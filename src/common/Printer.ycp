@@ -125,7 +125,6 @@
      * "options": map,   // options from printer db -|
      * "ff" : boolean, // print formfeed between pages, present only for queues with formfeed
      * "raw": boolean, // raw queue, present only for raw queues
-     * "database" : string, // filename of the database used for this printer configuration. nil for main db.
      * ]
      */
     global map printer = $[];
@@ -426,14 +425,10 @@
       *   (to assign correct state)
       * @return map printer with assigned states
       */
-    define map assignStates (map p, boolean changed) ``{
+    global define map assignStates (map p, boolean changed) ``{
 	if (lookup (p, "type", "yast2") != "yast2")
 	    return p;
 	boolean supported = true;
-	if (p["database"]:"" != "foomatic")
-	{
-	    supported = false;
-	}
 	list spoolers = ["cups", "lprng"];
 	string uri = lookup (p, "uri", "");
 	string q_type = Printerlib::getUriType (uri);
@@ -442,7 +437,7 @@
 	if (p["ownppd"]:"" == "")
 	{
 	    q_filter = Printer::foomatic [p["vendor_db"]:"",
-		p["device_db"]:"", config, "filter"]:"";
+		p["device_db"]:"", config, "filter"]:nil;
 	}
 	else
 	{
@@ -457,6 +452,8 @@
 		q_filter = info["filter"]:"";
 	    }
 	}
+	if (q_filter == nil)
+	    supported = false;
 	boolean is_class = q_type == "class";
 	if (is_class || p["raw"]:false)
 	    supported = true;
@@ -1036,7 +1033,14 @@ Remove them?
 	    entry = fixPrinter(entry);
 	    if (spooler == "cups")
 	    {
-		if ((lookup (entry, "cups-state", "changed") == "changed" || Printer::save_all) && (lookup (entry, "type", "yast2") == "yast2"))
+		if (lookup (entry, "cups-state", "changed") == "void")
+		{
+		    UI::MessagePopup (sformat(
+			// popup %1 is queue name
+			_("Queue %1 cannot be saved because
+the selected spooler does not support it."), name));
+		}
+		else if ((lookup (entry, "cups-state", "changed") == "changed" || Printer::save_all) && (lookup (entry, "type", "yast2") == "yast2"))
 		{
 		    y2debug ("Saving printer %1", entry);
 		    if (writeCupsPrinter (entry))
@@ -1045,22 +1049,21 @@ Remove them?
 			entry = add (entry, "cups-state", "commited");
 		    }
 		}
-		if (lookup (entry, "cups-state", "changed") == "void")
-		    // popup %1 is queue name
-		    UI::MessagePopup (sformat(_("Queue %1 cannot be saved because
-the selected spooler does not support it.
-"), name));
 	    }
 	    else if (spooler == "lprng")
 	    {
-		if ((lookup (entry, "lprng-state", "changed") == "changed" || Printer::save_all) && (lookup (entry, "type", "yast2") == "yast2"))
+		if (lookup (entry, "lprng-state", "changed") == "void")
+		{
+		    UI::MessagePopup (sformat(
+			// popup %1 is queue name
+			_("Queue %1 cannot be saved because
+the selected spooler does not support it."), name));
+		}
+		else if ((lookup (entry, "lprng-state", "changed") == "changed" || Printer::save_all) && (lookup (entry, "type", "yast2") == "yast2"))
+		{
 		    if (writeLpdPrinter (entry))
 			entry = add (entry, "lprng-state", "commited");
-		if (lookup (entry, "lprng-state", "changed") == "void")
-		    // popup %1 is queue name
-		    UI::MessagePopup (sformat(_("Queue %1 cannot be saved because
-the selected spooler does not support it.
-"), name));
+		}
 	    }
 	    Progress::NextStep ();
 	    return entry;
@@ -1136,7 +1139,8 @@ the selected spooler does not support it.
     define boolean saveTheConfiguration () ``{
 	list l = filter (`e, printcap, ``(lookup (e, "type", "yast2") == "yast2"));
 	list forbidden_keys = ["changed", "ppd", "auto_propose",
-	    "modelset_required", "composite", "comment"];
+	    "modelset_required", "composite", "comment", "saved",
+	    "newer_gs_upp", "database", ];
 	l = maplist (`e, l, ``(filter (`k, `v, e,
 	    ``(! contains (forbidden_keys, k)))));
 	cleanDeletedPrinters ();
@@ -1352,10 +1356,7 @@ the selected spooler does not support it.
 		if (type == "yast2")
 		{
 		    string model = "";
-		    if (i["database"]:"" == "foomatic")
-		    {
-			model = i["vendor_ieee"]:"" + " " + i["device_ieee"]:"";
-		    }
+		    model = i["vendor_ieee"]:"" + " " + i["device_ieee"]:"";
 		    string ppd = lookup (i, "ownppd", "");
 	            if (ppd != "" && ! isPpd (ppd))
 	                ppd = lookup (i, "ppd", "");
@@ -1440,11 +1441,14 @@ the selected spooler does not support it.
 	foreach (`k, `v, other_printers, ``{
 	    summary = add (summary, Summary::Device (k, sformat (format, v)));
 	});
-	if (cups_server_settings["Browsing"]:"On" == "On")
+	if (Printer::spooler == "cups")
 	{
-	    // part of summary
-	    summary = add (summary, _("<LI>Listenning to IPP broadcasts
+	    if (cups_server_settings["Browsing"]:"On" == "On")
+	    {
+		// part of summary
+		summary = add (summary, _("<LI>Listenning to IPP broadcasts
 to access queues of remote CUSP servers.</LI>"));
+	    }
 	}
 	return Summary::DevicesList (summary);
     }
@@ -1490,7 +1494,6 @@ to access queues of remote CUSP servers.</LI>"));
 	    "device_ieee" : det["device"]:"",
 	    "vendor_db" : det["vendor_db"]:"",
 	    "device_db" : det["device_db"]:"",
-	    "database" : "foomatic",
 	    "unique_key" : det["unique_key"]:"",
 	    "uri" : det["uri"]:"",
 	    "info": det["info"]:"",

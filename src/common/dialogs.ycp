@@ -232,7 +232,6 @@ with the SuSE database of printers only.</B></P>
 		    "device_db" : model_db,
 		    "vendor_ieee" : manuf_ieee,
 		    "device_ieee" : model_ieee,
-		    "database" : "foomatic",
 		    "ownppd" : "",
 		    "config" : ppd_file,
 		    ]);
@@ -337,12 +336,14 @@ with the SuSE database of printers only.</B></P>
 	map info = $[];
 	list cfgs = [];
 	map cfgsmap = $[];
-	boolean foomatic = ((Printer::printer["vendor_db"]:"" != ""
+	if (! ((Printer::printer["vendor_db"]:"" != ""
 		&& Printer::printer["device_db"]:"" != "")
-	    || Printer::printer["ownppd"]:"" != "");
-	y2milestone ("Configuring queue %1", Printer::printer);
-	if (foomatic)
+	    || Printer::printer["ownppd"]:"" != ""));
 	{
+	    // TODO error message
+	    return `back;
+	}
+	y2milestone ("Configuring queue %1", Printer::printer);
 	    loadFoomaticIfNeeded ();
 
 	    map opts = Printer::printer["options"]:$[];
@@ -394,18 +395,13 @@ with the SuSE database of printers only.</B></P>
 
 		return;
 	    });
-	    Printer::printer["database"] = "foomatic";
-	}
-	else
-	{
-	    y2error ("Not foomatic!!!");
-	}
+
 	term contents = `HBox (
 	    `HSpacing (1),
 	    `VBox (
 		    `VSpacing (1),
 		    // selection box label
-		    `SelectionBox (`id (`selection), `opt (`hstretch), _("&Select configuration:"), foomatic ? cfgs : select (cfgs, 1, [])),
+		    `SelectionBox (`id (`selection), `opt (`hstretch), _("&Select configuration:"), cfgs),
 		    `VSpacing (1),
 		    ppd_only ? `VSpacing (0) : `HBox (
 			`HStretch (),
@@ -429,7 +425,7 @@ with the SuSE database of printers only.</B></P>
 	{
 	    UI::ChangeWidget (`id (`selection), `CurrentItem, config);
 	}
-	if (foomatic && (config == "" || config == nil))
+	if (config == "" || config == nil)
 	{
             {
 		term item = cfgs[0]:nil;
@@ -899,41 +895,36 @@ be tested here."));
      * @return symbol for ws
      */
     global define symbol runOptionsDialog () ``{
-	boolean foomatic = Printer::printer["database"]:"" == "foomatic";
-	if (foomatic)
-	    loadFoomaticIfNeeded ();
-	foomatic = foomatic || Printer::printer["ownppd"]:"" != "";
-	string filename = "";
-	if (foomatic)
+	if (Printer::printer["ownppd"]:"" == ""
+	    && Printer::printer["vendor_db"]:"" == "")
 	{
+	    // TODO error report
+	    return `back;
+	}
+	loadFoomaticIfNeeded ();
+	string filename = "";
 	    string orig_name = Printer::foomatic[Printer::printer["vendor_db"]:"", Printer::printer["device_db"]:"", Printer::printer["config"]:"", "filename"]:"";
-	    if (Printer::printer["ownppd"]:"" != "")
-		orig_name = Printer::printer["ownppd"]:"";
-	    if (orig_name == "")
-	    {
+	if (Printer::printer["ownppd"]:"" != "")
+	    orig_name = Printer::printer["ownppd"]:"";
+	if (orig_name == "")
+	{
+	    // error report
+	    Report::Error (_("Unknown PPD file. Select printer model."));
+	    return `back;
+	}
+	filename = SCR::Read (.ppd.file.open,
+	    [orig_name, SCR::Read (.target.tmpdir)]);
+	if (filename == "")
+	{
+	    Report::Error (sformat (
 		// error report
-		Report::Error (_("Unknown PPD file. Select printer model."));
-		return `back;
-	    }
-	    filename = SCR::Read (.ppd.file.open,
-		[orig_name, SCR::Read (.target.tmpdir)]);
-	    if (filename == "")
-	    {
-		Report::Error (sformat (
-			// error report
-		    _("Error occurred while opening PPD file
+		_("Error occurred while opening PPD file
 %1
 "),
-		    orig_name));
-		return `back;
-	    }
+		orig_name));
+	    return `back;
 	}
 
-	Printer::printer = add (Printer::printer, "newer_gs_upp", false);
-	map saved = lookup (Printer::printer, "saved", $[]);
-	saved = add (saved, "upp_fname", "");
-	saved = add (saved, "upp", "");
-	Printer::printer = add (Printer::printer, "saved", saved);
 	string config = lookup (Printer::printer, "config", "");
 	any vals = nil;
 
@@ -951,9 +942,8 @@ be tested here."));
 	map selected = lookup (Printer::printer, "options", $[]);
 
 	list opts = [];
-	list optlist = []; // used only for foomatic;
-	if (foomatic)
-	{
+	list optlist = [];
+
 	    map options = SCR::Read (.ppd.file.options, [filename, ""]);
 	    optlist = options["data"]:[];
 	    y2debug ("First option: %1", optlist[0]:$[]);
@@ -994,7 +984,6 @@ be tested here."));
 	    opts = maplist (`i, optlist, ``(
 		`item (`id (i["name"]:""), i["gui"]:"")
 	    ));
-	}
 
 	symbol ret = `opts;
 	// selection box label
@@ -1041,6 +1030,7 @@ be tested here."));
 	    {
 		string o = UI::QueryWidget (`id (`opts), `CurrentItem);
 		string v = UI::QueryWidget (`id (`vals), `CurrentItem);
+		selected[o] = v;
 	    }
 	    ret = UI::UserInput ();
 	    if (ret == `cancel)
@@ -1055,11 +1045,7 @@ be tested here."));
 		selected["ImageableArea"] = ps;
 		selected["PaperDimension"] = ps;
 	    }
-	    map saved = lookup (Printer::printer, "saved", $[]);
-	    saved = add (saved, "upp_fname", "");
-	    saved = add (saved, "upp", "");
 	    Printer::printer = add (Printer::printer, "options", selected);
-	    Printer::printer = add (Printer::printer, "saved", saved);
 	}
 	return ret;
     }
@@ -1076,7 +1062,6 @@ be tested here."));
 	boolean conf_type = lookup (Printer::printer, "type", "yast2") == "yast2";
 	boolean know = conf_type || lookup (Printer::printer, "type", "yast2") == "non-yast-now";
 	boolean raw = lookup (Printer::printer, "raw", false);
-	boolean foomatic = Printer::printer["database"]:"" == "foomatic";
 	string model = lookup (Printer::printer, "device", "");
 
 	//
