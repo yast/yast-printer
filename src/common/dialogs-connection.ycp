@@ -736,9 +736,14 @@ actually selected."));
         if (packages_to_check != [])
         {
             import "Require";
-            Require::RequireAndConflictTarget (packages_to_check, [],
+            if ((! Require::RequireAndConflictTarget (packages_to_check, [],
                 "<P>For the selected function, the additional packages<BR>
-<TT>%1</TT><BR> must be installed.<BR><BR> Install them now?</P>");
+<TT>%1</TT><BR> must be installed.<BR><BR> Install them now?</P>"))
+		&& ! Require::LastOperationCanceled ())
+	    {
+		// error report
+		Report::Error (_("Failed to install required packages."));
+	    };
         }
 
         boolean has_user_password = (type == "samba" || type == "novell");
