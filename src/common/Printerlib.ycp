@@ -166,7 +166,7 @@ ECHO_PID=$!
       * @return list of PTAL devices
       */
     global define list getPtalDevices () ``{
-	SCR::Execute (.target.bash, "test -f /usr/sbin/ptal-init && /usr/sbin/ptal-init --setup-usb");
+	SCR::Execute (.target.bash, "test -f /usr/sbin/ptal-init && /usr/sbin/ptal-init start --setup-usb >/dev/null 2>&1");
         if (SCR::Read (.target.size, "/usr/lib/cups/backend/ptal") <= 0)
             return [];
         map out = SCR::Execute (.target.bash_output,
@@ -324,7 +324,7 @@ ECHO_PID=$!
 		    // FIXME condition to check if it is really HP office jet ??
 		    if (pr["sub_class_id"]:0 == 1)
 		    {
-y2error ("PTAL device found");
+			y2milestone ("PTAL device found");
 			import "Require";
 			boolean req_ret = Require::RequireAndConflict (
 			    ["hp-officeJet"],
