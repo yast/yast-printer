@@ -13,7 +13,6 @@
 #ifndef _Y2CCCupsAgent_h
 #define _Y2CCCupsAgent_h
 
-#define y2log_component "ag_cups"
 #include "Y2.h"
 
 /**
