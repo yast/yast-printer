@@ -275,6 +275,13 @@ bool PPD::mtimes(const char *dirname, time_t mtime, int *count) {
     struct stat fileinfo;
     char filename[MAX];
 
+    if(stat(dirname, &fileinfo))
+        return true;
+
+    if(fileinfo.st_mtime >= mtime || fileinfo.st_ctime >= mtime) {
+        return true;
+    }
+
     dir = opendir(dirname);
     if(!dir) {
         y2error("opendir failed: %s (%s)", dirname, strerror(errno));
