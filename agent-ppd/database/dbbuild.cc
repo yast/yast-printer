@@ -19,6 +19,6 @@ main (int argc, char *argv[])
 
     setenv("Y2_PRINTER_DATA_DIR", "../../data/", 1);
     PPD ppd;
-    void* ret = ppd.createdbThread ("ppd_db.ycp");
+    ppd.createdbThread ("ppd_db.ycp");
     return 0;
 }
