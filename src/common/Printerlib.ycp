@@ -236,8 +236,8 @@ ECHO_PID=$!
 	    return [];
 	}
 	// load hotplug if it is not (there is no way to find out whether hotplug is runing so just start it)
-	if (0 != SCR::Execute (.target.bash, "/etc/init.d/hotplug status"))
-	    SCR::Execute (.target.bash, "/etc/init.d/hotplug start");
+	SCR::Execute (.target.bash,
+	    "test -f /etc/init.d/hotplug && (/etc/init.d/hotplug status || /etc/init.d/hotplug start)");
 	list aprobe = SCR::Read (.probe.printer);
 /*		aprobe = [
 		    $[ "bus" : "Parallel",      // recognized, found in db
@@ -576,14 +576,8 @@ Install it now?"));
     global define void stopServices () ``{
 	if (Mode::config)
 	    return;
-	if (Pkg::IsProvided ("plp"))
-	    SCR::Execute (.target.bash, "test -f /etc/init.d/lpd && /etc/init.d/lpd stop");
-	if (Pkg::IsProvided ("lprold"))
-	    SCR::Execute (.target.bash, "test -f /etc/init.d/lpd && /etc/init.d/lpd stop");
-	if (Pkg::IsProvided ("lprng"))
-	    SCR::Execute (.target.bash, "test -f /etc/init.d/lpd && /etc/init.d/lpd stop");
-	if (Pkg::IsProvided ("cups"))
-	    SCR::Execute (.target.bash, "test -f /etc/init.d/cups && /etc/init.d/cups stop");
+	SCR::Execute (.target.bash, "test -f /etc/init.d/lpd && /etc/init.d/lpd stop");
+	SCR::Execute (.target.bash, "test -f /etc/init.d/cups && /etc/init.d/cups stop");
     }
 
     /**

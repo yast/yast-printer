@@ -175,7 +175,7 @@ press 'OK'.
 	    //
 	    // restart lpd
 	    //
-	    SCR::Execute (.target.bash, "/etc/init.d/lpd restart");
+	    SCR::Execute (.target.bash, "test -f /etc/init.d/lpd && /etc/init.d/lpd restart");
 	}
 	//
 	// print test page
@@ -294,7 +294,9 @@ Output from lpr:
 	if (false == OkOrStopPrinting (sformat ("lpr -P%1 %2", virtual_name, test_page)))
 	{ // Problems, stop the printing!
 	    if (Printer::spooler != "cups")
-		SCR::Execute (.target.bash, "/etc/init.d/lpd stop");
+	    {
+		Printerlib::stopServices ();
+	    }
 
 	    string contype = Printerlib::getUriType (uri);
 	    if (contype == "parallel" || contype == "serial" || contype == "usb")
@@ -317,7 +319,7 @@ Output from lpr:
 
 	    SCR::Execute (.target.bash, "/bin/rm `/usr/bin/find /var/spool/lpd -name \"[cd]f*\" -type f`"); // remove all jobs
 	    if (Printer::spooler != "cups")
-		SCR::Execute (.target.bash, "/etc/init.d/lpd start"); // restart lpd
+		SCR::Execute (.target.bash, "test -f /etc/init.d/lpd && /etc/init.d/lpd start"); // restart lpd
 
 	    // message box
 	    Popup::Message (_("Printing was stopped.

@@ -851,11 +851,11 @@ END { if (!used) print \"ServerName %1\" }
 	    else if (Printer::spooler == "lprng")
 	    {
 		SCR::Execute (.target.bash,
-		    "/usr/bin/touch /etc/printcap; /bin/chmod u=rw,g=r,o=r /etc/printcap; /etc/init.d/lpd stop");
+		    "/usr/bin/touch /etc/printcap; /bin/chmod u=rw,g=r,o=r /etc/printcap; test -f /etc/init.d/lpd && /etc/init.d/lpd stop");
 		// step 1
 		Progress::NextStep (); if (testAbort ()) return false;
 		integer lpdaemon = SCR::Execute (.target.bash,
-		    "/etc/init.d/lpd start");
+		    "test -f /etc/init.d/lpd && /etc/init.d/lpd start");
 		// step 2
 		Progress::NextStep (); if (testAbort ()) return false;
 		if (lpdaemon != 0)
@@ -1140,7 +1140,6 @@ Detect your printers?"));
 	if (!skip_io)
 	{
 	    ret = Printer::oldWrite ();
-	    Runlevel::RunInitScript ("lpd", "restart");
 	    Popup::Message (
 	        // popup
 		_("The new configuration \nwas stored successfully."));
@@ -1148,10 +1147,7 @@ Detect your printers?"));
 
 	if (Mode::cont)
 	{
-	    if (Printer::spooler == "cups")
-		SCR::Execute (.target.bash, "/etc/init.d/cups stop");
-	    else if (Printer::spooler == "lprng")
-		SCR::Execute (.target.bash, "/etc/init.d/lpd stop");
+	    Printerlib::stopServices ();
 	}
 	else if (size (Printer::printcap) > 0)
 	{
@@ -1169,7 +1165,7 @@ Detect your printers?"));
 	    }
 	    else if (Printer::spooler == "lprng")
 	    {
-		SCR::Execute (.target.bash, "/etc/init.d/lpd restart");
+		SCR::Execute (.target.bash, "test -f /etc/init.d/lpd && /etc/init.d/lpd restart");
 	    }
 	}
 	return ret;
