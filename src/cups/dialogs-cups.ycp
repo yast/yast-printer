@@ -67,10 +67,15 @@ in the network. All broadcasted queues will be
 accessible under the same names as they are
 on the remote host."))),
 	    `VSpacing (2),
-	    `Left (`CheckBox (`id (`listen),
-		// check box
-		_("Listen to IPP &Broadcast Packets"),
-		contains (CUPS::cups_server_settings["Browsing"]:["On"],"On"))),
+	    `Left (`HBox (`VBox (
+		`Left (`CheckBox (`id (`listen),
+		    // check box
+		    _("Listen to IPP &Broadcast Packets"),
+		    contains (
+			CUPS::cups_server_settings["Browsing"]:["On"],"On"))),
+		// push button
+		`PushButton (`id (`perm), _("Select A&dresses"))
+	    ), `HStretch ())),
 	    `VSpacing (2),
 	    firewall_layout,
 	    `VStretch ()
@@ -79,11 +84,12 @@ on the remote host."))),
 	Wizard::SetContentsButtons (_("Listening to Remote CUPS Servers"),
 	    contents, getListenIPPHelp () + firewall_help, Label::BackButton (),
 	    Label::OKButton ());
+	Wizard::RestoreAbortButton ();
 
 	map event = $[];
 	any ret = nil;
 	CWMFirewallInterfaces::OpenFirewallInit (firewall_widget, "");
-	while (ret != `abort && ret != `next && ret != `back)
+	while (ret != `abort && ret != `next && ret != `back && ret != `perm)
 	{
 	    event = UI::WaitForEvent ();
 	    ret = event["ID"]:nil;
@@ -728,7 +734,7 @@ on the remote host."))),
 		: (type == `printers
 		    ? "/printers"
 		    : "/classes"));
-	boolean show_ignore = type != `root && type != `admin;
+	boolean show_ignore = type != `root && type != `admin && type != `bcast;
 	term contents = `HBox (
 	    `HSpacing (2),
 	    `VBox (
@@ -758,15 +764,40 @@ on the remote host."))),
 	    `HSpacing (2)
 	);
 
-	// dialog caption
-        Wizard::SetContentsButtons (sformat (_("CUPS Permissions for %1"), pth), contents, getCupsAclHelp (show_ignore), Label::BackButton (), Label::NextButton ());
-	map<string, list<string> > settings = CUPS::cups_server_permissions[pth]:$[];
-	if (settings["Order"]:["Deny,Allow"] == ["Allow,Deny"])
+	string caption = "";
+	if (type == `bcast)
+	{
+	    caption = _("CUPS Permissions for Accepting IPP Broadcasts");
+	}
+	else
+	{
+	    // dialog caption
+	    caption = sformat (_("CUPS Permissions for %1"), pth);
+	}
+	Wizard::SetContentsButtons (caption, contents, getCupsAclHelp (show_ignore), Label::BackButton (), Label::OKButton ());
+
+	string allow_key = "Allow";
+	string deny_key = "Deny";
+	string order_key = "Order";
+	map<string, list<string> > settings = $[];
+	if (type == `bcast)
+	{
+	    allow_key = "BrowseAllow";
+	    deny_key = "BrowseDeny";
+	    order_key = "BrowseOrder";
+	    settings = CUPS::cups_server_settings;
+	}
+	else
+	{
+	    settings = CUPS::cups_server_permissions[pth]:$[];
+	}
+
+	if (settings[order_key]:["Deny,Allow"] == ["Allow,Deny"])
 	    UI::ChangeWidget (`id (`ad), `Value, true);
 	else
 	    UI::ChangeWidget (`id (`da), `Value, true);
-	list<term> cont = (list<term>)union (maplist (any e, settings["Allow"]:[], ``{return `i (`allow, e);}),
-			maplist (any e, settings["Deny"]:[], ``{return `i (`deny, e);}));
+	list<term> cont = (list<term>)union (maplist (any e, settings[allow_key]:[], ``{return `i (`allow, e);}),
+			maplist (any e, settings[deny_key]:[], ``{return `i (`deny, e);}));
 	// selectionbox label
 	UI::ReplaceWidget (`id (`replace_acl), `SelectionBox (`id (`acl), _("&Permissions"),
 	   // listbox entry, %1 is IP address
@@ -856,17 +887,24 @@ on the remote host."))),
                         : sformat (_("Deny From %1"), e[1]:""))))));
 	    }
         }
-	settings["Order"] = UI::QueryWidget (`id (`order), `CurrentButton)
+	settings[order_key] = UI::QueryWidget (`id (`order), `CurrentButton)
 	    == `ad
 		? ["Allow,Deny"]
 		: ["Deny,Allow"];
 	list<string> allow = filter (string z, (list<string>)maplist (term x, filter (term e, cont, ``(e[0]:nil == `allow)), ``{return x[1]:"";}), ``(z != ""));
 	list<string> deny = filter (string z, (list<string>)maplist (term x, filter (term e, cont, ``(e[0]:nil == `deny)), ``{return x[1]:"";}), ``(z != ""));
-	settings = add (settings, "Allow", allow);
-	settings = add (settings, "Deny", deny);
+	settings = add (settings, allow_key, allow);
+	settings = add (settings, deny_key, deny);
 	if (`next == ret)
 	{
-	    CUPS::cups_server_permissions[pth] = settings;
+	    if (type == `bcast)
+	    {
+		CUPS::cups_server_settings = settings;
+	    }
+	    else
+	    {
+		CUPS::cups_server_permissions[pth] = settings;
+	    }
 	}
 	else if (`ignore == ret)
 	{
