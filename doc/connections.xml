@@ -1,0 +1,264 @@
+<?xml version="1.0" encoding='ISO-8859-1'?>
+<chapter id = "connection_types">
+  <title>Printer Connection Types</title>
+  <para>
+Generally you can say, that the printer can be <keycap>local</keycap> or connected to
+another machine via <keycap>network</keycap>.
+  </para>
+  <section>
+    <title>Local Printer</title>
+    <para>
+It means a printer that is connected to the machine's parallel or serial
+ port, USB port or via the IrDA or Blootooth interface.
+    </para>
+    <section id="parallel">
+      <title>
+Parallel port
+      </title>
+      <section>
+	<title>Requirements</title>
+	<para>
+Parport support module, lp module, proc
+filesystem support, parport_pc module in the kernel.
+	</para>
+      </section>
+      <section>
+	<title>Autodetection of Devices</title>
+	<para>
+A list of parallel ports is in
+<computeroutput>/proc/sys/dev/parport</computeroutput>.
+The user must choose the port for adding a printer
+if there is more than one not autoprobed port.
+	</para>
+      </section>
+      <section>
+	<title>Autoprobe of the Printer Model</title>
+	<para>
+If the printer conforms to the IEEE 1284 specification
+then hwinfo detects the printer vendor and model (and
+the device it is connected to).
+	</para>
+      </section>
+    </section>
+    <section id="serial">
+      <title>
+Serial Port
+      </title>
+      <section>
+	<title>Requirements</title>
+	<para>
+Serial port support module, proc filesystem
+support in the kernel.
+	</para>
+      </section>
+      <section>
+	<title>Autodetection of Devices</title>
+	<para>
+A list of serial ports can be found in
+<computeroutput>/proc/tty/driver/serial</computeroutput>.
+The user must choose the port for adding a printer
+if there is more than one not autoprobed port.
+	</para>
+      </section>
+      <section>
+	<title>Device Settings</title>
+	<para>
+User shoule be able to set baud rate,
+data bits, parity and ?flow control?.
+TODO it doesn't work!!!
+	</para>
+      </section>
+      <section>
+	<title>Autoprobe of the Printer Model</title>
+	<para>
+Probing of printer connected via serial port is not supported
+(probably is not possible at all).
+	</para>
+      </section>
+    </section>
+    <section id="usb">
+      <title>
+USB
+      </title>
+      <section>
+	<title>Requirements</title>
+	<para>
+USB support in kernel, usblp module loaded, hotplug
+	</para>
+      </section>
+      <section>
+	<title>Autodetection of Devices</title>
+	<para>
+All /dev/usb/lp* are treated as possible devices.
+If CUPS is used as spooler, CUPS USB backend is used
+to probe URIs for queues.
+	</para>
+      </section>
+      <section>
+	<title>Autoprobe of the Printer Model</title>
+	<para>
+Printer vendor and model are detected via hwinfo. In case
+of some printers (Epson USB printers) CUPS USB backend is used
+to detect the vendor and model (as hwinfo doesn't report the
+model correctly).
+	</para>
+      </section>
+    </section>
+    <section id="irda">
+      <title>
+IrDA
+      </title>
+      <section>
+	<title>Requirements</title>
+	<para>
+IrDA properly configured and active
+	</para>
+      </section>
+      <section>
+	<title>Autodetection of Devices</title>
+	<para>
+All /dev/irlpt* are treated as possible devices.
+	</para>
+      </section>
+      <section>
+	<title>Autoprobe of the Printer Model</title>
+	<para>
+Probing of printer connected via serial port is not supported.
+	</para>
+      </section>
+    </section>
+  </section>
+  <section>
+    <title>Remote Printer</title>
+    <para>
+It means printing on printers connected to a remote host with
+a spooler running ot the printer is connected directly to the
+network. The queues on the remote host should be already configured.
+    </para>
+    <section id="lpd">
+      <title>
+LPD-compatible server
+      </title>
+      <section>
+	<title>Required information</title>
+	<para>
+Name of the remote host, name of the remove queue
+	</para>
+      </section>
+      <section>
+	<title>Autodetection of Hosts</title>
+	<para>
+Scan ports on remote machines
+	</para>
+      </section>
+      <section>
+	<title>Autodetection of Queues</title>
+	<para>
+Not possible.
+	</para>
+      </section>
+    </section>
+    <section id="ipp">
+      <title>
+Printing via IPP protocol
+      </title>
+      <section>
+	<title>Required information</title>
+	<para>
+Name of the remote host, name of the remote queue
+	</para>
+      </section>
+      <section>
+	<title>Autodetection of Hosts</title>
+	<para>
+Scan ports on the remote machines, check if the machine has at least one queue (via IPP protocol)
+	</para>
+      </section>
+      <section>
+	<title>Autodetection of Queues</title>
+	<para>
+Via the IPP protocol.
+	</para>
+      </section>
+    </section>
+    <section id="samba">
+      <title>
+SMB/CIFS/Windows printer
+      </title>
+      <section>
+	<title>Required information</title>
+	<para>
+Name of the remote host, name of the remote queue, name of the workgroup,
+user name and corresponding password
+	</para>
+      </section>
+      <section>
+	<title>Autodetection of Hosts</title>
+	<para>
+Currently not supported
+	</para>
+      </section>
+      <section>
+	<title>Autodetection of Workgroups</title>
+	<para>
+Currently not supported
+	</para>
+      </section>
+      <section>
+	<title>Autodetection of Queues</title>
+	<para>
+Via <computeroutput>nmblookup -A $HOST</computeroutput>
+	</para>
+      </section>
+    </section>
+    <section id="ncp">
+      <title>
+Novell Netware (NCP)
+      </title>
+      <section>
+	<title>Required information</title>
+	<para>
+Name of the remote host, name of the remote queue,
+user name and corresponding password
+	</para>
+      </section>
+      <section>
+	<title>Autodetection of Hosts</title>
+	<para>
+A list of available NCP servers can be get
+using <computeroutput>slist</computeroutput>
+	</para>
+      </section>
+      <section>
+	<title>Autodetection of Queues</title>
+	<para>
+A list of available queues on specified
+server can be get using <computeroutput>pqlist</computeroutput>.
+	</para>
+      </section>
+    </section>
+    <section id="direct">
+      <title>
+Direct printing to TCP port
+      </title>
+      <section>
+	<title>Required information</title>
+	<para>
+Host name of the printer, port number
+	</para>
+      </section>
+      <section>
+	<title>Autodetection of Hosts</title>
+	<para>
+Scan ports on remote machine
+	</para>
+      </section>
+      <section>
+	<title>Autodetection of Port</title>
+	<para>
+Currently not supported
+	</para>
+      </section>
+    </section>
+  </section>
+</chapter>
