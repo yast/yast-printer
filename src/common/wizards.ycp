@@ -1,0 +1,93 @@
+/**
+ * File:
+ *  wizards.ycp
+ * Module:
+ *  Printer configurator
+ * Summary:
+ *  Wizard sequencer
+ * Authors:
+ *  Petr Blahos <pblahos@suse.cz>
+ *  Jiri Srain <jsrain@suse.cz>
+ *
+ * $Id$
+ */
+{
+    textdomain "printer";
+
+    import "Wizard_hw";
+    import "Wizard";
+    import "Printerlib";
+    import "Printer";
+    import "Arch";
+
+    include "printer/misc.ycp";
+    include "printer/helps.ycp";
+    import "Label";
+    import "Popup";
+    import "Report";
+    import "Mode";
+    include "ui/file_popups.ycp";
+    include "wizard/sequencer.ycp";
+
+    include "printer/dialogs-cups.ycp";
+    include "printer/dialogs-lprng.ycp";
+    include "printer/testpage.ycp";
+
+    include "printer/dialogs-connection.ycp";
+
+    /**
+      * Whole configuration of dns-server
+      * @return sequence result
+      */
+    global define symbol PrinterSequence() ``{
+	map aliases = $[
+	    "read"	: [ ``( ReadDialog() ), true ],
+	    "main"	:   ``(runWizard (false)),
+//	    "main"	:   ``( MainSequence() ),
+	    "write"	: [ ``( WriteDialog() ), true ],
+	    "switch"	: [ ``(nil), true ],
+	    "reinstall"	: [ ``(nil), true ],
+	];
+
+	map sequence = $[
+	    "ws_start"		: "read",
+	    "read" : $[
+		`abort		: `abort,
+		`next		: "main"
+	    ],
+	    "main" : $[
+		`abort		: `abort,
+		`next		: "write",
+		`switch		: "switch",
+		`reinstall	: "reinstall",
+	    ],
+	    "switch" : $[
+		`next : "read",
+	    ],
+	    "reinstall" : $[
+		`next : "read",
+	    ],
+	    "write" : $[
+		`abort  : `abort,
+		`next   : `next
+	    ]
+	];
+
+	// dialog caption
+	string caption = _("Printer configuration");
+	// label
+	term contents = `Label(_("Initializing ..."));
+
+	Wizard::CreateDialog();
+	Wizard::SetContentsButtons(caption, contents, "",
+	    Label::BackButton(), Label::NextButton());
+
+	any ret = WizardSequencer(aliases, sequence);
+
+	UI::CloseDialog();
+	return ret;
+    }
+
+
+
+}
