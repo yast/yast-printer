@@ -1,0 +1,31 @@
+/**
+ * File:        etc_cups_printers.scr
+ * Summary:     Agent for reading /etc/cups/printers.conf file
+ * Author:      Jiri Srain <jsrain@suse.cz>
+ * Access:      read
+ *
+ * $Id$
+ *
+ */
+.etc.cups.cupsd_conf
+
+`ag_ini(
+    `IniAgent( "/etc/cups/cupsd.conf",
+	$[
+	    "options"	: [ "global_values", "repeat_names" ],
+	    "comments"	: [ "^[ \t]*#.*$", "^[ \t]*$" ],
+	    "params"    : [
+		$[ "match" : [ "^[ \t]*([^ \t]+)[ \t]+(.*)$", "%s %s" ]],
+		$[ "match" : [ "^[ \t]*([^ \t]+)[ \t]*(.*)$", "%s %s" ]],
+	    ],
+	    "sections" : [
+		$[
+		    "begin" : [ "^[ \t]*<[ \t]*Location[ \t]+([^ \t]+)[ \t]*>[ \t]*$", "<Location %s>" ],
+		    "end"   : [ "^[ \t]*<[ \t]*/Location[ \t]*>[ \t]*$", "</Location>" ],
+		 ],
+	    ],
+	    "subindent"	: "  "
+	]
+))
+
+
