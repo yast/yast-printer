@@ -72,7 +72,7 @@
 	if (ret == `next)
 	{
 	    boolean listen = (boolean)UI::QueryWidget (`id (`listen), `Value);
-	    CUPS::cups_server_settings["Browsing"] = listen ? "On" : "Off";
+	    CUPS::cups_server_settings["Browsing"] = listen ? ["On"] : ["Off"];
 	}
 
 	return ret;
@@ -727,7 +727,7 @@
 
 	// dialog caption
         Wizard::SetContentsButtons (sformat (_("CUPS permissions settings for %1"), pth), contents, getCupsAclHelp (show_ignore), Label::BackButton (), Label::NextButton ());
-	map settings = lookup (CUPS::cups_server_permissions, pth, $[]);
+	map<string, list<string> > settings = lookup (CUPS::cups_server_permissions, pth, $[]);
 	if (settings["Order"]:["Deny,Allow"] == ["Allow,Deny"])
 	    UI::ChangeWidget (`id (`ad), `Value, true);
 	else
@@ -827,8 +827,8 @@
 	    == `ad
 		? ["Allow,Deny"]
 		: ["Deny,Allow"];
-	list allow = filter (string z, (list<string>)maplist (term x, filter (term e, cont, ``(select (e, 0, nil) == `allow)), ``{return select (x, 1, "");}), ``(z != ""));
-	list deny = filter (string z, (list<string>)maplist (term x, filter (term e, cont, ``(select (e, 0, nil) == `deny)), ``{return select (x, 1, "");}), ``(z != ""));
+	list<string> allow = filter (string z, (list<string>)maplist (term x, filter (term e, cont, ``(select (e, 0, nil) == `allow)), ``{return select (x, 1, "");}), ``(z != ""));
+	list<string> deny = filter (string z, (list<string>)maplist (term x, filter (term e, cont, ``(select (e, 0, nil) == `deny)), ``{return select (x, 1, "");}), ``(z != ""));
 	settings = add (settings, "Allow", allow);
 	settings = add (settings, "Deny", deny);
 	if (`next == ret)
