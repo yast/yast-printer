@@ -236,6 +236,33 @@ of printers.
     }
 
     /**
+      * List all PPD files
+      * @return a list of sorted PPD files (maps containing vendor_db, model_db,
+      *  nick name and file name
+      */
+    global define list<map<string,string> > ListAllPpds () {
+	list<map<string,string> > ret = [];
+	foreach (string vendor, map v, foomatic, {
+	    foreach (any model, any m, v, {
+		if (is (model, string) && is (m, map))
+		{
+		    foreach (any file, any f, (map)m, {
+			if (is (file, string) && is (f, map))
+			{
+			    ret = add (ret, $[
+				"vendor_db" : vendor,
+				"device_db" : (string)model,
+				"filename" : (string)file,
+				"nickname" : ((map)f)["nickname"]:"",
+			    ]);
+			}
+		    });
+		}
+	    });
+	});
+	return ret;
+    }
+    /**
       * Sort PPD files for specified model according to preference list
       * @param vendor_db string vendor database key
       * @param device_db string model database key
