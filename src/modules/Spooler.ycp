@@ -25,6 +25,7 @@
     import "LPRng";
     import "Mode";
     import "Label";
+    import "PackageSystem";
     import "Popup";
     import "Require";
     import "Service";
@@ -198,15 +199,15 @@ This usually takes one or two minutes")),
      */
     global define integer getSpoolSystem () ``{
 	// first try if some of the systems exists.
-	boolean cups_exists = Require::AreAllPackagesInstalled(["cups-client"]);
+	boolean cups_exists = PackageSystem::Installed("cups-client");
 	// for lpd we need to check the file because
 	boolean lpd_exists = (SCR::Read(.target.size, "/etc/init.d/lpd")!=-1);
 	y2milestone ("CUPS exists: %1, LPD exists: %2",
 	    cups_exists, lpd_exists);
-	boolean cups_complete = Require::AreAllPackagesInstalled (
+	boolean cups_complete = PackageSystem::InstalledAll (
 	    ["cups-drivers", "cups-libs", "cups", "cups-client", "filters",
 	    "foomatic-filters"]);
-	boolean lpd_complete = Require::AreAllPackagesInstalled (
+	boolean lpd_complete = PackageSystem::InstalledAll (
 	    ["lpdfilter", "filters", "cups-drivers", "foomatic-filters"]);
 
 	if (cups_exists && !lpd_exists)
@@ -216,8 +217,8 @@ This usually takes one or two minutes")),
 		else
 		{
 		    boolean cups_client =
-			Require::AreAllPackagesInstalled (["cups-libs"])
-			&& ! Require::AreAllPackagesInstalled (["cups"]);
+			PackageSystem::Installed ("cups-libs")
+			&& ! PackageSystem::Installed ("cups");
 		    if (cups_client)
 			return 512 + 2;
 		    else
@@ -245,7 +246,7 @@ This usually takes one or two minutes")),
      */
     global define void switchTo (string to) ``{
 	y2milestone ("Switching spooler to %1", to);
-	Require::EnsureTargetInit ();
+	PackageSystem::EnsureTargetInit ();
 	list<string> del = ["plp", "lprold", "lprng", "cups", "cups-client",
             "cups-drivers", "cups-drivers-cs", "cups-drivers-de",
             "cups-drivers-stp", "lpdfilter", "filters", "foomatic-filters"];
@@ -311,7 +312,7 @@ Install them now?"));
 	    foreach (string e, inst, ``{Pkg::PkgInstall (e);});
 	    Pkg::PkgSolve (false);
 	    Pkg::PkgCommit (0);
-	    Require::RunSuSEconfig ();
+	    PackageSystem::RunSUSEconfig ();
 	}
 	if (to == "cups" || to == "cups_client")
 	{

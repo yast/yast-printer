@@ -19,6 +19,7 @@
     import "CUPS";
     import "Label";
     import "Mode";
+    import "Package";
     import "Popup";
     import "Printer";
     import "Printerlib";
@@ -779,14 +780,16 @@ actually selected.
         }
         if (packages_to_check != [])
         {
-            import "Require";
 	    boolean reinit = false;
-	    if (! Require::AreAllPackagesInstalledTarget (packages_to_check))
+	    if (! Package::InstalledAll (packages_to_check))
 	    {
-		if ((! Require::RequireAndConflictTarget (packages_to_check, [],
+		boolean inst_result = size (packages_to_check) == 1
+		    ? Package::Install (packages_to_check[0]:"")
+		    : Package::InstallAll (packages_to_check);
+/*		if ((! Package::PackageDialog (packages_to_check, true))
 	            _("<P>For the selected function, the additional packages<BR>
-<TT>%1</TT><BR> must be installed.<BR><BR> Install them now?</P>")))
-		    && ! Require::LastOperationCanceled ())
+<TT>%1</TT><BR> must be installed.<BR><BR> Install them now?</P>")))*/
+		if (! (inst_result || Package::LastOperationCanceled ()))
 		{
 		    // error report
 		    Report::Error (_("Failed to install required packages."));
