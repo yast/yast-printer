@@ -45,17 +45,6 @@
 
 // global variables
 
-    /**
-      * Has to be saved all?
-      * FIXME should it really be here?
-      */
-    global boolean save_all = false;
-    /**
-      * Shall be settings read at the beginning?
-      * FIXME should it really be here?
-      */
-    global boolean reread = true;
-
 // local functions
 
     /**
@@ -244,14 +233,17 @@ Install them now?"));
 	{
 	    inst = add (inst, "ghostscript-x11");
 	}
-	import "PackageCallbacks";
-	y2milestone("-------- deleting = %1", del);
-	foreach (`e, del, ``{Pkg::PkgDelete (e);});
-	y2milestone("-------- installing = %1", inst);
-	foreach (`e, inst, ``{Pkg::PkgInstall (e);});
-	Pkg::PkgSolve ();
-	Pkg::PkgCommit (0);
-	Require::RunSuSEconfig ();
+	if (del != [] || inst != [])
+	{
+	    import "PackageCallbacks";
+	    y2milestone("-------- deleting = %1", del);
+	    foreach (`e, del, ``{Pkg::PkgDelete (e);});
+	    y2milestone("-------- installing = %1", inst);
+	    foreach (`e, inst, ``{Pkg::PkgInstall (e);});
+	    Pkg::PkgSolve ();
+	    Pkg::PkgCommit (0);
+	    Require::RunSuSEconfig ();
+	}
 	if (to == "cups" || to == "cups_client")
 	{
 	    // after switch from CUPS to LPRng printcap with imported queues
@@ -272,8 +264,6 @@ Install them now?"));
 //	Require::DoInstallAndRemove (inst, del);
 
 	sys_forbidden_names = nil;
-	reread = true;
-	save_all = true;
     }
 
     /**
@@ -461,24 +451,18 @@ may not run properly.");
 	    if (`cups_server == result)
 	    {
 		Spooler::switchTo ("cups");
-		// FIXME
-//		Printer::assignAllQueuesChanged ();
 		spooler = "cups";
 		return "cups";
 	    }
 	    else if (`cups_client == result)
             {
                 Spooler::switchTo ("cups_client");
-		// FIXME
-//		Printer::assignAllQueuesChanged ();
 		spooler = "cups";
                 return "cups";
             }
 	    else if (`lprng == result)
 	    {
 		Spooler::switchTo ("lprng");
-		// FIXME
-//		Printer::assignAllQueuesChanged ();
 		spooler = "lprng";
 		return "lprng";
 	    }

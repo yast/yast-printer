@@ -10,6 +10,8 @@ AG=$5
 unset Y2DEBUG
 unset Y2DEBUGGER
 
+export HOME=/tmp
+
 shopt -s expand_aliases
 alias kick-debug-lines="fgrep -v ' <0> '"
 alias kick-empty-lines="grep -v '^$'"

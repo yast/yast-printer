@@ -24,7 +24,7 @@ Read	.init.scripts.comment "cups" $[]
 Execute	.target.bash_output "/sbin/insserv -d /etc/init.d/cups" $["exit":0, "srderr":"", "stdout":""]
 Execute	.target.bash "/usr/bin/lpq 2>/dev/null" 0
 Write	.cups.default_dest "" true
-Write	.target.ycp "/var/lib/YaST2/printers" $["cups_usb_devices":`always, "default":"", "deleted":[], "printers":[], "server_default":true, "version":521] true
+Write	.target.ycp "/var/lib/YaST2/printers" $["cups_usb_devices":`always, "printers":[], "version":521] true
 Execute	.target.bash "/bin/chmod 600 /var/lib/YaST2/printers" 0
 Execute	.target.bash "test -f /etc/init.d/lpd && /etc/init.d/lpd stop" 0
 Execute	.target.bash "test -f /etc/init.d/cups && /etc/init.d/cups stop" 0
@@ -52,11 +52,12 @@ Execute	.target.bash "/bin/grep '#this database was generated during package bui
 Read	.ppd.db.changed false
 Read	.target.ycp "/var/lib/YaST2/ppd_db.ycp" $["":$["":$["":$["filename":"filename"]]]]
 Read	.target.tmpdir "/tmp"
-Write	.ppd.file.modify ["filename", "/tmp/ppdfile", $[]] true
-Read	.target.size "/tmp/ppdfile" 555
-Write	.cups.printers.add $["accepting":true, "bannerend":"none", "bannerstart":"none", "changed":true, "database":"foomatic", "name":"lp", "ppd":"/tmp/ppdfile", "state":"idle", "uri":"parallel://dev/lp0"] true
+Write	.ppd.file.modify ["filename", "/tmp/patched_ppd_lp", $[]] true
+Execute	.target.remove "filename" 0
+Read	.target.size "/tmp/patched_ppd_lp" 555
+Write	.cups.printers.add $["accepting":true, "allowusers":[], "bannerend":"none", "bannerstart":"none", "changed":true, "default":true, "denyusers":[], "name":"lp", "ppd":"/tmp/patched_ppd_lp", "state":"idle", "uri":"parallel://dev/lp0"] true
 Write	.cups.default_dest "lp" true
-Write	.target.ycp "/var/lib/YaST2/printers" $["cups_usb_devices":`always, "default":"lp", "deleted":[$["name":"lpx", "states":$["cups-state":"commited", "lprng-state":"changed"], "type":"printer"]], "printers":[$["accepting":true, "bannerend":"none", "bannerstart":"none", "cups-state":"commited", "name":"lp", "state":"idle", "uri":"parallel://dev/lp0"]], "server_default":true, "version":521] true
+Write	.target.ycp "/var/lib/YaST2/printers" $["cups_usb_devices":`always, "printers":[$["name":"lp", "uri":"parallel://dev/lp0"]], "version":521] true
 Execute	.target.bash "/bin/chmod 600 /var/lib/YaST2/printers" 0
 Execute	.target.bash "test -f /etc/init.d/lpd && /etc/init.d/lpd stop" 0
 Execute	.target.bash "test -f /etc/init.d/cups && /etc/init.d/cups stop" 0

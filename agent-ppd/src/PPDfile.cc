@@ -348,3 +348,45 @@ YCPList PPDfile::ppdConstraints (YCPString filename)
     ppdClose (ppd);
     return ret;
 }
+
+/**
+  * Get the list of constrainting options
+  * @param filename of the PPD file
+  * @param options map of options to mark
+  * @return list of all constrainting options in the PPD file
+  */
+YCPList PPDfile::ppdFailedConstraints (YCPString filename, YCPMap options)
+{
+    ppd_file_t *ppd; 
+
+    const char* fn = filename->value_cstr ();
+
+    if ((ppd = ppdOpenFile(fn)) == NULL)
+    {
+        y2error ("Unable to open PPD file %s !", fn);
+        return YCPList ();
+    }
+    ppdMarkDefaults (ppd);
+    int conflicts = 0;
+    for (YCPMapIterator it = options->begin (); it != options->end (); it++)
+    {
+	YCPString key = it.key ()->asString ();
+	YCPString value = it.value ()->asString ();
+	conflicts = ppdMarkOption(ppd,
+	    key->value_cstr (), value->value_cstr ());
+    }
+    YCPList constraints = YCPList ();
+    for (int i = 0 ; i < ppd->num_groups; i++)
+    {
+	for (int j = 0 ; j < ppd->groups[i].num_options; j++)
+	{
+	    if (ppd->groups[i].options[j].conflicted)
+	    {
+		constraints->add (YCPString (
+		    ppd->groups[i].options[j].keyword));
+	    }
+	}
+    }
+
+    return constraints;
+}

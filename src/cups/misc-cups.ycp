@@ -37,16 +37,40 @@
     }
 
     /**
+      * Read settings of CUPS client-only
+      * @return boolean true on success
+      * TODO error handling
+      */
+    global define boolean cupsClientRead () ``{
+	map state = SCR::Read (.target.ycp, "/var/lib/YaST2/printers");
+	if (nil == state)
+	{
+	    state = $[];
+	}
+	string cups_default = SCR::Read (.cups.default_dest);
+	map out = SCR::Execute (.target.bash_output,
+	    "/bin/grep ^Default </etc/cups/lpoptions | cut -f2 -d\\ ");
+	string lpoptions_default = out["stdout"]:"";
+	if (nil != findfirstof (lpoptions_default, "\n"))
+	{
+	    lpoptions_default = substring (lpoptions_default, 0,
+		findfirstof (lpoptions_default, "\n"));
+	}
+	CUPS::server_default = ! (cups_default == lpoptions_default);
+	default = CUPS::server_default
+	    ? ""
+	    : cups_default;
+	return true;
+    }
+
+    /**
       * Write configuration to CUPS
       * @param entry map of printer entry
       * @return boolean true if successfull
       */
     global define boolean writeCupsPrinter (map entry) ``{
-y2error ("Writing printer %1", entry);
 	Printerdb::loadFoomaticIfNeeded ();
         string name = lookup (entry, "name", "");
-        if (lookup (entry, "type", "yast2") != "yast2")
-            return false;
         if (lookup (entry, "uri", "class") == "class")
         {
             return SCR::Write (.cups.classes.add, entry);

@@ -74,6 +74,11 @@
      */
     global string default = "";
     /**
+      * Has to be saved all?
+      */
+    global boolean save_all = false;
+
+    /**
      * Were settings changed?
      */
     global boolean dirty = false;
@@ -161,11 +166,6 @@
     global boolean conf_detected = false;
 
     /**
-      * When configuring client, using server's default queue?
-      */
-    global boolean server_default = true;
-
-    /**
       * Selected item of the list of detected printers
       */
     global integer runAutoprobedListDialog__current = 0;
@@ -211,7 +211,7 @@
 	    Printerlib::setCupsUsbDevicesInfo ();
 	    autodetected = filter (`a, autodetected, ``(
 		! contains (Printerlib::getProblematicCupsUsbDevices (),
-		    Printerlib::getUridevice (a["uri"]:""))
+		    Printerlib::getUriDevice (a["uri"]:""))
 	    ));
 	}
     }
@@ -396,10 +396,9 @@
 	string q_filter = "";
 
 	string filename = p["ppd"]:"";
-	if (isPpd (filename))
+	if (! p["raw"]:false)
 	{
-	    map info = p["ppd_info"]:$[];
-	    q_filter = info["filter"]:"";
+	    q_filter = p["ppd_info", "filter"]:"";
 	}
 
 	if (q_filter == nil)
@@ -428,13 +427,6 @@
 			"void";
 	});
 	return p;
-    }
-    /**
-      * Make states of all queues changed or void
-      * after spooler switch de-facto no queue is really saved
-      */
-    global define void assignAllQueuesChanged () ``{
-	printcap = maplist (`p, printcap, ``(assignStates (p, true)));
     }
 
     /**
@@ -525,7 +517,7 @@
 	    "spooler" : Spooler::Get (),
 	    "cups_installation" : CUPS::cups_installation,
 	    "server_hostname" : CUPS::server_hostname,
-	    "server_default" : server_default,
+	    "server_default" : CUPS::server_default,
 	];
     }
     /**
@@ -535,14 +527,14 @@
     global define void Import (map settings) ``{
 	dirty = true;
 	Spooler::Set (settings["spooler"]:"cups");
-	CUPS::cups_installation = lookup (settings, "cups_installation", nil);
-	CUPS::server_hostname = lookup (settings, "server_hostname", "");
-	default = lookup (settings, "default", "");
-	printcap = lookup (settings, "printcap", []);
+	CUPS::cups_installation = settings["cups_installation"]:nil;
+	CUPS::server_hostname = settings["server_hostname"]:"";
+	default = settings["default"]:"";
+	printcap = settings["printcap"]:[];
 	CUPS::usb_dev_names = `always;
 	index = -1;
 	deleted = [];
-	server_default = settings["server_default"]:"";
+	CUPS::server_default = settings["server_default"]:"";
     }
     /**
      * Reset all settings...
@@ -563,32 +555,72 @@
 	deleted = [];
 	autodetected = [];
 	CUPS::usb_dev_names = `always;
-	server_default = true;
+	CUPS::server_default = true;
     }
     /**
      * read printers from /etc/printcap
      * @return list of printers
      */
-    global define list printcapRead () ``{
+    global define list printcapRead (list yast_printcap) ``{
 	SCR::Execute (.target.bash,
 	    "test -d /etc/lpdfilter || /bin/mkdir /etc/lpdfilter");
-	list ret = SCR::Read (.etc.printcap);
+
+	// mark the queues that are managed by YaST proper way
+	map yast_queues_map = listmap (map p, yast_printcap, ``{
+	    if (p["name"]:"" != "")
+	    {
+		SCR::Execute (.target.bash, sformat (
+		    "/bin/touch /etc/lpdfilter/%1/yast2", p["name"]:""));
+	    }
+	    return [p["name"]:"", p];
+	});
+	list<map> ret = SCR::Read (.etc.printcap);
 	if (nil == ret)
 	    return [];
 
+	list<string> queue_names = [];
+	map qm = $[];
+	foreach (map p, ret, ``{
+	    string name = p["name"]:"";
+	    if (name != "")
+	    {
+		qm[name] = union (qm[name]:$[], p);
+	    }
+	});
+	ret = maplist (string k, map v, qm, ``(v));
+
 	ret = maplist (map p, ret, ``{
+	    p["saved"] = $[];
+	    p["lprng-state"] = "commited";
+	    if (p["type"]:"" != "yast2")
+		return p;
+	    boolean raw = yast_queues_map[p["name"]:"", "raw"]:false;
+	    p["raw"] = raw;
 	    string ppd_filename
 		= sformat ("/etc/lpdfilter/%1/ppd", p["name"]:"");
-	    if (-1 != SCR::Read (.target.size, ppd_filename))
+	    if ((! raw) && -1 != SCR::Read (.target.size, ppd_filename))
 	    {
-		string tmp_file = SCR::Read (.target.tmpdir);
-		SCR::Execute (.target.bash, "/bin/cp %1 %2", ppd_filename,
-		    tmp_file);
+		string tmp_file = SCR::Read (.target.tmpdir) + "/ppd_file_" + p["name"]:"";
+		SCR::Execute (.target.bash, sformat ("/bin/cp %1 %2",
+		    ppd_filename, tmp_file));
 		p["ppd"] = tmp_file;
 		p["ppd_info"] = Printer::ppdInfo (tmp_file);
 	    }
+	    else if (! raw)
+	    {
+		p["type"] = "non-yast";
+	    }
+	    p["uri"] = yast_queues_map[p["name"]:"", "uri"]:"";
+	    p["ascii"] = yast_queues_map[p["name"]:"", "ascii"]:false;
+	    p["unique_key"] = yast_queues_map[p["name"]:"", "unique_key"]:"";
 	    return p;
 	});
+
+	foreach (string k, map v, yast_queues_map, ``{
+	    SCR::Execute (.target.bash, sformat (
+		"test -f /etc/lpdfilter/%1/yast2 && /bin/rm /etc/lpdfilter/%1/yast2", k));
+	});
+
 	default = ret[0, "name"]:nil;
 	return ret;
     }
@@ -605,13 +637,65 @@
 	    ret = filter (`e, ret, ``(lookup (e, "uri", "") != ""));
 	    ret = maplist (map e, ret, ``{
 		if (SCR::Read (.target.size, e["ppd"]:"") > 0)
+		{
 		    e["ppd_info"] = Printer::ppdInfo (e["ppd"]:"");
-		    path p = .etc.cups.printers.value;
-		    p = add (p, e["name"]:"");
-		    p = add (p, "DeviceURI");
-		    string uri = SCR::Read (p);
-		    if (uri != nil)
-			e["uri"] = uri;
+		    e["raw"] = false;
+		}
+		else
+		{
+		    e["raw"] = true;
+		}
+		path p = .etc.cups.printers.value;
+		p = add (p, e["name"]:"");
+		p = add (p, "DeviceURI");
+		string uri = SCR::Read (p);
+		if (uri != nil)
+		    e["uri"] = uri;
+		if (regexpmatch (e["uri"]:"", "^smb:\/\/.*"))
+		{
+		    e["uri"] = regexpsub (e["uri"]:"",
+			"^smb(:\/\/.*)$",
+			"samba\\1");
+		}
+		e["cups-state"] = "commited";
+		e["type"] = "yast2";
+
+		// in case of raw queues, there is no PPD file and no options
+		// can be checked against this PPD file
+		if (e["raw"]:true)
+		{
+		    e["ppd_options"] = $[];
+		    return e;
+		}
+
+		// split options to those comming from PPD file and others
+		map options = e["options"]:$[];
+		map ppd_options = $[];
+
+		string filename = e["ppd"]:"";
+		map opts_ppd = SCR::Read (.ppd.file.options, [filename, ""]);
+		list<map> optlist = opts_ppd["data"]:[];
+		list<string> ppd_opts
+		    = maplist (map o, optlist, ``(o["name"]:nil));
+		ppd_opts = filter (string o, ppd_opts, ``(o != nil && o != ""));
+		foreach (string k, any v, options, ``{
+		    if (contains (ppd_opts, k))
+		    {
+			ppd_options[k] = (string) v;
+			options[k] = nil;
+		    }
+		});
+		options = filter (string k, any v, options, ``(v != nil));
+
+		// check options comming from PPD file for constraints
+		list<string> constraints = SCR::Read (
+		    .ppd.file.constraints_list,
+		    [filename, ppd_options]);
+		ppd_options = filter (string k, string v, ppd_options, ``(
+		    ! contains (constraints, k)));
+
+		e["options"] = options;
+		e["ppd_options"] = ppd_options;
 		return e;
 	    });
             list classes = SCR::Read (.cups.classes);
@@ -620,6 +704,8 @@
 	    classes = maplist (`e, classes, ``(add (e, "uri", "class")));
 	    ret = ret + classes;
 	    default = SCR::Read (.cups.default_dest);
+	    if (default == "" || default == nil)
+		default = ret[0, "name"]:nil;
 	    CUPS::readCupsSettings ();
 	    return ret;
         }
@@ -762,6 +848,7 @@
 	}
 	// Progress finish
 	Progress::Finish (); if (testAbort ()) return false;
+	y2milestone ("Reading finished");
 	return true;
     }
 
@@ -845,23 +932,6 @@ to print."));
 	}
     }
 
-    /**
-      * Read settings of CUPS client-only
-      * @return boolean true on success
-      * TODO prefer lpoptions
-      * TODO error handling
-      */
-    global define boolean cupsClientRead () ``{
-	map state = SCR::Read (.target.ycp, "/var/lib/YaST2/printers");
-	if (nil == state)
-	{
-	    state = $[];
-	}
-	server_default = state["server_default"]:true;
-	default = state["default"]:"";
-	return true;
-    }
-
     global define boolean spoolerInitialize () ``{
 	if (Spooler::Get () == "cups")
 	{
@@ -926,7 +996,7 @@ Detect your printers?"));
         }
         if (Spooler::Get () == "lprng")
         {
-            return printcapRead();
+            return printcapRead(printcap);
         }
 	return [];
     }
@@ -937,12 +1007,6 @@ Detect your printers?"));
       * TODO error handling
       */
     global define boolean stateRead () ``{
-	if (! Spooler::reread)
-	{
-	    printcap = filter (`e, printcap, ``(lookup (e, "type", "yast2") == "yast2"));
-	}
-	else
-	{
 	    printcap = [];
 	    SCR::Execute (.target.bash, "/bin/touch /var/lib/YaST2/printers");
 	    map state = SCR::Read (.target.ycp, "/var/lib/YaST2/printers");
@@ -958,14 +1022,11 @@ Detect your printers?"));
 
 	    updateConfig (read_version);
 
-	    deleted = lookup (state, "deleted", []);
-	    if (default == "" || default == nil)
-		default = lookup (state, "default", "");
+	    deleted = [];
 	    CUPS::usb_dev_names = state["cups_usb_devices"]:`always;
 	    printcap = maplist (`e, printcap, ``(
 		add (e, "type", "yast2")
 	    ));
-	}
 	return true;
     }
 
@@ -980,104 +1041,6 @@ Detect your printers?"));
         });
     }
 
-    global define void updateStatesAfterRead (list nonyast) ``{
-	list nyl = maplist (`e, nonyast, ``{return lookup (e, "name", "");});
-	nyl = filter (`e, nyl, ``(e != ""));
-	printcap = maplist (`e, printcap, ``{
-	    boolean ready = contains (nyl, lookup (e, "name", ""));
-	    string state = Spooler::Get () + "-state";
-        // changed due to bug #19224, but I'm not sure, if it is really OK!
-	    e[state] = ready ? e[state]:"changed" : "changed";
-	    return e;
-	});
-    }
-
-    /**
-      * Remove queues from YaST2 config. files, that were deleted by other tool
-      * @param nonyast list of non-yast queues
-      */
-    global define void removeDeletedQueues (list nonyast) ``{
-	list nyl = maplist (`e, nonyast, ``{return lookup (e, "name", "");});
-	nyl = filter (`e, nyl, ``(e != ""));
-	if (Spooler::Get () == "cups")
-	{
-	    printcap = filter (`e, printcap, ``(
-		contains (nyl, e["name"]:"")
-		|| e["cups-state"]:"changed" != "commited"
-	    ));
-	}
-	else if (Spooler::Get () == "lprng")
-	{
-	    printcap = filter (`e, printcap, ``(
-		contains (nyl, e["name"]:"")
-		|| e["lprng-state"]:"changed" != "commited"
-	    ));
-	}
-    }
-
-    /**
-      * Add queues not added by YaST to list of queues
-      * @param nonyast list of non-yast queues
-      */
-    global define void mergeNonYaST (list nonyast) ``{
-	list yast2_queue_names = filter (string f,
-	    maplist (map e, printcap, ``(e["name"]:"")),
-	    ``(f != ""));
-	list marked_for_delete =filter (string f,
-	    maplist (map e, deleted, ``(e["name"]:"")),
-	    ``(f != ""));
-
-	if (Spooler::Get () == "cups")
-	{
-foreach (map e, nonyast, ``{y2error ("CR: %1", e);});
-
-	    printcap = nonyast;
-	    return;
-	}
-
-        foreach (`e, nonyast, ``{
-            string name = lookup (e, "name", "");
-	    if (! contains (marked_for_delete, name))
-	    {
-                if (! contains (yast2_queue_names, name))
-                {
-		    string uri = lookup (e, "uri", "");
-		    e = add (e, "type", "nonYaST");
-                    printcap = add (printcap, e);
-                }
-	        else if (Spooler::Get () == "cups")
-	        {
-		    printcap = maplist (`ye, printcap, ``{
-		        if (lookup (ye, "name", "") == name)
-			{
-y2error ("CUPS record: %1", e);
-			    if (lookup (ye, "uri", "") == "")
-			    {
-				ye = add (ye, "uri", lookup (e, "uri", ""));
-			    }
-			    foreach (string key, [
-				"options", "ppd", "accepting", "bannerend",
-				"bannerstart", "state", "allowusers",
-				"denyusers", "ppd_info", "uri",
-			    ], ``{
-				if (e[key]:nil != nil)
-				    ye[key] = e[key]:nil;
-			    });
-		        }
-			return ye;
-		    });
-	        }
-		else if (Spooler::Get () == "lprng")
-		{
-		    if (e["ppd"]:"" != "")
-		        ye["ppd"] = e["ppd"]:"";
-		    if (e["ppd_info"]:$[] != $[])
-			ye["ppd_info"] = e["ppd_info"]:$[];
-		}
-	    }
-        });
-    }
-
     /**
       * Old read function, called from new Read function
       * TODO: better integrate
@@ -1089,12 +1052,9 @@ y2error ("CUPS record: %1", e);
 	if (Mode::cont && ! Mode::update)
 	    return true;
 	boolean ret = true;
-	list nonyast = spoolerSpecQueuesRead ();
 
 	stateRead ();
-//	removeDeletedQueues (nonyast);
-	updateStatesAfterRead (nonyast);
-	mergeNonYaST (nonyast);
+	printcap = spoolerSpecQueuesRead ();
 
 	setUniqueKeys ();
 	read_done = true;
@@ -1104,6 +1064,7 @@ y2error ("CUPS record: %1", e);
 	    // message box
 	    Report::Error (_("Unable to read the current configuration."));
 	}
+	y2milestone ("Queues reading finished");
         return ret;
      }
     /**
@@ -1225,7 +1186,6 @@ y2error ("CUPS record: %1", e);
 	Progress::NextStage (); // adjst services
 	if (testAbort ()) return false;
 	ret = Spooler::AdjustServices (size (printcap) > 0) && ret;
-
 	if (with_daemon)
 	{
 	    Progress::NextStage (); // delete old printers
@@ -1254,7 +1214,7 @@ y2error ("CUPS record: %1", e);
 	{
 	    Progress::NextStage (); // save system settings
 	    if (testAbort ()) return false;
-	    ret = CUPS::saveCupsClient () && ret;
+	    ret = CUPS::saveCupsClient (default) && ret;
 	    ret = saveTheConfiguration() && ret;
 	}
 
@@ -1301,15 +1261,16 @@ y2error ("CUPS record: %1", e);
 	// printer to "".
 	//
 	boolean default_printer_found = false;
-	printcap = maplist (`entry, printcap, ``{
+	printcap = maplist (map entry, printcap, ``{
 	    string uri = lookup (entry, "uri", "");
 	    string name = lookup (entry, "name", "");
+	    entry["default"] = (name == default);
 	    // progress title
 	    Progress::Title (sformat (_("Saving printer %1"), name));
 	    if (name == "")
 	    {
 		// error report. %1 is queue name
-		Report::Error (sformat (_("Attempting to save unnamed printer. Skipping: %1"), ent));
+		Report::Error (sformat (_("Attempting to save unnamed printer. Skipping: %1"), entry));
 		return;
 	    }
 	    string state = Spooler::Get () + "-state";
@@ -1332,7 +1293,7 @@ y2error ("CUPS record: %1", e);
 			_("Queue %1 cannot be saved because
 the selected spooler does not support it."), name));
 		}
-		else if ((lookup (entry, "cups-state", "changed") == "changed" || Spooler::save_all) && (lookup (entry, "type", "yast2") == "yast2"))
+		else if ((lookup (entry, "cups-state", "changed") == "changed" || save_all) && (lookup (entry, "type", "yast2") == "yast2"))
 		{
 		    y2debug ("Saving printer %1", entry);
 		    if (writeCupsPrinter (entry))
@@ -1351,7 +1312,7 @@ the selected spooler does not support it."), name));
 			_("Queue %1 cannot be saved because
 the selected spooler does not support it."), name));
 		}
-		else if ((lookup (entry, "lprng-state", "changed") == "changed" || Spooler::save_all) && (lookup (entry, "type", "yast2") == "yast2"))
+		else if ((lookup (entry, "lprng-state", "changed") == "changed" || save_all) && (lookup (entry, "type", "yast2") == "yast2"))
 		{
 		    if (writeLpdPrinter (entry))
 			entry = add (entry, "lprng-state", "commited");
@@ -1389,90 +1350,22 @@ the selected spooler does not support it."), name));
     }
 
     /**
-      * Remove from deleted printers list printers which are deleted from both spoolers and which were recreated
-      */
-    define void cleanDeletedPrinters () ``{
-	//remove deleted from all spoolers from list
-	deleted = filter (`e, deleted, ``{
-	    map states = lookup (e, "states", $[]);
-	    boolean res = false;
-	    foreach (`k, `v, states, ``{
-		if (v != "commited")
-		    res = true;
-	    });
-	    return res;
-	});
-    }
-
-    /**
-      * Remove from list of deleted printers suplicated entries
-      */
-    define void removeDuplicatedDeletedPrinters () ``{
-	map tmp = $[
-	    "class" : $[],
-	    "printer" : $[],
-	];
-	foreach (map d, deleted, ``{
-	    if (! haskey (tmp[(d["type"]:"printer")]:$[], d["name"]:""))
-	    {
-		tmp[d["type"]:"printer", d["name"]:""] = d["states"]:$[];
-	    }
-	    else
-	    {
-		map old_states = tmp[d["type"]:"printer", d["name"]:""]:$[];
-		map new_states = d["states"]:$[];
-		old_states = mapmap (`k, `v, old_states, ``{
-		    if (v != "changed")
-			v = new_states[k]:"changed";
-		    return [k, v];
-		});
-		tmp[d["type"]:"printer", d["name"]:""] = old_states;
-	    }
-	});
-	deleted = merge (
-	    maplist (`k, `v, tmp["class"]:$[], ``(
-		$[
-		    "type" : "class",
-		    "name" : k,
-		    "states" : v,
-		]
-	    )),
-	    maplist (`k, `v, tmp["printer"]:$[], ``(
-		$[
-		    "type" : "printer",
-		    "name" : k,
-		    "states" : v,
-		]
-	    ))
-	);
-    }
-
-    /**
      * Write /var/lib/yast2/printers
      * @return boolean true if successful
      */
 
     define boolean saveTheConfiguration () ``{
-	list l = filter (`e, printcap, ``(lookup (e, "type", "yast2") == "yast2"));
-	list forbidden_keys = ["changed", "ppd", "ppd_info", "auto_propose",
-	    "modelset_required", "composite", "comment", "saved",
-	    "newer_gs_upp", "database", "options", "ownppd", "accepting",
-	    "bannerend", "bannerstart", "state", "allowusers", "denyusers",
-	    "ppd_options", "config", "detected", "vendor_ieee", "device_ieee",
-	    "vendor_db", "device_db", "info", "location", 
-	];
-	l = maplist (`e, l, ``(filter (`k, `v, e,
-	    ``(! contains (forbidden_keys, k)))));
-	removeDuplicatedDeletedPrinters ();
-	cleanDeletedPrinters ();
+	list l = [];
+	l = filter (`e, printcap, ``(lookup (e, "type", "yast2") == "yast2"));
+	list allowed_keys = [ "name", "raw", "uri", "ff", "ascii",
+	    "unique_key" ];
+	l = maplist (map e, l, ``(filter (string k, any v, e,
+	    ``(contains (allowed_keys, k)))));
 	map save = $[
 	    "printers" : l,
-	    "deleted" : deleted,
-	    "default" : default,
 	    "cups_usb_devices" : CUPS::usb_dev_names,
-	    "server_default" : server_default,
+	    "version" : version,
 	];
-	save["version"] = version;
 	if (! SCR::Write (.target.ycp, "/var/lib/YaST2/printers", save))
 	{
 	    // error report. %1 is filename
@@ -1504,20 +1397,6 @@ the selected spooler does not support it."), name));
     }
 
     /**
-     * Write conf file onto disk.
-     * @param fn filename
-     * @param conf file contents
-     */
-    define void writeConf (string fn, map conf) ``{
-	string s = "#\n# for documentation see /usr/lib/lpdfilter/global/optional.options\n#\n\n";
-	foreach (`k, `v, conf, ``{
-	    s = s + sformat ("%1=\"%2\"\n", k, v);
-	});
-	SCR::Write (.target.string, fn, s);
-	SCR::Execute (.target.bash, sformat ("/bin/chmod 660 %1 ; /bin/chown lp:lp %1", fn));
-    }
-
-    /**
      * Create string with the definition of samba print command
      * @param uri Uri of the printer
      * @return string string with definition
@@ -1539,35 +1418,7 @@ the selected spooler does not support it."), name));
 	    sformat ("/usr/lib/lpdfilter/redirect/samba_print //%1/\"%2\" %3 %4 -N -P\n",
 		    Printerlib::getUriHost (uri), Printerlib::getUriRemoteQueue (uri), pass, user);
     }
-    /**
-     * Create .upp file from the options. Note that there can be depended options.
-     * @param options Options list
-     * @return string upp file content
-     */
-    define string optionsToString (list options) ``{
-	string upp = "";
-	if (nil != options)
-	{
-	    foreach (`opt, options, ``{
-		integer defaultindex = lookup (opt,"defaultindex", nil);
-		string def = lookup (opt, "default", "");
-		list val = lookup (opt,"values", []);
-		list depended_opt = lookup (select (val,0, $[]),"options", nil);
-		if (nil != defaultindex)
-		{
-		    def = lookup (select (val,defaultindex, $[]),"value", nil);
-		    depended_opt = lookup (select (val,defaultindex, $[]),"options", nil);
-		}
-		//else if there is no defaultindex, no changes were made, so let "default"
-		if (def != "")
-		    upp = upp+sformat ("%1\n", def);
-		// if there is no defaultindex, no suboptions can be here
-		if (nil != depended_opt)
-		    upp = upp+optionsToString (depended_opt);
-	    });
-	}
-	return upp;
-    }
+
     /**
      * Creates summary from autodetected printers and printcap.
      * @param style type of summary - list of symbols - flags:
@@ -1587,7 +1438,8 @@ the selected spooler does not support it."), name));
 			// summary text part
 			// %1 server name
 		    sformat (_("using server %1."), CUPS::server_hostname));
-	    list servers = filter (`s, cups_servers, ``(s != CUPS::server_hostname));
+	    list servers = filter (`s, CUPS::cups_servers,
+		``(s != CUPS::server_hostname));
 	    servers = toset (servers);
 	    if (size (servers) > 0)
 	    {
@@ -1619,7 +1471,6 @@ the selected spooler does not support it."), name));
 		    used = add (used, cache);
 		    if (contains (style, `test))
 		    {
-y2error ("Printer to sum: %1", entry);
 			if ((Spooler::Get () == "cups" && lookup (entry, "cups-state", "") != "void")
 			    || (Spooler::Get () == "lprng" && lookup (entry, "lprng-state", "") != "void"))
 			{
@@ -1682,15 +1533,16 @@ y2error ("Printer to sum: %1", entry);
 		string cfg = "";
 		if (type == "yast2")
 		{
+		    boolean raw = i["raw"]:false;
 		    string model = "";
-		    model = i["ppd_info", "manufacturer"]:"" + " "
-			+ i["ppd_info", "model"]:"";
-
-		    if (model == " ")
+		    if (! raw)
 		    {
-			string ppd = i["ppd"]:"";
-			if (isPpd (ppd))
+			model = i["ppd_info", "manufacturer"]:"" + " "
+			    + i["ppd_info", "model"]:"";
+
+			if (model == " ")
 			{
+			    string ppd = i["ppd"]:"";
 			    map info = i["ppd_info"]:$[];
 			    model = info["manufacturer"]:"" + " "
 				+ info["model"]:"";
@@ -1698,7 +1550,6 @@ y2error ("Printer to sum: %1", entry);
 		    }
 
 		    i = assignStates (i, false);
-		    boolean raw = i["raw"]:false;
 		    string dev = (raw ?
 			// menu item, %1 is URI
 			sformat (_("Raw queue: %1"), Printerlib::getUriNiceName (lookup (i, "uri", "")))
@@ -1798,18 +1649,6 @@ y2error ("Printer to sum: %1", entry);
 	return Printerlib::getUriType (lookup (printer, "uri", ""));
     }
 
-
-    /**
-     * Constructor only grabs Args
-     */
-    global define void Printer () ``{
-	integer i = 0;
-	while (i < size (Args ()))
-	{
-	    i = i + 1;
-	}
-	return ;
-    }
     /**
      * Prepare detected printer to be configured.
      * @param det map of detected printer
