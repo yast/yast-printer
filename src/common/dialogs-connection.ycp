@@ -74,12 +74,12 @@
 	    `parallel : "parallel",
 	    `usb : "usb",
 	    `irda : "irda",
+	    `bluetooth : "bluetooth",
 	    `serial : "serial",
 	    `ipp : "ipp",
 	    `lpd : "lpd",
 	    `samba : "samba",
 	    `socket : "socket",
-	    `irda : "irda",
 	    `novell : "novell",
 	    `pipe : "pipe",
 	    `class : "class",
@@ -321,7 +321,11 @@ only if a CUPS spooler is used
 	    `Left (`RadioButton (`id (`irda),
 		// radio button
 		_("IrD&A printer"),
-		selected == `irda))
+		selected == `irda)),
+	    `Left (`RadioButton (`id (`bluetooth),
+		// radio button
+		_("Blue&tooth printer"),
+		selected == `bluetooth))
 	);
 
 	if (Arch::s390 ())
@@ -379,6 +383,8 @@ only if a CUPS spooler is used
 	string uri_type = Printerlib::getUriType (Printer::printer["uri"]:"");
 	if (uri_type == "irda")
 	    selected = `irda;
+	else if (uri_type == "bluetooth")
+	    selected = `bluetooth;
 	else if (uri_type == "serial")
 	    selected = `serial;
 	else if (uri_type == "usb")
@@ -400,7 +406,11 @@ only if a CUPS spooler is used
 	    `Left (`RadioButton (`id (`irda),
 		// radio button
 		_("IrD&A printer"),
-		selected == `irda))
+		selected == `irda)),
+	    `Left (`RadioButton (`id (`bluetooth),
+		// radio button
+		_("Blue&tooth printer"),
+		selected == `bluetooth))
 	);
 	// dialog caption
 	return runGenericConnectionTypeDialog (items, _("Printer Type"),
@@ -519,7 +529,7 @@ only if a CUPS spooler is used
      * Asks user about settings of selected device (port number, other settings
      * for serial ports). Lets user do test of device. Uses global variable
      * printer.
-     * @param type "parallel", "serial", "usb", "irda"
+     * @param type "parallel", "serial", "usb", "irda", "bluetooth"
      *
      * @return symbol `back, `next, `abort
      */
@@ -550,7 +560,7 @@ only if a CUPS spooler is used
 	integer i = find (device, "?");
         if (nil != i)
             device = substring (device, 0, i);
-        if ("irda" != type)
+        if ("irda" != type && "bluetooth" != type)
             devices = (list<string>)SCR::Read (read_devs);
         else
             devices = [];
@@ -615,12 +625,25 @@ that your serial ports are not properly configured."));
                 devices = ["/dev/irlpt0", "/dev/irlpt1", "/dev/irlpt2",
 		    "/dev/irlpt3"];
             }
+/*	    else if (type == "bluetooth")
+	    {
+		if (device != "")
+		    devices = [device];
+		else
+		    Wizard::DisableNextButton ();
+	    }*/
         }
         if (type != Printerlib::getUriType (device))
             device = "";
         if (device == "")
             device = devices[0]:"";
         list device_val = getDevicesItems (devices, device);
+y2error ("DV: %1", device_val);
+	if (size (device_val) == 0)
+	{
+y2error ("disabling NB");
+	    Wizard::DisableNextButton ();
+	}
         term details = `VBox (
             // PushButton
             `HBox (`HStretch (), `PushButton (`id (`details), _("&Other...")))
@@ -628,7 +651,7 @@ that your serial ports are not properly configured."));
 
         if ("parallel" == type || "serial" == type)
         {
-            if (!Mode::config)
+            if (!Mode::config ())
             {
                 details = add (details,
                     `HBox (
@@ -642,6 +665,17 @@ that your serial ports are not properly configured."));
 	                        : _("&Serial port details..."))));
             }
         }
+	else if (type == "bluetooth")
+	{
+	    if (! Mode::config ())
+	    {
+		details = add (details, `HBox (
+		    `HStretch (),
+		    // push button
+		    `PushButton (`id (`bt_detect), _("&Detect Devices"))
+		));
+	    }
+	}
 
         term contents = `VBox (`VSpacing (2),
 	    `HBox (`HSpacing (5),
@@ -669,14 +703,18 @@ that your serial ports are not properly configured."));
 		),
                 `HSpacing (5)
 	    ),
-            `VStretch (),
-            // pushbutton
-            `PushButton (`id (`test), `opt (`key_F6),
-		// pushbutton
-		_("&Test printer connection")
-	    ),
             `VStretch ()
-        );
+	);
+	if (type != "bluetooth")
+	{
+	   contents = add (contents,
+		`PushButton (`id (`test), `opt (`key_F6),
+		    // pushbutton
+		    _("&Test printer connection")
+		)
+	    );
+	    contents = add (contents, `VStretch ());
+        };
         Wizard::SetContentsButtons (getAskDeviceLabel (type), contents,
 	    getAskDeviceHelp (type), Label::BackButton (), Label::NextButton ());
 	Wizard::RestoreBackButton ();
@@ -716,7 +754,21 @@ actually selected.
                 ret = `abort;
             device = (string)UI::QueryWidget (`id (`devicesel), `CurrentItem);
 
-            if (ret == `test)
+	    if (ret == `bt_detect)
+	    {
+		map<string,string> devs = Printerlib::GetBluetoothDevices ();
+		devices = maplist (string k, string v, devs, { return k; });
+		device_val = getDevicesItems (devices, "");
+		UI::ReplaceWidget (`id (`devicesel_replace),
+		    `SelectionBox (
+			`id (`devicesel),
+			`opt (`notify),
+			// Unix device /dev/(lp|usb/lp|ttyS)*
+			_("Select the d&evice:"),
+			device_val));
+		Wizard::EnableNextButton ();
+	    }
+            else if (ret == `test)
             {
                 Printerlib::testDevice (cups_devices_mapping[device]:device);
             }
@@ -762,6 +814,9 @@ actually selected.
             if ("serial" == type)
                 uri = uri + sformat ("?baudrate=%1+ty=%2", baudrate,
 		    ser_settings);
+	    else if (type == "bluetooth")
+		uri = type + "://" + filterchars (device,
+		    "0123456789aAbBcCdDeEfF");
             Printer::printer = add (Printer::printer, "uri", uri);
         }
         return ret;

@@ -277,7 +277,7 @@ define void CleanAndUnmountAgents () {
      * @return boolean true if success
      */
     define boolean reinstallAll () ``{
-	if (Mode::config)
+	if (Mode::config ())
 	{
 	    Printerlib::DisplayUnavailableAIPopup ();
 	    return true;
@@ -516,16 +516,16 @@ All changes will be lost.
 	boolean default_selected = false;
 	foreach (string dev, devices, ``{
 	    boolean this_is_selected = (("" != device && dev == device)
-					 || ("" == device && (
+					 || ("" == device));/* && (
 					    dev == "/dev/lp0"
 					    || dev == "/dev/usblp0"
 					    || dev == "/dev/usb/lp0"
-					    || dev == "/dev/ttyS0")));
+					    || dev == "/dev/ttyS0")));*/
 	    if (this_is_selected)
 		default_selected = true;
 	    device_val = add (device_val, `item (`id (dev), Printerlib::getDeviceNiceName (dev, false), this_is_selected));
 	});
-	if (!default_selected)
+	if (!default_selected && device != "")
 	    device_val = add (device_val, `item (`id (device), device, true));
 	return device_val;
     }

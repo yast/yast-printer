@@ -69,6 +69,7 @@
 	    "serial" :          ``(runDeviceDialog ("serial")),
 	    "usb" :             ``(runDeviceDialog ("usb")),
 	    "irda" :            ``(runDeviceDialog ("irda")),
+	    "bluetooth" :	``(runDeviceDialog ("bluetooth")),
 		    // special
 	    "ppdetails" :       ``(editParallelPort ()),
             "spdetails" :       ``(editSerialPort ()),
@@ -184,6 +185,7 @@
 		`serial : "serial",
 		`usb : "usb",
 		`irda : "irda",
+		`bluetooth : "bluetooth",
 		`abort : `abort,
 	    ],
 	    "parallel" : $[
@@ -200,6 +202,7 @@
 	    "spdetails" : $[ `abort : `abort, `next : "serial", ],
 	    "usb" : $[ `abort : `abort, `next : "edit", ],
 	    "irda" : $[ `next : "edit", `abort : `abort, ],
+	    "bluetooth" : $[ `next : "edit", `abort : `abort, ],
 	    "lpd" : $[ `abort: `abort, `next: "edit", ],
 	    "pipe" : $[ `abort : `abort, `next : "edit", ],
 	    "model" : $[
@@ -260,6 +263,7 @@
 		`serial: "serial",
 		`usb: "usb",
 		`irda: "irda",
+		`bluetooth: "bluetooth",
 		`cups : "connection_cups",
 		`lpd : "lpd",
 		`smb : "samba",
@@ -301,6 +305,7 @@
 	    ],
 	    "usb" : $[ `next : "name_auto", `abort : `abort, ],
 	    "irda" : $[ `next : "name_auto", `abort : `abort, ],
+	    "bluetooth" : $[ `next : "name_auto", `abort : `abort, ],
 	    "samba" : $[ `next : "name_auto", `abort : `abort, ],
 	    "novell" : $[ `next : "name_auto", `abort : `abort, ],
 	    "lpd" : $[ `next : "name_auto", `abort : `abort, ],
@@ -524,7 +529,7 @@
 	Wizard::SetDesktopIcon("printer");
         Wizard::SetContentsButtons("", `VBox (), "",
             Label::BackButton(), Label::NextButton());
-	if (Mode::cont) // running from hardware proposal
+	if (Stage::cont ()) // running from hardware proposal
 	{
 	    if (! Printer::checkSpooler ())
 	    {

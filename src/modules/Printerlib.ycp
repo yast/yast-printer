@@ -24,6 +24,7 @@ textdomain "printer";
 import "Directory";
 import "Mode";
 import "Popup";
+import "Report";
 
 include "printer/texts.ycp";
 
@@ -59,6 +60,11 @@ global string baseDataDir = Directory::datadir + "/printer";
  * list of HP all-in-one models
  */
 list<string> hp_all_in_one = nil;
+
+/**
+ * List of probed bluetooth devices (in order to keep their names)
+ */
+map<string,string> probed_bt_devices = $[];
 
 // local functions
 
@@ -211,7 +217,7 @@ ECHO_PID=$!
      * @param dev device to test (/dev/lp0)
      */
     global define void testDevice (string dev) ``{
-        if (Mode::config)
+        if (Mode::config ())
         {
             DisplayUnavailableAIPopup ();
             return;
@@ -232,7 +238,7 @@ ECHO_PID=$!
       * @param type string "samba" or "novell"
       */
     global define void testRemoteUP (string wg, string hname, string rname, string user, string pass, string type) ``{
-	if (Mode::config)
+	if (Mode::config ())
 	{
 	    DisplayUnavailableAIPopup ();
 	    return;
@@ -261,7 +267,7 @@ ECHO_PID=$!
      * @param port TCP port
      */
     global define void testRemote (string hname, string rname, string type, integer port) ``{
-        if (Mode::config)
+        if (Mode::config ())
         {
 	    DisplayUnavailableAIPopup ();
             return;
@@ -332,6 +338,13 @@ ECHO_PID=$!
 	if (nil == i)
 	    return "";
 	uri = substring (uri, i + 1);
+	if (uri_type == "bluetooth")
+	{
+	    uri = filterchars (uri, "0123456789aAbBcCdDeEfF");
+	    uri = regexpsub (uri, "(..)(..)(..)(..)(..)(..)",
+		"\\1:\\2:\\3:\\4:\\5:\\6");
+	    return uri;
+	}
 	if (uri_type != "usb")
 	    while ("//" == substring (uri, 0, 2))
 		uri = substring (uri, 1);
@@ -554,6 +567,9 @@ ECHO_PID=$!
 	if ("irda" == type)
             // IrDA printer on /dev/irlpt0
             return sformat (_("IrDA printer on %1"), getUriDevice (uri));
+	if ("bluetooth" == type)
+	    // Bluetooth printer 11:22:33:44:55:66
+	    return sformat (_("Bluetooth printer %1"), getUriDevice (uri));
         if ("lpd" == type)
             // Forwarding queue to QUEUENAME on LPD server SERVERNAME
             return sformat (_("Forwarding queue to %1 on LPD server %2"), getUriRemoteQueue (uri), getUriHost (uri));
@@ -601,6 +617,14 @@ ECHO_PID=$!
 		ret = "USB";
 	    if (ret != "" && ret != nil)
 		return sformat ("%1 (%2)", ret, dev);
+	}
+	if (regexpmatch (dev, "[0-9a-fA-F:]{17,17}"))
+	{
+	    string nice_name = probed_bt_devices[dev]:"";
+	    if (nice_name != "")
+		return sformat ("%1 (%2)", nice_name, dev);
+	    else
+		return dev;
 	}
 	return lookup ($[
 	    // Names of devices. Labels in dialog
@@ -672,6 +696,48 @@ ECHO_PID=$!
 	    paper_size = `letter;
 	return paper_size;
     }
+
+global map<string,string> ListBluetoothDevices () {
+    return probed_bt_devices;
+}
+
+global map<string,string> GetBluetoothDevices () {
+    // popup message
+    UI::OpenDialog (`Label (_("Detecting Bluetooth devices...")));
+    map out = (map)SCR::Execute (.target.bash_output, "/usr/bin/hcitool scan");
+    UI::CloseDialog ();
+    if (out["exit"]:0 != 0)
+    {
+	Report::Error (_("Detecting Bluetooth devices failed"));
+	return $[];
+    }
+    string output = out["stdout"]:"";
+    list<string> lines = splitstring (output, "\n");
+
+//list<string> lines = ["   00:04:61:82:92:AB       Printer Adapter 8292AB"];
+
+    probed_bt_devices = listmap (string l, lines, {
+	if (regexpmatch (l, "[0-9a-fA-Z:]{17,17}[ \t]+[^ \t].*$"))
+	{
+	    string device = regexpsub (
+		l,
+		"([0-9a-fA-Z:]{17,17})[ \t]+[^ \t].*$",
+		"\\1");
+	    string descr = regexpsub (
+		l,
+		"[0-9a-fA-Z:]{17,17}[ \t]+([^ \t].*)$",
+		"\\1");
+	    return $[device : descr];
+	}
+
+	return $["" : ""];
+    });
+    probed_bt_devices = filter (string k, string v, probed_bt_devices, {
+	return k != "";
+    });
+    y2milestone ("Detected Bluetooth devices: %1", probed_bt_devices);
+    return probed_bt_devices;
+}
 
 
 }

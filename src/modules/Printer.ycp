@@ -40,6 +40,7 @@
     import "Spooler";
     import "String";
     import "Summary";
+    import "Stage";
     import "SuSEFirewall";
 
 
@@ -217,7 +218,7 @@
      * Autodetect printers.
      */
     global define list<map<string,any> > Detect () ``{
-	if (Mode::config)
+	if (Mode::config ())
 	{
 	    Printerlib::DisplayUnavailableAIPopup ();
 	    autodetected = [];
@@ -996,7 +997,7 @@ Detect your printers?"));
       */
     global define boolean queuesRead () ``{
 	// during installation, no queues are saved
-	if (Mode::cont && ! Mode::update)
+	if (Stage::cont () && ! Mode::update ())
 	    return true;
 	boolean ret = true;
 
@@ -1020,7 +1021,7 @@ Detect your printers?"));
     global define boolean Read () ``{
 	if (Arch::s390 ())
 	    skip_autodetection = true;
-	if (Mode::config)
+	if (Mode::config ())
 	    skip_autodetection = true;
 	list<string> stages = [
 	    // progress stage, text in dialog (short) (infinitive)
@@ -1077,14 +1078,14 @@ Detect your printers?"));
 	Progress::NextStep (); // step 3 - initialize spooler
 	if (testAbort ()) return false;
 
-	if (! Mode::test)
+	if (! Mode::test ())
 	{
 	    Spooler::Initialize ();
 	}
 
 	Progress::NextStageStep (4); // step 4-7 - read firewall settings
 
-	if (! Mode::test)
+	if (! Mode::test ())
 	{
 	    Progress::off ();
 	    SuSEFirewall::Read ();
@@ -1410,7 +1411,7 @@ the selected spooler does not support it."), name));
 
 	    Progress::NextStage (); // save firewall settings
 	    if (testAbort ()) return false;
-	    if (! Mode::test)
+	    if (! Mode::test ())
 	    {
 		Progress::off ();
 		SuSEFirewall::Write ();
@@ -1432,7 +1433,7 @@ the selected spooler does not support it."), name));
 
 	    Progress::NextStage (); // save firewall settings
 	    if (testAbort ()) return false;
-	    if (! Mode::test)
+	    if (! Mode::test ())
 	    {
 		Progress::off ();
 		SuSEFirewall::Write ();
@@ -1696,10 +1697,10 @@ the selected spooler does not support it."), name));
 		    // %1 is link to change the listenning to CUPS servers
 		    _("Listen to remote CUPS servers to get comfortable access to remote queues. (%1)"),
 		    ipp_listen_modify) + "</li>");
-		if (! Mode::config && SuSEFirewall::start)
+		if (! Mode::config () && SuSEFirewall::start)
 		{
 		    map<string,boolean> service_status = $[];
-		    map<string,map<string,boolean> > ifaces_info
+		    map<string,map<string,boolean> > ifaces_info = $[];
 			= SuSEFirewall::GetServices ([ "ipp-udp" ]);
 		    foreach (string s, map<string,boolean> status, ifaces_info,{
 			foreach (string iface, boolean en, status, {
@@ -1768,7 +1769,7 @@ the selected spooler does not support it."), name));
      * @return new queue name
      */
     global define string generateQueueName (string name, string uri,
-	string vendor_name, string device_name, list forbidden_names)
+	string vendor_name, string device_name, list<string> forbidden_names)
     ``{
 	if (name == nil)
 	{

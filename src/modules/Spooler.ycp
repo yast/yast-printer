@@ -56,7 +56,7 @@
  * display CUPS initialization popup
  */
 define void showCupsInitPopup () ``{
-    if (Mode::commandline)
+    if (Mode::commandline ())
     {
 	CommandLine::Print (_("Initializing CUPS server...
 This usually takes one or two minutes"));
@@ -198,7 +198,7 @@ global list GetSystemForbiddenNames () {
       * stop currently running printer spooler service
       */
     global define void StopServices () ``{
-	if (Mode::config)
+	if (Mode::config ())
 	    return;
 	SCR::Execute (.target.bash, "test -f /etc/init.d/lpd && /etc/init.d/lpd stop");
 	SCR::Execute (.target.bash, "test -f /etc/init.d/cups && /etc/init.d/cups stop");
@@ -296,7 +296,7 @@ global list GetSystemForbiddenNames () {
 	del = filter (string e, del, ``(! contains (inst, e)));
 
 
-	if (Mode::config)
+	if (Mode::config ())
 	{
 	    Spooler::Set (to);
 	    PackageAI::RemoveAll (del);
@@ -358,7 +358,7 @@ global list GetSystemForbiddenNames () {
       * @param showPopup boolean true if shall show a popup if needed
       */
     global define void RestartIfNeeded (boolean showPopup) ``{
-	if (Mode::config)
+	if (Mode::config ())
 	    return;
         if (Spooler::Get () == "cups")
         {
@@ -396,7 +396,7 @@ global list GetSystemForbiddenNames () {
 		    {
 			break;
 		    }
-                    if (close_dialog && ! Mode::commandline)
+                    if (close_dialog && ! Mode::commandline ())
                         UI::ChangeWidget (`id (`cups_prog), `Value, attempts);
                     sleep (1000);
                     status = (integer)SCR::Execute (.target.bash, "/etc/init.d/cups status");
@@ -408,7 +408,7 @@ global list GetSystemForbiddenNames () {
 			break;
                     }
                 }
-		if (close_dialog && ! Mode::commandline)
+		if (close_dialog && ! Mode::commandline ())
 		{
 		    UI::CloseDialog ();
 		}
