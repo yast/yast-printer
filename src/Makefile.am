@@ -1,1 +1,1 @@
-SUBDIRS = common config cups lprng modules clients
+SUBDIRS = common config cups modules clients

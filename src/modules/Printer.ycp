@@ -170,10 +170,6 @@
     global integer runAutoprobedListDialog__current = 0;
 
 
-    include "printer/misc-cups.ycp";
-    include "printer/misc-lprng.ycp";
-
-
 // local functions
 
     /**
@@ -270,6 +266,9 @@ $["bus":"USB", "bus_hwcfg":"usb", "class_id":265, "dev_name":"/dev/usb/lp0", "de
 $["bus":"USB", "bus_hwcfg":"usb", "class_id":265, "dev_name":"/dev/usb/lp0", "dev_names":["/dev/usb/lp0"], "dev_num":$["major":180, "minor":0, "range":1, "type":"c"], "device":"LASERJET 1300", "device_id":196613, "driver":"usblp", "hotplug":"usb", "model":"LASERJET 1300", "old_unique_key":"oQ6X.jfKkG0mJXc1", "resource":$["baud":[$["speed":1500000]]], "rev":"1.00", "sub_class_id":0, "sub_device":"LASERJET 1300", "sub_vendor":"HP", "sysfs_bus_id":"1-2:1.0", "unique_key":"cLrx.twN5GQuyNJ3", "vendor":"HP", "vendor_id":197816]
 ];
 */
+
+	CUPS::DetectCupsUsbDevicesInfo ();
+
 	y2milestone ("Probed printers: %1", aprobe);
 	autodetected = maplist (map i, aprobe, {
 	    map<string,any> p = $[];
@@ -304,7 +303,7 @@ $["bus":"USB", "bus_hwcfg":"usb", "class_id":265, "dev_name":"/dev/usb/lp0", "de
 
 		if (Spooler::Get () == "cups")
 		{
-		    dev_name = select (Printerlib::getCupsUsbDeviceInfo (
+		    dev_name = select (Printerlib::GetCupsUsbDeviceInfo (
 			class_dev), 0, "");
 		    if (dev_name == nil || dev_name == "")
 		    {
@@ -381,9 +380,8 @@ Install it now?
 	});
 	if (Spooler::Get () == "cups")
 	{
-	    Printerlib::setCupsUsbDevicesInfo ();
 	    autodetected = filter (map<string,any> a, autodetected, ``(
-		! contains (Printerlib::getProblematicCupsUsbDevices (),
+		! contains (CUPS::GetProblematicCupsUsbDevices (),
 		    Printerlib::getUriDevice (a["uri"]:""))
 	    ));
 	}
@@ -543,9 +541,7 @@ Install it now?
 	if (nil == printer)
 	    printer = $[];
 	string printer_type = "";
-	if (lookup (printer, "type", "yast2") == "lprng")
-	    printer_type = "printer";
-	else if (lookup (printer, "type", "yast2") == "yast2")
+	if (lookup (printer, "type", "yast2") == "yast2")
 	    printer_type = lookup (printer, "uri", "class") == "class" ? "class" : "printer";
 	else
 	{
@@ -623,16 +619,13 @@ Install it now?
 
 	if (q_filter == nil)
 	    supported = false;
-	boolean is_class = q_type == "class";
-	if (is_class || p["raw"]:false)
+	list<string> known_filters = Printerdb::GetSupportedFilters ();
+	if (q_type == "class" || p["raw"]:false)
 	    supported = true;
-	string s = Spooler::Get ();
-	boolean filt_sup = ((s == "cups" || ! is_class)
-		&& (s == "cups" || q_filter == "foomatic-rip"))
-	    || p["raw"]:false;
-	boolean spool_sup = Spooler::testSupportedQueueBySpooler (q_type, s);
-	if (s == "cups")
-	    spool_sup = true;
+	boolean filt_sup = p["raw"]:false
+	    || known_filters == nil
+	    || contains (known_filters, q_filter);
+	boolean spool_sup = Spooler::testSupportedQueue (q_type);
 	boolean sup = supported && filt_sup && spool_sup;
 	p["valid"] = sup
 	    ?
@@ -915,7 +908,7 @@ Install it now?
 	    default = (string)SCR::Read (.cups.default_dest);
 	    if (default == "" || default == nil)
 		default = (string) (ret[0, "name"]:nil);
-	    CUPS::readCupsSettings ();
+	    CUPS::ReadCupsSettings ();
 	    return ret;
         }
         return [];
@@ -981,18 +974,18 @@ Install it now?
 	return true;
     }
 
-    /**
-      * Detect spooler currently in use
-      * @return boolean true on success
-      */
-    global define boolean checkSpooler () ``{
-	Spooler::Set (Spooler::checkSpoolSystem());
-	y2milestone ("Detected spooler: %1", Spooler::Get ());
-	if (Spooler::Get () == "exit")
-	    return false;
-
-	return true;
-    }
+/**
+ * Detect spooler currently in use
+ * @return boolean true on success
+ */
+global define boolean checkSpooler () {
+    Spooler::Set (Spooler::checkSpoolSystem());
+    string det_spool = Spooler::Get ();
+    y2milestone ("Detected spooler: %1", det_spool);
+    if (det_spool == "exit")
+	return false;
+    return true;
+}
 
     /**
       * Check if GhostScript is installed
@@ -1040,37 +1033,6 @@ to print."));
     }
 
     /**
-     * Initialize current spooler
-     * @return boolean true on success
-     */
-    global define boolean spoolerInitialize () ``{
-	if (Spooler::Get () == "cups")
-	{
-	    if (`server == CUPS::InstallationType ())
-	    {
-		integer status = (integer)SCR::Execute (.target.bash,
-		    "/usr/bin/lpq 2>/dev/null");
-		if (status != 0)
-		{
-		    Spooler::RestartIfNeeded (true);
-		}
-	    }
-	}
-	else if (Spooler::Get () == "lprng")
-	{
-	    SCR::Execute (.target.bash,
-		"/usr/bin/touch /etc/printcap; /bin/chmod u=rw,g=r,o=r /etc/printcap");
-	    integer lpdaemon = (integer)SCR::Execute (.target.bash,
-		 "test -f /etc/init.d/lpd && /etc/init.d/lpd restart");
-	    if (lpdaemon != 0)
-	    {
-		// error report
-	        Report::Error (_("Unable to restart the lpd daemon."));
-	    }
-	}
-    }
-
-    /**
       * Check if it is safe, ask user if needed, and detect local printers
       * @return boolean true on success
       * TODO error checking
@@ -1105,11 +1067,6 @@ Detect your printers?"));
         {
             return cupsRead();
         }
-        if (Spooler::Get () == "lprng")
-        {
-	    SCR::Execute (.target.bash, "test -d /etc/lpdfilter || /bin/mkdir /etc/lpdfilter");
-            return printcapRead(printcap);
-        }
 	return [];
     }
 
@@ -1139,8 +1096,9 @@ Detect your printers?"));
 	    printcap = maplist (map<string,any> e, printcap, ``(
 		add (e, "type", "yast2")
 	    ));
-	    Spooler::available_packages = (map<string,boolean>)
-		state["available_packages"]:$[];
+// FIXME
+//	    Spooler::available_packages = (map<string,boolean>)
+//		state["available_packages"]:$[];
 	return true;
     }
 
@@ -1239,9 +1197,9 @@ Detect your printers?"));
 	Progress::NextStep (); // step 3 - initialize spooler
 	if (testAbort ()) return false;
 
-	if (Mode::test)
+	if (! Mode::test)
 	{
-	    spoolerInitialize ();
+	    Spooler::Initialize ();
 	}
 
 	Progress::NextStageStep (4); // step 4-7 - check and load the database
@@ -1258,7 +1216,8 @@ Detect your printers?"));
 
 	if (Spooler::Get () == "cups" && CUPS::InstallationType () == `client)
 	{
-	    if (! cupsClientRead ())
+	    default = CUPS::ClientRead ();
+	    if (default == nil)
 		return false;
 	}
 	else
@@ -1305,15 +1264,6 @@ Detect your printers?"));
 		else
 		{
 		    SCR::Write (.cups.printers.remove, name);
-		}
-	    }
-	    else if (Spooler::Get () == "lprng")
-	    {
-		if (p_type != "class")
-		{
-		    command = command +
-			sformat ("/bin/rm -r /etc/lpdfilter/%1 /var/spool/lpd/%1; \n", name);
-		    callLprsetup (sformat ("/usr/lib/lpdfilter/bin/lprsetup -lprng -delete %1", name));
 		}
 	    }
 	}
@@ -1371,39 +1321,30 @@ Detect your printers?"));
 	    }
 	    entry = fixPrinter(entry);
 
-	    if (Spooler::Get () == "cups")
+	    if (! entry["valid"]:true)
 	    {
-		if (! entry["valid"]:true)
-		{
-		    Popup::Message (sformat(
-			// popup %1 is queue name
-			_("Queue %1 cannot be saved because
+		Popup::Message (sformat(
+		    // popup %1 is queue name
+		    _("Queue %1 cannot be saved because
 the selected spooler does not support it."), name));
-		}
-		else if ((entry["changed"]:false || save_all) && (lookup (entry, "type", "yast2") == "yast2"))
-		{
-		    y2debug ("Saving printer %1", entry);
-		    if (writeCupsPrinter (entry))
-		    {
-			y2debug ("Success");
-			entry["changed"] = false;
-		    }
-		}
 	    }
-	    else if (Spooler::Get () == "lprng")
+	    else if (entry["type"]:"yast2" == "yast2"
+		&& (entry["changed"]:false || save_all))
 	    {
-		if (! entry["valid"]:true)
+		y2debug ("Saving printer %1", entry);
+		Printerdb::loadFoomaticIfNeeded ();
+		entry = Printerdb::getUpdatedPpdFile (entry);
+		boolean successfully = false;
+		if (Spooler::Get () == "cups")
 		{
-		    Popup::Message (sformat(
-			// popup %1 is queue name
-			_("Queue %1 cannot be saved because
-the selected spooler does not support it."), name));
+		    successfully = CUPS::WriteQueue (entry);
 		}
-		else if ((entry["changed"]:false || save_all) && (lookup (entry, "type", "yast2") == "yast2"))
+		if (successfully)
 		{
-		    if (writeLpdPrinter (entry))
-			entry["changed"] = false;
+		    y2debug ("Success");
+		    entry["changed"] = false;
 		}
+
 	    }
 	    Progress::NextStep ();
 	});
@@ -1455,7 +1396,7 @@ the selected spooler does not support it."), name));
 	    "printers" : l,
 	    "cups_usb_devices" : CUPS::usb_dev_names,
 	    "version" : version,
-	    "available_packages" : Spooler::available_packages,
+// FIXME	    "available_packages" : Spooler::available_packages,
 	];
 	if (! SCR::Write (.target.ycp, "/var/lib/YaST2/printers", save))
 	{
@@ -1473,10 +1414,11 @@ the selected spooler does not support it."), name));
      * @return success state
      */
     global define boolean Write () ``{
-	y2milestone ("Write called; spooler: %1, cups inst type: %2", Spooler::Get (),
+	y2milestone ("Write called; spooler: %1, cups inst type: %2",
+	    Spooler::Get (),
 	    CUPS::InstallationType ());
 
-	CUPS::stopListenCupsServers ();
+	CUPS::StopListenCupsServers ();
 
 	boolean with_daemon = Spooler::Get () != "cups"
 	    || `client != CUPS::InstallationType ();
@@ -1537,8 +1479,8 @@ the selected spooler does not support it."), name));
 	if (with_daemon && Spooler::Get () == "cups")
 	{
 	    CUPS::server_hostname = "";
-	    CUPS::saveClientHostName ();
-	    CUPS::writeCupsSettings ();
+	    CUPS::SaveServerHostName ();
+	    CUPS::WriteCupsSettings ();
 	}
 
 	Progress::NextStage (); // adjst services
@@ -1546,11 +1488,6 @@ the selected spooler does not support it."), name));
 	ret = Spooler::AdjustServices (size (printcap) > 0) && ret;
 	if (with_daemon)
 	{
-	    if (Spooler::Get () == "lprng")
-	    {
-		SCR::Execute (.target.bash,
-		    "test -d /etc/lpdfilter || /bin/mkdir /etc/lpdfilter");
-	    }
 	    Progress::NextStage (); // delete old printers
 	    if (testAbort ()) return false;
 	    ret = deleteDeletedPrinters () && ret;
@@ -1577,7 +1514,7 @@ the selected spooler does not support it."), name));
 	{
 	    Progress::NextStage (); // save system settings
 	    if (testAbort ()) return false;
-	    ret = CUPS::saveCupsClient (default) && ret;
+	    ret = CUPS::SaveCupsClient (default) && ret;
 	    ret = saveTheConfiguration() && ret;
 	}
 
@@ -1943,9 +1880,7 @@ the selected spooler does not support it."), name));
      * Autoconfigure all printers that haven't been configured yet.
      */
     global define void Propose () ``{
-	if (Spooler::Get () == "cups")
-	    Printerlib::setCupsUsbDevicesInfo ();
-	if (! Spooler::AreDriversInstaller ())
+	if (! Printerdb::AreDriversInstalled ())
 	    return;
 	// settings are read and hw is detected
 	list<string> forbidden_names = getForbiddenNames ();

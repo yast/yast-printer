@@ -21,12 +21,8 @@
 
     textdomain "printer";
 
-    import "CUPS";
-    import "Label";
     import "Mode";
     import "Popup";
-    import "Report";
-    import "Spooler";
 
     include "printer/texts.ycp";
 
@@ -43,6 +39,12 @@
      * for accessing this function.
      */
     symbol paper_size = nil;
+
+/**
+ * Info about USB devices got through CUPS backend
+ * Contains lists of [<cups_device>, <model_name>, <unix_device>]
+ */
+list<list<string> > cups_usb_devices_info = [];
 
 // global variables
 
@@ -61,6 +63,40 @@
 
 
 // global functions
+
+/**
+ * Set the USB devices info got through the CUPS backend
+ * @param di a list of found CUPS devices
+ */
+global define void SetCupsUsbDevicesInfo (list<list<string> > di) {
+    cups_usb_devices_info = di;
+}
+
+/**
+ * Return the currently stored CUPS USB devices info
+ */
+global define list<list<string> > GetCupsUsbDevicesInfo () {
+    return cups_usb_devices_info;
+}
+
+/**
+ * Get info about device connected to USB port from CUPS backed
+ * @param device string USB device to examine
+ * @return a list containing CUPS device name, Printer model and
+ *   UNIX-like device
+ */
+global list<string> GetCupsUsbDeviceInfo (string device) {
+    integer pos = find (device, "lp");
+    string dev_num = substring (device, pos + 2);
+    list<string> ret = [];
+    if (dev_num != "")
+    {
+	integer num = tointeger (dev_num);
+	ret = cups_usb_devices_info[num]:[];
+    }
+    y2milestone ("USB backend for device %1 detected %2", device, ret);
+    return ret;
+}
 
     /**
      * Get the list of all HP all-in-one models
@@ -110,79 +146,6 @@ ECHO_PID=$!
     }
 
     /**
-      * List of CUPS USB device names
-      * Contains lists of [<cups_device>, <model_name>, <unix_device>]
-      */
-    global list< list<string> > cups_usb_devices = [];
-
-    /**
-      * Set list of CUPS USB devices
-      */
-    global define void setCupsUsbDevicesInfo () ``{
-	cups_usb_devices = [];
-	if (SCR::Read (.target.size, "/usr/lib/cups/backend/usb") <= 0)
-	    return;
-	map out = (map)SCR::Execute (.target.bash_output,
-	    "/usr/lib/cups/backend/usb");
-	list<string> lines = splitstring (out["stdout"]:"", "\n");
-	lines = filter (string l, lines, ``(l != "" && l != nil));
-	integer counter = 0;
-	foreach (string l, lines, ``{
-	    string model = regexpsub (l, "[^\"]*\"([^\"]*)\".*", "\\1");
-	    string c_dev = regexpsub (l, "direct usb:([^ ]*) .*", "\\1");
-	    string u_dev = sformat ("/dev/usb/lp%1", counter);
-	    if (CUPS::usb_dev_names == `never
-		|| (CUPS::usb_dev_names == `serial
-		    && ! issubstring (c_dev, "serial")))
-		c_dev = u_dev;
-	    cups_usb_devices = add (cups_usb_devices,
-		[c_dev, model, u_dev]);
-	    counter = counter + 1;
-	});
-    }
-
-    /**
-      * Get problematic CUPS USB devices names
-      * @return a list of strings with problematic device names
-      */
-    global define list<string> getProblematicCupsUsbDevices () ``{
-	list<string> c_devs = maplist (list<string> e, cups_usb_devices, ``(e[0]:""));
-	c_devs = filter (string d, c_devs, ``(d != ""));
-	if (size (c_devs) == size (toset (c_devs)))
-	    return [];
-	list tested = [];
-	list problematic = [];
-	foreach (string d, c_devs, ``{
-	    if (contains (tested, d))
-		problematic = add (problematic, d);
-	    tested = add (tested, d);
-	});
-	return (list<string>)toset (problematic);
-    }
-
-    /**
-      * Get info about device connected to USB port from CUPS backed
-      * @param device string USB device to examine
-      * @return a list containing CUPS device name, Printer model and
-      *   UNIX-like device
-      */
-    global define list<string> getCupsUsbDeviceInfo (string device) ``{
-        if (SCR::Read (.target.size, "/usr/lib/cups/backend/usb") > 0)
-        {
-            integer pos = find (device, "lp");
-            string dev_num = substring (device, pos + 2);
-            if (dev_num != "")
-            {
-		setCupsUsbDevicesInfo ();
-                integer num = tointeger (dev_num);
-		y2milestone ("USB backend for device: %1", cups_usb_devices[num]:[]);
-		return cups_usb_devices[num]:[];
-            }
-        }
-	return [];
-    }
-
-    /**
       * Get list of all PTAL devices
       * @return a list of PTAL devices
       */
@@ -227,16 +190,6 @@ ECHO_PID=$!
     }
 
     /**
-      * Get all CUPS-like USB device names
-      * @return a list of CUPS USB device names
-      */
-    global define list<string> getCupsUsbDevices () ``{
-	setCupsUsbDevicesInfo ();
-	list<string> ret = (list<string>) maplist (list e, cups_usb_devices, ``(e[0]:""));
-	return ret;
-    }
-
-    /**
      * Calls escputil to find out exact model of Epson stylus printer.
      * @param device USB Device to examine.
      * @return string Printer model. If unsuccessful, returns "Stylus".
@@ -246,7 +199,7 @@ ECHO_PID=$!
 	wakeUpEpson (device);
 	// now we can run escputil
 
-	string model = select (getCupsUsbDeviceInfo (device), 1, "");
+	string model = select (GetCupsUsbDeviceInfo (device), 1, "");
 	if (substring (model, 0, 6) == "EPSON ")
 	    model = substring (model, 6);
 	return model;
@@ -648,15 +601,14 @@ ECHO_PID=$!
 	    && SCR::Read (.target.size, "/usr/lib/cups/backend/usb") > 0)
 	{
 	    y2milestone ("USB printer %1", dev);
-	    setCupsUsbDevicesInfo ();
-/*	    string serial = regexpsub (dev, ".*?(serial=.*)", "\\1");
+	    string serial = regexpsub (dev, ".*?(serial=.*)", "\\1");
 	    y2milestone ("Serial: %1", serial);
 	    if (serial != nil && serial != "")
 	    {
 		return sformat (_("USB port (%1)"), serial);
-	    }*/
+	    }
 	    string ret = "";
-	    foreach (list e, cups_usb_devices, ``{
+	    foreach (list e, cups_usb_devices_info, ``{
 		if (e[0]:"" == dev)
 		    ret = e[1]:"";
 	    });

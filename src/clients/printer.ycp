@@ -21,7 +21,7 @@
 {
     /***
      * <H3>YaST2 Printers configuration</H3>
-     * Configurator of printers that works with packages <tt>cups</tt> and <tt>LPRng</tt>
+     * Configurator of printers that works with package <tt>cups</tt>
      * as printing daemons and <tt>apsfilter</tt> or Foomatoc as magic filter.<BR>
      * For printer documentation index, click <a href="../index.html">here</a>.
      */
@@ -246,9 +246,6 @@
                 "ppd_info" : Printer::ppdInfo (ppd_file),
             ]);
 	}
-// ff (form feed) handling
-	if (haskey (options, "ff"))
-	    Printer::printer["ff"] = options["ff"]:false;
 // info handling
 // location handling
 // banners handling
@@ -378,7 +375,7 @@
      */
     define boolean PrinterSpoolerhandler (map options) ``{
 	integer found = 0;
-	foreach (string s, ["cups", "lprng", "cups_client"], ``{
+	foreach (string s, ["cups", "cups_client"], ``{
 	    if (haskey (options, s))
 		found = found + 1;
 	});
@@ -397,11 +394,6 @@
 	if (haskey (options, "cups"))
 	{
 	    Spooler::switchTo ("cups");
-	    Printer::Read ();
-	}
-	else if (haskey (options, "lprng"))
-	{
-	    Spooler::switchTo ("lprng");
 	    Printer::Read ();
 	}
 	else if (haskey (options, "cups_client"))
@@ -659,11 +651,6 @@
 		"help"		: _("Location of the printer"),
 		"type"		: "string",
 	    ],
-	    "ff"	: $[
-		// command line help text for the form reed option
-		"help"		: _("Print form feed after evbery job (LPRng only)"),
-		"type"		: "boolean",
-	    ],
 	    "bannerstart":$[
 		// command line help text for the starting banner option
 		"help"		: _("Banner to be printed before every job"),
@@ -714,10 +701,6 @@
 		// command line help text for the 'switch to CUPS' option
 		"help"		: _("Switch top CUPS server"),
 	    ],
-	    "lprng"	: $[
-		// command line help text for the 'switch to LPRng' option
-		"help"		: _("Switch to LPRng server"),
-	    ],
 	    "cups_client":$[
 		// command line help text for the 'switch to CUPS client' option
 		"help"		: _("Switch to CUPS client"),
@@ -746,7 +729,7 @@
 					"queue", "detected_index",
 					"uri", "raw", "manufacturer",
 					"model", "nick", "info", "location",
-					"ff", "bannerstart", "bannerend",
+					"bannerstart", "bannerend",
 					"accepting", "state", "allowusers",
 					"denyusers", "default"
 				  ],
@@ -754,14 +737,14 @@
 					"queue", "new_name",
 					"uri", "raw", "manufacturer",
 					"model", "nick", "info", "location",
-					"ff", "bannerstart", "bannerend",
+					"bannerstart", "bannerend",
 					"accepting", "state", "allowusers",
 					"denyusers", "default"
 				  ],
 	    "ppdoptions"	: [ "queue"],
 	    "lpoptions"		: [ "queue"],
 	    "spooler"		: [
-					"cups", "lprng", "cups_client",
+					"cups", "cups_client",
 					"server", "default_queue"
 				  ],
 	    "test"		: [ "queue", "testpage_type" ],

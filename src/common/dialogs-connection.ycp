@@ -558,8 +558,8 @@ only if a CUPS spooler is used
 
         if (type == "usb" && Spooler::Get () == "cups")
         {
-            Printerlib::setCupsUsbDevicesInfo ();
-            devices = Printerlib::getCupsUsbDevices ();
+            CUPS::DetectCupsUsbDevicesInfo ();
+            devices = CUPS::GetCupsUsbDevices ();
 	    integer index = -1;
 	    foreach (string d, devices, {
 		index = index + 1;
@@ -569,10 +569,9 @@ only if a CUPS spooler is used
             if (size (devices) != size (toset (devices)))
             {
                 problematic_usb = true;
-                list problematic = Printerlib::getProblematicCupsUsbDevices ();
-                devices = maplist (list d, Printerlib::cups_usb_devices, ``{
+                list problematic = CUPS::GetProblematicCupsUsbDevices ();
+                devices = maplist (list d, Printerlib::GetCupsUsbDevicesInfo (), ``{
                     if (contains (problematic, d))
-                    if (true)
                     {
                         return d[2]:"";
                     }
@@ -1021,7 +1020,7 @@ actually selected.
                 }
 		if (`get_hosts_listen == ret)
 		{
-		    hosts = CUPS::listenCupsServers ();
+		    hosts = CUPS::ListenCupsServers ();
 		}
 		else
 		{

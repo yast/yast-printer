@@ -1480,20 +1480,12 @@ and test the queue after the printer model is selected."));
 	{
 	    if (! raw)
 	    {
-	// table entry
+		// table entry
 		items = add (items, `item (`id (`settings), _("Printing filter settings"), ""));
-		if (Spooler::Get () != "cups")
-		{
-	// table entry
-		    items = add (items, `item (`id (`ascii), _("ASCII printing settings"), ""));
-		}
-		if (Spooler::Get () != "lprng")
-		{
-	// table entry
-		    items = add (items, `item (`id (`perm), _("Restrictions settings"), ""));
-	// table entry
-		    items = add (items, `item (`id (`state), _("State and banners settings"), ""));
-		}
+		// table entry
+		items = add (items, `item (`id (`perm), _("Restrictions settings"), ""));
+		// table entry
+		items = add (items, `item (`id (`state), _("State and banners settings"), ""));
 	    }
 	}
 
@@ -1784,11 +1776,9 @@ All your changes will be lost.
 	    {
 		symbol spooler = (symbol)
 		    UI::QueryWidget (`id (`spooler), `CurrentButton);
-		string spoolerstring = spooler == `lprng
-		    ? "lprng"
-		    : (spooler == `cups_client
-			? "cups-client"
-			: "cups");
+		string spoolerstring = spooler == `cups_client
+		    ? "cups-client"
+		    : "cups";
 	    }
 	    else if (`back == ret)
 		break;
@@ -1818,7 +1808,7 @@ All your changes will be lost.
 		CUPS::server_hostname = "";
 		if (Spooler::getSpoolSystem () != 2)
 		{
-		    CUPS::saveClientHostName ();
+		    CUPS::SaveServerHostName ();
 		    ret = `switch;
 		    CUPS::cups_installation = nil;
 		    Spooler::RestartIfNeeded (true);
@@ -1834,7 +1824,7 @@ the current configuration.
 		    }
 		}
 		CUPS::cups_installation = `server;
-		CUPS::saveClientHostName ();
+		CUPS::SaveServerHostName ();
 		Spooler::RestartIfNeeded (true);
 		ret = `cups;
 		new_spooler = "cups";
@@ -1844,10 +1834,6 @@ the current configuration.
 		 CUPS::cups_installation = `client;
 		 ret = `cups;
 		 new_spooler = "cups";
-	    }
-	    else if (`lprng == spooler)
-	    {
-		new_spooler = "lprng";
 	    }
 	    else
 	    {
@@ -1946,7 +1932,7 @@ the current configuration.
 	    ret = `connection;
 	}
 	// unsupported spooler
-	else if (Spooler::Get () != "cups" && Spooler::Get () != "lprng")
+	else if (Spooler::Get () != "cups")
 	{
 	    y2milestone ("Unknown spooler");
 	    ret = `connection;
@@ -1995,8 +1981,8 @@ the current configuration.
 	// check CUPS USB device
 	if (Spooler::Get () == "cups")
 	{
-	    Printerlib::setCupsUsbDevicesInfo ();
-	    list problematic = Printerlib::getProblematicCupsUsbDevices ();
+	    CUPS::DetectCupsUsbDevicesInfo ();
+	    list problematic = CUPS::GetProblematicCupsUsbDevices ();
 	    string device = Printerlib::getUriDevice (
 		Printer::printer["uri"]:"");
 	    if (contains (problematic, device))
@@ -2310,10 +2296,6 @@ Set up this device for printing only?");
 	{
 	    spoolerlabel = "CUPS";
 	}
-	else if (Spooler::Get () == "lprng")
-	{
-	    spoolerlabel = "LPRng";
-	}
 	else
 	{
 	    // is %1 in following translation text
@@ -2324,7 +2306,7 @@ Set up this device for printing only?");
 	// Header of the dilag with all the printers
 	    sformat (_("Printer administration for %1"), spoolerlabel),
 	    Wizard_hw::ConfiguredContent (
-		(Spooler::Get () == "cups" || Spooler::Get () == "lprng")
+		(Spooler::Get () == "cups")
 		?
 			// table header
 		    `header (_("Default"),
