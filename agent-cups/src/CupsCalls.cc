@@ -431,6 +431,7 @@ string getDefaultDest()
 bool setDefaultDestLocal(const char*d)
 {
   cups_dest_t *dests;
+  cupsSetServer (NULL);
   int num_dests = cupsGetDests(&dests);
   for(int i = 0;i<num_dests;i++)
     if (! strcmp (dests[i].name, d))
