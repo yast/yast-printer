@@ -7,6 +7,8 @@ yncludedir = @yncludedir@/printer
 config_DATA =                           \
 	printer.y2cc                  
 
+desktop_DATA =                           \
+	printer.desktop                
 
-EXTRA_DIST = \
-	$(config_DATA)
+
+EXTRA_DIST = $(config_DATA) $(desktop_DATA)
