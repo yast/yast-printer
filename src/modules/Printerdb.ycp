@@ -212,6 +212,8 @@
 	list ppd_nicks)
     ``{
 	list ppds = sortPpds (vendor_db, device_db, ppd_nicks);
+	if (size (ppds) == 0)
+	    return nil;
 	if (Spooler::Get () == "cups")
 	    return ppds[0]:nil;
 	// for LPRng find first with foomatic-rip as filter
@@ -227,55 +229,35 @@
       * @return map updated printer map
       */
     global define map getUpdatedPpdFile (map entry) ``{
-        string ppdfilename = lookup (entry, "ppd", "");
-        string ownppd = lookup (entry, "ownppd", "");
+        string src_ppd = entry["ppd"]:"";
+	string dst_ppd = SCR::Read (.target.tmpdir) + "/patched_ppd_"
+	    + entry["name"]:"";
+	while (SCR::Read (.target.size, dst_ppd) > 0)
+	    dst_ppd = dst_ppd + "x"; // FIXME this isn't the best solution, but
+				// should work fine
         boolean raw = entry["raw"]:false;
         if (raw)
         {
             ppdfilename = "";
-            ownppd = "";
             entry["ppd"] = "";
-        }
-        else if (ppdfilename == "")
-        {
-            ppdfilename = SCR::Read (.target.tmpdir);
-            ppdfilename = ppdfilename + "/ppdfile";
+	    return entry;
         }
 
-        string ppdfile = "";
-        if (entry["ownppd"]:"" != "")
-            ppdfile = entry["ownppd"]:"";
-        else if (! raw)
-        {
-            ppdfile = foomatic[entry["vendor_db"]:"",
-                entry["device_db"]:"",
-                entry["config"]:"",
-                "filename"]:"";
-            y2milestone ("Using PPD file >>%1<<", ppdfile);
-            if (ppdfile == "")
-            {
-                // message popup
-                Report::Error (sformat (_("An error occurred while saving queue %1.
+	if (src_ppd == "")
+	{
+	    // message popup
+	    Report::Error (sformat (_("An error occurred while saving queue %1.
 
 Incorrect internal data. Try selecting the
 printer model again.
 "), name));
-                return nil;
-            }
-        }
+	    return nil;
+	}
 
-        if ((ownppd == "" || isPpd (ownppd)) && ! raw)
-        {
-            if (ppdfilename != "")
-            {
-                SCR::Write (.ppd.file.modify, [ppdfile, ppdfilename, entry["options"]:$[]]);
-                entry["ppd"] = ppdfilename;
-            }
-        }
-        else
-            if (isPpd (ownppd))
-                entry["ppd"] = ownppd;
-
+	SCR::Write (.ppd.file.modify,
+	    [src_ppd, dst_ppd, entry["options"]:$[]]);
+	SCR::Execute (.target.remove, src_ppd);
+	entry["ppd"] = dst_ppd;
         return entry;
     }
 

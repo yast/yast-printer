@@ -329,6 +329,15 @@ press 'OK'.
 	// but tell user it is queue: virtual_name
 	string switch = " -P" + name;
 	string test_page = "";
+
+	string ppd_file = Printer::printer["ppd"]:"";
+	map ppd_info = Printer::ppdInfo (ppd_file);
+	string manuf = ppd_info["manufacturer"]:"";
+	string model = ppd_info["model"]:"";
+	string config = ppd_info["nick"]:"";
+	if (findfirstof (config, "(") != nil)
+	    config = substring (config, 0, findfirstof (config, "("));
+
 	if (`postscript == testpage_type)
 	{
 	    map consolefonts = SCR::Read (.target.yast2, "consolefonts.ycp");
@@ -350,18 +359,9 @@ press 'OK'.
 
 	    string enc = "ISO-8859-2" == ce ? "h02" : "h01";
 
-	    string config = printer["config"]:"";
-	    if (findfirstof (config, "(") != nil)
-		config = substring (config, 0, findfirstof (config, "("));
+// FIXME recode to UTF-8
 
-	    // options
-	    string filename = SCR::Read (.ppd.file.open,
-		[Printerdb::foomatic[
-		    printer["vendor_db"]:"",
-		    printer["device_db"]:"",
-		    printer["config"]:"", "filename"]:"",
-		SCR::Read (.target.tmpdir)]);
-	    map options = SCR::Read (.ppd.file.options, [filename, ""]);
+	    map options = SCR::Read (.ppd.file.options, [ppd_file, ""]);
 	    list optlist = options["data"]:[];
 	    optlist = maplist (`i, optlist, ``{
 		    string name = i["name"]:"";
@@ -441,8 +441,7 @@ press 'OK'.
 	    os = os + sformat ("----X-SECT1: (%1)\n", printer["name"]:"");
 
 	    list<string> sect2_values = [
-		sformat ("%1 %2",
-		    printer["vendor_ieee"]:"", printer["device_ieee"]:""),
+		sformat ("%1 %2", manuf, model),
 		printer["info"]:"",
 		printer["location"]:"",
 		Printerlib::getUriNiceName (printer["uri"]:""),
@@ -477,12 +476,6 @@ press 'OK'.
 		    os = UI::Recode ("UTF-8", ce, os);
 	    }
 	    SCR::Write (.target.string, opts, os);
-	    boolean is_ps = true;
-	    if (issubstring (printer["config"]:"", "Foomatic"))
-	    {
-		if (! issubstring (printer["config"]:"", "Postscript"))
-		    is_ps = false;
-	    }
 	    test_page = preparePsTestPage (virtual_name, opts, photo_filename);
 	}
 	else

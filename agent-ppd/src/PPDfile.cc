@@ -293,6 +293,8 @@ YCPMap PPDfile::ppdInfo (const char *filename)
     m->add (YCPString ("manufacturer"), YCPString (info.vendor));
     m->add (YCPString ("model"), YCPString (info.printer));
     m->add (YCPString ("nick"), YCPString (info.nick));
+    m->add (YCPString ("manufacturer_db"), YCPString (info.vendor_db));
+    m->add (YCPString ("model_db"), YCPString (info.printer_db));
     m->add (YCPString ("filter"), YCPString (info.filter));
 
     // and grab some info via CUPS libraries

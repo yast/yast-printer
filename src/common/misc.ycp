@@ -47,7 +47,7 @@
         list new_queues = [];
         map ppds = Printerdb::getPpdFiles (vendor, model);
         string ppdfile_orig = "";
-        if (vendor == "__ownppd__")
+        if (vendor == "__spec_ppd__")
             ppdfile_orig = model;
         else if (config == nil || config == "")
             ppdfile_orig = Printerdb::getAutoPpdFile (ppds, vendor, model);
@@ -57,6 +57,8 @@
         string config = ppds[ppdfile_orig]:"";
         string ppdfile = SCR::Read (.ppd.file.open,
             [ppdfile_orig, SCR::Read (.target.tmpdir)]);
+	Printer::printer["ppd"] = ppdfile;
+	Printer::printer["ppd_info"] = Printer::ppdInfo (ppdfile);
         map options = SCR::Read (.ppd.file.options, [ppdfile, ""]);
         list opts = options["data"]:[];
             integer ind = -1;
@@ -69,11 +71,13 @@
             map composite = $[];
             if (found)
                 composite = opts[ind]:$[];
+		string pagesize = Printerlib::getDefaultPaperSize () == `a4
+		    ? "A4"
+		    : "Letter";
             if (composite != $[])
             {
+                string optname = composite["name"]:"";
                 foreach (`v, composite["valorder"]:[], ``{
-                    string optname = composite["name"]:"";
-                    string pagesize = Printerlib::getDefaultPaperSize () == `a4 ? "A4" : "Letter";
                     map new_options = $[
                         optname : v,
                         "PageSize" : pagesize,
@@ -82,12 +86,10 @@
                         "PaperDimension" : pagesize,
                     ];
                     new_queues = add (new_queues, $[
-                        "config" : config,
                         "name" : mergestring (splitstring
                             (tolower (v), "."), "_"),
                         "info" : composite["values", v]:v,
-                        "options" : new_options,
-                        "composite" : composite["name"]:"",
+                        "ppd_options" : new_options,
                     ]);
 
                 });
@@ -95,11 +97,15 @@
             else
             {
                 new_queues = [ $[
-                    "config" : config,
                     "name" : "lp",
                         // table cell
                     "info" : _("default configuration"),
-// TODO FIXME: page size
+		    "ppd_options" : $[
+                        "PageSize" : pagesize,
+                        "PageRegion" : pagesize,
+                        "ImageableArea" : pagesize,
+                        "PaperDimension" : pagesize,
+		    ],
                 ]];
             }
             string suffix = Printer::getQueueSuffix (new_queues);
@@ -198,11 +204,14 @@
         foreach (`p, Printer::printcap, ``{
             string ukey = p["unique_key"]:"";
             string uri = p["uri"]:"";
-	    string model = p["ownppd"]:"";
+	    string ppd_file = p["ppd"]:"";
+	    map ppd_info = Printer::ppdInfo (ppd_file);
+	    string model = ppd_info["manufacturer"]:"" + ppd_info["model"]:"";
 	    if (model == "")
-		model = p["vendor_ieee"]:"" + p["device_ieee"]:"";
-	    if (model == "")
-		model = p["vendor_db"]:"" + p["device_db"]:"";
+	    {
+		model = ppd_info["manufacturer_db"]:""
+		    + ppd_info["model_db"]:"";
+	    }
             if ((! contains (ukeys, ukey)
 		    && (! contains (uris, uri))
 			|| ! contains (models, model)
@@ -221,48 +230,28 @@
     }
 
     /**
-      * List all queues of specified printer
-      * @param uri of printer
-      * @param vendor string printer vendor name
-      * @param device string printer model name
-      * @return a list of maps of queues
-      */
-    global define list(map) getQueuesOfPrinter (string uri, string vendor,
-	string device)
-    ``{
-	list(map) queues = filter (`p, Printer::printcap, ``(
-	    p["uri"]:"" == uri &&
-		((p["vendor_db"]:"" == vendor && p["device_db"]:"" == device)
-		||(p["vendor_ieee"]:"" == vendor && p["device_ieee"]:"" == device))
-	    ));
-	return queues;
-    }
-
-    /**
       * Has a printer (physical) been already configured (contains at least
       * one queue?
-      * @param printer map containing at least vendor, device and
-      *   unique_key keys for comparsionprinter vendor
+      * @param manuf string manufacturer of the printer
+      * @param model string model of the printer
+      * @param uri string URI of the printer
+      * @param unique_key string unique_key of the printer
       * @return boolean true if already configured
       */
-    global define boolean isPrinterConfigured (map printer) ``{
-	string vendor_db = printer["vendor_db"]:"";
-	string device_db = printer["device_db"]:"";
-	string vendor_ieee = printer["vendor_ieee"]:"";
-	string device_ieee = printer["device_ieee"]:"";
-	string ukey = printer["unique_key"]:"";
-	string uri = printer["uri"]:"";
-	if (uri == "")
-	    uri = printer["bus"]:"parallel" + ":" + printer["dev_name"]:"";
+    global define boolean isPrinterConfigured (string manuf, string model,
+	string uri, string unique_key)
+    ``{
+	string manuf_db = SCR::Read (.ppd.db.vendorname, manuf);
+	string model_db = SCR::Read (.ppd.db.modelname, [manuf_db, model]);
 	boolean exists = false;
 
 	foreach (`p, Printer::printcap, ``{
-	    if ((p["unique_key"]:"" == ukey && ukey != "")
+	    if ((p["unique_key"]:"" == unique_key && unique_key != "")
 		|| (p["uri"]:"" == uri && uri != ""
-		    && ((p["vendor_db"]:".." == vendor_db
-			    && p["device_db"]:".." == device_db)
-			|| (p["vendor_ieee"]:".." == vendor_ieee
-			    && p["device_ieee"]:".." == device_ieee))
+		    && ((p["ppd_info", "manufacturer_db"]:".." == manuf_db
+			    && p["ppd_info", "model_db"]:".." == model_db)
+			|| (p["ppd_info", "manufacturer"]:".." == manuf
+			    && p["ppd_info", "model"]:".." == model))
 		   ))
 	    {
 		exists = true;
