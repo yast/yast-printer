@@ -27,17 +27,28 @@
     include "printer/dialogs.ycp";
     include "printer/helps.ycp";
     include "ui/common_popups.ycp";
+	any ret = nil;
+	string func = "";
+	map param = $[];
 
-    string func = WFM::Args(0);
-    map param = WFM::Args(1);
+	/* Check arguments */
+	if(size(Args()) > 0 && is(Args(0), string)) {
+		func = WFM::Args(0);
+		if(size(Args()) > 1 && is(Args(1), map))
+			param = WFM::Args(1);
+	}
+	y2debug("func=%1", func);
+	y2debug("param=%1", param);
 
+    if(func == "Import") {
+	ret = Printer::Import( param);
+    }
     /**
       * Create a summary
       * return string
       */
-    if(func == "Summary") {
-	Printer::Import( param);
-	return (Printer::Summary ());
+    else if(func == "Summary") {
+	ret = Printer::Summary ([`short]);
     }
     /**
       * Reset configuration
@@ -45,23 +56,23 @@
       */
     else if (func == "Reset") {
 	Printer::Import($[]);
-	return ($[]);
+	ret = $[];
     }
     /**
       * Change configuration
       * return symbol (i.e. `finish || `accept || `next || `cancel || `abort)
       */
     else if (func == "Change") {
-	Printer::Import(param);
-	any res = AutoSequence();
-	return res;
+    Wizard::CreateDialog ();
+    ret = runWizard (true);
+    UI::CloseDialog ();
     }
     /**
       * Return configuration data
       * return map or list
       */
     else if (func == "Result") {
-	return(Printer::Export());
+	ret = Printer::Export();
     }
     /**
       * Write configuration data
@@ -70,13 +81,20 @@
     else if (func == "Write") {
 	Printer::write_only = true;
 	Printer::save_all = true;
-	return(Printer::Write());
+	ret = Printer::Write();
     }
 
     /* unknown function */
     else {
 	y2error("unknown function: %1", func);
-	return false;
+	ret = false;
     }
 
+	y2debug("ret=%1", ret);
+	y2milestone("printer auto finished");
+	y2milestone("----------------------------------------");
+
+	return ret;
+
+/* EOF */
 }
