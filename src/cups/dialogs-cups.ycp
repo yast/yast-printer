@@ -34,6 +34,13 @@
       * @return symbol for WS
       */
     define symbol runListenIPPDialog () ``{
+	// this avoids problem with unread CUPS settings in the proposal
+	// see bug #46822
+	if (CUPS::cups_server_settings == nil
+	    || CUPS::cups_server_permissions == nil)
+	{
+	    CUPS::ReadCupsSettings ();
+	}
 
 	map<string,any> firewall_settings = $[
 	    "services" : [ "ipp-udp" ],
