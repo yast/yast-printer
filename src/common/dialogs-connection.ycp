@@ -65,42 +65,6 @@
     }
 
     /**
-      * Updates uri to contain specified URI-type
-      * Modifies Printer::printer variable
-      * @param type symbol specifying URI type
-      */
-    define void updateUri (symbol type) ``{
-	map mapping = $[
-	    `parallel : "parallel",
-	    `usb : "usb",
-	    `irda : "irda",
-	    `bluetooth : "bluetooth",
-	    `serial : "serial",
-	    `ipp : "ipp",
-	    `lpd : "lpd",
-	    `samba : "samba",
-	    `socket : "socket",
-	    `novell : "novell",
-	    `pipe : "pipe",
-	    `class : "class",
-	    `listen_ipp : "listen_ipp",
-	    `cups_client : "cups_client",
-	];
-	if (Printer::old_uri != "")
-	    Printer::old_uri = Printer::printer["uri"]:"";
-	integer sep = findfirstof (Printer::printer["uri"]:"", ":");
-	if (nil == sep)
-	{
-	    Printer::printer["uri"] = mapping[type]:"";
-	}
-	else
-	{
-	    Printer::printer["uri"] = mapping[type]:""
-		+ substring (Printer::printer["uri"]:"", sep);
-	}
-    }
-
-    /**
       * Check whether connection configuration is possible
       * additionally store last selected config type
       * @param selected symbol selected radio button
@@ -197,6 +161,33 @@ only if a CUPS spooler is used
 	return selected;
     }
 
+    /**
+      * Check whether connection configuration is possible
+      * additionally store last selected config type
+      * @param selected symbol selected radio button
+      * @return the same as selected radio button if proceed, nil otherwise
+      */
+    define symbol checkConnectionSubType (symbol what, symbol selected) ``{
+	Printer::connection_subtype_selected = selected;
+	if (what == `connection_local)
+	{
+	    selected = checkConnectionLocal (selected);
+	}
+	else if (what == `connection_cups)
+	{
+	    selected = checkConnectionCups (selected);
+	}
+	else if (what == `connection_direct)
+	{
+	    selected = checkConnectionDirect (selected);
+	}
+	else if (what == `connection_other)
+	{
+	    selected = checkConnectionOther (selected);
+	}
+	return selected;
+    }
+
 
 // dialogs
 
@@ -256,40 +247,10 @@ only if a CUPS spooler is used
 		    {
 			ret = checkConnectionType (ret);
 		    }
-		    else if (what == `connection_local)
+		    else
 		    {
-			ret = checkConnectionLocal (ret);
+			ret = checkConnectionSubType (what, ret);
 		    }
-		    else if (what == `connection_cups)
-		    {
-			ret = checkConnectionCups (ret);
-		    }
-		    else if (what == `connection_direct)
-		    {
-			ret = checkConnectionDirect (ret);
-		    }
-		    else if (what == `connection_other)
-		    {
-			ret = checkConnectionOther (ret);
-		    }
-
-		    if (what != `connection_type
-			&& what != `connection_local// FIXME is this correct?
-			&& ret != nil)
-		    {
-			updateUri (ret);
-		    }
-		}
-	    }
-	    else if (ret == `back)
-	    {
-		if (ret != `connection_type && Printer::old_uri != "")
-		{
-		    Printer::printer["uri"] = Printer::old_uri;
-		}
-		else if (ret != `connection_type)
-		{
-		    Printer::printer["uri"] = "";
 		}
 	    }
 	}
@@ -392,6 +353,11 @@ only if a CUPS spooler is used
 	    selected = `serial;
 	else if (uri_type == "usb")
 	    selected = `usb;
+	if (contains ([`parallel, `irda, `bluetooth, `serial, `usb],
+	    Printer::connection_subtype_selected))
+	{
+	    selected = Printer::connection_subtype_selected;
+	}
 
 	term items = `VBox (
 	    `Left (`RadioButton (`id (`parallel),
@@ -433,6 +399,11 @@ only if a CUPS spooler is used
             selected = `ipp;
 	if (uri_type == "listen_ipp")
 	    selected = `listen_ipp;
+	if (contains ([`cups_client, `ipp, `listen_ipp],
+	    Printer::connection_subtype_selected))
+	{
+	    selected = Printer::connection_subtype_selected;
+	}
 
 	term items = `VBox (
 	    `Left (`RadioButton (`id (`cups_client),
@@ -473,6 +444,11 @@ only if a CUPS spooler is used
 	    selected = `lpd;
 	else if (uri_type == "ipp")
 	    selected = `ipp;
+	if (contains ([`socket, `lpd, `ipp],
+	    Printer::connection_subtype_selected))
+	{
+	    selected = Printer::connection_subtype_selected;
+	}
 
 	term items = `VBox (
 	    `Left (`RadioButton (`id (`socket),
@@ -509,6 +485,11 @@ only if a CUPS spooler is used
 	    selected = `pipe;
 	else if (uri_type == "class")
 	    selected = `class;
+	if (contains ([`uri, `pipe, `class],
+	    Printer::connection_subtype_selected))
+	{
+	    selected = Printer::connection_subtype_selected;
+	}
 
 	term items = `VBox (
 	    `Left (`RadioButton (`id (`class),
@@ -827,7 +808,7 @@ actually selected.
 	    else if (type == "bluetooth")
 		uri = type + "://" + filterchars (device,
 		    "0123456789aAbBcCdDeEfF");
-            Printer::printer = add (Printer::printer, "uri", uri);
+            Printer::printer["uri"] = uri;
         }
         return ret;
     }
