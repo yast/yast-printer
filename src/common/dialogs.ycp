@@ -44,14 +44,17 @@
             file = "";
         term contents = `HBox (`HSpacing (5), `VBox (
             `HBox (
+		// text entry
                 `TextEntry (`id (`name), _("&File name:"), file),
                 `VBox (
                     `Label (" "),
+		    // push button
                     `PushButton (`id (`browse), _("&Browse"))
                 )
             )
         ), `HSpacing (5));
 
+	// dialog caption
         Wizard::SetContentsButtons (_("Select printer database"), contents, getDbChangeHelp (), BackButtonLabel (), NextButtonLabel ());
 
         symbol ret = nil;
@@ -70,11 +73,13 @@
                 }
                 if (!Printer::isFile (file))
                 {
+		    // popup
                     UI::MessagePopup (_("Enter a valid file name."));
                     continue;
                 }
                 if (!Printer::changeDb (file))
                 {
+		    // popup
                     UI::MessagePopup (_("Invalid database selected."));
                     continue;
                 }
@@ -133,7 +138,9 @@
 			     `HBox (
 				 `HSpacing (0.7),
 				 // text entry label
-				 `TextEntry (`id(`name), (type == "file" ? _("&File name:") : _("&Program name:")), file),
+				 `TextEntry (`id(`name), (type == "file" ? _("&File name:")
+				 // text entry label
+				 : _("&Program name:")), file),
 				 `HSpacing (0.7)
 				 ),
 			     `VSpacing (0.5)
@@ -143,7 +150,9 @@
 	    `HSpacing (8)
 	    );
 	// dialog label
-	Wizard::SetContentsButtons (type == "file" ? _("Printing to file") : _("Printing to pipe"), contents, getDiskFileHelp (), BackButtonLabel (), NextButtonLabel ());
+	Wizard::SetContentsButtons (type == "file" ? _("Printing to file")
+	// dialog label
+	: _("Printing to pipe"), contents, getDiskFileHelp (), BackButtonLabel (), NextButtonLabel ());
 
 	symbol ret = nil;
 	while (true)
@@ -165,7 +174,9 @@
 		else
 		{
 		    // message box
-		    UI::MessagePopup (type == file ? _("Enter the full path of the file to which to print.") : _("Enter full path of the program to which to print through pipe."));
+		    UI::MessagePopup (type == file ? _("Enter the full path of the file to which to print.")
+		    // message box
+			: _("Enter full path of the program to which to print through pipe."));
 		}
 	    }
 	    else if (`back == ret)
@@ -217,7 +228,7 @@
 	{
 	    if (type == "parallel")
 	    {
-		// CAUTION: "device" here means /dev/lp0, /dev/lp1, ...
+		// popup CAUTION: "device" here means /dev/lp0, /dev/lp1, ...
 		UI::MessagePopup (_("No parallel devices (/dev/lp?) found. It seems
 that your parallel port is not properly configured.
 "));
@@ -225,7 +236,7 @@ that your parallel port is not properly configured.
 	    }
 	    else if (type == "usb")
 	    {
-		// CAUTION: "device" here means /dev/usb/lp0, /dev/usb/lp1, ...
+		// popup CAUTION: "device" here means /dev/usb/lp0, /dev/usb/lp1, ...
 		UI::MessagePopup (_("No USB devices (/dev/usb/lp?) found. It seems
 that your USB bus is not properly configured.
 "));
@@ -233,7 +244,7 @@ that your USB bus is not properly configured.
 	    }
 	    else if (type == "serial")
 	    {
-		// CAUTION: "device" here means /dev/ttyS0, /dev/ttyS1, ...
+		// popup CAUTION: "device" here means /dev/ttyS0, /dev/ttyS1, ...
 		UI::MessagePopup (_("No serial devices (/dev/ttyS?) found. It seems
 that your serial ports are not properly configured.
 "));
@@ -241,7 +252,7 @@ that your serial ports are not properly configured.
 	    }
 	    else if (type == "irda")
 	    {
-/*		// CAUTION: "device" here means /dev/lp0, /dev/lp1, ...
+/*		// popup CAUTION: "device" here means /dev/lp0, /dev/lp1, ...
 		UI::MessagePopup (_("No parallel devices (/dev/lp?) found. It seems
 that your parallel port is not properly configured.
 "));*/
@@ -254,6 +265,7 @@ that your parallel port is not properly configured.
 	    device = select (devices, 0, "");
 	list device_val = getDevicesItems (devices, device);
 	term details = `VBox (
+	    // PushButton
 	    `HBox (`HStretch (), `PushButton (`id (`details), _("&Other...")))
 	);
 
@@ -263,13 +275,17 @@ that your parallel port is not properly configured.
 	    {
 		details = add (details,
 		    `HBox (`HStretch (), `PushButton (`id ("parallel" == type ? `ppdetails : `spdetails),
-			"parallel" == type ? _("&Parallel port details...") : _("&Serial port details..."))));
+			// PushButton
+			"parallel" == type ? _("&Parallel port details...")
+			// PushButton
+			    : _("&Serial port details..."))));
 	    }
 	}
 
 	term contents =
 	    `VBox (`VSpacing (2),
 		   `HBox (`HSpacing (5),
+			  // frame
 			  `Frame (_("Connection"),
 				  `HBox (`HSpacing (0.7),
 					 `VBox (`VSpacing (0.2),
@@ -287,6 +303,7 @@ that your parallel port is not properly configured.
 					 `HSpacing (0.7))),
 			  `HSpacing (5)),
 		   `VStretch (),
+		    // pushbutton
 		   `PushButton (`id (`test), _("&Test printer connection")),
 		   `VStretch ()
 		);
@@ -381,8 +398,11 @@ that your parallel port is not properly configured.
 					  // text entry label
 					  _("Name of the remote &queue:"),
 					    remote_printer);
+	// menubutton
 	term lookup_hosts = `MenuButton (_("&Lookup"), [
+			// menuentry
 		    `item (`id (`get_hosts_lpd), _("&LPD servers")),
+			// menuentry
 		    `item (`id (`get_hosts), _("&All hosts")),
 		]);
 
@@ -397,6 +417,7 @@ that your parallel port is not properly configured.
 									    _("Use already configured TCP/IP forwarding queue:"),
 									    !create_queue)),
 						       `HBox (`HSpacing (3.5),
+									// selectionbox
 							      `SelectionBox (`id (`all_forwarding_sb), _("Q&ueues:"), all_forwarding)),
 						       `VSpacing (0.5),
 						       `Left (`RadioButton (`id (`new_forwarding), `opt (`notify),
@@ -469,6 +490,7 @@ that your parallel port is not properly configured.
 		// Find the hosts...
 		list hosts = [];
 		UI::OpenDialog (`opt (`decorated),
+				// label
 				 `Label (_("Scanning for hosts on this LAN...")));
 		if (`get_hosts_lpd == ret)
 		    hosts = SCR::Read (.net.hostnames, 515);
@@ -481,6 +503,7 @@ that your parallel port is not properly configured.
 		}
 		UI::ReplaceWidget (
 		    `id (`hostent_replace),
+		    // combobox label
 		    `ComboBox (`id (`hostnameent), `opt (`editable, `hstretch), _("&Host name of the printer:"), sort (hosts))
 		    );
 	    }
@@ -558,36 +581,51 @@ that your parallel port is not properly configured.
 					  // text entry label
 					  _("Name of the remote &queue:"),
 					  queue);
+	// menu button
 	term lookup_hosts = `MenuButton (_("&Lookup"), [
+			// menuentry
 		    `item (`id (`get_hosts_special), _("&LPD servers")),
+			// menuentry
 		    `item (`id (`get_hosts), _("&All hosts")),
 		]);
 	if (type == "novell")
 	    {
+		// menu button
 		lookup_hosts = `PushButton (`id (`get_hosts), _("&Lookup"));
+		// pushbutton
 		test_button = Printer::isNetAvailable () ? `PushButton (`id (`test), _("&Test remote Novell access")) : `VSpacing (1);
 	    }
 	if (type == "samba")
 	    {
+		// pushbutton
 		test_button = Printer::isNetAvailable () ? `PushButton (`id (`test), _("&Test remote SMB access")) : `VSpacing (1);
 		queue_entry = `ComboBox (`id (`queueent), `opt (`editable, `hstretch),
 					    // text entry label
 					    _("Name of the remote &queue:"));
+		// pushbutton
 		queue_button = `VBox (`VStretch (), `PushButton (`id (`get_printers), _("L&ookup")));
+		// menu button
 		lookup_hosts = `MenuButton (_("&Lookup"), [
+			// menuentry
 		    `item (`id (`get_hosts_special), _("&Samba servers")),
+			// menuentry
 		    `item (`id (`get_hosts), _("&All hosts")),
 		]);
 	    }
 	if (type == "ipp")
 	{
+	    // pushbutton
 	    test_button = Printer::isNetAvailable () ? `PushButton (`id (`test), _("&Test remote IPP access")) : `VSpacing (1);
 	    queue_entry = `ComboBox (`id (`queueent), `opt (`editable, `hstretch),
                                             // text entry label
                                             _("Name of the remote &queue:"));
+					    // push button
 	    queue_button = `VBox (`VStretch (), `PushButton (`id (`get_printers), _("L&ookup")));
+	    // menu button
 	    lookup_hosts = `MenuButton (_("&Lookup"), [
+		// menu item
                 `item (`id (`get_hosts_special), _("&IPP servers")),
+		// menu item
                 `item (`id (`get_hosts), _("&All hosts")),
             ]);
 	}
@@ -596,10 +634,15 @@ that your parallel port is not properly configured.
 	    port = Printerlib::getUriPort (uri);
 	    if (port == 0)
 		port = 9100;
+	    // push button
 	    test_button = Printer::isNetAvailable () ? `PushButton (`id (`test), _("&Test remote socket access")) : `VSpacing (1);
+	    // text entry label
 	    queue_entry = `VBox (`VStretch (), `TextEntry (`id (`port), _("&TCP port number"), sformat("%1", port)));
+	    // menu button
 	    lookup_hosts = `MenuButton (_("&Lookup"), [
+		// menu item
 		`item (`id (`get_hosts_special), _("&Direct socket servers")),
+		// menu item
 		`item (`id (`get_hosts), _("&All hosts")),
 	    ]);
 	}
@@ -818,6 +861,7 @@ that your parallel port is not properly configured.
 			 `VBox (
 			     `HBox (
 				 `HSpacing (0.7),
+				  // textentry label
 				 `TextEntry (`id(`name), _("&Uri:"), device),
 				 `HSpacing (0.7)
 				 ),
@@ -828,6 +872,7 @@ that your parallel port is not properly configured.
 		),
 	    `HSpacing (8)
 	    );
+	// dialog caption
 	Wizard::SetContentsButtons (_("Printer device"), contents, getUriHelp (), BackButtonLabel (), NextButtonLabel ());
 
 	symbol ret = nil;
@@ -875,9 +920,11 @@ that your parallel port is not properly configured.
 	term contents =
 	    `VBox (`HBox (`HWeight (1, manufsel),
 			  `HWeight (1, `ReplacePoint (`id (`modelsel_rep), `HSpacing ()))),
-		   // Button which provides information about selected manufacturer/model
+		   // pushbutton
 		   `HBox (`PushButton (`id (`dbchange), _("&Change database")), `HSpacing(),
+		   // pushbutton
 			  `PushButton (`id (`useppd), _("Use non-YaST2 &ppd file"))),
+		   // Button which provides information about selected manufacturer/model
 		   `PushButton (`id (`infobut), _("&Info")));
 	// dialog box label
 	Wizard::SetContentsButtons (_("Manufacturer and model of the printer"), contents, getManufModelHelp (), BackButtonLabel (), NextButtonLabel ());
@@ -887,7 +934,9 @@ that your parallel port is not properly configured.
 	{
 	    if (ret == `infobut)
 	    {
+		// richtext
 		string manuf_info = lookup (info, "vendor", _("<P>No information available.</P>"));
+		// richtext
 		string model_info = lookup (info, "printer", lookup (info, "config", _("<P>No information available.</P>")));
 		// Manufacturer: ...info... Model: ...info...  1/2
 		string info_text = _("<P><B>Manufacturer:</B></P>") + manuf_info +
@@ -930,9 +979,7 @@ that your parallel port is not properly configured.
             {
 		boolean cont = true;
 		if (Printer::spooler != "cups")
-		    cont = UI::YesNoPopup (getPpdWarning ());//_("PPD files are supported by CUPS only.
-// Continue?
-//"));
+		    cont = UI::YesNoPopup (getPpdWarning ());
 		ret = cont ? `useppd : `cont;
             }
 	    if (`dbchange == ret)
@@ -969,11 +1016,14 @@ that your parallel port is not properly configured.
 	    `VBox (
 //		    `RichText (select (cfgs, 0, "")),
 		    `VSpacing (1),
+		    // selection box label
 		    `SelectionBox (`id (`selection), `opt (`hstretch), _("&Select configuration:"), select (cfgs, 1, [])),
 		    `VSpacing (1),
 		    `HBox (
 			`HStretch (),
+			// pushbutton
 			`HWeight (1, `PushButton (`id (`test), _("&Test printing"))),
+			// pushbutton
 			-1 == Printer::index ? `HWeight (1, `PushButton (`id (`advanced), _("Ad&vanced settings"))) : `HSpacing (0),
 			`HStretch ()
 		    ),
@@ -1050,7 +1100,9 @@ that your parallel port is not properly configured.
 	    }
 	    if (`info == ret)
 	    {
+		// popup
 		string i = lookup (info, "comment", _("<P>No information available.</P>"));
+		// popup header
 		UI::LongTextPopup (_("Configuration information"), `RichText (i), 50, 18);
 	    }
 	    if (`abort == ret)
@@ -1141,17 +1193,26 @@ that your parallel port is not properly configured.
 
 	term insert =
 	    "lpd" == Printer::getUriType ()  || "cups" == Printer::spooler ? `VSpacing (0) :
+		// check box
 		`CheckBox (`id (`raw), `opt (`hstretch), _("Ra&w queue"), lookup (Printer::printer, "raw", raw));
 	term insert2 =
 	     "cups" == Printer::spooler ? `VSpacing (0) :
+		// check box
 		`CheckBox (`id (`ff), `opt (`hstretch), _("Print &formfeed between jobs"), lookup (Printer::printer, "ff", ff));
 	term contents = `VBox (
+		// text entry
 		`TextEntry (`id (`name), `opt (`hstretch), _("Name for &printing:"), name),
 		`VSpacing (1),
 		"lprng" == Printer::spooler ? `VSpacing (0) :
-		    `TextEntry (`id (`info), `opt (`hstretch), is_class ? _("&Description of class") : _("Description of printer"), info),
+		// text entry
+		    `TextEntry (`id (`info), `opt (`hstretch), is_class ? _("&Description of class")
+		// text entry
+			 : _("Description of printer"), info),
 		"lprng" == Printer::spooler ? `VSpacing (0) :
-		    `TextEntry (`id (`loc), `opt (`hstretch), is_class ? _("&Location of class") : _("Location of printer"), loc),
+		// text entry
+		    `TextEntry (`id (`loc), `opt (`hstretch), is_class ? _("&Location of class")
+		// text entry
+			 : _("Location of printer"), loc),
 		`VSpacing ("cups" == Printer::spooler ? 0 : 1),
 		insert,
 		insert2,
@@ -1161,15 +1222,18 @@ that your parallel port is not properly configured.
 	{
 	    contents = add (add (contents,
 		    `TextEntry (`id (`prefilter), `opt (`hstretch),
+			// textentry
 			_("Name for &TCP/IP forwarding queue"), remote)),
 		    `VSpacing (1));
 	}
 	contents = `HBox (`HSpacing (4),
+		// frame
 		`VBox (`Frame (_("Queue name and spooler settings"), contents), `VSpacing (2)),
 		`HSpacing (4));
 
 	// dialog box label
 	Wizard::SetContentsButtons (
+		// dialog caption
 		is_class ? _("Class name") : _("Queue name"),
 		contents,
 		getSpoolInfoHelp (is_prefilter_editable, "lpd" != Printer::getUriType ()),
@@ -1328,8 +1392,8 @@ that your parallel port is not properly configured.
                         )
                     ),
                 `HBox(
-                    `PushButton(`id(`add),_("A&dd")),
-                    `PushButton(`id(`delete),_("De&lete"))
+                    `PushButton(`id(`add),AddButtonLabel ()),
+                    `PushButton(`id(`delete),DeleteButtonLabel ())
                     )
                 );
         // dialog label
@@ -1456,7 +1520,7 @@ settings changed manually will be lost.
 Otherwise, press Next or Back to proceed.
 ")
 		    )),
-		`PushButton (`id (`edit), _("&Edit")),
+		`PushButton (`id (`edit), EditButtonLabel ()),
 		`Left (`Label (
 		    // in-dialog text
 		    _("If you are not sure, you can try to edit settings, test them,
@@ -1479,8 +1543,11 @@ and if you do not like the result, just press Back.")
 	Printer::printer = add (Printer::printer, "saved", saved);
 	string config = lookup (Printer::printer, "config", "");
 	any vals = nil;
+	// pushbutton
 	term test_button = (!Printer::isNetAvailable () && Printer::isNetwork ()) ? `VSpacing (1) : `HWeight (1, `PushButton (`id (`test), _("&Test graphical printing")));
+	// pushbutton
 	term advanced_button = `HWeight (1, `PushButton (`id (`advanced), _("Ad&vanced settings")));
+	// dialog caption
 	Wizard::SetContentsButtons (_("Configuration options"), `VBox (
 		    `VWeight (1, `ReplacePoint (`id (`upper), `VSpacing (1))),
 		    `VWeight (1, `ReplacePoint (`id (`lower), `VSpacing (1))),
@@ -1495,6 +1562,7 @@ and if you do not like the result, just press Back.")
 	    selected = solvePaperSize (selected, opts);
 	    opts = SCR::Read (add (.printerdb.options, config), selected);
 	}
+	// selection box label
 	UI::ReplaceWidget (`id (`upper), `SelectionBox (`id (`opts), `opt (`notify), _("&Options"), opts));
 	while (`next != ret && `back != ret && `abort != ret)
 	{
@@ -1520,6 +1588,7 @@ and if you do not like the result, just press Back.")
 		string co = select (idx, 0, "");
 		selected = add (selected, co, grabValueUI (vals));
 		opts = SCR::Read (add (add (.printerdb.options, config), co), selected);
+		// selection box label
 		UI::ReplaceWidget (`id (`upper), `SelectionBox (`id (`opts), `opt (`notify), _("&Options"), opts));
 	    }
 	    else if (`advanced == ret)
@@ -1661,6 +1730,7 @@ and if you do not like the result, just press Back.")
 	list items = [];
 	string rich = "";
 
+	// table entry
 	items = add (items, `item (`id (`name), _("Name and basic settings"), lookup (Printer::printer, "name", "")));
 	if ("class" != uri_type)
 	{
@@ -1678,22 +1748,27 @@ and if you do not like the result, just press Back.")
                     {
                         filename = "";
                     }
+			// table entry
                     items = add (items, `item (`id (`ppd), _("PPD file"), know ? filename : _("unknown")));
 
                 }
                 else
                 {
+			// table entry
                     items = add (items, `item (`id (`model), _("Printer model"), know ? model_text : _("unknown")));
                 }
             }
+		// table entry
 	    items = add (items, `item (`id (`connection), _("Connection"), know ? Printerlib::getUriNiceName (uri) : _("unknown")));
 	}
 	if ("class" == uri_type)
 	{
+	// table entry
 	    items = add (items, `item (`id (`class_members), _("Class members"), ""));
+	// table entry
 	    items = add (items, `item (`id (`perm), _("Restrictions settings"), ""));
+	// table entry
 	    items = add (items, `item (`id (`state), _("State and banners settings"), ""));
-//	    items = add (items, `item (`id (`class), _("Class settings"), ""));
 	}
 	else
 	{
@@ -1704,18 +1779,21 @@ and if you do not like the result, just press Back.")
 		}
 		else
 		{
+	// table entry
 		    items = add (items, `item (`id (`settings), _("Printing filter settings"), ""));
 		}
 		if (Printer::spooler != "cups")
 		{
+	// table entry
 		    items = add (items, `item (`id (`ascii), _("ASCII printing settings"), ""));
 		}
 		if (Printer::spooler != "lprng")
 		{
+	// table entry
 		    items = add (items, `item (`id (`perm), _("Restrictions settings"), ""));
+	// table entry
 		    items = add (items, `item (`id (`state), _("State and banners settings"), ""));
 		}
-//		items = add (items, `item (`id (`indep), _("Hardware independent settings"), ""));
 	    }
 	}
 
@@ -1724,12 +1802,18 @@ and if you do not like the result, just press Back.")
 	    `HBox (
 		`HSpacing (1),
 		`VBox (
+			// check box
 		    `Left (`CheckBox (`id (`yast), `opt (`notify), _("&Allow editing of this queue"), conf_type)),
 		    `VSpacing (1),
-		    `Table (`id (`options), `header ( _("Option area"), _("Current values")), items),
+			// table header
+		    `Table (`id (`options), `header ( _("Option area"),
+			// table header
+			 _("Current values")), items),
 		    `HBox (
-			`PushButton (`id (`edit), _("&Edit...")),
+			// push button
+			`PushButton (`id (`edit), EditButtonLabel ()),
 			`HStretch (),
+			// push button
 			"class" == uri_type ? `HSpacing (0.1) : `PushButton (`id (`test), _("&Test"))
 		    )
 		),
@@ -1738,6 +1822,7 @@ and if you do not like the result, just press Back.")
 	    `VSpacing (1)
 	);
 
+	// dialog caption
 	Wizard::SetContentsButtons (_("Edit configuration"), contents, getEditHelp (uri_type, raw, lookup (Printer::printer, "ownppd", "") != ""),
 	    BackButtonLabel (), NextButtonLabel ());
     }
@@ -1782,6 +1867,7 @@ and if you do not like the result, just press Back.")
 		    boolean state = UI::QueryWidget (`id (`yast), `Value);
 		    if (! state)
 		    {
+			// popup
 			if (UI::YesNoPopup (_("If you forbid editing this queue,\nyou will not be able to change its settings\nusing YaST2. Continue?")))
 			{
 			    Printer::printer = add (Printer::printer, "type", "non-yast-now");
@@ -1801,6 +1887,7 @@ and if you do not like the result, just press Back.")
 		    }
 		    else
 		    {
+			// popup
 			if (UI::YesNoPopup (_("The selected queue was not configured 
 using YaST2. Do you want to add a printer 
 with a prefilled name?
@@ -1833,9 +1920,7 @@ with a prefilled name?
 		{
 		    boolean cont = true;
 		    if (Printer::spooler != "cups")
-			cont = UI::YesNoPopup (getPpdWarning ());//_("PPD files are supported by CUPS only.
-// Continue?
-//"));
+			cont = UI::YesNoPopup (getPpdWarning ());
 		    ret = cont ? `ppd : nil;
 		}
 		if (`update == ret)
@@ -1874,18 +1959,23 @@ with a prefilled name?
 		    `VStretch (),
 		    `HBox (
 			`HStretch (),
+			// frame
 			`Frame (_("Spooler"),
 			    getSpoolerItems (new_spooler, false)
 		        ),
 			`HStretch ()
 		    ),
 		    `VStretch (),
+		    // chackbox
 		    `CheckBox (`id (`save), _("&Force saving everything"), Printer::save_all),
 		    `VStretch (),
+		    // pushbutton
 		    `HWeight (1, `PushButton (`id (`reinstall), _("Re&install printing packages"))),
 		    `VStretch (),
+		    // pushbutton
 		    `HWeight (1, `PushButton (`id (`scratch), _("Cl&ear current configuration"))),
 		    Printer::spooler == "cups" && 0 == Printer::cupsInstallationType () ? `VStretch () :`VSpacing (0),
+		    // pushbutton
 		    Printer::spooler == "cups" && 0 == Printer::cupsInstallationType () ? `HWeight (1, `PushButton (`id (`cupsd), _("CUPS server se&ttings"))) : `VSpacing (0),
 		    `VStretch ()
 		),
@@ -1894,6 +1984,7 @@ with a prefilled name?
 	    `VSpacing (1)
 	);
 
+	// dialog caption
         Wizard::SetContentsButtons (_("Edit configuration"), contents, getAdvancedHelp (), BackButtonLabel (), NextButtonLabel ());
 	symbol ret = nil;
 	while (nil == ret)
@@ -1901,7 +1992,10 @@ with a prefilled name?
 	    ret = UI::UserInput ();
 	    if (`scratch == ret)
 	    {
-		if (! UI::AnyQuestionPopup (WarningMsg(), _("Really discard your configuration?"), _("&Discard"), CancelButtonLabel (), `focus_no))
+		// popup
+		if (! UI::AnyQuestionPopup (WarningMsg(), _("Really discard your configuration?"),
+			// pushbutton
+			_("&Discard"), CancelButtonLabel (), `focus_no))
 		{
 		    ret = nil;
 		    continue;
@@ -1912,9 +2006,11 @@ with a prefilled name?
 	    }
 	    else if (`reinstall == ret)
 	    {
+		// popup
 		if (! UI::AnyQuestionPopup(WarningMsg(), _("Really reinstall your printing system? 
 All your changes will be lost.
 "),
+		    // pushbutton
 		    _("&Reinstall"), CancelButtonLabel (), `focus_no))
 		{
 		    ret = nil;
@@ -2170,6 +2266,7 @@ the current configuration.
 	    `opt (`decorated),
 	    `VBox (
 		`TextEntry (`id (`text),
+			    // textentry label
 			    _("&Enter device:"),
 			    pre_filled),
 		`HBox (
@@ -2223,10 +2320,14 @@ the current configuration.
 			`VBox (
 			    `VSpacing (0.5),
 			    `Table (
-				`id (`table), `header (_("Queue name"), _("Comment")),
+				// table header
+				`id (`table), `header (_("Queue name"),
+				// table header
+				 _("Comment")),
 				maplist (`v, new_queues, ``(`item (`id (lookup (v, "name", "")), lookup (v, "name", ""), lookup (v, "comment", ""))))
 				),
 			    `VSpacing (0.5),
+			    // pushbutton
 			    `PushButton (`id (`test), _("&Test graphical printing")),
 			    `VSpacing (0.5)
 			    ),
@@ -2298,6 +2399,7 @@ the current configuration.
 			      Printerlib::getDeviceNiceName (lookup (i, "dev_name", ""))),
 			  current == current_sel);
 	});
+	// selection box entry
 	return add (items, `item (`id (-1), _("Other (not detected)"), !selected));
     }
 
@@ -2314,17 +2416,12 @@ the current configuration.
      * @return symbol for ws
      */
     global define symbol runDetectedDialog () ``{
-/*	term contents = `Frame (
-	    `SelectionBox 
-	    `HBox (
-		`PushButton
-		`HStretch (),
-		`PushButton (`id (`configure_button), _("&Configure")
-	    )*/
 	term contents = Wizard_hw::DetectedContent (
+	    // Selectionbox caption
 	    _("Printers to configure"),
 	    getAutoprobedSelectionBox (runAutoprobedListDialog__current),
 	    true,
+	    // ruchtext caption
 	    _("<P>Already installed printers and queues:</P>")
 	    + Printer::Summary ([`nonew, `test])
 	    );
@@ -2401,20 +2498,38 @@ system will be saved.
 	}
 	else
 	    spoolerlabel = "any spooler";
-	// Header of the dilag with all the printers
 	Wizard::SetContentsButtons (
+	// Header of the dilag with all the printers
 	    sformat (_("Printer administration for %1"), spoolerlabel),
 	    Wizard_hw::ConfiguredContent (
 		(Printer::spooler == "cups" || Printer::spooler == "lprng")
 		?
-		    `header (_("Default"), _("Name"), _("Type"), `Center(_("Ready")))
+			// table header
+		    `header (_("Default"),
+			// table header
+			 _("Name"),
+			// table header
+			 _("Type"),
+			// table header
+			 `Center(_("Ready")))
 		:
-		    `header (_("Default"), _("Name"), _("Type"), `Center(_("CUPS")), `Center(_("LPRng"))),
+			// table header
+		    `header (_("Default"),
+			// table header
+			 _("Name"),
+			// table header
+			 _("Type"),
+			// table header
+			 `Center(_("CUPS")),
+			// table header
+			 `Center(_("LPRng"))),
 		printcapTable (),
 		nil, nil,
 		`HBox (
 		    `HStretch (),
+		// push button
 		`PushButton (`id (`setdefault), _("&Set as default")),
+		// push button
 		`PushButton (`id (`advanced), _("Ad&vanced")),
 
 		    `HStretch ()
@@ -2525,6 +2640,7 @@ system will be saved.
 		    if (!Printer::warn_finish || UI::YesNoPopup (Printer::save_all ? _("Now the configuration of the printing 
 system will be saved
 ")
+			// message box
 			: _("Now the changes to your printing \nsystem will be saved.")))
 		    {
 			break;
@@ -2532,9 +2648,11 @@ system will be saved
 		}
 		if (`scratch == ret)
 		{
+			// message box
 		    if (! UI::AnyQuestionPopup(WarningMsg(), _("Really reinstall your printing system? 
 All your changes will be lost.
 "),
+			// push button
 			_("&Reinstall"), CancelButtonLabel (), `focus_no))
 			    continue;
 		    boolean success = reinstallAll ();

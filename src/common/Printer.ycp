@@ -655,7 +655,7 @@ END { if (!used) print \"ServerName %1\" }
 		state = $[];
 		if (is (nonyast, list) && size (nonyast) > 0)
 		{
-		    y2error ("Update");
+		    y2milestone ("First run after update from older version");
 		    update = true;
 		}
 	    }
@@ -708,6 +708,15 @@ END { if (!used) print \"ServerName %1\" }
 	        }
 	    }
         });
+	if (update)
+	{
+	    list tmp = printcap;
+	    printcap = [];
+	    foreach (`e, tmp, ``{
+		e = add (e, "type", "yast2");
+		printcap = add (printcap, e);
+	    });
+	}
         original_unique_keys = $[];
         foreach (`i, printcap, ``{
             if (haskey (i, "unique_key"))
@@ -778,6 +787,7 @@ END { if (!used) print \"ServerName %1\" }
             if (0 != cupsInstallationType ())
 	    {
 		saveClientHostName ();
+		// popup
 		boolean delete = SCR::Read (.targetpkg.installed, "cups") && UI::YesNoPopup (_("Some packages installed are not needed
 for CUPS client-only installation. 
 Remove them?
@@ -802,8 +812,18 @@ Remove them?
 	Progress::New (_("Saving settings of printers. Please wait..."),
 		       // progress stages, short texts
 		       " ", size (printcap) + 3,
-		       [ _("Delete old printers"), _("Save printers"), _("Save system settings") ],
-		       [ _("Deleting old printers..."), _("Saving printer..."), _("Saving system settings...")],
+			// progress bar states
+		       [ _("Delete old printers"),
+			// progress bar states
+			 _("Save printers"),
+			// progress bar states
+			 _("Save system settings") ],
+			// progress bar states
+		       [ _("Deleting old printers..."),
+			// progress bar states
+			 _("Saving printer..."),
+			// progress bar states
+			 _("Saving system settings...")],
 		       "");
 	Progress::NextStage ();
 
@@ -832,9 +852,11 @@ Remove them?
 	printcap = maplist (`entry, printcap, ``{
 	    string uri = lookup (entry, "uri", "");
 	    string name = lookup (entry, "name", "");
+	    // progress title
 	    Progress::Title (sformat (_("Saving printer %1"), name));
 	    if (name == "")
 	    {
+		// error report. %1 is queue name
 		Report::Error (sformat (_("Attempting to save unnamed printer. Skipping: %1"), ent));
 		return;
 	    }
@@ -860,6 +882,7 @@ Remove them?
 		    if (writeCupsPrinter (entry))
 			entry = add (entry, "cups-state", "commited");
 		if (lookup (entry, "cups-state", "changed") == "void")
+		    // popup %1 is queue name
 		    UI::MessagePopup (_("Queue %1 cannot be saved because
 the selected spooler does not support it.
 "), name);
@@ -870,6 +893,7 @@ the selected spooler does not support it.
 		    if (writeLpdPrinter (entry))
 			entry = add (entry, "lprng-state", "commited");
 		if (lookup (entry, "lprng-state", "changed") == "void")
+		    // popup %1 is queue name
 		    UI::MessagePopup (_("Queue %1 cannot be saved because
 the selected spooler does not support it.
 "), name);
@@ -943,6 +967,7 @@ the selected spooler does not support it.
 	map save = $["printers" : l, "deleted" : deleted, "default" : default ];
 	if (! SCR::Write (.target.ycp, "/var/lib/YaST2/printers", save))
 	{
+	    // error report. %1 is filename
 	    Report::Error (sformat (_("Cannot write %1."), "/var/lib/YaST2/printers"));
 	    return false;
 	}
@@ -984,7 +1009,7 @@ the selected spooler does not support it.
 	string fname = sformat ("/etc/lpdfilter/%1/upp", name);
 	if (!SCR::Write (.target.string, fname, upp_file))
 	{
-	    // message box
+	    // message box %1 is filename
 	    Report::Error (sformat (_("Cannot write %1."), fname));
 	    return false;
 	}
@@ -1081,7 +1106,9 @@ the selected spooler does not support it.
      */
     global define string Summary (list style) ``{
 	// Configured as name_of_queue.
-	string format = contains (style, `short) ? _("Configured as %1.") : _("Configured as:<br>%1");
+	string format = contains (style, `short) ? _("Configured as %1.")
+	// Configured as name_of_queue.
+	: _("Configured as:<br>%1");
 	list summary = [];
 	list used = [];
 	// autodetected printer
@@ -1161,6 +1188,7 @@ the selected spooler does not support it.
 		    i = assignStates (i, false);
 		    boolean raw = lookup (i, "raw", false) || "lpd" == Printerlib::getUriType (lookup (i, "uri", ""));
 		    string dev = (raw ?
+			// menu item, %1 is URI
 			sformat (_("Raw queue: %1"), Printerlib::getUriNiceName (lookup (i, "uri", "")))
 			:
 			sformat ("%1: %2", model, Printerlib::getUriNiceName (lookup (i, "uri", "")))
@@ -1189,9 +1217,12 @@ the selected spooler does not support it.
 		    // This printer was not configured using YaST2. Item in table. SHORT!
 		    if (contains (style, `test))
 			cache = sformat ("%1"/* [<a href=\"%1\">test</a>]"*/, cache);
+		    // menu item part
 		    if (haskey (other_printers, _("- not YaST2 -")))
+			// menu item part
 			other_printers = add (other_printers, _("- not YaST2 -"), lookup (other_printers, _("- not YaST2 -"), "???") + ", " + cache);
 		    else
+			// menu item part
 			other_printers = add (other_printers, _("- not YaST2 -"), cache);
 		}
 	    }

@@ -526,6 +526,7 @@ void addTranslatableString (FILE*f, const char*c, int cls = 0)
 	c++;
     }
     switch (cls) {
+    case 0: fputs ("// printer database string\n", f); break;
     case 1: fputs ("//TRANSLATORS: keep this short! Only translations in languages with encodings ISO-8859-[1|2|15] will be used.\n", f); break;
     case 2: fputs ("//class-comments\n", f); break;
     case 3: fputs ("//class-options\n", f); break;

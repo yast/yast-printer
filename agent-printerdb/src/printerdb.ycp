@@ -19,20 +19,20 @@
     string current_config = "";
 
     // strings which may be useable for 8.1, but currently not used
-    string a = _("Ready");
-    a = _("Status");
-    a = _("&Baud rate:");
-    a = _("&Parity:");
-    a = _("&Data bits:");
-    a = _("&Flow control:");
-    a = _("None");
-    a = _("Even");
-    a = _("Odd");
+//    string a = _("Ready");
+//    a = _("Status");
+//    a = _("&Baud rate:");
+//    a = _("&Parity:");
+//    a = _("&Data bits:");
+//    a = _("&Flow control:");
+//    a = _("None");
+//    a = _("Even");
+/*    a = _("Odd");
     a = _("None");
     a = _("XON/XOFF (Software)");
     a = _("RTS/CTS (Hardware)");
     a = _("DTR/DSR (Hardware)");
-
+*/
     define getConfigTreeHelper (list l, string pre) ``{
 	list ll = [];
 	foreach (`i, l, ``{
@@ -55,8 +55,10 @@
     define vendors () ``{
 	list items = SCR::Read (.printerdb.vendors, current_vendor);
 	Wizard::SetContentsButtons
+	// Dialog caption
 /*	UI::SetWizardContents i*/(_("Vendors"), `VBox (
 		    `SelectionBox (`id (`sel), "", items),
+			// pushbutton
 		    `PushButton (`id (`generate), _("&Generate translation strings and test script"))
 		    ), "", BackButtonLabel (), NextButtonLabel ());
 	symbol ret = UI::UserInput ();
@@ -67,6 +69,7 @@
 	    SCR::Write (.printerdb.gettext.prg, tmp + "prg.msg");
 	    SCR::Write (.printerdb.testscript, tmp + "tst");
 	    UI::OpenDialog (`VBox (
+			// label
 			`Label (sformat (_("Files %1msg and %1tst were generated."), tmp)),
 			`HBox (`PushButton (OKButtonLabel ()),`PushButton (CancelButtonLabel ()))));
 	    ret = UI::UserInput ();
@@ -80,6 +83,7 @@
     define printers () ``{
 	list items = SCR::Read (add (.printerdb.models, current_vendor), current_printer);
 	Wizard::SetContentsButtons
+	// dialog caption
 /*	UI::SetWizardContents*/ (_("Printers"), `VBox (
 		    `SelectionBox (`id (`sel), "", items)
 		    ), "", BackButtonLabel (), NextButtonLabel ());
@@ -91,8 +95,10 @@
     define configsrt () ``{
 	list l = SCR::Read (add (.printerdb.configsrt, current_printer), "");
 	Wizard::SetContentsButtons
+	// dialog caption
 /*	UI::SetWizardContents*/ (_("Configs"), `VBox (
 		    `RichText (`id (`sel), select (l, 0, "")),
+			// menubutton
 		    `MenuButton (_("Configurations"), select (l, 1, []))
 		    ),
 		    "",  BackButtonLabel (), NextButtonLabel ());
@@ -110,6 +116,7 @@
     }
     define configs () ``{
 	Wizard::SetContentsButtons
+	// dialog caption
 /*	UI::SetWizardContents */(_("Configs"), `VBox (
 		    `Table (`id (`sel), `header ("leaf","name", "id", "queue"), getConfigTree ())
 		    ), "", BackButtonLabel (), NextButtonLabel ());
@@ -119,11 +126,15 @@
     }
     define options () ``{
 	Wizard::SetContentsButtons
+	// dialog caption
 /*	UI::SetWizardContents */(_("Options"), `VBox (
+			//selectionbox label
 		    `VWeight (1, `ReplacePoint (`id (`upper), `SelectionBox (`id (`opts), _("&Options"), []))),
+			//selectionbox label
 		    `VWeight (1, `ReplacePoint (`id (`lower), `SelectionBox (`id (`vals), _("&Values"), [])))
 		    ), "", BackButtonLabel (), NextButtonLabel ());
 	list opts = SCR::Read (add (.printerdb.options, current_config));
+			//selectionbox label
 	UI::ReplaceWidget (`id (`upper), `SelectionBox (`id (`opts), `opt (`notify), _("&Options"), opts));
 	symbol ret = `opts;
 	map selected = $[];
@@ -140,6 +151,7 @@
 		string co = UI::QueryWidget (`id (`opts), `CurrentItem);
 		selected = add (selected, co, UI::QueryWidget (`id (`vals), `CurrentItem));
 		opts = SCR::Read (add (add (.printerdb.options, current_config), co), selected);
+		// selectionbox
 		UI::ReplaceWidget (`id (`upper), `SelectionBox (`id (`opts), `opt (`notify), _("&Options"), opts));
 	    }
 	    ret = UI::UserInput ();
@@ -149,24 +161,29 @@
 
     define getValuesUI (any vals) ``{
 	if (is (vals,list))
+		// selectionbox
 	    return `SelectionBox (`id (`vals), `opt (`notify), _("&Values"), vals);
 	if (!is (vals, term))
 	    return `VStretch ();
 	if (`int == symbolof (vals))
 	{
+	    // intfield
 	    term out = UI::HasSpecialWidget (`Slider) ? `Slider (`id (`int), _("&Values")) : `IntField (`id (`int), _("&Values"));
 	    out = add (out, select (vals, 0, 0));
 	    out = add (out, select (vals, 1, 0));
 	    out = add (out, select (vals, 2, 0));
 	    out = `VBox (
+		    // label, %1-3 replaced by integers
 		    `Label (`opt (`hstretch), sformat (_("Minimum value: %1, Maximum value: %2, Step: %3"), select (vals, 0, nil), select (vals, 1, nil), select (vals, 2, nil))),
 		    out);
 	    return out;
 	}
 	if (`float == symbolof (vals))
 	{
+	    // textentry
 	    term out = `TextEntry (`id (`float), _("&Values"), sformat ("%1",select (vals,2,nil)));
 	    out = `VBox (
+		    // label, %1-3 replaced by integers
 		    `Label (`opt (`hstretch), sformat (_("Minimum value: %1, Maximum value: %2, Step: %3"), select (vals, 0, nil), select (vals, 1, nil), select (vals, 2, nil))),
 		    out);
 	    return out;

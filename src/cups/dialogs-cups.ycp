@@ -35,12 +35,16 @@
 	    `HBox (
 		`ReplacePoint (
 		    `id (`hostent_replace),
+		    // Combobox label
 		    `ComboBox (`id (`hostnameent), `opt (`editable, `hstretch), _("&Server name"), [ Printer::server_hostname ] )
 		),
 		`VBox (
 		    `Label (" "),
+		    // menubutton
                     `MenuButton (_("&Lookup"), [
+			// menu entry
                         `item (`id (`get_hosts_special), _("&IPP servers")),
+			// menu entry
                         `item (`id (`get_hosts), _("&All hosts")),
                     ])
 		)
@@ -48,10 +52,12 @@
 	    `VSpacing (2),
 	    `HBox (
 		`HStretch (),
+		// pushbutton
 		`PushButton (`id (`test), _("&Test remote IPP access")),
 		`HStretch ()
 	    ),
             `VSpacing (4),
+	    // pushbutton
 	    `PushButton (`id (`advanced), _("Ad&vanced")),
 	    `VSpacing (2)
             );
@@ -73,6 +79,7 @@
                 Printer::dirty = true;
                 Printer::server_hostname = n;
                 if (nil == n || "" == n)
+		    // popup
 		    UI::MessagePopup (_("Enter a valid server name."));
 		else
 		{
@@ -97,6 +104,7 @@
                                     `ComboBox (
                                         `id (`hostnameent),
                                         `opt (`editable, `hstretch),
+					// combobox label
                                         _("&Server name"),
                                         hosts));
             }
@@ -120,21 +128,33 @@
 	    `HSpacing (5),
 	    `VBox (
 		`HBox (
+		    // textentry
 		    `TextEntry (`id(`name), `opt (`notify), _("&File name:"), file),
 		    `VBox (
 			`Label (" "),
+			// pushbutton
 			`PushButton (`id (`browse), _("Bro&wse..."))
 		    )
 		),
 		`VSpacing (3),
+		// frame
 		`Frame ( _("File info"),
 		    `HBox (
 			`HSpacing (4),
 			`VBox (
 			    `VSpacing (1),
-			    `Label (`id (`manuf), `opt (`hstretch), sformat (_("Manufacturer: %1"), _("File does not exist."))),
-			    `Label (`id (`model), `opt (`hstretch), sformat (_("Model: %1"), _("File does not exist."))),
-			    `Label (`id (`nick), `opt (`hstretch), sformat (_("Description: %1"), _("File does not exist."))),
+			    // label
+			    `Label (`id (`manuf), `opt (`hstretch), sformat (_("Manufacturer: %1"),
+			    // label
+				 _("File does not exist."))),
+			    // label
+			    `Label (`id (`model), `opt (`hstretch), sformat (_("Model: %1"),
+			    // label
+				 _("File does not exist."))),
+			    // label
+			    `Label (`id (`nick), `opt (`hstretch), sformat (_("Description: %1"),
+			    // label
+				 _("File does not exist."))),
 			    `VSpacing (1)
 			),
 			`HSpacing (4)
@@ -143,18 +163,22 @@
 		`VSpacing (2),
 		`HBox (
 		    `HStretch (),
+		    // pushbutton
 		    `HWeight (1, `PushButton (`id (`test), _("&Test graphical printing"))),
+		    // pushbutton
 		    `HWeight (1, `PushButton (`id (`advanced), _("Ad&vanced settings"))),
 		    `HStretch ()
 		),
 		`VSpacing (2),
 		`HBox (
 		    `HStretch (),
+		    // pushbutton
 		    `PushButton (`id (`db), _("Use &driver from printer database"))
 		)
 	    )
 	);
 
+	// dialog caption
 	Wizard::SetContentsButtons (_("Select PPD file"), contents, getPpdFileHelp (), BackButtonLabel (), NextButtonLabel ());
 
 	if (Printer::isFile (file))
@@ -165,15 +189,27 @@
 		manuf = lookup (info, "manufacturer", "");
 		model = lookup (info, "model", "");
 		nick = lookup (info, "nick", "");
+		// label
 		UI::ChangeWidget (`id (`manuf), `Value, sformat (_("Manufacturer: %1"), manuf));
+		// label
 		UI::ChangeWidget (`id (`model), `Value, sformat (_("Model: %1"), model));
+		// label
 		UI::ChangeWidget (`id (`nick), `Value, sformat (_("Description: %1"), nick));
 	    }
 	    else
 	    {
-		UI::ChangeWidget (`id (`manuf), `Value, sformat (_("Manufacturer: %1"), _("Not a PPD file.")));
-		UI::ChangeWidget (`id (`model), `Value, sformat (_("Model: %1"), _("Not a PPD file.")));
-		UI::ChangeWidget (`id (`nick), `Value, sformat (_("Description: %1"), _("Not a PPD file.")));
+		// label
+		UI::ChangeWidget (`id (`manuf), `Value, sformat (_("Manufacturer: %1"),
+		// label
+		 _("Not a PPD file.")));
+		// label
+		UI::ChangeWidget (`id (`model), `Value, sformat (_("Model: %1"),
+		// label
+		 _("Not a PPD file.")));
+		// label
+		UI::ChangeWidget (`id (`nick), `Value, sformat (_("Description: %1"),
+		// label
+		 _("Not a PPD file.")));
 	    }
 	}
 
@@ -187,11 +223,13 @@
 		    file = "";
 		if (!Printer::isFile (file))
 		{
+		    // popup
 		    UI::MessagePopup (_("Enter a valid file name."));
 		    continue;
 		}
 		if (!Printer::isPpd (file))
 		{
+		    // popup
 		    UI::MessagePopup (_("The selected file is not a valid PPD file."));
 		    continue;
 		}
@@ -207,11 +245,13 @@
 		    file = "";
 		if (!Printer::isFile (file))
 		{
+		    // popup
 		    UI::MessagePopup (_("Enter a valid file name."));
 		    continue;
 		}
 		if (!Printer::isPpd (file))
 		{
+		    // popup
 		    UI::MessagePopup (_("The selected file is not a valid PPD file."));
 		    continue;
 		}
@@ -254,8 +294,11 @@
 		file = UI::QueryWidget (`id (`name), `Value);
 		if (! Printer::isFile (file))
 		{
+		    // label
 		    UI::ChangeWidget (`id (`manuf), `Value, sformat (_("Manufacturer: %1"), _("File does not exist.")));
+		    // label
 		    UI::ChangeWidget (`id (`model), `Value, sformat (_("Model: %1"), _("File does not exist.")));
+		    // label
 		    UI::ChangeWidget (`id (`nick), `Value, sformat (_("Description: %1"), _("File does not exist.")));
 		}
 		else if (Printer::isPpd (file))
@@ -264,14 +307,20 @@
 		    manuf = lookup (info, "manufacturer", "");
 		    model = lookup (info, "model", "");
 		    nick = lookup (info, "nick", "");
+		    // label
 		    UI::ChangeWidget (`id (`manuf), `Value, sformat (_("Manufacturer: %1"), manuf));
+		    // label
                     UI::ChangeWidget (`id (`model), `Value, sformat (_("Model: %1"), model));
+		    // label
 		    UI::ChangeWidget (`id (`nick), `Value, sformat (_("Description: %1"), nick));
 		}
 		else
 		{
+		    // label
 		    UI::ChangeWidget (`id (`manuf), `Value, sformat (_("Manufacturer: %1"), _("Not a PPD file.")));
+		    // label
 		    UI::ChangeWidget (`id (`model), `Value, sformat (_("Model: %1"), _("Not a PPD file.")));
+		    // label
 		    UI::ChangeWidget (`id (`nick), `Value, sformat (_("Description: %1"), _("Not a PPD file.")));
 		}
 	    }
@@ -368,19 +417,24 @@
             [
                 // items in combobox
                 `item ( `id (`all),    _("All users can use this printer"), `all == style),
+		// items in combobox
                 `item ( `id (`can),    _("The following users can use this printer"), `can == style),
+		// items in combobox
                 `item ( `id (`cannot), _("The following users cannot use this printer"), `cannot == style)
             ] :
             [
                 // items in combobox
                 `item ( `id (`all),    _("All users can use this class"), `all == style),
+		// items in combobox
                 `item ( `id (`can),    _("The following users can use this class."), `can == style),
+		// items in combobox
                 `item ( `id (`cannot), _("The following users cannot use this class."), `cannot == style)
             ]);
         term contents = `VBox (
 		`ComboBox (`id (`type), `opt (`notify),  "", items),
+		// selectionbox label
 		`ReplacePoint (`id( `replace_users), `SelectionBox (`id (`users), _("&Users"), maplist (`i, users, ``{return `item (`id (i), i);}))),
-		`HBox (`PushButton (`id (`add), _("A&dd")), `PushButton (`id (`delete), _("De&lete")))
+		`HBox (`PushButton (`id (`add), AddButtonLabel ()), `PushButton (`id (`delete), DeleteButtonLabel ()))
 	    );
 
         // dialog label
@@ -411,12 +465,14 @@
             {
                 list users_to_add = chooseUser ();
                 users = toset (flatten ( [users, users_to_add]));
+		// selectionbox label
                 UI::ReplaceWidget (`id (`replace_users), `SelectionBox (`id (`users), _("&Users"),maplist (`i, users, ``{return `item (`id (i), i);})));
             }
             if (`delete == ret)
             {
                 string user_to_delete = UI::QueryWidget (`id (`users), `CurrentItem);
                 users = DeleteItem (users, user_to_delete);
+		// selectionbox label
                 UI::ReplaceWidget (`id (`replace_users), `SelectionBox (`id (`users), _("&Users"),maplist (`i, users, ``{return `item (`id (i), i);})));
             }
             if (`back == ret)
@@ -484,11 +540,26 @@
         boolean accept = lookup (Printer::printer, "accepting", true);
         boolean idle = !(lookup (Printer::printer, "state", "idle") == "stopped");
 
-        string caption_state = (!is_class ? _("The printer is idle or &printing.") : _("The class is idle or &printing."));
-        string caption_avail = (!is_class ? _("The printer is accepting &jobs.") : _("The class is accepting &jobs."));
-        string caption = (!is_class ? _("State and banners of the printer") : _("State and banners of the class"));
-	string state_caption = (!is_class ? _("State of the printer") : _("State of the class"));
-	string banners_caption = (!is_class ? _("Banners of the printer") : _("Banners of the class"));
+	// label
+        string caption_state = (!is_class ? _("The printer is idle or &printing.")
+	// label
+	 : _("The class is idle or &printing."));
+	// label
+        string caption_avail = (!is_class ? _("The printer is accepting &jobs.")
+	// label
+	 : _("The class is accepting &jobs."));
+	// label
+        string caption = (!is_class ? _("State and banners of the printer")
+	// label
+	 : _("State and banners of the class"));
+	// label
+	string state_caption = (!is_class ? _("State of the printer")
+	// label
+	 : _("State of the class"));
+	// label
+	string banners_caption = (!is_class ? _("Banners of the printer")
+	// label
+	 : _("Banners of the class"));
 
         // read list of banners
         list banners = getBannerList ();
@@ -595,7 +666,9 @@
 	return `VBox (
 	    ad ? `RadioButtonGroup (`id (`type),
 		`HBox (
+		    // radiobutton
 		    `RadioButton (`id (`allow), _("Allow From"), state != `deny),
+		    // radiobutton
 		    `RadioButton (`id (`deny), _("Deny From"), state == `deny)
 		)
 	    ) : `VSpacing (0),
@@ -617,12 +690,16 @@
 	    `HSpacing (2),
 	    `VBox (
 		`VSpacing (1),
+		// frame
 		`Frame (_("Application order"),
                 `RadioButtonGroup (`id (`order), `HBox (
+		    // radio button
                     `RadioButton (`id (`ad), `opt (`hstretch), _("A&llow, Deny")),
+		    // radio button
                     `RadioButton (`id (`da), `opt (`hstretch), _("&Deny, Allow"))
                 ))),
 		`VSpacing (1),
+		// selection box label
                 `ReplacePoint (`id (`replace_acl), `SelectionBox (`id (`acl), _("&Permissions"))),
 		`VSpacing (1),
                 `HBox (
@@ -631,12 +708,14 @@
                     `PushButton (`id (`del), DeleteButtonLabel ())
                 ),
 		show_ignore ? `VSpacing (1) : `VSpacing (0),
+		// push button
 		show_ignore ? `PushButton (`id (`ignore), sformat (_("Use inherited permissions"))) : `VSpacing (0),
 		`VSpacing (1)
 	    ),
 	    `HSpacing (2)
 	);
 
+	// dialog caption
         Wizard::SetContentsButtons (sformat (_("CUPS permissions settings for %1"), pth), contents, getCupsAclHelp (show_ignore), BackButtonLabel (), NextButtonLabel ());
 	map settings = lookup (Printer::cups_server_settings, pth, $[]);
 	if (lookup (settings, "Order", "Deny,Allow") == "Allow,Deny")
@@ -645,8 +724,11 @@
 	    UI::ChangeWidget (`id (`da), `Value, true);
 	list cont = union (maplist (`e, lookup (settings, "AllowFrom", []), ``{return `i (`allow, e);}),
 			maplist (`e, lookup (settings, "DenyFrom", []), ``{return `i (`deny, e);}));
+	// selectionbox label
 	UI::ReplaceWidget (`id (`replace_acl), `SelectionBox (`id (`acl), _("&Permissions"),
+	   // listbox entry, %1 is IP address
 	   maplist (`e, cont, ``(`item (`id (e), select (e, 0, nil) == `allow ? sformat (_("Allow From %1"), select (e, 1, ""))
+		// listbox entry, %1 is IP address
 		: sformat (_("Deny From %1"), select (e, 1, "")))))));
         symbol ret = nil;
         while (true)
@@ -669,6 +751,7 @@
 	    }
 	    else if (`add == ret)
             {
+		// popup request
                 UI::OpenDialog (ipAddrPopup (true, _("Enter &IP address"), "", `allow));
                 symbol r = nil;
                 while (nil == r)
@@ -682,8 +765,11 @@
 		{
                     cont = toset (add (cont, `i (acc, ad)));
 		}
+		// selectionbox label
 		UI::ReplaceWidget (`id (`replace_acl), `SelectionBox (`id (`acl), _("&Permissions"),
+		    // listbox entry, %1 is IP address
 	            maplist (`e, cont, ``(`item (`id (e), select (e, 0, nil) == `allow ? sformat (_("Allow From %1"), select (e, 1, ""))
+			// listbox entry, %1 is IP address
 			: sformat (_("Deny From %1"), select (e, 1, "")))))));
 	    }
 	    else if (`edit == ret)
@@ -692,6 +778,7 @@
 		symbol acc = select (item, 0, nil);
 		string ad = select (item, 1, "");
 
+		// popup request
                 UI::OpenDialog (ipAddrPopup (true, _("Enter &IP address"), ad, acc));
                 symbol r = nil;
                 while (nil == r)
@@ -706,15 +793,21 @@
 		    cont = DeleteItem (cont, item);
                     cont = toset (add (cont, `i (acc, ad)));
                 }
+		// selectionbox label
                 UI::ReplaceWidget (`id (`replace_acl), `SelectionBox (`id (`acl), _("&Permissions"),
+		    // listbox entry, %1 is IP address
                     maplist (`e, cont, ``(`item (`id (e), select (e, 0, nil) == `allow ? sformat (_("Allow From %1"), select (e, 1, ""))
+			// listbox entry, %1 is IP address
                         : sformat (_("Deny From %1"), select (e, 1, "")))))));
             }
 	    else if (`del == ret)
 	    {
 		cont = DeleteItem (cont, UI::QueryWidget (`id (`acl), `CurrentItem));
+		// selectionbox label
                 UI::ReplaceWidget (`id (`replace_acl), `SelectionBox (`id (`acl), _("&Permissions"),
+		    // listbox entry, %1 is IP address
                     maplist (`e, cont, ``(`item (`id (e), select (e, 0, nil) == `allow ? sformat (_("Allow From %1"), select (e, 1, ""))
+			// listbox entry, %1 is IP address
                         : sformat (_("Deny From %1"), select (e, 1, "")))))));
 	    }
         }
@@ -741,15 +834,19 @@
     global define symbol runCupsServerDialog () ``{
 	term contents = `HBox (`HSpacing (2), `VBox (
 	    `VSpacing (1),
+	    // frame
 	    `Frame (_("Browsing settings"), `VBox (
 		`HBox (`HSpacing (3), `RadioButtonGroup (`id (`browsing), `HBox (
+		    // label
 		    `Label (_("Browsing")),
+		    // radiobutton
 		    `RadioButton (`id (`on), _("On")),
+		    // radiobutton
 		    `RadioButton (`id (`off), _("Off"))
 		)),
-
-/*`CheckBox (`id (`browsing), `opt (`hstretch), _("Bro&wsing")),*/ `HSpacing (3)),
+		`HSpacing (3)),
 		`VSpacing (1),
+		// selectionbox label
 		`HBox (`HSpacing (3), `ReplacePoint (`id( `replace_addr), `SelectionBox (`id (`addr), _("Browse Addre&sses"))), `HSpacing (3)),
 		`HBox (
 		    `PushButton (`id (`add), AddButtonLabel ()),
@@ -758,6 +855,7 @@
 		)
 	    )),
 	    `VSpacing (1),
+	    // frame
 	    `Frame (_("Access settings"), `VBox (
 		`RadioButtonGroup (`id (`loc), `VBox (
 		    `HBox (
@@ -769,16 +867,19 @@
 			`RadioButton (`id (`classes), `opt (`hstretch), "/&classes")
 		    )
 		)),
+		// pushbutton
 		`PushButton (`id (`change), _("Change p&ermissions"))
 	    )),
 	    `VSpacing (1)
 	), `HSpacing (2));
 
+	// dialog caption
 	Wizard::SetContentsButtons (_("CUPS server settings"), contents, getCupsServerHelp (), BackButtonLabel (), NextButtonLabel ());
 
 	list addresses = lookup (Printer::cups_server_settings, "BrowseAddress", []);
 
 	UI::ChangeWidget (`id (`browsing), `CurrentButton, lookup (Printer::cups_server_settings, "Browsing", "Off") == "On" ? `on : `off);
+	// selectionbox
 	UI::ReplaceWidget (`id (`replace_addr), `SelectionBox (`id (`addr), _("Browse Addre&sses"), addresses));
 
 	symbol ret = nil;
@@ -799,6 +900,7 @@
 	    }
 	    else if (`add == ret)
 	    {
+		// popup request
 		UI::OpenDialog (ipAddrPopup (false, _("Enter &IP address"), "", nil));
 		symbol r = nil;
 		while (nil == r)
@@ -809,17 +911,20 @@
 		    continue;
 		if (ad != "")
 		    addresses = toset (add (addresses, ad));
+		// selectionbox label
 		UI::ReplaceWidget (`id (`replace_addr), `SelectionBox (`id (`addr), _("Browse Addre&sses"), addresses));
 	    }
 	    else if (`del == ret)
 	    {
                 addresses = DeleteItem (addresses, UI::QueryWidget (`id (`addr), `CurrentItem));
+		// selectionbox label
 		UI::ReplaceWidget (`id (`replace_addr), `SelectionBox (`id (`addr), _("Browse Addre&sses"), addresses));
 	    }
 	    else if (`edit == ret)
 	    {
 		if (UI::QueryWidget (`id (`addr), `CurrentItem) == nil)
 		    continue;
+		// popup request
 		UI::OpenDialog (ipAddrPopup (false, _("Enter &IP address"), UI::QueryWidget (`id (`addr), `CurrentItem), nil));
                 symbol r = nil;
                 while (nil == r)
@@ -833,6 +938,7 @@
 		    addresses = DeleteItem (addresses, UI::QueryWidget (`id (`addr), `CurrentItem));
                     addresses = toset (add (addresses, ad));
 		}
+		// selectionbox label
                 UI::ReplaceWidget (`id (`replace_addr), `SelectionBox (`id (`addr), _("Browse Addre&sses"), addresses));
 
 	    }

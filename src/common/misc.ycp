@@ -277,12 +277,13 @@ queue you want to use."));
     global define boolean testPrinter (map printer, integer testpage_type) ``{
 	if (Printer::spooler != "lprng" && Printer::spooler != "cups")
 	{
+	    // message box
 	    UI::MessagePopup (_("Unable to print a testpage. \n You have to install some spooler \n before printing testpages"));
 	    return true;
 	}
-	// message box
 	if (testpage_type != -1)
 	{
+	    // message box
 	    if (!UI::AnyQuestionPopup ("", _("Sample page is ready to be printed..
 
 Please make sure that the printer is turned
@@ -296,6 +297,7 @@ on and ONLINE, then press the 'OK' button."),
 	{
 	    UI::OpenDialog (
 		`VBox (
+		    // label
 		    `Label (_("Sample page is ready to be printed.
 
 Please select testpage type, make sure that
@@ -303,12 +305,16 @@ the printer is turned on and ONLINE, then
 press the 'OK' button.")),
 		    `VSpacing (1),
 		    `RadioButtonGroup (`id (`type), `VBox (
+			// radiobutton
 			`Left (`RadioButton (`id (`graphic), _("Test &graphical printing"))),
+			// radiobutton
 			`Left (`RadioButton (`id (`ascii), _("Test &text printing")))
 		    )),
 		    `VSpacing (1),
 		    `HBox (
+			// pushbutton
 			`PushButton (`id (`ok), OKButtonLabel ()),
+			// pushbutton
 			`PushButton (`id (`cancel), CancelButtonLabel ())
 		    )
 		)
@@ -434,8 +440,8 @@ press the 'OK' button.")),
 	map out = SCR::Execute (.target.bash_output, lpr_command);
 	if (lookup (out, "exit", 0) != 0)
 	{
-	    // message box
 	    UI::MessagePopup (
+		// message box
 		sformat (_("It was unable to print the testpage.\n\nOutput from lpr:\n"), test_page) +
 		lookup (out, "stderr", ""));
 	    Printer::deletePrinters ([$["name": name, "type": printer_type ], $["name" : prefilter_name, "type": printer_type]]);
@@ -524,6 +530,7 @@ output, use the 'Stop!' button.
 
 When the whole page is printed, press
 'Printout finished'."), pr_command);
+	// push button
 	return UI::AnyQuestionPopup (NoHeadline (), text, _("Printout &finished"), StopButtonLabel (), `focus_yes);
     }
 
@@ -580,52 +587,93 @@ All changes will be lost!",
     global define list advancedConnectionsRadioButtons (string type) ``{
 	return Printer::spooler == "cups" ?
 		`VBox (
+		    // label
 		    `Label (`opt (`hstretch), _("LPD and IPP network printing:")),
+		    // radiobutton
                     `RadioButton (`id (`filtering),`opt (`hstretch), _("LPD fil&tering and forwarding queue"), type == "filtering"),
+		    // radiobutton
 		    `RadioButton (`id (`ipp), `opt (`hstretch),    _("&IPP filtering and forwarding queue"), type == "ipp"),
+		    // label
 		    `Label (`opt (`hstretch), _("Other network printing:")),
+		    // radiobutton
 		    `RadioButton (`id (`samba), `opt (`hstretch),    _("SMB Printing (Samba/&Windows printer)"), type == "samba"),
+		    // radiobutton
 		    `RadioButton (`id (`socket), `opt (`hstretch),    _("Direct TCP port printin&g (network printer)"), type == "socket"),
+		    // label
 		    `Label (`opt (`hstretch), _("Other:")),
+		    // radiobutton
 		    `RadioButton (`id (`other), `opt (`hstretch),  _("&Other Printer (set URI)"), "" == knowConnection (type) && type != "class"),
+		    // radiobutton
 		    `RadioButton (`id (`class), `opt (`hstretch),  _("CUPS &class"), type == "class"),
+		    // label
 		    `Label (`opt (`hstretch), _("Unsupported printing in CUPS:")),
+		    // radiobutton
                     `RadioButton (`id (`remote), `opt (`hstretch),      _("LPD &forwarding queue"), type == "lpd"),
+		    // radiobutton
                     `RadioButton (`id (`prefilter),`opt (`hstretch), _("Prefilter queue for a LPD forwarding &queue"), type == "prefilter"),
+		    // radiobutton
                     `RadioButton (`id (`novell), `opt (`hstretch),   _("IPX printing (Nove&ll printer)"), type == "novell"),
+		    // radiobutton
 		    `RadioButton (`id (`pipe), `opt (`hstretch),     _("Pip&e printing"), type == "pipe")
 		    )
 		: Printer::spooler == "lprng" ?
                 `VBox (
+		    // label
                     `Label (`opt (`hstretch), _("LPD and IPP network printers:")),
+		    // radiobutton
                     `RadioButton (`id (`remote), `opt (`hstretch),      _("LPD &forwarding queue"), type == "lpd"),
+		    // radiobutton
                     `RadioButton (`id (`prefilter),`opt (`hstretch), _("Prefilter queue for a LPD forwarding &queue"), type == "prefilter"),
+		    // radiobutton
                     `RadioButton (`id (`filtering),`opt (`hstretch), _("LPD fil&tering forwarding queue"), type == "filtering"),
+		    // radiobutton
 		    `RadioButton (`id (`ipp), `opt (`hstretch),    _("&IPP filtering and forwarding queue"), type == "ipp"),
+		    // label
 		    `Label (`opt (`hstretch), _("Other network printing:")),
+		    // radiobutton
                     `RadioButton (`id (`samba), `opt (`hstretch),    _("SMB Printing (Samba/&Windows printer)"), type == "samba"),
+		    // radiobutton
                     `RadioButton (`id (`novell), `opt (`hstretch),   _("IPX printing (Nove&ll printer)"), type == "novell"),
+		    // radiobutton
 		    `RadioButton (`id (`socket), `opt (`hstretch),    _("Direct TCP port printin&g (network printer)"), type == "socket"),
+		    // label
 		    `Label (`opt (`hstretch), _("Other printing:")),
+		    // radiobutton
 		    `RadioButton (`id (`pipe), `opt (`hstretch),     _("Pip&e printing"), type == "pipe"),
+		    // label
 		    `Label (`opt (`hstretch), _("Unsupported printing in LPRng:")),
+		    // radiobutton
 		    `RadioButton (`id (`other), `opt (`hstretch),   _("&Other Printer (set URI)"), "" == knowConnection (type) && type != "class"),
+		    // radiobutton
 		    `RadioButton (`id (`class), `opt (`hstretch),  _("CUPS &class"), type == "class")
                     )
 		: //unknown spooler
 		`VBox (
+		    // label
                     `Label (`opt (`hstretch), _("LPD and IPP network printing:")),
+		    // radiobutton
                     `RadioButton (`id (`remote), `opt (`hstretch),      _("LPD &forwarding queue"), type == "lpd"),
+		    // radiobutton
                     `RadioButton (`id (`prefilter),`opt (`hstretch), _("Prefilter& queue for a LPD forwarding queue"), type == "prefilter"),
+		    // radiobutton
                     `RadioButton (`id (`filtering),`opt (`hstretch), _("LPD fil&tering and forwarding queue"), type == "filtering"),
+		    // radiobutton
                     `RadioButton (`id (`ipp), `opt (`hstretch),    _("&IPP filtering and forwarding queue"), type == "ipp"),
+		    // label
                     `Label (`opt (`hstretch), _("Other network printing:")),
+		    // radiobutton
                     `RadioButton (`id (`samba), `opt (`hstretch),    _("SMB Printing (Samba/&Windows printer)"), type == "samba"),
+		    // radiobutton
                     `RadioButton (`id (`novell), `opt (`hstretch),   _("IPX printing (Nove&ll printer)"), type == "novell"),
+		    // radiobutton
                     `RadioButton (`id (`socket), `opt (`hstretch),    _("Direct TCP port printin&g (network printer)"), type == "socket"),
+		    // label
                     `Label (`opt (`hstretch), _("Other:")),
+		    // radiobutton
                     `RadioButton (`id (`other), `opt (`hstretch),  _("&Other Printer (set URI)"), "" == knowConnection (type) && type != "class"),
+		    // radiobutton
                     `RadioButton (`id (`pipe), `opt (`hstretch),     _("Pip&e printing"), type == "pipe"),
+		    // radiobutton
                     `RadioButton (`id (`class), `opt (`hstretch),  _("CUPS &class"), type == "class")
 		);
     }
@@ -638,24 +686,40 @@ All changes will be lost!",
     global define list connectionsRadioButtons (string type, boolean all) ``{
         return all ?
 	    `VBox (
+		    // label
 		`Label (`opt (`hstretch), _("Local printing:")),
+		    // radiobutton
 		`RadioButton (`id (`parallel), `opt (`hstretch), _("&Parallel printer"), type == "parallel"),
+		    // radiobutton
 		`RadioButton (`id (`usb), `opt (`hstretch),      _("&USB printer"), type == "usb"),
+		    // radiobutton
 		`RadioButton (`id (`serial), `opt (`hstretch),   _("&Serial printer"), type == "serial"),
+		    // radiobutton
 		`RadioButton (`id (`irda), `opt (`hstretch),     _("IrD&A printer"), type == "irda"),
+		    // radiobutton
 		`RadioButton (`id (`file), `opt (`hstretch),     _("&Disk file"), type == "file"),
+		    // label 1/3
 		`Label (`opt (`hstretch), _("Expert printer setup e.g. LPD, IPP, Samba/Windows,")),
+		    // label 2/3
 		`Label (`opt (`hstretch), _("Novell Netware and direct TCP socket network")),
+		    // label 3/3
 		`Label (`opt (`hstretch), _("printing and other queue types")),
+		    // radiobutton
 		`RadioButton (`id (`more), `opt (`hstretch),	 _("Show &more connection types..."), ! contains (["parallel", "usb", "serial", "irda", "file"], type))
 	    )
 	    :
 	    `VBox (
+		    // label
 		`Label (`opt (`hstretch), _("Local printing:")),
+		    // radiobutton
 		`RadioButton (`id (`parallel), `opt (`hstretch), _("&Parallel printer"), type == "parallel"),
+		    // radiobutton
 		`RadioButton (`id (`usb), `opt (`hstretch),      _("&USB printer"), type == "usb"),
+		    // radiobutton
 		`RadioButton (`id (`serial), `opt (`hstretch),   _("&Serial printer"), type == "serial"),
+		    // radiobutton
 		`RadioButton (`id (`irda), `opt (`hstretch),     _("IrD&A printer"), type == "irda"),
+		    // radiobutton
 		`RadioButton (`id (`file), `opt (`hstretch),     _("&Disk file"), type == "file")
 	    );
     }
@@ -702,6 +766,7 @@ All changes will be lost!",
 		{
 		    string description = Printerlib::getUriNiceName (lookup (ent, "uri", ""));
 		    if ("void" == Printer::getPrinterState (ent, Printer::spooler))
+			// table item. SHORT!
 			description = _("- invalid for selected spooler -");
 		    ret = add (ret, description);
 		}
@@ -711,16 +776,19 @@ All changes will be lost!",
 		if (Printer::spooler == "cups" || Printer::spooler == "lprng")
 		{
 		    if ("yast2" == lookup (ent, "type", "yast2"))
+			// table item. SHORT
 			ret = add (ret, "commited" == Printer::getPrinterState (ent, Printer::spooler) ? _("OK") : "");
 		    else
+			// table item. SHORT
 			ret = add (ret, _("unknown"));
 		}
 		else
 		{
+			// table item. SHORT
 		    ret = add (ret, "void" != Printer::getPrinterState (ent, "cups") ? _("OK") : "");
+			// table item. SHORT
 		    ret = add (ret, "void" != Printer::getPrinterState (ent, "lprng") ? _("OK") : "");
 		}
-//		ret = add (ret, "commited" == Printer::getPrinterState (ent, "lprng") ? _("OK") : "");
 		count = count+1;
 		return ret;
 	});
@@ -741,6 +809,7 @@ All changes will be lost!",
 	    }
 	    else
 	    {
+		// popup
 		 UI::MessagePopup (_("You entered a wrong queue name. It must be
 shorter than 127 characters, start with a letter
 and you can only use 0..9, a..z and _."));
@@ -874,16 +943,19 @@ for any file in directory /etc/lpdfilter"));
     global define term getValuesUI (any vals) ``{
 	if (is (vals,list))
 	{
+	    // selectionbox label
 	    return `SelectionBox (`id (`vals), `opt (`notify), _("Val&ues"), vals);
 	}
 	if (!is (vals, term))
 	    return `VStretch ();
 	if (`text == symbolof (vals))
 	{
+	    // textentry label
 	    term out = `TextEntry (`id (`vals), `opt (`notify), _("Value:"), select (vals, 1, ""));
 	    return `VBox (
 		    `VStretch (),
 		    out,
+		    // label
 		    `Right (`Label (sformat (_("Allowed characters: %1"), select (vals, 0, "")))),
 		    `VStretch ());
 	}
@@ -900,7 +972,9 @@ for any file in directory /etc/lpdfilter"));
 		initial = select (vals, 0, nil);
 	    }
 	    term out = UI::HasSpecialWidget (`Slider) ?
+		// slider
 		`Slider (`id (`vals), not_used ? `opt (`notify, `disabled) : `opt (`notify), _("&Values")) :
+		// int field
 		`IntField (`id (`vals), not_used ? `opt (`hstretch, `notify, `disabled) : `opt (`notify), _("&Values"));
 	    out = add (out, select (vals, 0, 0));
 	    out = add (out, select (vals, 1, 0));
@@ -909,8 +983,10 @@ for any file in directory /etc/lpdfilter"));
 	    {
 		out = `VBox (
 			`VStretch (),
+			// check box
 			`CheckBox (`id (`vals2), `opt (`hstretch, `notify), _("Not &set (use the driver default)"), not_used),
 			out,
+			// label
 			`Label (`opt (`hstretch), sformat (_("Minimal value: %1\nMaximal value: %2\nStep: %3"),
 				select (vals, 0, 0), select (vals, 1, 0), select (vals, 2, 0))),
 			`VStretch ()
@@ -921,6 +997,7 @@ for any file in directory /etc/lpdfilter"));
 		out = `VBox (
 			`VStretch (),
 			out,
+			// label
 			`Label (`opt (`hstretch), sformat (_("Minimal value: %1\nMaximal value: %2\nStep: %3"),
 				select (vals, 0, 0), select (vals, 1, 0), select (vals, 2, 0))),
 			`VStretch ()
@@ -942,13 +1019,16 @@ for any file in directory /etc/lpdfilter"));
 	    }
 	    term out = `TextEntry (`id (`vals),
 		    not_used ? `opt (`disabled, `hstretch, `notify) :
+			// textentry label
 		    `opt (`hstretch, `notify), _("&Values"), sformat ("%1", initial));
 	    if (nil == select (vals, 3, nil))
 	    {
 		out = `VBox (
 			`VStretch (),
+			// checkbox
 			`CheckBox (`id (`vals2), `opt (`hstretch, `notify), _("Not &set (use the driver default)"), not_used),
 			out,
+			// label
 			`Label (`opt (`hstretch), sformat (_("Minimal value: %1\nMaximal value: %2\nStep: %3"),
 				select (vals, 0, 0), select (vals, 1, 0), select (vals, 2, 0))),
 			`VStretch ()
@@ -959,6 +1039,7 @@ for any file in directory /etc/lpdfilter"));
 		out = `VBox (
 			`VStretch (),
 			out,
+			// label
 			`Label (`opt (`hstretch), sformat (_("Minimal value: %1\nMaximal value: %2\nStep: %3"),
 				select (vals, 0, 0), select (vals, 1, 0), select (vals, 2, 0))),
 			`VStretch ()
@@ -1040,12 +1121,16 @@ for any file in directory /etc/lpdfilter"));
                         `HBox (`HSpacing (1),
                             `VBox (
                                 `VSpacing (1),
+				// radiobutton
                                 `RadioButton (`id (`cups_server), `opt (`hstretch), _("CUPS full &server installation"), spooler == "cups"),
                                 `VSpacing (0.5),
+				// radiobutton
                                 `RadioButton (`id (`cups_client), `opt (`hstretch), _("CUPS &client only installation"), spooler == "cups-client"),
                                 `VSpacing (0.5),
+				// radiobutton
                                 `RadioButton (`id (`lprng), `opt (`hstretch), _("&LPRng"), spooler == "lprng"),
 				none ? `VSpacing (0.5) : `VSpacing (0),
+				// radiobutton
 				none ? `RadioButton (`id (`none), `opt (`hstretch), _("L&eave current status"), spooler == "current") : `VSpacing (0),
                                 `VSpacing (1)
                             ),
@@ -1067,7 +1152,7 @@ for any file in directory /etc/lpdfilter"));
 		`Label (msg),
 		getSpoolerItems ("current", true),
 		`HBox (
-		    `HWeight (1, `PushButton (`id (`ok), "&OK")),
+		    `HWeight (1, `PushButton (`id (`ok), OKButtonLabel ())),
 		    `HWeight (1, `PushButton (`id (`cancel), abort_msg))))
 	);
 	ret = UI::UserInput ();
@@ -1111,9 +1196,12 @@ for any file in directory /etc/lpdfilter"));
 	}
 	else if (0 == spool_sys) //none installed
 	{
+	    // popup message
 	    symbol result = chooseSpooler (_("No printing system is installed. 
 Please choose what spooler do you 
-want to install and configure."), _("Abo&rt setup"));
+want to install and configure."),
+	    // pushbutton
+	    _("Abo&rt setup"));
 	    if (`lprng == result)
 	    {
 		Printerlib::switchTo ("lprng");
@@ -1136,9 +1224,12 @@ want to install and configure."), _("Abo&rt setup"));
 	}
 	else if (3 == spool_sys) //both spoolers are installed
 	{
+	    // popup message
             symbol result = chooseSpooler (_("Both LPRng and CUPS are installed.
 Please choose what spooler do you 
-want to leave installed and configure."), _("Abo&rt setup"));
+want to leave installed and configure."),
+	    // pushbutton
+	    _("Abo&rt setup"));
             if (`lprng == result)
             {
                 Printerlib::switchTo ("lprng");
@@ -1162,13 +1253,16 @@ want to leave installed and configure."), _("Abo&rt setup"));
 	else if (256 + 1 == spool_sys) //lpd is installed, but seems to be not complete
 	{
 	    symbol result = chooseSpooler (
+	    // popup message
 _("You have installed some LPD compatible spooler,
 probably LPRng but the instalation doesn't seem 
 to be complete. You can choose to reinstall 
 LPRng, install CUPS or leave current status.
 If you want to only repair current configuration, select LPRng.
 If you leave current status, your spooler doesn't have
-to run properly"), _("Abo&tr setup"));
+to run properly"),
+	    // pushbutton
+	    _("Abo&tr setup"));
 	    if (`cups_server == result)
 	    {
 		Printerlib::switchTo ("cups");
@@ -1192,13 +1286,16 @@ to run properly"), _("Abo&tr setup"));
 	else if (256 + 2 == spool_sys) //cups is installed, but seems to be not complete
 	{
 	    symbol result = chooseSpooler (
+	    // popup message
 _("You have installed CUPS spooler, but the instalation 
 doesn't seem to be complete. You can choose to reinstall
 CUPS, install LPRng, or leave current status. 
 If you want to only repair current configuration, select 
 CUPS full server installation.
 If you leave current status, your spooler doesn't have
-to run properly"), _("Abo&rt setup"));
+to run properly"),
+	    // pushbutton
+	    _("Abo&rt setup"));
 	    if (`cups_server == result)
 	    {
 		Printerlib::switchTo ("cups");

@@ -95,6 +95,7 @@
     if (!Printerlib::amIRoot () && !test_mode)
     {
         if (! UI::AnyQuestionPopup ("",
+	    // popup
 	    _("You must be root to run the printer configuration tool. 
  If you continue, you will not be able to save your settings. 
  Continue?
@@ -127,17 +128,23 @@
 	list stages = [
 	    // progress stage, text in dialog (short)
 	   _("Check environment."),
+	    // progress stage, text in dialog (short)
 	   _("Load current settings."),
 	    ];
 	list titles = [
+	    // progress stage, text in dialog (short)
 	    _("Checking environment..."),
+	    // progress stage, text in dialog (short)
 	    _("Loading current settings..."),
 	    ];
 	if (!skip_autodetection)
 	{
+	    // progress stage, text in dialog (short)
 	    stages = add (stages, _("Autodetect printers"));
+	    // progress stage, text in dialog (short)
 	    titles = add (titles, _("Autodetecting printers..."));
 	}
+	// progress bar caption
 	Progress::New (_("Initializing printer configuration tool..."), " ", skip_autodetection ? 8 : 12, stages, titles, getInitProgressHelp ());
     }
 
@@ -168,6 +175,7 @@
 		    {
 			if (!UI::AnyQuestionPopup (
 			    UI::ErrorMsg (),
+			    // error popup
 			    _("CUPS daemon died during initialization"),
 			    UI::ContinueButtonLabel (), UI::AbortButtonLabel (), `focus_no))
 			{
@@ -197,6 +205,7 @@
 		// message box
 		if (!UI::AnyQuestionPopup (
 		    UI::ErrorMsg (),
+			    // error popup
 		    _("Unable to restart the lpd daemon."),
 		    UI::ContinueButtonLabel (), UI::AbortButtonLabel (), `focus_no))
 		{
@@ -233,35 +242,20 @@ the current configuration.
 	    return `back;
 	}
     }
-/*    if (Printer::spooler == "cups")
-    {
-	if (0 != Printer::cups_installation)
-	{
-	    if (`next != runClientDialog ())
-	    {
-		UI::CloseDialog ();
-		return `back;
-	    }
-	    if (0 != Printer::cups_installation)
-	    {
-		Printer::Write ();
-		UI::CloseDialog ();
-		UI::MessagePopup (_("The new configuration \nwas stored successfully."));
-		return `back;
-	    }
-	}
-    }*/
 
     Progress::NextStageStep (8);	if (testAbort ())			return `back;
     /* Autodetection */
     if (!skip_autodetection)
     {
+	// popup
 	if (UI::AnyQuestionPopup (WarningMsg(), _("Printer detection can now start. In some cases, detection can cause a
 system freeze. If a free happens, select Skip Detection
 when next running the printer configuration.
 
 Detect your printers?
-"), YesButtonLabel (), _("&Skip detection"), `focus_yes))
+"), YesButtonLabel (),
+	// pushbutton
+	_("&Skip detection"), `focus_yes))
 	    runProbeDialog ();
     }
     Progress::Finish ();		if (testAbort ())			return `back;
@@ -279,6 +273,7 @@ Detect your printers?
 	    Printer::Write ();
 	    SCR::Execute (.target.bash, "/sbin/SuSEconfig -quick --nonewpackage --module profiles");
 	    Runlevel::RunInitScript ("lpd", "restart");
+	    // popup
 	    UI::MessagePopup (_("The new configuration \nwas stored successfully."));
 	}
     }
