@@ -451,7 +451,6 @@
 	// for lpd we need to check the file because
 	boolean lpd_exists = (SCR::Read(.target.size, "/etc/init.d/lpd")!=-1);
 	boolean cups_complete = Pkg::IsProvided ("cups-drivers")
-//            && Pkg::IsProvided ("cups-drivers-stp")
 	    && Pkg::IsProvided ("cups-libs")
 	    && Pkg::IsProvided ("cups")
 	    && Pkg::IsProvided ("cups-client");
@@ -531,8 +530,11 @@
 	fn = fn + "/script.sw_single";
 	SCR::Write (.target.ycp, fn, script);
 	CallFunction (`sw_single (fn));*/
+	foreach (`e, del, ``{Pkg::PkgDelete (e);});
 	Pkg::DoRemove (del);
-	Pkg::DoProvide (inst);
+	foreach (`e, inst, ``{Pkg::DoProvide (e);});
+	Pkg::PkgSolve ();
+	Pkg::PkgCommit ();
 	WFM::CallModule("inst_suseconfig", []);
     }
     /**
