@@ -25,6 +25,7 @@
     import "Report";
     import "Summary";
     import "Mode";
+    import "HTML";
     include "printer/misc.ycp";
     include "printer/misc-lprng.ycp";
     include "printer/misc-cups.ycp";
@@ -1293,6 +1294,7 @@ the selected spooler does not support it.
      *		`test: add test link<br>
      *		`nonew: do not include new -- unconfigured printers into summary<br>
      *		`short: short summary doesn't contain queue description
+     *		`state: show printer state
      * @return summary string
      */
     global define string Summary (list style) ``{
@@ -1376,7 +1378,35 @@ the selected spooler does not support it.
 			    comment = "  -  " + comment;
 			else
 			    comment = "";
-			found = found + ("" != found ? "<br>" : "") + cache + comment;
+
+			string state = "";
+			if (Printer::spooler == "cups")
+			    state = entry["cups-state"]:"changed";
+			else if (Printer::spooler == "lprng")
+			    state = entry["lprng-state"]:"changed";
+			if (state != "" && state != nil)
+			{
+			    if (state == "commited")
+			    {
+				// summary part, printer state
+				state = " - " + HTML::Colorize (
+				    _("ready"), "green");
+			    }
+			    else if (state == "changed")
+			    {
+				// summary part, printer state
+				state = " - " + HTML::Colorize (
+				    _("changed, not yet saved"), "orange");
+			    }
+			    else if (state == "void")
+			    {
+				// summary part, printer state
+                                state = " - " + HTML::Colorize (
+                                    _("invalid for current spooler"), "red");
+			    }
+			    else state = "";
+			}
+			found = found + ("" != found ? "<br>" : "") + cache + comment + state;
 		    }
 		}
 	    });
@@ -1451,6 +1481,35 @@ the selected spooler does not support it.
 			}
 			if (nil != cfg && "" != cfg)
 			    cache = cache + "  -  " + cfg;
+
+                        string state = "";
+                        if (Printer::spooler == "cups")
+                            state = i["cups-state"]:"changed";
+                        else if (Printer::spooler == "lprng")
+                            state = i["lprng-state"]:"changed";
+                        if (state != "" && state != nil)
+                        {
+                            if (state == "commited")
+                            {
+                                // summary part, printer state
+                                state = " - " + HTML::Colorize (
+				    _("ready"), "green");
+                            }
+                            else if (state == "changed")
+                            {
+                                // summary part, printer state
+                                state = " - " + HTML::Colorize (
+				    _("changed, not yet saved"), "orange");
+                            }
+                            else if (state == "void")
+                            {
+                                // summary part, printer state
+                                state = " - " + HTML::Colorize (
+				    _("invalid for current spooler"), "red");
+			    }
+                            else state = "";
+                        }
+			cache = cache + state;
 		    }
 		    if (haskey (other_printers, dev))
 			other_printers = add (other_printers, dev, lookup (other_printers, dev, "???") + (contains (style, `short) ? ", " : "<br>") + cache);
