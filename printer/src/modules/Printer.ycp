@@ -1,0 +1,2022 @@
+/**
+ * File:
+ *   modules/Printer.ycp
+ *
+ * Package:
+ *   printer configuration tool
+ *
+ * Summary:
+ *   Module for printer.
+ *
+ * Authors:
+ *  Petr Blahos <pblahos@suse.cz>
+ *  Jiri Srain <jsrain@suse.cz>
+ *
+ * $Id$
+ *
+ * Well we all know what modules are for.
+ */
+
+{
+    module "Printer";
+
+    textdomain "printer";
+
+    import "Arch";
+    import "Confirm";
+    import "Crash";
+    import "CUPS";
+    import "HTML";
+    import "Label";
+    import "Message";
+    import "Mode";
+    import "Package";
+    import "Popup";
+    import "Printerdb";
+    import "Printerlib";
+    import "Progress";
+    import "Report";
+    import "Service";
+    import "Spooler";
+    import "String";
+    import "Summary";
+    import "Stage";
+    import "SuSEFirewall";
+
+
+
+    //////////
+    ////////// Module data
+    //////////
+
+    /**
+      * Version of YaST2 printer module for updates handling
+      */
+    global integer version = 256 * 2 + 11; // 2.11
+    /**
+      * Don't run SuSEconfig, don't restart services if true and possible
+      */
+    global boolean write_only = false;
+    /**
+      * Shall be printers detected
+      * If nil, ask user
+      */
+    global boolean detect = true;
+
+    /**
+     * List of print queues. See description of map printer
+     * for members structure.
+     */
+    global list<map<string,any> > printcap = [];
+    /**
+      *Backup list of print queues. See description of map printer
+      * for members structure.
+      */
+    global list<map<string,any> > printcap_backup = [];
+    /**
+     * Default queue name
+     */
+    global string default = "";
+    /**
+      * Has to be saved all?
+      */
+    global boolean save_all = false;
+
+    /**
+     * Were settings changed?
+     */
+    global boolean dirty = false;
+    /**
+      * Were settings read?
+      */
+    global boolean read_done = false;
+    /**
+     * Print queue we are currently working with.
+     * @example
+     * $[
+     * "name" : string, //queue name
+     * "uri" : string, //printer uri
+     * "unique_key" : string,  // from libhd  -|
+     * "ppd" : string // filename of used ppd file, non-raw queues only
+     * "ppd_info" : map // chached information about PPD file, non-raw only
+     * "options": map,   // options from printer db -|
+     * "ff" : boolean, // print formfeed between pages, present only for queues with formfeed
+     * "raw": boolean, // raw queue, present only for raw queues
+     * ]
+     */
+    global map<string,any> printer = $[];
+    /**
+     * Index of printer we are working with.
+     */
+    global integer index = 0;
+    /**
+     * List of printers that were deleted during this configuration
+     * session.
+     */
+    global list<map<string,string> > deleted = [];
+    /**
+     * List of autodetected printers. For documentation see
+     * yast2-lib-printer.
+     */
+    global list<map<string,any> > autodetected = [];
+
+
+    /**
+     * List of unique keys of the printers read at the beginning.
+     * We need this because when writting, we must call
+     * Write (.probe.status.configured, "unique_key", `yes | `no)
+     * It is map of $[ unique_key : true ]. When saving, unique keys that
+     * are still configured are replaced by $[ unique_key : false ]
+     */
+    map<string,boolean> original_unique_keys = $[];
+
+
+    /**
+      * Type of start, true if autodetection
+      */
+    global boolean detection = false;
+    /**
+      * At least one queue has been tested - because of hw proposal
+      */
+    global boolean tested = false;
+
+    /**
+      * True if autodetection should be skipped
+      */
+    global boolean skip_autodetection = Arch::s390 ();
+
+// variables for UI purproses
+
+    /**
+      * Current mode of configuration
+      * `det for configuring from detected printers dialog
+      * `adm for configuring from printer administration dialog
+      */
+    global symbol confmode = nil;
+
+    /**
+      * Selected item from main connection type dialog
+      */
+    global symbol connection_type_selected = `parallel;
+
+     /**
+      * Selected item from 2nd-level connection type dialog
+      */
+    global symbol connection_subtype_selected = `none;
+
+    /**
+      * Configuring printer, which is result of detection?
+      */
+    global boolean conf_detected = false;
+
+    /**
+      * Selected item of the list of detected printers
+      */
+    global integer runAutoprobedListDialog__current = 0;
+
+    /**
+     * Driver (backend) for HP all-in-one devices, one of "ptal" and "hp"
+     */
+    global string hp_driver = nil;
+
+
+// local functions
+
+    /**
+     * Test for abort.
+     * @return true if abort was pressed
+     */
+    global define boolean testAbort () ``{
+// FIXME commented because of command line
+/*	if (`abort == UI::PollInput ())
+	{
+	    UI::CloseDialog ();
+	    return true;
+	}*/
+	return false;
+    }
+
+// global functions
+
+    /**
+      * Add unpresent entries into a map
+      * @param p map of printer
+      * @return modified map
+      */
+    global define map<string,any> fixPrinter (map<string,any> p) ``{
+	if (p["accepting"]:true == true)
+	    p["accepting"] = true;
+	if (p["state"]:"idle" == "idle")
+	    p["state"] = "idle";
+	if (p["bannerstart"]:"" == "")
+	    p["bannerstart"] = "none";
+	if (p["bannerend"]:"" == "")
+	    p["bannerend"] = "none";
+	if (p["allowusers"]:[] == [])
+	    p["allowusers"] = [];
+	if (p["denyusers"]:[] == [])
+	    p["denyusers"] = [];
+	return p;
+    }
+
+    /**
+     * Autodetect printers.
+     */
+    global define list<map<string,any> > Detect () ``{
+	if (Mode::config ())
+	{
+	    Printerlib::DisplayUnavailableAIPopup ();
+	    autodetected = [];
+	    return [];
+	}
+        /* Confirmation: label text (detecting hardware: xxx) */
+        if (!Confirm::Detection (_("Printers")))
+            return [];
+
+	y2milestone ("Detecting printers");
+	boolean restart_cups = false;
+	boolean detected_usb = false;
+
+	dirty = true;
+	SCR::Execute (.target.bash,
+	    "test -f /etc/init.d/hotplug && (test -d /proc/bus/usb/001 || /etc/init.d/hotplug start)");
+	list<map> aprobe = (list<map>)SCR::Read (.probe.printer);
+/*
+aprobe = [
+$["bus":"USB", "bus_hwcfg":"usb", "class_id":265, "dev_name":"/dev/usb/lp0", "dev_names":["/dev/usb/lp0"], "dev_num":$["major":180, "minor":0, "range":1, "type":"c"], "device":"HP LASERJET 1220", "device_id":196613, "driver":"usblp", "hotplug":"usb", "model":"HP LASERJET 1220", "old_unique_key":"oQ6X.jfKkG0mJXc1", "resource":$["baud":[$["speed":1500000]]], "rev":"1.00", "sub_class_id":0, "sub_device":"HP LASERJET 1220", "sub_vendor":"HP", "sysfs_bus_id":"1-2:1.0", "unique_key":"cLrx.twN5GQuyNJ3", "vendor":"HP", "vendor_id":197816],
+$["bus":"USB", "bus_hwcfg":"usb", "class_id":265, "dev_name":"/dev/usb/lp0", "dev_names":["/dev/usb/lp0"], "dev_num":$["major":180, "minor":0, "range":1, "type":"c"], "device":"LASERJET 1300", "device_id":196613, "driver":"usblp", "hotplug":"usb", "model":"LASERJET 1300", "old_unique_key":"oQ6X.jfKkG0mJXc1", "resource":$["baud":[$["speed":1500000]]], "rev":"1.00", "sub_class_id":0, "sub_device":"LASERJET 1300", "sub_vendor":"HP", "sysfs_bus_id":"1-2:1.0", "unique_key":"cLrx.twN5GQuyNJ3", "vendor":"HP", "vendor_id":197816]
+];
+*/
+
+	CUPS::DetectCupsUsbDevicesInfo ();
+
+	y2milestone ("Probed printers: %1", aprobe);
+	autodetected = maplist (map i, aprobe, {
+	    map<string,any> p = $[];
+	    string bus = i["bus"]:"Parallel";
+
+	    if ("Parallel" == bus)
+	    {
+		p = $[
+		    "vendor" : i["vendor"]:"",
+		    "device" : i["device"]:"",
+		    "unique_key" : i["unique_key"]:"",
+		    "uri" : "parallel:" + i["dev_name"]:"",
+		];
+	    }
+	    else if  ("USB" == bus)
+	    {
+		detected_usb = true;
+		if (0 !=  SCR::Execute (.target.bash,
+		    "grep '^usblp ' /proc/modules"))
+		{
+		    return $[];
+		}
+		if ("epson" == tolower (i["sub_vendor"]:""))
+		{
+		    string sub_dev
+			= Printerlib::getEpsonUsbModel (i["dev_name"]:"");
+		    if (sub_dev != "")
+			i["sub_device"] = sub_dev;
+		}
+		string class_dev = i["dev_name"]:"";
+		string dev_name = class_dev;
+
+		if (Spooler::Get () == "cups")
+		{
+		    dev_name
+			= Printerlib::GetCupsUsbDeviceInfo (class_dev)[0]:"";
+		    if (dev_name == nil || dev_name == "")
+		    {
+			dev_name = class_dev;
+		    }
+		}
+		p = $[
+		    "vendor" : i["sub_vendor"]:i["vendor"]:"",
+		    "device" : i["sub_device"]:i["device"]:"",
+		    "unique_key": i["unique_key"]:"",
+		    "uri": "usb:" + dev_name,
+		];
+	    }
+	    p = (map<string,any>)union (p, $[
+		"info" : p["vendor"]:"" + " " + p["device"]:"",
+	        "location" : Printerlib::getUriNiceName (p["uri"]:""),
+		"vendor_db" : SCR::Read (.ppd.db.vendorname, p["vendor"]:""),
+		"device_db" : SCR::Read (.ppd.db.modelname,
+		    [p["vendor_db"]:"", p["device"]:""]),
+	    ]);
+	    if (Spooler::Get () == "cups")
+	    {
+		boolean ptal_failed = false;
+		if (contains (i["requires"]:[], "hp-officeJet")
+		    || contains (i["requires"]:[], "hplip")
+		    ||(p["vendor_db"]:"" == "HP"
+			&& contains (
+			    Printerlib::GetHPAllInOneModels (),
+			    p["device_db"]:"")))
+		{
+		    y2milestone ("PTAL/HPLIP device found: %1", p);
+		    if (substring (p["uri"]:"", 0, 9) == "parallel:")
+		    {
+			y2warning ("PTAL must be set manually for parallel devices");
+			ptal_failed = true;
+		    }
+		    boolean req_ret = true;
+		    if (! Package::InstalledAny (["hp-officeJet", "hplip"]))
+		    {
+			// FIXME if default should be PTAL
+			if (hp_driver == nil)
+			    hp_driver = "hp";
+			string package = hp_driver == "ptal"
+			    ? "hp-officejet"
+			    : "hplip";
+			req_ret = Package::InstallMsg (package,
+			    // question, %1 is package name
+			    _("An HP all-in-one device has been detected. To
+use it as both printer and scanner,
+package %1 must be installed.
+
+Install it now?"));
+		    }
+		    // FIXME order if default should be PTAL
+		    else if (Package::Installed ("hplip") && hp_driver == nil)
+		    {
+			hp_driver = "hp";
+		    }
+		    else if (hp_driver == nil)
+		    {
+			hp_driver = "ptal";
+		    }
+		    if (! req_ret && ! Package::LastOperationCanceled ())
+		    {
+			Report::Error (Message::FailedToInstallPackages ());
+			ptal_failed = true;
+		    }
+		    restart_cups = true;
+		    string ptal_uri = (hp_driver == "hp")
+			? Printerlib::getHplipUri (p["device_db"]:"")
+			: Printerlib::getPtalUri (p["device_db"]:"");
+		    if (ptal_uri != nil && ! ptal_failed)
+		    {
+			p["uri"] = ptal_uri;
+		    }
+		    else
+		    {
+			y2warning ("Cannot detect PTAL/HP URI");
+			ptal_failed = true;
+		    }
+		}
+		if (ptal_failed)
+		{
+		    p["ptal_manual"] = true;
+		}
+	    }
+	    y2milestone ("Detected printer %1", p);
+	    return p;
+	});
+	if (Spooler::Get () == "cups")
+	{
+	    autodetected = filter (map<string,any> a, autodetected, ``(
+		! contains (CUPS::GetProblematicCupsUsbDevices (),
+		    Printerlib::getUriDevice (a["uri"]:""))
+	    ));
+	}
+	// check if usblp module is loaded
+	if (detected_usb)
+	{
+	    if (0 !=  SCR::Execute (.target.bash, "grep '^usblp ' /proc/modules"))
+	    {
+		y2error ("USB printer found and printer module not loaded, loading it");
+		boolean probe_success = (boolean)SCR::Execute(.target.modprobe, "usblp", "");
+		string hotplug
+		    = (string)SCR::Read (.sysconfig.hotplug.HOTPLUG_USB_STATIC_MODULES);
+		y2debug ("Current hotplug: %1", hotplug);
+		list<string> hplist = splitstring (hotplug, " ");
+		if (! contains (hplist, "usblp"))
+		{
+		    hplist = add (hplist, "usblp");
+		    hotplug = mergestring (hplist, " ");
+		    y2debug ("Final hotplug: %1", hotplug);
+		    SCR::Write (.sysconfig.hotplug.HOTPLUG_USB_STATIC_MODULES,
+			hotplug);
+		    SCR::Write (.sysconfig.hotplug, nil);
+		}
+		sleep (100);
+		if (probe_success)
+		{
+		    probe_success = 0 == SCR::Execute (.target.bash, "grep '^usblp ' /proc/modules");
+		}
+		if (probe_success)
+		{
+		    y2milestone ("Restarting detection");
+		    list<map<string,any> > redetected = Detect ();
+		    y2debug ("Redetection done");
+		    return redetected;
+		}
+		else
+		{
+		    y2error ("Error occured while loading usblp.ko module");
+		}
+	    }
+	}
+	// restart CUPS so that it knows about new URIs
+	if (restart_cups)
+	{
+	    SCR::Execute (.target.bash, "test -x /etc/init.d/cups && /etc/init.d/cups status && /etc/init.d/cups restart");
+	}
+	return autodetected;
+    }
+
+    /**
+     * Select printer to edit or something.
+     * @param i printer to select. Pass nil if you do not want to select
+     *		printer, e.g. if printer is going to be added.
+     */
+    global define void selectPrinter (integer i) ``{
+	if (nil == i || i < 0 || i >= size (printcap))
+	{
+	    index = -1;
+	    printer = $[
+		"type" : "yast2",
+	    ];
+	    return ;
+	}
+	index = i;
+	connection_type_selected = `parallel;
+	connection_subtype_selected = `none;
+	printer = printcap[index]:$[];
+    }
+
+    /**
+     * Let print queue named name be currently edited.
+     * If printer is not found, then queue will be $[] and index -1
+     * @param name name of the queue to find
+     */
+    global define void selectPrinterByName (string name) ``{
+	index = -1;
+	integer j = -1;
+	foreach (map i, printcap, ``{
+	    j = j + 1;
+	    if (name == i["name"]:"")
+	    {
+		index = j;
+	    }
+	});
+	printer = printcap[index]:$[];
+    }
+
+    /**
+      * Adds a queue to the deleted list
+      * @param name string queue name
+      * @param printer_type string "printer" or "class"
+      */
+    global define void addToDeleted (string name, string printer_type) ``{
+	deleted = add (deleted, $[ "name" : name, "type" : printer_type]);
+    }
+
+    /**
+      * Set implicit default queue if no queue is set as default
+      */
+    global define void assignDefault () ``{
+	boolean found_default = false;
+	boolean found_lp = false;
+	boolean found_normal = false;
+	boolean found_defstr = false;
+	string norm_name = "";
+	string first = "";
+	foreach (map e, printcap, ``{
+	    string name = e["name"]:"";
+	    if (e["valid"]:true)
+	    {
+		if (name == "lp")
+		    found_lp = true;
+		if (name == default)
+		    found_default = true;
+		if (name == "normal" || regexpmatch (name, "normal[0-9]"))
+		{
+		    norm_name = name;
+		    found_normal = true;
+		}
+		if (name == "default")
+		    found_defstr = true;
+		if (first == "")
+		    first = name;
+	    }
+	});
+	if (found_default)
+	{
+	    y2debug ("Default queue found");
+	}
+	else if (found_lp)
+	{
+	    default = "lp";
+	    dirty = true;
+	}
+	else if (found_normal)
+	{
+	    default = norm_name;
+	    dirty = true;
+	}
+	else if (found_default)
+	{
+	    default = "default";
+	    dirty = true;
+	}
+	else
+	{
+	    default = first;
+	    dirty = true;
+	}
+    }
+
+    /**
+     * Delete currently selected printer.
+     */
+    global define void deletePrinter () ``{
+	if (index < 0 || index >= size (printcap))
+	    return ;
+	printer = printcap[index]:$[];
+	if (nil == printer)
+	    printer = $[];
+	string printer_type = "";
+	if (printer["type"]:"yast2" == "yast2")
+	    printer_type = printer["uri"]:"class" == "class" ? "class" : "printer";
+	else
+	{
+	    if (printer["uri"]:"" == "class")
+		printer_type = "class";
+	    else if (printer["uri"]:"" != "")
+		printer_type = "printer";
+	    else
+	    {
+		printer_type = "class";
+		addToDeleted (printer["name"]:"", "printer");
+	    }
+	}
+	addToDeleted (printer["name"]:"", printer_type);
+	printcap = remove (printcap, index);
+	if (index >= size (printcap))
+	    index = index - 1;
+	dirty = true;
+	assignDefault ();
+    }
+
+    /**
+     * Set current printer as default printer
+     */
+    global define void setDefaultPrinter () ``{
+	if (index < 0 || index >= size (printcap))
+	    return ;
+	default = printer["name"]:"";
+	dirty = true;
+    }
+    /**
+     * Return list(set) of names that can not be used as printer name. There can be
+     * same name for more printers in /etc/printcap. It was impossible to add printer,
+     * because all names were invalid because
+     * size (union (forbidden_names, new_names)) != size (forbidden_names) + size (new_names).
+     * @return a list of already used names
+     */
+    global define list<string> getForbiddenNames() ``{
+	list<string> l = (list<string>)toset (
+	    add (
+		flatten (
+		    maplist (map entry, printcap, ``(
+			add (entry["names"]:[], entry["name"]:"")
+		    ))
+		),
+		"all"
+	    )
+	);
+	list<string> names = maplist (string i, l, ``(tolower (i)));
+	names = toset (names);
+	return names;
+    }
+    /**
+      * Assign states to a printer
+      * @param p a map printer
+      * @param changed boolean true if queue was changed
+      *   (to assign correct state)
+      * @return a map printer with assigned states
+      */
+    global define map<string,any> assignState (map<string,any> p,
+	boolean changed)
+    ``{
+	if (p["type"]:"yast2" != "yast2")
+	    return p;
+	boolean supported = true;
+	string uri = p["uri"]:"";
+	string q_type = Printerlib::getUriType (uri);
+	string q_filter = "";
+
+	string filename = p["ppd"]:"";
+	if (! p["raw"]:false)
+	{
+	    q_filter = p["ppd_info", "filter"]:"";
+	}
+
+	if (q_filter == nil)
+	    supported = false;
+	list<string> known_filters = Printerdb::GetSupportedFilters ();
+	if (q_type == "class" || p["raw"]:false)
+	    supported = true;
+	boolean filt_sup = p["raw"]:false
+	    || known_filters == nil
+	    || contains (known_filters, q_filter);
+	boolean spool_sup = Spooler::testSupportedQueue (q_type);
+	boolean sup = supported && filt_sup && spool_sup;
+	p["valid"] = sup
+	    ?
+		true
+	    :
+		false;
+	if (changed)
+	    p["changed"] = true;
+	return p;
+    }
+
+    /**
+     * Save currently edited printer.
+     */
+    global define void storePrinter () ``{
+	CUPS::cups_installation = `server;
+	if (printer["uri"]:"" == "listen_ipp")
+	{
+	    if (contains (CUPS::cups_server_settings["Browsing"]:["On"], "On"))
+	    {
+		y2debug ("TODO");
+		// TODO make sure CUPS server will be running
+	    }
+	    return;
+	}
+	else if (printer["uri"]:"" == "cups_client")
+	{
+	    CUPS::cups_installation = `client;
+	    return;
+	}
+
+	printer = assignState (printer, true);
+
+	y2milestone ("Storing printer %1, index %2", printer, index);
+
+	if (-1 == index)
+	{
+	    printcap = add (printcap, printer);
+	    index = size (printcap) - 1;
+	}
+	else
+	{
+	    // we do not need care about creating new remote queue, it is
+	    // impossible in this situation
+	    integer c = -1;
+	    printcap = maplist (map<string,any> i, printcap, ``{
+		c = c + 1;
+		if (c == index)
+		    return printer;
+		return i;
+	    });
+	}
+	// fix default printer
+	if ("" == default || nil == default)
+	{
+	    default = printer["name"]:"";
+	}
+	else
+	{
+	    boolean found = false;
+	    foreach (map i, printcap, ``{
+		    if (!found && i["name"]:"" == default)
+			found = true;
+	    });
+	    if (!found)
+		default = printer["name"]:"";
+	}
+	dirty = true;
+	y2debug ("Final printcap: %1", printcap);
+    }
+    /**
+     * Export module settings to map.
+     * @return Map of module settings.
+     */
+    global define map<string, any> Export () ``{
+	return $[
+	    "printcap" : printcap,
+	    "default"  : default,
+	    "spooler" : Spooler::Get (),
+	    "cups_installation" : CUPS::cups_installation,
+	    "server_hostname" : CUPS::server_hostname,
+	    "server_default" : CUPS::server_default,
+	    "cups_server_settings" : CUPS::cups_server_settings,
+	];
+    }
+    /**
+     * Import module settings.
+     * @param settings module settings
+     */
+    global define void Import (map<string, any> settings) ``{
+	dirty = true;
+	Spooler::Set (settings["spooler"]:"cups");
+	CUPS::cups_installation = (symbol) (settings["cups_installation"]:nil);
+	CUPS::server_hostname = settings["server_hostname"]:"";
+	default = settings["default"]:"";
+	printcap = settings["printcap"]:[];
+	CUPS::usb_dev_names = `always;
+	index = -1;
+	deleted = [];
+	CUPS::server_default = settings["server_default"]:false;
+	CUPS::cups_server_settings = settings["cups_server_settings"]:$[];
+    }
+    /**
+     * Reset all settings...
+     */
+    global define void Reset () ``{
+
+	CUPS::server_hostname = "";
+	CUPS::cups_installation = nil;
+	dirty = true;
+	default = "";
+	printcap = [];
+	index = -1;
+	deleted = [];
+	autodetected = [];
+	CUPS::usb_dev_names = `always;
+	CUPS::server_default = true;
+    }
+    /**
+     * Read the CUPS settings.
+     * @return a list of printers
+     */
+    global define list<map<string,any> > cupsRead () ``{
+        if (`server == CUPS::InstallationType ())
+        {
+	    Spooler::RestartIfNeeded (true);
+            list<map<string,any> > ret = (list<map<string,any> >) SCR::Read (.cups.printers);
+	    ret = filter (map<string,any> e, ret, ``(e["uri"]:"" != ""));
+	    ret = maplist (map<string,any> e, ret, ``{
+		if (SCR::Read (.target.size, e["ppd"]:"") > 0)
+		{
+		    string orig_file = e["ppd"]:"";
+		    e["ppd"] = SCR::Read (.ppd.file.open,
+			[e["ppd"]:"", SCR::Read (.target.tmpdir)]);
+		    SCR::Execute (.target.remove, orig_file);
+		    e["ppd_info"] = Printerdb::PpdInfo (e["ppd"]:"");
+		    e["raw"] = false;
+		}
+		else
+		{
+		    e["raw"] = true;
+		}
+		path p = .etc.cups.printers_conf.value;
+		p = add (p, e["name"]:"");
+		p = add (p, "DeviceURI");
+		string uri = (string) SCR::Read (p);
+		if (uri != nil)
+		    e["uri"] = uri;
+		if (regexpmatch (e["uri"]:"", "^smb:\/\/.*"))
+		{
+		    e["uri"] = regexpsub (e["uri"]:"",
+			"^smb(:\/\/.*)$",
+			"samba\\1");
+		}
+		e["changed"] = false;
+		e["valid"] = true;
+		e["type"] = "yast2";
+
+		// in case of raw queues, there is no PPD file and no options
+		// can be checked against this PPD file
+		if (e["raw"]:true)
+		{
+		    e["ppd_options"] = $[];
+		    return e;
+		}
+
+		// split options to those comming from PPD file and others
+		map<string,string> options = e["options"]:$[];
+		map<string,string> ppd_options = $[];
+
+		string filename = e["ppd"]:"";
+		map opts_ppd = (map)SCR::Read (.ppd.file.options,
+		    [filename, ""]);
+		list<map> optlist = opts_ppd["data"]:[];
+		list<string> ppd_opts
+		    = (list<string>) maplist (map o, optlist, ``(o["name"]:nil));
+		ppd_opts = filter (string o, ppd_opts, ``(o != nil && o != ""));
+		foreach (string k, any v, options, ``{
+		    if (contains (ppd_opts, k))
+		    {
+			ppd_options[k] = (string) v;
+			options[k] = nil;
+		    }
+		});
+		options = filter (string k, string v, options, ``(v != nil));
+
+		// check options comming from PPD file for constraints
+		list<string> constraints = (list<string>)SCR::Read (
+		    .ppd.file.constraints_list,
+		    [filename, ppd_options]);
+		ppd_options = filter (string k, string v, ppd_options, ``(
+		    ! contains (constraints, k)));
+
+		e["options"] = options;
+		e["ppd_options"] = ppd_options;
+		return e;
+	    });
+            list<map<string,any> > classes = (list<map<string,any> >)
+		SCR::Read (.cups.classes);
+	    if (nil == ret) ret = [];
+	    if (nil == classes)  classes = [];
+	    classes = maplist (map<string,any> e, classes,
+		``(add (e, "uri", "class")));
+	    ret = ret + classes;
+	    default = (string)SCR::Read (.cups.default_dest);
+	    if (default == "" || default == nil)
+		default = (string) (ret[0, "name"]:nil);
+	    CUPS::ReadCupsSettings ();
+	    return ret;
+        }
+        return [];
+    }
+    /**
+      * Sorts entries of printcap
+      */
+    global define void sortPrinters () ``{
+	list<map<string,any> > yast = (list<map<string,any> >)filter (map<string,any> e, printcap, ``(e["type"]:"yast2" == "yast2"));
+	list<map<string,any> > non_yast = (list<map<string,any> >)filter (map<string,any> e, printcap, ``(e["type"]:"yast2" != "yast2"));
+	list<map<string,any> > classes = (list<map<string,any> >)filter (map<string,any> e, yast, ``(e["uri"]:"class" == "class"));
+	list<map<string,any> > printers = (list<map<string,any> >)filter (map<string,any> e, yast, ``(e["uri"]:"class" != "class"));
+	list<map<string,any> > locals = (list<map<string,any> >)filter (map<string,any> e, printers, ``(contains (["parallel", "serial", "irda", "usb", "pipe"], Printerlib::getUriType (e["uri"]:""))));
+	list<map<string,any> > remote = (list<map<string,any> >)filter (map<string,any> e, printers, ``(! contains (["parallel", "serial", "irda", "usb", "pipe"], Printerlib::getUriType (e["uri"]:""))));
+	map<string,list> sorted = $[];
+
+	foreach (map<string,any> e, locals, ``{
+	    string uri = e["uri"]:"";
+	    list s = sorted[uri]:[];
+	    s = add (s, e);
+	    sorted = add (sorted, uri, s);
+	});
+	locals = [];
+	foreach (string k, list v, sorted, ``{locals = (list<map<string,any> >)merge (locals, v);});
+	sorted = $[];
+	foreach (map<string,any> e, remote, ``{
+	    string uri = e["uri"]:"";
+	    list s = sorted[uri]:[];
+	    s = add (s, e);
+	    sorted = add (sorted, uri, s);
+	});
+        remote = [];
+        foreach (string k, list v, sorted, ``{remote = (list<map<string,any> >)merge (remote, v);});
+
+	printcap = (list<map<string,any> >)merge (locals, remote);
+	classes = sort (map<string,any> x, map<string,any> y, classes, ``(x["name"]:"" < y["name"]:""));
+	printcap = (list<map<string,any> >)merge (printcap, classes);
+	non_yast = sort (map<string,any> x, map<string,any> y, non_yast, ``(x["name"]:"" < y["name"]:""));
+	printcap = (list<map<string,any> >)merge (printcap, non_yast);
+    }
+
+
+
+/**
+ * Detect spooler currently in use
+ * @return boolean true on success
+ */
+global define boolean checkSpooler () {
+    Spooler::Set (Spooler::checkSpoolSystem());
+    string det_spool = Spooler::Get ();
+    y2milestone ("Detected spooler: %1", det_spool);
+    if (det_spool == "exit")
+	return false;
+    return true;
+}
+
+    /**
+      * Check if GhostScript is installed
+      * @return boolean true if is installed
+      */
+    global define boolean checkGhostscript () ``{
+	if (SCR::Execute (.target.bash, "/usr/bin/which gs") != 0)
+	{
+	    // message box
+	    Report::Warning (_("It seems that you do not have GhostScript
+installed on your computer. It is needed
+to print."));
+	    return false;
+	}
+	return true;
+    }
+
+    /**
+      * Update configuration if cfg. saved by previous version
+      * @param read_version integere version written in cfg. file
+      */
+    global define void updateConfig (integer read_version) ``{
+	if (read_version < 520)
+	{
+	    printcap = maplist (map<string,any> p, printcap, ``{
+		if (substring (p["uri"]:"", 0, 12) == "prefilter://")
+		    p["uri"] = "filtering://localhost/"
+			+ substring (p["uri"]:"", 12);
+		if (substring (p["uri"]:"", 0, 6) == "lpd://")
+		    p["raw"] = true;
+		if (substring (p["uri"]:"", 0, 12) == "filtering://")
+		    p["uri"] = "lpd://" + substring (p["uri"]:"", 12);
+		return p;
+	    });
+	}
+	if (read_version < 521)
+	{
+	    printcap = maplist (map<string,any> p, printcap, ``{
+		p["options"] = $[];
+		if (p["raw"]:false)
+		    return p;
+		return p;
+	    });
+	}
+    }
+
+    /**
+      * Check if it is safe, ask user if needed, and detect local printers
+      * @return boolean true on success
+      * TODO error checking
+      */
+    global define boolean doPrinterDetection () ``{
+	if (Printer::detect != false)
+	    Printer::detect = Crash::AskRun ("printer_detection",
+		// popup
+		_("During the following step, YaST2 will try to detect local printers only.
+
+Printer detection can now start. In some cases, detection can cause a
+system freeze. If a freeze happens, select Skip Detection
+when next running the printer configuration.
+
+Detect your printers?"));
+
+	if (Printer::detect)
+	{
+	    Crash::Run ("printer_detection");
+	    Detect ();
+	    Crash::Finish ("printer_detection");
+	}
+	return true;
+    }
+
+    /**
+      * Read queues set for spooler
+      * @return a list of queues
+      */
+    global define list<map<string,any> > spoolerSpecQueuesRead () ``{
+	if (Spooler::Get () == "cups")
+        {
+            return cupsRead();
+        }
+	return [];
+    }
+
+    /**
+      * Read the contents of /var/lib/YaST2/printers
+      * @return boolean true on success
+      * TODO error handling
+      */
+    global define boolean stateRead () ``{
+	    printcap = [];
+	    SCR::Execute (.target.bash, "/bin/touch /var/lib/YaST2/printers");
+	    map state = (map)SCR::Read (.target.ycp, "/var/lib/YaST2/printers");
+	    if (nil == state)
+	    {
+		state = $[];
+	    }
+	    integer read_version = state["version"]:0;
+	    if ( !(Spooler::Get () == "cups" && CUPS::InstallationType () == `client))
+	    {
+		printcap = state["printers"]:[];
+	    }
+
+	    updateConfig (read_version);
+
+	    deleted = [];
+	    CUPS::usb_dev_names = state["cups_usb_devices"]:`always;
+	    printcap = maplist (map<string,any> e, printcap, ``(
+		add (e, "type", "yast2")
+	    ));
+	    Printerdb::SetDriversAreInstalled (
+		state["drivers_were_installed"]:false);
+	return true;
+    }
+
+    /**
+      * Set unique keys after configuration reading
+      */
+    global define void setUniqueKeys () ``{
+        original_unique_keys = $[];
+        foreach (map i, printcap, ``{
+            if (haskey (i, "unique_key"))
+                original_unique_keys = add (original_unique_keys, i["unique_key"]:"", true);
+        });
+    }
+
+    /**
+      * Old read function, called from new Read function
+      * TODO: better integrate
+      * TODO: error handling
+      * @return boolean true on success
+      */
+    global define boolean queuesRead () ``{
+	// during installation, no queues are saved
+	if (Stage::cont () && ! Mode::update ())
+	    return true;
+	boolean ret = true;
+
+	stateRead ();
+	printcap = spoolerSpecQueuesRead ();
+
+	setUniqueKeys ();
+	read_done = true;
+	assignDefault ();
+	if (! ret)
+	{
+	    Report::Error (Message::CannotReadCurrentSettings ());
+	}
+	foreach (map<string,any> p, printcap, {
+	    string uri_type = Printerlib::getUriType (p["uri"]:"");
+	    if (uri_type == "ptal")
+	    {
+		y2milestone ("Ptal queue fonud");
+		hp_driver = "ptal";
+		return;
+	    }
+	    else if (uri_type == "hp")
+	    {
+		y2milestone ("HPLIP queue fonud");
+		hp_driver = "hp";
+		return;
+	    }
+	});
+	y2milestone ("Queues reading finished");
+        return ret;
+     }
+    /**
+     * Read settings from disk or where.
+     * @return boolean success?
+     */
+    global define boolean Read () ``{
+	if (Arch::s390 ())
+	    skip_autodetection = true;
+	if (Mode::config ())
+	    skip_autodetection = true;
+	list<string> stages = [
+	    // progress stage, text in dialog (short) (infinitive)
+	    _("Check environment"),
+	    // progress stage, text in dialog (short) (infinitive)
+	    _("Read firewall settings"),
+	    // progress stage, text in dialog (short) (infinitive)
+	    _("Check database of printers"),
+	    // progress stage, text in dialog (short) (infinitive)
+	    _("Load current settings"),
+	];
+	list<string> titles = [
+	    // progress step, text in dialog (short)
+	    _("Checking environment..."),
+	    // progress step, text in dialog (short)
+	    _("Reading firewall settings..."),
+	    // progress step, text in dialog (short)
+	    _("Checking database of printers..."),
+	    // progress step, text in dialog (short)
+	    _("Loading current settings..."),
+	];
+	if (!skip_autodetection)
+	{
+	    // progress stage, text in dialog (short) (infinitive)
+	    stages = add (stages, _("Autodetect printers"));
+	    // progress stage, text in dialog (short)
+	    titles = add (titles, _("Autodetecting printers..."));
+	}
+
+	// progress label
+	Progress::New (_("Initializing printer configuration"),
+	    " ", skip_autodetection ? 16 : 20, stages, titles, "");
+
+	Progress::NextStageStep (0); // step 0 - check root permission
+	if (testAbort ()) return false;
+
+	if (! Confirm::MustBeRoot ())
+	    return false;
+
+	Progress::NextStep (); // step 1 - check installed spooler
+	if (testAbort ()) return false;
+
+	if (! checkSpooler ())
+	    return false;
+
+	Progress::NextStep (); // step 2 - check ghostscript package
+	if (testAbort ()) return false;
+
+	if (Spooler::Get () != "cups" || CUPS::InstallationType () == `server)
+	{
+	    checkGhostscript ();
+	}
+
+	Progress::NextStep (); // step 3 - initialize spooler
+	if (testAbort ()) return false;
+
+	if (! Mode::test ())
+	{
+	    Spooler::Initialize ();
+	}
+
+	Progress::NextStageStep (4); // step 4-7 - read firewall settings
+
+	if (! Mode::test ())
+	{
+	    boolean progress_orig = Progress::set (false);
+	    SuSEFirewall::Read ();
+	    Progress::set (progress_orig);
+	}
+
+	Progress::NextStageStep (8); // step 8-11 - check and load the database
+	if (testAbort ()) return false;
+
+	if (Spooler::Get () != "cups" || CUPS::InstallationType () == `server)
+	{
+	    Printerdb::foomatic = nil;
+	    Printerdb::loadFoomaticIfNeeded ();
+	}
+
+	Progress::NextStageStep (12); // step 12-15 - read the settings
+	if (testAbort ()) return false;
+
+	if (Spooler::Get () == "cups" && CUPS::InstallationType () == `client)
+	{
+	    default = CUPS::ClientRead ();
+	    if (default == nil)
+		return false;
+	}
+	else
+	{
+	    if (! queuesRead ())
+		return false;
+	}
+
+	printcap = maplist (map<string,any> e, printcap,``{return assignState (e, false);});
+
+	if (!skip_autodetection)
+	{
+	    Progress::NextStageStep (16); // step 16-19 - autodetection
+	    if (testAbort ()) return false;
+	    if (! doPrinterDetection ())
+		return false;
+	}
+	// Progress finish
+	Progress::Finish ();
+	if (testAbort ()) return false;
+	y2milestone ("Reading finished");
+	return true;
+    }
+
+    /**
+      * deletes printers
+      * @param printer map of printer to delete (with keys name and type
+      *  containing "printer" or "class"
+      * @return success state
+      */
+    global define boolean wipePrinter (map printer) ``{
+	string command = "";
+	string name = printer["name"]:"";
+	string p_type = printer["type"]:"class";
+	if ("" != name)
+	{
+	    if (Spooler::Get () == "cups")
+	    {
+		if (p_type == "class")
+		{
+		    SCR::Write (.cups.classes.remove, name);
+		}
+		else
+		{
+		    SCR::Write (.cups.printers.remove, name);
+		}
+	    }
+	}
+	if (command != "")
+	    SCR::Execute (.target.bash, command);
+	return true;
+    }
+
+
+    /**
+      * Delete printers marked for being deleted
+      * @return boolean true on success
+      */
+    global define boolean deleteDeletedPrinters () ``{
+	// FIXME error checking
+	foreach (map d, deleted, ``{
+	    wipePrinter (d);
+	});
+	return true;
+    }
+
+    global boolean SaveQueue (map<string,any> queue) {
+	y2debug ("Saving printer %1", queue);
+	Printerdb::loadFoomaticIfNeeded ();
+	queue = Printerdb::getUpdatedPpdFile (queue);
+	boolean successfully = false;
+	if (Spooler::Get () == "cups")
+	{
+	    successfully = CUPS::WriteQueue (queue);
+	}
+	if (successfully)
+	{
+	    y2debug ("Success");
+	}
+	return successfully;
+    }
+
+    /**
+     * Save all queues
+     * @return boolean true on success
+     */
+    global define boolean savePrinters () ``{
+	// FIXME error checking
+	list unique_keys = [];
+	//
+	// We are not sure if default printer exists, someone could have
+	// deleted it. If default printer does not exist, set default
+	// printer to "".
+	//
+	boolean default_printer_found = false;
+	foreach (map<string,any> entry, printcap, ``{
+	    string uri = entry["uri"]:"";
+	    string name = entry["name"]:"";
+	    entry["default"] = (name == default);
+	    // progress title, %1 is queue name
+	    Progress::Title (sformat (_("Saving queue %1..."), name));
+	    if (name == "")
+	    {
+		// error report. %1 is queue name
+		Report::Error (sformat (_("Attempting to save unnamed printer. Skipping: %1"), entry));
+		return ;
+	    }
+	    if (name == default && entry["valid"]:true)
+		default_printer_found = true;
+
+	    string unique_key = entry["unique_key"]:(string)nil;
+	    if (nil != unique_key)
+	    {
+		unique_keys = add (unique_keys, unique_key);
+		original_unique_keys = add (original_unique_keys, unique_key, false);
+	    }
+	    entry = fixPrinter(entry);
+
+	    if (! entry["valid"]:true)
+	    {
+		Popup::Message (sformat(
+		    // popup %1 is queue name
+		    _("Queue %1 cannot be saved because
+the selected spooler does not support it."), name));
+	    }
+	    else if (entry["type"]:"yast2" == "yast2"
+		&& (entry["changed"]:false || save_all))
+	    {
+		SaveQueue (entry);
+	    }
+	    Progress::NextStep ();
+	});
+	if (Spooler::Get () != "cups")
+	{
+	    // set 0644 mode to /etc/printcap (file does not exist if there is no printer)
+	    if (-1 != SCR::Read(.target.size, "/etc/printcap"))
+		SCR::Execute (.target.bash, "/bin/chmod 0644 /etc/printcap");
+	}
+
+	// Save unique_keys for autedetected printers to libhd
+	foreach (any k, boolean v, original_unique_keys, ``{
+	    SCR::Write (.probe.status.configured, k, v ? `no : `yes);
+	});
+	if (! default_printer_found)
+	    default = "";
+	return true;
+    }
+
+    /**
+     * Save default queue to appropriate location
+     * @return boolean true on success
+     */
+    global define boolean saveDefaultQueue () ``{
+	if (Spooler::Get () == "cups")
+	{
+	    SCR::Write (.cups.default_dest, default);
+	}
+	else
+	{
+	    SCR::Execute (.target.bash, sformat ("/usr/lib/YaST2/bin/assign_printcap_default %1", default != "" ? default : "\"\""));
+	}
+	return true;
+    }
+
+    /**
+     * Write /var/lib/yast2/printers
+     * @return boolean true if successful
+     */
+
+    define boolean saveTheConfiguration () ``{
+	list<map<string,any> > l = [];
+	l = filter (map<string,any> e, printcap, ``(e["type"]:"yast2" == "yast2"));
+	list allowed_keys = [ "name", "raw", "uri", "ff", "ascii",
+	    "unique_key" ];
+	l = maplist (map<string,any> e, l, ``(filter (string k, any v, e,
+	    ``(contains (allowed_keys, k)))));
+	map save = $[
+	    "printers" : l,
+	    "cups_usb_devices" : CUPS::usb_dev_names,
+	    "version" : version,
+	    "drivers_were_installed" : Printerdb::GetDriversAreInstalled ()
+	];
+	if (! SCR::Write (.target.ycp, "/var/lib/YaST2/printers", save))
+	{
+	    Report::Error (Message::CannotWriteSettingsTo (
+		"/var/lib/YaST2/printers"));
+	    return false;
+	}
+	// It can contain Samba/Novell passwords...
+	SCR::Execute (.target.bash, sformat ("/bin/chmod 600 %1", "/var/lib/YaST2/printers"));
+	return true;
+    }
+
+    /**
+     * Write settings.
+     * @return success state
+     */
+    global define boolean Write () ``{
+	y2milestone ("Write called; spooler: %1, cups inst type: %2",
+	    Spooler::Get (),
+	    CUPS::InstallationType ());
+
+	CUPS::StopListenCupsServers ();
+
+	boolean with_daemon = Spooler::Get () != "cups"
+	    || `client != CUPS::InstallationType ();
+	y2milestone ("Daemon will run for this configuration: %1", with_daemon);
+	if (with_daemon)
+	{
+	    // caption of progress
+	    Progress::New (_("Saving printer configuration"),
+		" ", size (printcap) + 7,
+		[
+		    // progress bar states
+		    _("Adjust spooler services"),
+		    // progress stage
+		    _("Delete old queues"),
+		    // progress bar states
+		    _("Save queues"),
+		    // progress bar states
+		    _("Set default queue"),
+		    // progress bar stage
+		    _("Save system settings"),
+		    // progress bar stage
+		    _("Save firewall settings"),
+		    // progress bas stage
+		    _("Restart spooler"),
+		],
+		[
+		    // progress step
+		    _("Adjusting spooler services..."),
+		    // progress step
+		    _("Deleting old queues..."),
+		    // progress step
+		    _("Saving queues..."),
+		    // progress step
+		    _("Setting default queue..."),
+		    // progress step
+		    _("Saving system settings..."),
+		    // progress step
+		    _("Saving firewall settings..."),
+		    // progress step
+		    _("Restarting spooler..."),
+		    // progress step
+		    _("Finished")
+		],
+	    "");
+	}
+	else
+	{
+	    // caption of progress
+	    Progress::New (_("Saving printer configuration"),
+		" ", 3,
+		[
+		    // progress stage
+		    _("Adjust spooler services"),
+                    // progress stage
+		    _("Save system settings"),
+		    // progress bar stage
+		    _("Save firewall settings"),
+		],
+		[
+		    // progress step
+		    _("Adjusting spooler services"),
+                    // progress step
+		    _("Saving system settings..."),
+		    // progress step
+		    _("Saving firewall settings..."),
+		    // progress step
+		    _("Finished")
+		],
+	    "");
+	}
+
+	boolean ret = true;
+
+	if (with_daemon && Spooler::Get () == "cups")
+	{
+	    CUPS::server_hostname = "";
+	    CUPS::SaveServerHostName ();
+	    CUPS::WriteCupsSettings ();
+	}
+
+	Progress::NextStage (); // adjst services
+	if (testAbort ()) return false;
+	ret = Spooler::AdjustServices (size (printcap) > 0) && ret;
+	if (with_daemon)
+	{
+	    Progress::NextStage (); // delete old printers
+	    if (testAbort ()) return false;
+	    ret = deleteDeletedPrinters () && ret;
+
+	    Progress::NextStage (); // save printers
+	    if (testAbort ()) return false;
+	    ret = savePrinters () && ret;
+
+	    Progress::NextStage (); // set default queue
+	    if (testAbort ()) return false;
+	    ret = saveDefaultQueue () && ret;
+
+	    Progress::NextStage (); // save system settings
+	    if (testAbort ()) return false;
+	    ret = saveTheConfiguration() && ret;
+
+	    Progress::NextStage (); // save firewall settings
+	    if (testAbort ()) return false;
+	    if (! Mode::test ())
+	    {
+		boolean progress_orig = Progress::set (false);
+		SuSEFirewall::Write ();
+		Progress::set (progress_orig);
+	    }
+
+	    Progress::NextStage ();// restart spooler
+	    if (testAbort ()) return false;
+	    if (! write_only)
+		ret = Spooler::restartServices (size (printcap) > 0) && ret;
+
+	}
+	else
+	{
+	    Progress::NextStage (); // save system settings
+	    if (testAbort ()) return false;
+	    ret = CUPS::SaveCupsClient (default) && ret;
+	    ret = saveTheConfiguration() && ret;
+
+	    Progress::NextStage (); // save firewall settings
+	    if (testAbort ()) return false;
+	    if (! Mode::test ())
+	    {
+		boolean progress_orig = Progress::set (false);
+		SuSEFirewall::Write ();
+		Progress::set (progress_orig);
+	    }
+	}
+
+	Progress::NextStage (); // finished
+	if (testAbort ()) return false;
+	// progress step
+        Progress::Title(_("Finished"));
+	sleep (500);
+	return ret;
+    }
+
+
+    /**
+      * separates from config map only values of specified type
+      * @param config Map of configuration
+      * @param type String specifying type
+      * @return map of selected values
+      */
+    global define map getArgsOfType (map config, string type) ``{
+	map result = $[];
+
+	foreach (any k, any v, config, ``{
+	    map valmap = config[k]:$[];
+	    string value = valmap[type]:"";
+	    if (value != "") {
+		result = add (result, k, value);
+	    }
+	});
+	return result;
+    }
+
+    /**
+     * Creates summary from autodetected printers and printcap.
+     * @param style type of summary - list of symbols - flags:
+     *		`test: add test link<br>
+     *		`nonew: do not include new -- unconfigured printers into summary<br>
+     *		`short: short summary doesn't contain queue description
+     *		`state: show printer state
+     * @return summary string
+     */
+    global define string Summary (list style) ``{
+	// to be used in summary after queue name - means verb
+	// is clickable link
+	// eg. HP DeskJet configured as lp0 [test]
+	string test_link = _("test");
+
+	if (Spooler::Get () == "cups" && CUPS::InstallationType () == `client)
+	{
+	    string ret =
+                // summary text
+                // %1 is info about config status of the server
+		sformat (_("<LI>CUPS Client-Only Configuration:<BR>%1</LI>"),
+		    CUPS::server_hostname != "" && CUPS::server_hostname != nil
+			// summary text part, alt. 1
+			// %1 server name
+			? sformat (_("using server %1."),
+			    CUPS::server_hostname)
+			// summary text part, alt. 1
+			: _("No server set."));
+	    list<string> servers = filter (string s, CUPS::cups_servers,
+		``(s != CUPS::server_hostname));
+	    servers = toset (servers);
+	    if (size (servers) > 0)
+	    {
+		// sumary text
+		ret = ret + sformat(_("<li>Other Detected Servers:<br>%1</li>"),
+		    mergestring (servers, ", "));
+	    }
+	    ret = "<UL>" + ret + "</UL>";
+	    return ret;
+	}
+	// Configured as name_of_queue.
+	string format = contains (style, `short) ? _("Configured as %1.")
+	// Configured as name_of_queue.
+	: _("Configured as:<br>%1");
+	list<string> summary = [];
+	list used = [];
+	// autodetected printer
+//	y2milestone ("Listing autodetected");
+	foreach (map<string,any> i, autodetected, ``{
+	    string found = "";
+	    string vendor = i["vendor"]:"";
+	    string model = i["device"]:"";
+	    string dev = sformat ("%1 %2: %3", vendor, model, Printerlib::getUriNiceName (i["uri"]:""));
+	    foreach (map<string,any> entry, printcap, ``{
+		if (i["unique_key"]:"" == entry["unique_key"]:" ")
+		{
+		    entry = assignState (entry, false);
+		    string cache = entry["name"]:"";
+		    used = add (used, cache);
+		    if (contains (style, `test))
+		    {
+			if (entry["valid"]:true)
+			{
+			    cache = sformat ("%1 [<a href=\"%1\">%2</a>]",
+				cache, test_link);
+			}
+		    }
+		    else if (contains (style, `test_proposal))
+			if (entry["valid"]:true)
+			{
+			    cache = sformat ("%1 [<a href=\"printer--test_queue_%1\">%2</a>]", cache, test_link);
+			}
+		    {
+
+		    }
+		    if (contains (style, `short))
+		    {
+			found = found + ("" != found ? ", " : "") + cache;
+		    }
+		    else
+		    {
+			string state = "";
+			if (entry["type"]:"yast2" == "yast2"
+			    && contains (style, `state))
+			{
+			    if (! entry["valid"]:true)
+			    {
+				// summary part, printer state
+                                state = " - " + HTML::Colorize (
+                                    _("invalid for current spooler"), "red");
+			    }
+			    else if (! entry["changed"]:false)
+			    {
+				state = " - " + HTML::Colorize (
+				    // summary part, printer state
+				    _("ready"), "green");
+			    }
+			    else
+			    {
+				state = " - " + HTML::Colorize (
+				    // summary part, printer state
+				    _("changed, not yet saved"), "orange");
+			    }
+			}
+			found = found + ("" != found ? "<br>" : "") + cache + state;
+		    }
+		}
+	    });
+	    if ("" == found)
+	    {
+		if (!contains (style, `nonew))
+		    summary = add (summary, Summary::Device (dev, Summary::NotConfigured ()));
+	    }
+	    else
+		summary = add (summary, Summary::Device (dev, contains (style, `short) ? sformat (format, found) : sformat (format + "<br>", found)));
+	});
+//	y2milestone ("Listing others");
+	// other than autodetected printers
+	map<string,string> other_printers = $[];
+	foreach (map<string,any> i, printcap, ``{
+	    string cache = i["name"]:"";
+	    if (!contains (used, cache))
+	    {
+		string type = i["type"]:"yast2";
+		string cfg = "";
+		if (type == "yast2")
+		{
+		    boolean raw = i["raw"]:false;
+		    string model = "";
+		    if (! raw)
+		    {
+			model = i["ppd_info", "manufacturer"]:"" + " "
+			    + i["ppd_info", "model"]:"";
+
+			if (model == " ")
+			{
+			    string ppd = i["ppd"]:"";
+			    map info = i["ppd_info"]:$[];
+			    model = info["manufacturer"]:"" + " "
+				+ info["model"]:"";
+			}
+		    }
+
+		    i = assignState (i, false);
+		    string dev = (raw ?
+			// menu item, %1 is URI
+			sformat (_("Raw queue: %1"), Printerlib::getUriNiceName (i["uri"]:""))
+			:
+			sformat ("%1: %2", model, Printerlib::getUriNiceName (i["uri"]:""))
+		    );
+		    if (contains (style, `test))
+		    {
+			if (i["valid"]:true)
+			{
+			    cache = sformat ("%1 [<a href=\"%1\">%2</a>]",
+				cache, test_link);
+			}
+		    }
+		    if (!contains (style, `short))
+		    {
+			if (nil != cfg && "" != cfg)
+			    cache = cache + "  -  " + cfg;
+
+                        string state = "";
+			if (i["type"]:"yast2" == "yast2"
+			    && contains (style, `state))
+                        {
+                            if (! i["valid"]:true)
+                            {
+                                state = " - " + HTML::Colorize (
+                                    // summary part, printer state
+				    _("invalid for current spooler"), "red");
+			    }
+                            else if (! i["changed"]:false)
+                            {
+                                state = " - " + HTML::Colorize (
+                                    // summary part, printer state
+				    _("ready"), "green");
+                            }
+                            else
+                            {
+                                state = " - " + HTML::Colorize (
+                                    // summary part, printer state
+				    _("changed, not yet saved"), "orange");
+                            }
+                        }
+			cache = cache + state;
+		    }
+		    if (haskey (other_printers, dev))
+			other_printers = add (other_printers, dev, other_printers[dev]:"???" + (contains (style, `short) ? ", " : "<br>") + cache);
+		    else
+			other_printers = add (other_printers, dev, cache);
+		}
+		else
+		{
+		    // This printer was not configured using YaST2. Item in table. SHORT!
+		    if (contains (style, `test))
+			cache = sformat ("%1"/* [<a href=\"%1\">test</a>]"*/, cache);
+		    // menu item part
+		    if (haskey (other_printers, _("- not YaST2 -")))
+			// menu item part
+			other_printers = add (other_printers, _("- not YaST2 -"), other_printers[_("- not YaST2 -")]:"???" + ", " + cache);
+		    else
+			// menu item part
+			other_printers = add (other_printers, _("- not YaST2 -"), cache);
+		}
+	    }
+	});
+	foreach (string k, string v, other_printers, ``{
+	    summary = add (summary, Summary::Device (k, sformat (format, v)));
+	});
+	if (Spooler::Get () == "cups")
+	{
+	    string ipp_listen_modify = "";
+	    if (contains (style, `ipp_listen_modify))
+	    {
+		ipp_listen_modify = sformat (
+		    "<a href=\"change_ipp_listen\">%1</a>",
+		    // link in rich text for summary
+		    _("change"));
+	    }
+	    if (contains (CUPS::cups_server_settings["Browsing"]:["On"], "On"))
+	    {
+		summary = add (summary, "<li>" + sformat (
+		    // part of summary
+		    // %1 is link to change the listenning to CUPS servers
+		    _("Listening to CUPS servers to provide access to remote queues. (%1)"),
+		    ipp_listen_modify) + "</li>");
+		if (! Mode::config () && SuSEFirewall::IsEnabled ())
+		{
+		    map<string,boolean> service_status = $[];
+		    map<string,map<string,boolean> > ifaces_info
+			= SuSEFirewall::GetServices ([ "ipp-udp" ]);
+		    foreach (string s, map<string,boolean> status, ifaces_info,{
+			foreach (string iface, boolean en, status, {
+			    service_status[iface]
+				= service_status[iface]:true && en;
+			});
+		    });
+		    service_status = filter (string iface, boolean en,
+			service_status,
+		    {
+			return en;
+		    });
+		    list<string> allowed_interfaces = maplist (
+			string iface,
+			boolean en,
+			service_status,
+		    {
+			return iface;
+		    });
+		    if (size (allowed_interfaces) == 0)
+		    {
+			summary = add (summary, "<li>" + sformat (
+			    // part of summary
+			    // %1 is link to change the firewall settings
+			    _("Port for listening to remote CUPS servers is closed by firewall. (%1)"), ipp_listen_modify) + "</li>");
+		    }
+		    else
+		    {
+			string il = mergestring (allowed_interfaces, ", ");
+			il = String::EscapeTags (il);
+			summary = add (summary, "<li>" + sformat (
+			    // part of summary, %1 is list of interfaces
+			    // %2 is link to change the firewall settings
+			    _("Port for listening to remote CUPS servers is open on %1. (%2)"), il, ipp_listen_modify) + "</li>");
+		    }
+		}
+	    }
+	}
+	return Summary::DevicesList (summary);
+    }
+    /**
+     * get list of names of deleted printers.
+     * @return List of names.
+     */
+    global define list DeletedNames () ``{
+	return toset (maplist (map i, deleted, ``(i["name"]:"")));
+//	return toset (union (deleted, deleted_classes));
+    }
+
+    /**
+     * Get type of currently selected printer. Just a shortcut
+     * to Printerlib::getUriType (...)
+     * @return printer type
+     */
+    global define string getUriType () ``{
+	return Printerlib::getUriType (printer["uri"]:"");
+    }
+
+    /**
+     * TODO: create test case
+     * @param name printer name
+     * @param uri string queue uri
+     * @param vendor_name string name of the printer vendor (now unused)
+     * @param device_name string name of the printer device
+     * @param forbidden_names list of forbidden names
+     * @return new queue name
+     */
+    global define string generateQueueName (string name, string uri,
+	string vendor_name, string device_name, list<string> forbidden_names)
+    ``{
+	if (name == nil)
+	{
+	    name = "";
+	    string uri_type = Printerlib::getUriType (uri);
+	    if (contains (["lpd", "ipp", "samba", "novell"], uri_type) && Printerlib::getUriRemoteQueue (uri) != "")
+	    {
+	        name = Printerlib::getUriRemoteQueue (uri);
+	        integer i = findlastof (name, "/");
+	            if (i != nil)
+		    name = substring (name, i);
+	        name = filterchars (name,
+		    "_0123456789abcdefghijklmnopqrstuvwxyz");
+		if (size (name) >= 20)
+		    name = substring (name, 0, 20);
+	    }
+	    if (name == "" && device_name != "")
+	    {
+		name = filterchars (
+		    tolower (device_name),
+		    "_0123456789abcdefghijklmnopqrstuvwxyz");
+		if (size (name) >= 20)
+		    name = substring (name, 0, 20);
+	    }
+	if (name == "")
+	    name = "printer";
+	}
+
+	integer i = 1;
+	string original = name;
+	while (contains (forbidden_names, name))
+	{
+	    name = sformat ("%1_%2", original, i);
+	    i = i + 1;
+	}
+	return name;
+    }
+
+    /**
+      * generate class name
+      * @param forbidden_names list of forbidden names
+      * @return new class name
+      */
+    global string generateClassName (list forbidden_names) ``{
+	string name = "class_1";
+	integer i = 2;
+	while (contains (forbidden_names, name))
+	{
+	    name = sformat ("class_%1", i);
+	    i = i + 1;
+	}
+	return name;
+    }
+
+    /**
+     * Prepare detected printer to be configured.
+     * @param det map of detected printer
+     */
+    global define void editDetected (map det) ``{
+	Printerdb::InstallDrivers ();
+	index = -1;
+	y2debug ("Editing printer %1", det);
+	string filename = Printerdb::getAutoPpdFile (
+	    det["vendor_db"]:"", det["device_db"]:"");
+	y2debug ("Filename: %1", filename);
+	printer = $[
+	    "detected" : det,
+	    "unique_key" : det["unique_key"]:"",
+	    "uri" : det["uri"]:"",
+	    "info": det["info"]:"",
+            "location": det["location"]:"",
+            "accepting": true,
+            "state": "idle",
+	    "options" : $[],
+	    "name" : generateQueueName (nil, det["uri"]:"",
+		det["vendor_db"]:"", det["device_db"]:"",
+		getForbiddenNames ()),
+	    "type" : "yast2",
+	];
+	if (filename != "" && filename != nil)
+	{
+	    filename = (string)SCR::Read (.ppd.file.open,
+		[filename, SCR::Read (.target.tmpdir)]);
+	    printer["ppd"] =  filename;
+	    printer["ppd_info"] = Printerdb::PpdInfo (filename);
+	}
+	y2milestone ("Detected printer after editation: %1", printer);
+    }
+    /**
+     * Has the printer been already configured?
+     * @param uk unique key of the printer
+     * @return true or false
+     */
+    global define boolean alreadyConfigured (string uk) ``{
+	boolean was = false;
+	foreach (map i, printcap, ``{
+	    if (!was && i["unique_key"]:".a" == uk)
+		was = true;
+	});
+	return was;
+    }
+
+    /**
+     * Autoconfigure all printers that haven't been configured yet.
+     */
+    global define void Propose () ``{
+	if (! Printerdb::AreDriversInstalled ())
+	    return;
+	// settings are read and hw is detected
+	list<string> forbidden_names = getForbiddenNames ();
+	symbol page_size = Printerlib::getDefaultPaperSize ();
+	foreach (map i, autodetected, ``{
+	    if (!alreadyConfigured (i["unique_key"]:""))
+	    {
+		editDetected (i);
+		string vdb = printer["detected", "vendor_db"]:"";
+		string mdb = printer["detected", "device_db"]:"";
+		string ppd_file = Printerdb::getAutoPpdFile (vdb, mdb);
+		string support = Printerdb::foomatic[vdb, mdb, `support]:"";
+		boolean configure = (support == "full" || support == "partially"
+		    || support == "");
+		if (i["detected", "ptal_manual"]:false)
+		    configure = false;
+		if (ppd_file != nil && configure)
+		{
+		    boolean ok = true;
+		    if (printer["name"]:"" == "")
+		    {
+			printer["name"] = generateQueueName (
+			    nil,
+			    printer["uri"]:"",
+			    printer["det", "vendor_db"]:"",
+			    printer["det", "device_db"]:"",
+			    getForbiddenNames ()
+			);
+		    }
+		    printer["ppd_options"] = printer["ppd_options"]:$[];
+		    foreach (string paperentry, ["ImageableArea",
+			"PageRegion", "PageSize", "PaperDimension"],
+		    ``{
+			if (page_size == `letter)
+			    printer["ppd_options", paperentry] = "Letter";
+			else
+			    printer["ppd_options", paperentry] = "A4";
+		    });
+		    if (ok)
+		    {
+			printer = assignState (printer, true);
+			y2milestone ("Configuring autodetected printer %1",
+			    printer);
+			storePrinter ();
+		    }
+		}
+	    }
+	});
+	assignDefault ();
+    }
+    /**
+     * Check if queue name is OK. Otherwise adds number at the end.
+     * @param name printer name
+     * @param forbidden_names forbidden names
+     * @return new queue name.
+     */
+    global define string adjustQueueName (string name, list forbidden_names) ``{
+	if (!contains (forbidden_names, name))
+	    return name;
+	name = name + "%1";
+	integer i = 1;
+	while (contains (forbidden_names, sformat (name, i)))
+	{
+	    i = i + 1;
+	}
+	return sformat (name, i);
+    }
+    /**
+     * Get the suffix for the queue name.
+     * @param queues list of new queues. Keys are the names of the queues.
+     * @return suffix
+     */
+    global define string getQueueSuffix (list<map<string,any> > queues) ``{
+	integer highest = 0;
+	integer work = 0;
+	foreach (map<string,any> v, queues, ``{
+	    integer end = size (v["name"]:"");
+	    foreach (map<string,any> i, printcap, ``{
+		if (substring (i["name"]:"", 0, end) == v["name"]:"")
+		{
+		    if (regexpmatch (substring (i["name"]:"", end),
+			"^[0-9]*$"))
+		    {
+			string workstr = substring (i["name"]:"", end);
+			if (workstr != "")
+			    work = tointeger (workstr);
+			else
+			    work = 0;
+			if (work + 1 > highest)
+			    highest = work + 1;
+		    }
+		}
+	    });
+	});
+	if (0 == highest)
+	    return "";
+	return sformat ("%1", highest);
+    }
+
+
+}

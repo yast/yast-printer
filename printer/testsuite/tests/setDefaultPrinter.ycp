@@ -1,0 +1,97 @@
+/**
+ * File:
+ *  setDefaultPrinter.ycp
+ *
+ * Module:
+ *  Printer configurator
+ *
+ * Summary:
+ *  Miscelaneous tests.
+ *
+ * Authors:
+ *  Petr Blahos <pblahos@suse.cz>
+ *
+ * $Id$
+ *
+ */
+
+
+{
+    import "Pkg";
+
+    include "testsuite.ycp";
+
+// testedfiles: Printer.ycp
+
+    map I_READ = $[
+	"target" : $[
+	    "size" : -1,
+	    "tmpdir" : "/tmp/",
+	    "yast2" : nil,
+	],
+	"sysconfig" : $[
+	    "console" : $[
+		"CONSOLE_FONT" : "",
+		"CONSOLE_SCREENMAP" : "",
+		"CONSOLE_UNICODEMAP" : "",
+		"CONSOLE_MAGIC" : "",
+		"CONSOLE_ENCODING" : "",
+	    ],
+	    "language" : $[
+		"RC_LANG" : "",
+		"DEFAULT_LANGUAGE" : "",
+	    ],
+	    "personal-firewall" : $[
+		"REJECT_ALL_INCOMING_CONNECTIONS" : nil,
+	    ],
+	],
+	"etc" : $[
+	    "install_inf" : $[
+		"Cmdline" : "",
+		"InstMode" : nil,
+	    ],
+	],
+	"probe" : $[
+	    "architecture" : "i386",
+	    "has_apm" : true,
+	    "has_pcmcia" : false,
+	    "has_smp" : false,
+	    "system" : [],
+	    "memory" : [],
+	    "cpu" : [],
+	    "cdrom" : $[
+		"manual" : [],
+	    ],
+	    "floppy" : $[
+		"manual" : [],
+	    ],
+	    "is_uml" : false,
+	],
+	"product" : $[
+	    "features" : $[
+		"USE_DESKTOP_SCHEDULER" : "0",
+		"ENABLE_AUTOLOGIN" : "0",
+		"EVMS_CONFIG" : "0",
+		"IO_SCHEDULER" : "cfg",
+		"UI_MODE" : "expert",
+	    ],
+	],
+    ];
+    map I_WRITE = $[];
+    map I_EXEC = $[
+        "target" : $[
+            "bash_output" : $[],
+        ],
+    ];
+    TESTSUITE_INIT ([I_READ, I_WRITE, I_EXEC], 0);
+    import "Printer";
+
+    Printer::printcap = [
+	$["name" : "1",],
+	$["name" : "2",],
+	$["name" : "3",],
+	];
+    Printer::selectPrinter (1);
+    Printer::setDefaultPrinter ();
+    DUMP (Printer::default);
+}

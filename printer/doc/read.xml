@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding='ISO-8859-1'?>
+<chapter id = "read">
+  <title>Configuration Reading</title>
+  <para>
+Printer configuration reading has several steps. They are described below.
+  </para>
+  <section id="check_root">
+    <title>Check Root Permission</title>
+    <para>
+To configure printer queues, user must have root permission. To check this
+condition, general <computeroutput>Confirm::MustBeRoot ()</computeroutput>
+function is used.
+    </para>
+  </section>
+  <section id="check_spooler">
+    <title>Check Installed Spooler</title>
+    <para>
+Using the information about the installed packages, YaST determines what
+spooler is installed and checks if the spooler is installed properly.
+Also checks the mode of the spooler (CUPS with daemon running, CUPS with
+client to another server). It doesn't make final decision, just checks
+what is possible. When reading the configuration later, the type of CUPS
+installation is set.
+    </para>
+  </section>
+  <section id="initialize_spooler">
+    <title>Initialize the Spooler</title>
+    <para>
+In this step the spooler is checked if it works properly and also it is
+started. Running CUPS is needed for reading its configuration.
+    </para>
+  </section>
+  <section id="read_firewall">
+    <title>Read Firewall Settings</title>
+    <para>
+Firewall settings are read into the variables of the
+<computeroutput>SuSEFirewall.ycp</computeroutput> module. They are
+used directly from this module.
+    </para>
+  </section>
+  <section id="load_database">
+    <title>Load Database of Drivers</title>
+    <para>
+See <xref linkend="db_reading"/> or the whole chapter regarding the database
+of printers (<xref linkend="database"/>).
+    </para>
+  </section>
+  <section id="read_spooler_setting">
+    <title>Read Settings of the Spooler</title>
+    <para>
+Settings of the spooler means the configuration of the whole spooler.
+It contains configured printer queues and also the system settings of
+the spooler.
+    </para>
+    <section id="cups_system_read">
+      <title>CUPS System Settings</title>
+      <para>
+To read <computeroutput>/etc/cups/cupsd.conf</computeroutput> and
+<computeroutput>/etc/cups/client.conf</computeroutput> YaST uses the
+INI agent.
+      </para>
+    </section>
+    <section id="cups_queues_read">
+      <title>CUPS Queues Settings</title>
+      <para>
+CUPS queues are read via the IPP calls. They provide complete information about
+the queues and the PPD files used for filtering.
+      </para>
+      <para>
+The only exception is for the URIs of Samba and Novell queues. From the
+security reasons the IPP calls don't return complete URI as specified in
+the configuration files, but URI without the user name and password specified.
+Because of this the URI is read directly from
+<computeroutput>/etc/cups/printers.conf</computeroutput> via the INI agent.
+      </para>
+    </section>
+  </section>
+  <section id="autodetect_printers">
+    <title>Autodetect Printers</title>
+    <para>
+Only local printers connected via USB and parallel port are detected.
+The detection of the printer is described per interface type in
+<xref linkend="connection_types"/>.
+    </para>
+  </section>
+</chapter>
