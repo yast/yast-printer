@@ -189,6 +189,15 @@
       * Type of start, true if autodetection
       */
     global boolean detection = false;
+    /**
+      * At least one queue has been tested - because of hw proposal
+      */
+    global boolean tested = false;
+
+    /**
+      * Forbid to read CUPS settings, because it would mean to start CUPS server
+      */
+    global boolean do_not_read_cups = false;
 
 // variables for UI purproses
 
@@ -698,9 +707,9 @@ END { if (!used) print \"ServerName %1\" }
      * @return list of printers
      */
     global define list cupsRead () ``{
-        if (0 == cupsInstallationType ())
+        if (0 == cupsInstallationType () && ! do_not_read_cups)
         {
-	    startCupsServer ();
+	    restartSpoolerIfNeeded (true);
 //	    foomatic = SCR::Read (.target.ycp, "/var/lib/YaST2/ppd_db.ycp");
             list ret = SCR::Read (.cups.printers);
 	    ret = filter (`e, ret, ``(lookup (e, "uri", "") != ""));
