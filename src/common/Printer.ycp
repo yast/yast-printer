@@ -1353,12 +1353,13 @@ Detect your printers?"));
 	    }
 	    else
 	    {
-		if (SCR::Read (.init.scripts.exists, "cups")
+// always adjust CUPS to be run (bugzilla 29413)
+/*		if (SCR::Read (.init.scripts.exists, "cups")
 		    && (size (printcap) > 0
 			|| cups_server_settings["Browsing"]:"On" == "On"))
-		{
+		{*/
 		    Runlevel::ServiceAdjust ("cups", "enable");
-		}
+//		}
 	    }
 	}
 	else
@@ -1395,8 +1396,9 @@ Detect your printers?"));
 	Printerlib::stopServices ();
 	if (! write_only)
 	{
-	    if (size (printcap) > 0 || (spooler == "cups" &&
-		cups_server_settings["Browsing"]:"On" == "On"))
+// always adjust CUPS to be run (bugzilla 29413)
+	    if (size (printcap) > 0 || (spooler == "cups"/* &&
+		cups_server_settings["Browsing"]:"On" == "On"*/))
 	    {
 		if (spooler == "cups")
 		    SCR::Execute (.target.bash, "test -f /etc/init.d/cups && /etc/init.d/cups start");
