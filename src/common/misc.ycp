@@ -22,6 +22,9 @@
     import "Printer";
     import "Printerlib";
     import "Console";
+    import "Popup";
+    import "Mode";
+    import "Label";
 
     include "printer/ppds.ycp";
     include "printer/misc-cups.ycp";
@@ -73,7 +76,7 @@
       */
     global define void DisplayUnavailableAIPopup () ``{
 	// popup message
-	UI::MessagePopup (_("This function is not available during
+	Popup::Message (_("This function is not available during
 preparation for autoinstallation.
 "));
     }
@@ -239,7 +242,7 @@ preparation for autoinstallation.
                     status = SCR::Execute (.target.bash, "/etc/init.d/cups status");
                     if (0 != status)
                     {
-                        UI::MessagePopup (
+                        Popup::Message (
                             // error popup
                             _("CUPS daemon died during initialization"));
 			break;
@@ -367,7 +370,7 @@ preparation for autoinstallation.
 			// label
 			_("Detecting CUPS network server...")),
 			`PushButton (`id (`abort), `opt (`key_F9),
-			    AbortButtonLabel ())));
+			    Label::AbortButton ())));
 
 		}
 		sleep (100);
@@ -464,7 +467,7 @@ preparation for autoinstallation.
 	if (brate == 0)
 	    {
 		// message box
-		UI::MessagePopup (_("The baud rate should not be 0!"));
+		Popup::Message (_("The baud rate should not be 0!"));
 		return false;
 	    }
 	return true;
@@ -487,7 +490,7 @@ preparation for autoinstallation.
 		// message box
 		// the ',' character isn't separator,
 		//  but one of a list of characters
-		UI::MessagePopup (_("Invalid host name. It must be
+		Popup::Message (_("Invalid host name. It must be
 shorter than fifty characters and cannot contain
 :, / or @.
 "));
@@ -513,7 +516,7 @@ shorter than fifty characters and cannot contain
                 // message box
                 // the ',' character isn't separator,
                 //  but one of a list of characters
-                UI::MessagePopup (_("Invalid user name. It cannot 
+                Popup::Message (_("Invalid user name. It cannot 
 contain the characters : , / @.
 "));
             }
@@ -538,7 +541,7 @@ contain the characters : , / @.
                 // message box
                 // the ',' character isn't separator,
                 //  but one of a list of characters
-                UI::MessagePopup (_("Invalid password. It cannot 
+                Popup::Message (_("Invalid password. It cannot 
 contain the characters : , / @.
 "));
             }
@@ -558,7 +561,7 @@ contain the characters : , / @.
 		return true;
 	    }
 	// message box
-	UI::MessagePopup ( _("Please choose which forwarding
+	Popup::Message ( _("Please choose which forwarding
 queue you want to use."));
 	return false;
     };
@@ -660,7 +663,7 @@ output, use the 'Stop!' button.
 When the whole page is printed, press
 'Printout finished'."), pr_command);
 	// push button
-	return UI::AnyQuestionPopup (NoHeadline (), text, _("Printout &finished"), StopButtonLabel (), `focus_yes);
+	return Popup::AnyQuestion (Popup::NoHeadline (), text, _("Printout &finished"), Label::StopButton (), `focus_yes);
     }
 
     /**
@@ -673,7 +676,7 @@ When the whole page is printed, press
 	    {
 		return true;
 	    }
-	abort_now = UI::ReallyAbortPopup (true);
+	abort_now = Popup::ReallyAbort (true);
 	return abort_now;
     }
 
@@ -686,13 +689,13 @@ When the whole page is printed, press
             {
                 return true;
             }
-	return UI::AnyQuestionPopup( NoHeadline(),
+	return Popup::AnyQuestion( Popup::NoHeadline(),
 // question popup
 _("Really leave printer configuration without saving?
 All changes will be lost.
 "),
-                                      YesButtonLabel(),
-                                      NoButtonLabel(),
+                                      Label::YesButton(),
+                                      Label::NoButton(),
                                       `focus_no );
 
     }
@@ -783,7 +786,7 @@ All changes will be lost.
 		if (contains (Printer::getSystemForbiddenNames (), name))
 		{
 		    // message box
-		   UI::MessagePopup (_("Invalid queue name. The name must not be used
+		   Popup::Message (_("Invalid queue name. The name must not be used
 for any file in directory /etc/lpdfilter"));
 		   return false;
 		}
@@ -792,7 +795,7 @@ for any file in directory /etc/lpdfilter"));
 	    else
 	    {
 		// popup
-		 UI::MessagePopup (_("Invalid queue name. It must be
+		 Popup::Message (_("Invalid queue name. It must be
 shorter than 32 characters, start with a letter,
 and only contain 0...9, A...Z, a...z, and _."));
 		return false;
@@ -816,7 +819,7 @@ and only contain 0...9, A...Z, a...z, and _."));
 	else
 	    {
 		// message box
-		UI::MessagePopup (_("Invalid remote queue name. 
+		Popup::Message (_("Invalid remote queue name. 
 It cannot contain the characters @ and :.
 "));
 	    }
@@ -1088,7 +1091,7 @@ It cannot contain the characters @ and :.
 		`Label (msg),
 		getSpoolerItems ("current", true),
 		`HBox (
-		    `HWeight (1, `PushButton (`id (`ok), `opt (`key_F10), OKButtonLabel ())),
+		    `HWeight (1, `PushButton (`id (`ok), `opt (`key_F10), Label::OKButton ())),
 		    `HWeight (1, `PushButton (`id (`cancel), `opt (`key_F9), abort_msg))))
 	);
 	while (true)

@@ -17,11 +17,14 @@
     import "Wizard_hw";
     import "Printerlib";
     import "Printer";
+    import "Wizard";
+    import "Mode";
 
     include "printer/misc.ycp";
     include "printer/misc-cups.ycp";
     include "printer/helps.ycp";
-    include "ui/common_popups.ycp";
+    import "Label";
+    import "Popup";
     include "ui/file_popups.ycp";
     include "wizard/sequencer.ycp";
     include "printer/testpage.ycp";
@@ -43,13 +46,13 @@
 		_("on the remote host."))),
 	    `VSpacing (2),
 	    `Left (`CheckBox (`id (`listen),
-		_("Listen to IPP broadcast packets"),
+		_("Listen to IPP &broadcast packets"),
 		Printer::cups_server_settings["Browsing"]:"On" == "On")),
 	    `VStretch ()
 	), `HStretch ());
 	Wizard::SetContentsButtons (_("Listening to remote CUPS servers"),
-	    contents, getListenIPPHelp (), BackButtonLabel (),
-	    OKButtonLabel ());
+	    contents, getListenIPPHelp (), Label::BackButton (),
+	    Label::OKButton ());
 
 	any ret = nil;
 	while (ret == nil)
@@ -116,8 +119,8 @@ y2error ("CSS: %1", Printer::cups_server_settings);
             );
         // dialog label
         Wizard::SetContentsButtons (_("CUPS server"), contents,
-	    getCupsClientHelp (main), BackButtonLabel (),
-	    main ? FinishButtonLabel () : OKButtonLabel ());
+	    getCupsClientHelp (main), Label::BackButton (),
+	    main ? Label::FinishButton () : Label::OKButton ());
 
         symbol ret = nil;
         while (true)
@@ -137,11 +140,11 @@ y2error ("CSS: %1", Printer::cups_server_settings);
                 Printer::server_hostname = n;
                 if (nil == n || "" == n)
 		    // popup
-		    UI::MessagePopup (_("Enter a valid server name."));
+		    Popup::Message (_("Enter a valid server name."));
 		else
 		{
 		    if (main && Printer::warn_finish && ! Mode::config
-			&& !UI::ContinueCancelPopup (
+			&& !Popup::ContinueCancel (
 			    // popup
 			    _("Now the configuration of the printing 
 system will be saved.")))
@@ -251,7 +254,7 @@ system will be saved.")))
 	);
 
 	// dialog caption
-	Wizard::SetContentsButtons (_("Select PPD file"), contents, getPpdFileHelp (), BackButtonLabel (), NextButtonLabel ());
+	Wizard::SetContentsButtons (_("Select PPD file"), contents, getPpdFileHelp (), Label::BackButton (), Label::NextButton ());
 
 	if (Printer::isFile (file))
 	{
@@ -301,13 +304,13 @@ y2error ("Widgets changed");
 		if (!Printer::isFile (file))
 		{
 		    // popup
-		    UI::MessagePopup (_("Enter a valid file name."));
+		    Popup::Message (_("Enter a valid file name."));
 		    continue;
 		}
 		if (!Printer::isPpd (file))
 		{
 		    // popup
-		    UI::MessagePopup (_("The selected file is not a valid PPD file."));
+		    Popup::Message (_("The selected file is not a valid PPD file."));
 		    continue;
 		}
 		Printer::printer = add (Printer::printer, "vendor_ieee", manuf);
@@ -324,13 +327,13 @@ y2error ("Widgets changed");
 		if (!Printer::isFile (file))
 		{
 		    // popup
-		    UI::MessagePopup (_("Enter a valid file name."));
+		    Popup::Message (_("Enter a valid file name."));
 		    continue;
 		}
 		if (!Printer::isPpd (file))
 		{
 		    // popup
-		    UI::MessagePopup (_("The selected file is not a valid PPD file."));
+		    Popup::Message (_("The selected file is not a valid PPD file."));
 		    continue;
 		}
 		Printer::printer = add (Printer::printer, "ownppd", file);
@@ -438,8 +441,8 @@ y2error ("Got Info 2");
                         // text entry label
                         `TextEntry (`id (`user), _("Or type &user name:"), ""),
                         `HBox (
-                            `PushButton (`id (`ok), `opt (`key_F10), OKButtonLabel()),
-                            `PushButton (`id (`cancel), `opt (`key_F9), CancelButtonLabel ())
+                            `PushButton (`id (`ok), `opt (`key_F10), Label::OKButton()),
+                            `PushButton (`id (`cancel), `opt (`key_F9), Label::CancelButton ())
                             ),
                         `VSpacing (0.3),
 			`HSpacing (40)
@@ -519,11 +522,11 @@ y2error ("Got Info 2");
 		`ComboBox (`id (`type), `opt (`notify),  "", items),
 		// selectionbox label
 		`ReplacePoint (`id( `replace_users), `SelectionBox (`id (`users), _("&Users"), maplist (`i, users, ``{return `item (`id (i), i);}))),
-		`HBox (`PushButton (`id (`add), `opt (`key_F3), AddButtonLabel ()), `PushButton (`id (`delete), `opt (`key_F4), DeleteButtonLabel ()))
+		`HBox (`PushButton (`id (`add), `opt (`key_F3), Label::AddButton ()), `PushButton (`id (`delete), `opt (`key_F4), Label::DeleteButton ()))
 	    );
 
         // dialog label
-        Wizard::SetContentsButtons (_("Restrictions"), contents, getUsersHelp (), BackButtonLabel (), NextButtonLabel ());
+        Wizard::SetContentsButtons (_("Restrictions"), contents, getUsersHelp (), Label::BackButton (), Label::NextButton ());
 
         symbol ret = `type;
         while (true)
@@ -581,7 +584,7 @@ y2error ("Got Info 2");
                         if (0 == size (users))
                             {
                                 // message box
-                                UI::MessagePopup (_("Specify at least one user."));
+                                Popup::Message (_("Specify at least one user."));
                             }
                         else
                             {
@@ -595,7 +598,7 @@ y2error ("Got Info 2");
                         if (0 == size (users))
                             {
                                 // message box
-                                UI::MessagePopup (_("Specify at least one user."));
+                                Popup::Message (_("Specify at least one user."));
                             }
                         else
                             {
@@ -704,7 +707,7 @@ y2error ("Got Info 2");
 
 
         // dialog label
-        Wizard::SetContentsButtons (caption, contents, getStateHelp (), BackButtonLabel (), NextButtonLabel ());
+        Wizard::SetContentsButtons (caption, contents, getStateHelp (), Label::BackButton (), Label::NextButton ());
 
         symbol ret = nil;
         while (true)
@@ -767,8 +770,8 @@ y2error ("Got Info 2");
 	    ) : `VSpacing (0),
 	    `TextEntry (`id (`ad), label, init),
 	    `HBox (
-		`PushButton (`id (`ok), `opt (`default, `key_F10), OKButtonLabel()),
-		`PushButton (`id (`cancel), `opt (`key_F9), CancelButtonLabel())
+		`PushButton (`id (`ok), `opt (`default, `key_F10), Label::OKButton()),
+		`PushButton (`id (`cancel), `opt (`key_F9), Label::CancelButton())
 	    )
 	);
     }
@@ -797,9 +800,9 @@ y2error ("Got Info 2");
                 `ReplacePoint (`id (`replace_acl), `SelectionBox (`id (`acl), _("&Permissions"))),
 		`VSpacing (1),
                 `HBox (
-                    `PushButton (`id (`add), `opt (`key_F3), AddButtonLabel ()),
-                    `PushButton (`id (`edit), `opt (`key_F4), EditButtonLabel ()),
-                    `PushButton (`id (`del), `opt (`key_F5), DeleteButtonLabel ())
+                    `PushButton (`id (`add), `opt (`key_F3), Label::AddButton ()),
+                    `PushButton (`id (`edit), `opt (`key_F4), Label::EditButton ()),
+                    `PushButton (`id (`del), `opt (`key_F5), Label::DeleteButton ())
                 ),
 		show_ignore ? `VSpacing (1) : `VSpacing (0),
 		// push button
@@ -810,7 +813,7 @@ y2error ("Got Info 2");
 	);
 
 	// dialog caption
-        Wizard::SetContentsButtons (sformat (_("CUPS permissions settings for %1"), pth), contents, getCupsAclHelp (show_ignore), BackButtonLabel (), NextButtonLabel ());
+        Wizard::SetContentsButtons (sformat (_("CUPS permissions settings for %1"), pth), contents, getCupsAclHelp (show_ignore), Label::BackButton (), Label::NextButton ());
 	map settings = lookup (Printer::cups_server_settings, pth, $[]);
 	if (lookup (settings, "Order", "Deny,Allow") == "Allow,Deny")
 	    UI::ChangeWidget (`id (`ad), `Value, true);
@@ -945,9 +948,9 @@ y2error ("Got Info 2");
 		// selectionbox label
 		`HBox (`HSpacing (3), `ReplacePoint (`id( `replace_addr), `SelectionBox (`id (`addr), _("Browse Addre&sses"))), `HSpacing (3)),
 		`HBox (
-		    `PushButton (`id (`add), `opt (`key_F3), AddButtonLabel ()),
-		    `PushButton (`id (`edit), `opt (`key_F4), EditButtonLabel ()),
-		    `PushButton (`id (`del), `opt (`key_F5), DeleteButtonLabel ())
+		    `PushButton (`id (`add), `opt (`key_F3), Label::AddButton ()),
+		    `PushButton (`id (`edit), `opt (`key_F4), Label::EditButton ()),
+		    `PushButton (`id (`del), `opt (`key_F5), Label::DeleteButton ())
 		)
 	    )),
 	    `VSpacing (1),
@@ -970,7 +973,7 @@ y2error ("Got Info 2");
 	), `HSpacing (2));
 
 	// dialog caption
-	Wizard::SetContentsButtons (_("CUPS server settings"), contents, getCupsServerHelp (), BackButtonLabel (), NextButtonLabel ());
+	Wizard::SetContentsButtons (_("CUPS server settings"), contents, getCupsServerHelp (), Label::BackButton (), Label::NextButton ());
 
 	list addresses = lookup (Printer::cups_server_settings, "BrowseAddress", []);
 

@@ -21,7 +21,9 @@
     textdomain "printer";
     import "Printer";
     include "printer/texts.ycp";
-    include "ui/common_messages.ycp";
+    import "Label";
+    import "Popup";
+    import "Runlevel";
     include "printer/misc.ycp";
     import "Mode";
 
@@ -307,7 +309,7 @@ ECHO_PID=$!
 		if (probe_success)
 		{
 		    y2milestone ("Restarting detection");
-		    ret = Printerlib::Detect (cups);
+		    ret = Detect (cups);
 		    y2debug ("Redetection done");
 		}
 		else
@@ -345,11 +347,11 @@ ECHO_PID=$!
             DisplayUnavailableAIPopup ();
             return;
         }
-	UI::MessagePopup (sformat (textTestDevice (), 10));
+	Popup::Message (sformat (textTestDevice (), 10));
 	integer tst = SCR::Execute (.target.bash,
 				   sformat ("/usr/lib/YaST2/bin/test_device \"\\rHello, world\\r\\f\" %1 %2", dev, 10));
 
-	UI::MessagePopup (textTestDeviceResult (tst));
+	Popup::Message (textTestDeviceResult (tst));
     };
     /**
       * Test remote queue accessibility if username and password needed
@@ -379,7 +381,7 @@ ECHO_PID=$!
 	    message = message + lookup (test_return, "stdout", "");
 	}
 	UI::CloseDialog ();
-	UI::MessagePopup (message);
+	Popup::Message (message);
     };
 
     /**
@@ -421,7 +423,7 @@ ECHO_PID=$!
 		message = message + lookup (test_return, "stdout", "");
 	    }
 	UI::CloseDialog ();
-	UI::MessagePopup (message);
+	Popup::Message (message);
     }
 
     /**

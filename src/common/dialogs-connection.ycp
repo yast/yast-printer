@@ -16,13 +16,16 @@
     textdomain "printer";
 
     import "Wizard_hw";
+    import "Wizard";
     import "Printerlib";
     import "Printer";
     import "Arch";
+    import "Mode";
 
     include "printer/misc.ycp";
     include "printer/helps-connection.ycp";
-    include "ui/common_popups.ycp";
+    import "Label";
+    import "Popup";
     include "ui/file_popups.ycp";
 
 
@@ -74,7 +77,7 @@
         if (selected == `cups && Printer::spooler != "cups")
         {
 	    // message popup
-            UI::MessagePopup (_("Printing via CUPS network server
+            Popup::Message (_("Printing via CUPS network server
 is not possible if not using CUPS spooler"));
             return nil;
         }
@@ -102,7 +105,7 @@ is not possible if not using CUPS spooler"));
 	if (selected == `cups_client)
 	{
 	    // yes-no popup
-	    if (UI::YesNoPopup (_("If you set up CUPS client-only configuration,
+	    if (Popup::YesNo (_("If you set up CUPS client-only configuration,
 you will not be able to configure local printers
 nor queues of other remote servers.
 All changes you made will be discarded.
@@ -125,7 +128,7 @@ Continue?")))
 	if (selected == `ipp && Printer::spooler != "cups")
 	{
 	    // message popup
-	    UI::MessagePopup (_("Remote IPP queues are not possible
+	    Popup::Message (_("Remote IPP queues are not possible
 if not using CUPS spooler"));
 	    return nil;
 	}
@@ -142,14 +145,14 @@ if not using CUPS spooler"));
 	if (selected == `class && Printer::spooler != "cups")
 	{
 	    // message popup
-	    UI::MessagePopup (_("CUPS classes are not possible
+	    Popup::Message (_("CUPS classes are not possible
 if not using CUPS spooler"));
 	    return nil;
 	}
 	if (selected == `uri && Printer::spooler != "cups")
 	{
 	    // message popup
-	    UI::MessagePopup (_("Other printers set by URI can be configured
+	    Popup::Message (_("Other printers set by URI can be configured
 only if CUPS spooler is used"));
 	    return nil;
 	}
@@ -374,7 +377,7 @@ only if CUPS spooler is used"));
 	);
 	// dialog caption
 	Wizard::SetContentsButtons (caption, contents,
-	    help, BackButtonLabel (), NextButtonLabel ());
+	    help, Label::BackButton (), Label::NextButton ());
 	symbol ret = nil;
 
 	while (ret == nil)
@@ -385,7 +388,7 @@ only if CUPS spooler is used"));
 		ret = UI::QueryWidget (`id (`connection_type), `CurrentButton);
 		if (ret == nil)
 		{
-		    UI::MessagePopup (_("Select printer type"));
+		    Popup::Message (_("Select printer type"));
 		}
 		else
 		{
@@ -496,7 +499,7 @@ only if CUPS spooler is used"));
         {
             if (type == "parallel")
             {
-                UI::MessagePopup (
+                Popup::Message (
 // popup CAUTION: "device" here means /dev/lp0, /dev/lp1, ...
 _("No parallel devices (/dev/lp?) found. It seems
 that your parallel port is not properly configured."));
@@ -504,7 +507,7 @@ that your parallel port is not properly configured."));
             }
             else if (type == "usb")
             {
-                UI::MessagePopup (
+                Popup::Message (
 // popup CAUTION: "device" here means /dev/usb/lp0, /dev/usb/lp1, ...
 _("No USB devices (/dev/usb/lp?) found. It seems
 that your USB bus is not properly configured."));
@@ -512,7 +515,7 @@ that your USB bus is not properly configured."));
             }
             else if (type == "serial")
             {
-                UI::MessagePopup (
+                Popup::Message (
 // popup CAUTION: "device" here means /dev/ttyS0, /dev/ttyS1, ..
 _("No serial devices (/dev/ttyS?) found. It seems
 that your serial ports are not properly configured."));
@@ -586,13 +589,13 @@ that your serial ports are not properly configured."));
             `VStretch ()
         );
         Wizard::SetContentsButtons (getAskDeviceLabel (type), contents,
-	    getAskDeviceHelp (type), BackButtonLabel (), NextButtonLabel ());
+	    getAskDeviceHelp (type), Label::BackButton (), Label::NextButton ());
 
         if (problematic_usb)
         {
             if (Printer::conf_detected)
             {
-                UI::MessagePopup (_("Warning!
+                Popup::Message (_("Warning!
 
 USB printer detection found at least two printers
 that have the same identification.
@@ -602,7 +605,7 @@ actually selected."));
             }
             else
             {
-                UI::MessagePopup (_("Warning!
+                Popup::Message (_("Warning!
 
 USB printer detection found at least two printers
 that have the same identification.
@@ -863,7 +866,7 @@ actually selected."));
 
         // button label
         Wizard::SetContentsButtons (getAskDeviceLabel (type), contents,
-	    getAskRemoteHelp (type), BackButtonLabel (), NextButtonLabel ());
+	    getAskRemoteHelp (type), Label::BackButton (), Label::NextButton ());
 
         if (type != "socket")
             UI::ChangeWidget (`id (`queueent), `Value, queue);
@@ -1045,7 +1048,7 @@ actually selected."));
             );
         // dialog label
         Wizard::SetContentsButtons (_("Printing to pipe"), contents,
-            getPipeHelp (), BackButtonLabel (), NextButtonLabel ());
+            getPipeHelp (), Label::BackButton (), Label::NextButton ());
 
         symbol ret = nil;
         while (true)
@@ -1068,7 +1071,7 @@ actually selected."));
                 }
                 else
                 {
-                    UI::MessagePopup (
+                    Popup::Message (
                     // message box
                         _("Enter full path of the program to which to print through pipe."));
                 }
@@ -1118,7 +1121,7 @@ actually selected."));
         );
         // dialog caption
         Wizard::SetContentsButtons (_("Printer device"), contents,
-		getUriHelp (), BackButtonLabel (), NextButtonLabel ());
+		getUriHelp (), Label::BackButton (), Label::NextButton ());
 
         symbol ret = nil;
         while (true)
@@ -1164,7 +1167,7 @@ actually selected."));
             `VSpacing (2),
             `VStretch ()
           ),
-            textEditParallelPort (), BackButtonLabel (), OKButtonLabel ());
+            textEditParallelPort (), Label::BackButton (), Label::OKButton ());
         symbol r = UI::UserInput ();
         if (`next == r)
         {
@@ -1211,7 +1214,7 @@ actually selected."));
 
         // dialog caption
         Wizard::SetContentsButtons (_("Serial port settings"), contents,
-	    textEditSerialPort (), BackButtonLabel (), NextButtonLabel ());
+	    textEditSerialPort (), Label::BackButton (), Label::NextButton ());
         symbol r = nil;
         while (r != `back && r != `abort)
         {

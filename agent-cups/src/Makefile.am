@@ -8,7 +8,7 @@ liby2ag_cups_la_LIBADD = -lcups -lz
 libpy2ag_cups_la_LIBADD = -lcups -lz
 
 plugin_LTLIBRARIES = libpy2ag_cups.la
-lib_LTLIBRARIES = liby2ag_cups.la
+noinst_LTLIBRARIES = liby2ag_cups.la
 
 liby2ag_cups_la_SOURCES = 	\
 	CupsAgent.cc		\

@@ -35,7 +35,10 @@
     include "printer/misc.ycp";
     include "printer/dialogs.ycp";
     include "printer/helps.ycp";
-    include "ui/common_popups.ycp";
+    import "Label";
+    import "Popup";
+    import "Runlevel";
+    import "Printerlib";
 
     import "Crash";
 
@@ -82,12 +85,12 @@
     // make sure we are root
     if (!Printerlib::amIRoot () && !test_mode)
     {
-        if (! UI::AnyQuestionPopup ("",
+        if (! Popup::AnyQuestion ("",
 	    // popup
 	    _("You must be root to run the printer configuration tool. 
  If you continue, you will not be able to save your settings. 
  Continue?"),
-	    YesButtonLabel (), NoButtonLabel (), `focus_no))
+	    Label::YesButton (), Label::NoButton (), `focus_no))
 	{
             CloseDialog ();
             return `back;
@@ -188,11 +191,11 @@
 		if (lpdaemon != 0)
 		{
 		    // message box
-		    if (!UI::AnyQuestionPopup (
-			UI::ErrorMsg (),
+		    if (!Popup::AnyQuestion (
+			Label::ErrorMsg (),
 			// error popup
 			_("Unable to restart the lpd daemon."),
-			UI::ContinueButtonLabel (), UI::AbortButtonLabel (), `focus_no))
+			Label::ContinueButton (), Label::AbortButton (), `focus_no))
 		    {
 			UI::CloseDialog ();
 			return `back;
@@ -212,7 +215,7 @@
 	if (SCR::Execute (.target.bash, "/usr/bin/which gs") != 0)
 	{
 	    // message box
-	    UI::MessagePopup (_("It seems that you do not have GhostScript
+	    Popup::Message (_("It seems that you do not have GhostScript
 installed on your computer. It is needed
 to print."));
 	}
@@ -225,7 +228,7 @@ to print."));
 	    if (!Printer::Read ())
 	    {
 		// message box
-		UI::MessagePopup (_("ERROR: Unable to read
+		Popup::Message (_("ERROR: Unable to read
 the current configuration."));
 		return `back;
 	    }
@@ -280,7 +283,7 @@ Detect your printers?"));
 		SCR::Execute (.target.bash, "/sbin/SuSEconfig -quick --nonewpackage --module profiles");
 		Runlevel::RunInitScript ("lpd", "restart");
 		// popup
-		UI::MessagePopup (
+		Popup::Message (
 		    _("The new configuration \nwas stored successfully."));
 	   }
 	}
