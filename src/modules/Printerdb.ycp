@@ -329,38 +329,61 @@ of printers.
             }
         });
 
-        list<string> result = [];
-
         y2debug ("Recom: %1, other: %2", recom, other);
 	y2debug ("Downloaded: Recom: %1, other: %2", downrec, downoth);
 	y2debug ("Provided by vendor: %1", vend);
 
-        foreach (string i, preferred, ``{
-            result = (list<string>)merge (result, downrec[i]:[]);
-        });
-        result = (list<string>)merge (result, downrec["other"]:[]);
+	list<string> drec = [];
+	list<string> doth = [];
+	list<string> vnd = [];
+	list<string> rec = [];
+	list<string> oth = [];
 
         foreach (string i, preferred, ``{
-            result = (list<string>)merge (result, downoth[i]:[]);
+            drec = (list<string>)merge (drec, downrec[i]:[]);
         });
-        result = (list<string>)merge (result, downoth["other"]:[]);
+        drec = (list<string>)merge (drec, downrec["other"]:[]);
 
         foreach (string i, preferred, ``{
-            result = (list<string>)merge (result, vend[i]:[]);
+            doth = (list<string>)merge (doth, downoth[i]:[]);
         });
-        result = (list<string>)merge (result, vend["other"]:[]);
+        doth = (list<string>)merge (doth, downoth["other"]:[]);
 
         foreach (string i, preferred, ``{
-            result = (list<string>)merge (result, recom[i]:[]);
+            vnd = (list<string>)merge (vnd, vend[i]:[]);
         });
-        result = (list<string>)merge (result, recom["other"]:[]);
+        vnd = (list<string>)merge (vnd, vend["other"]:[]);
 
         foreach (string i, preferred, ``{
-            result = (list<string>)merge (result, other[i]:[]);
+            rec = (list<string>)merge (rec, recom[i]:[]);
         });
-        result = (list<string>)merge (result, other["other"]:[]);
+        rec = (list<string>)merge (rec, recom["other"]:[]);
 
-        y2debug ("Sorted PPD files: %1", result);
+        foreach (string i, preferred, ``{
+            oth = (list<string>)merge (oth, other[i]:[]);
+        });
+        oth = (list<string>)merge (oth, other["other"]:[]);
+
+        list<string> result = [];
+
+	list<string> rec_ps = (list<string>)merge (rec, drec);
+	rec_ps = filter (string r, rec_ps, ``(! issubstring (r, "Postscript")));
+
+	if (0 != size (rec_ps))
+	{
+	    if (size (vnd) > 0)
+		y2milestone ("Prefering Foomatic to manufacurer's");
+	    result = (list<string>)flatten ([drec, doth, rec, vnd, oth]);
+	}
+	else
+	{
+	    if (size (vnd) > 0)
+		y2milestone ("Prefering manufacturer's to Foomatic");
+	    result = (list<string>)flatten ([drec, doth, vnd, rec, oth]);
+	}
+
+        y2milestone ("Sorted PPD files for %1:%2: %3",
+	    vendor_db, device_db, result);
         return result;
     }
 
