@@ -13,7 +13,7 @@ main (int argc, char*argv[])
 	}
 
     argv++;
-    y2setLogfileName ("-");
+    set_log_filename ("-");
 
     {
 	PPD ppd (argv[0], argv[1]);
