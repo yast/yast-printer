@@ -29,6 +29,12 @@
     include "printer/dialogs-lprng.ycp";
 
 
+    // popup
+    string __tmp__ = _("Detecting CUPS server...");
+
+    // popup
+    __tmp__ = _("Looking for CUPS server...");
+
     /**
       * for temporary storing of printer model
       * because of `back button
@@ -42,7 +48,7 @@
       */
     global define boolean AskInstallPackages (list packages) ``{
 	// yes-no popup, %1 is list of package names
-	string popup = sformat (_("For the selected function, the  additional packages
+	string popup = sformat (_("For the selected function, the additional packages
 %1
 must be installed.
 
@@ -160,6 +166,7 @@ Install them now?
      * @return symbol `back, `next, `abort
      */
     global define symbol runDeviceDialog (string type) ``{
+	boolean problematic_usb = false;
 	string uri = lookup (Printer::printer, "tmpuri", "");
 	if ("" == uri)
 	    uri = lookup (Printer::printer, "uri", "parallel");
@@ -183,7 +190,26 @@ Install them now?
 	    devices = [];
 
 	if (type == "usb" && Printer::spooler == "cups")
+	{
+	    Printerlib::setCupsUsbDevicesInfo ();
 	    devices = Printerlib::getCupsUsbDevices ();
+	    if (size (devices) != size (toset (devices)))
+	    {
+		problematic_usb = true;
+		list problematic = Printerlib::getProblematicCupsUsbDevices ();
+	        devices = maplist (`d, Printerlib::cups_usb_devices, ``{
+		    if (contains (problematic, d))
+		    if (true)
+		    {
+			return d[2]:"";
+		    }
+		    else
+		    {
+			return d[0]:"";
+		    }
+		});
+	    }
+	}
 
 	if (size (devices) == 0)
 	{
@@ -225,8 +251,6 @@ that your parallel port is not properly configured.
 	if (device == "")
 	    device = select (devices, 0, "");
 	list device_val = getDevicesItems (devices, device);
-//	if (type == "usb")
-//	    device_val = merge (Printerlib::getCupsUsbDevices (), device_val);
 	term details = `VBox (
 	    // PushButton
 	    `HBox (`HStretch (), `PushButton (`id (`details), _("&Other...")))
@@ -271,6 +295,25 @@ that your parallel port is not properly configured.
 		   `VStretch ()
 		);
 	Wizard::SetContentsButtons (getAskDeviceLabel (type), contents, getAskDeviceHelp (type), BackButtonLabel (), NextButtonLabel ());
+
+	if (problematic_usb)
+		// message popup
+	    UI::MessagePopup (_("Warning!
+
+USB printer detection results at least two printers
+which have the same identification.
+Do the \"Test\" to make sure which printer is
+actually selected."));
+
+	// message popup
+	string tmp = _("Warning!
+
+USB printer detection results at least two printers
+which have the same identification.
+You must select and configure them manually.
+Do the \"Test\" to make sure which printer is
+actually selected.");
+
 
 	symbol ret = nil;
 	repeat {
@@ -903,12 +946,12 @@ that your parallel port is not properly configured.
       */
     global define void DisplayPrinterPopup (map info, string vdb, string mdb)``{
 
-                    // richtext
                     string manuf_info = lookup (info, "vendor",
+			// richtext
                         _("<P>No information available.</P>"));
-                    // richtext
                     string model_info = lookup (info, "printer",
                         lookup (info, "config",
+			// richtext
                         _("<P>No information available.</P>")));
                     // Manufacturer: ...info... Model: ...info...  1/2
                     string info_text = _("<P><B>Manufacturer:</B></P>")
@@ -1092,9 +1135,25 @@ with the SuSE database of printers only.</B></P>
 		    y2debug ("To %1", model_db);
 		    info = $[];
 		    string vc
-			 = Printer::foomatic[manuf_db,model_db, `vcomment]:"";
+			= Printer::foomatic[manuf_db,model_db, `vcomment]:"";
+		    if (vc != "")
+		    {
+			y2error ("original vc: %1", vc);
+			vc = replaceAll (vc, "\\n", "\n");
+			y2error ("Replaced vc: %1", vc);
+			vc = SCR::Read (.printerdb.translate, vc);
+			y2error ("Translated vc: %1", vc);
+		    }
 		    string mc
 			= Printer::foomatic[manuf_db,model_db, `mcomment]:"";
+		    if (mc != "")
+		    {
+			y2error ("original mc: %1", mc);
+                        mc = replaceAll (mc, "\\n", "\n");
+                        y2error ("Replaced mc: %1", mc);
+                        mc = SCR::Read (.printerdb.translate, mc);
+                        y2error ("Translated mc: %1", mc);
+		    }
 		    integer type
 			= Printer::foomatic[manuf_db,model_db, `support]:1;
 		    if (vc != "")
@@ -1137,6 +1196,7 @@ with the SuSE database of printers only.</B></P>
 	    {
 		// popup
 		UI::MessagePopup (_("Select a printer model."));
+		UI::SetFocus (`id (`modelsel));
 		ret = nil;
 	    }
 	    if (ret == `next && info_instead_next)
@@ -2063,18 +2123,24 @@ with the SuSE database of printers only.</B></P>
 		&& o["mame"]:"" != "PaperDimension"));
 	    optlist = add (optlist, $[
 		"current" : "3",
+			// list item
 		"gui" : _("Orientation"),
 		"name" : "orientation-requested",
 		"type" : "PickOne",
 		"valorder" : ["3", "4", "5", "6"],
+				// list item
 		"values" : $["3" : _("Portrait"),
+				// list item
 			"4" : _("Landscape"),
+				// list item
 			"5" : _("Reverse"),
+				// list item
 			"6" : _("Reverse portrait"),
 		],
 	    ]);
 	    optlist = add (optlist, $[
 		"current" : "1",
+			// list item
 		"gui" : _("Pages per sheet"),
 		"name" : "number-up",
 		"type" : "pick_one",
@@ -2122,15 +2188,10 @@ with the SuSE database of printers only.</B></P>
 		if (foomatic)
 		{
 		    string option = UI::QueryWidget (`id (`opts), `CurrentItem);
-//		    map options = SCR::Read (.ppd.file.options, [filename, ""]);
-//		    list optlist = options["data"]:[];
 		    string ppd_default = "";
-y2error ("Switched to %1", option);
 		    foreach (`i, optlist, ``{
-y2error ("Checking against %1", i["name"]:"");
 			if (i["name"]:"" == option)
 			{
-y2error ("Test passed");
 			    vals = maplist (`k, i["valorder"]:$[], ``(
 				`item (`id (k), i["values", k]:k)
 			    ));
@@ -2618,6 +2679,11 @@ with a prefilled name?
 		    Printer::spooler == "cups" && 0 == Printer::cupsInstallationType () ? `VStretch () :`VSpacing (0),
 		    // pushbutton
 		    Printer::spooler == "cups" && 0 == Printer::cupsInstallationType () ? `PushButton (`id (`cupsd), `opt (`hstretch), _("CUPS server se&ttings")) : `VSpacing (0),
+                    Printer::spooler == "cups" && 0 == Printer::cupsInstallationType () ? `VStretch () :`VSpacing (0),
+                    // pushbutton
+                    Printer::spooler == "cups" && 0 == Printer::cupsInstallationType () ? `PushButton (`id (`cupsusb), `opt (`hstretch), _("CUPS &USB devices settings")) : `VSpacing (0),
+
+
 		    `VStretch ()
 		    ), `HWeight (999, `HStretch ()))
 		),
@@ -2677,9 +2743,16 @@ All your changes will be lost.
 	    else if (`next == ret)
 		break;
 	    else if (`abort == ret)
-		break;
+	    {
+		if (reallyAbort ())
+		    break;
+	    }
 	    else if (`cupsd == ret)
 		break;
+	    else if (`cupsusb == ret)
+	    {
+		break;
+	    }
 	    ret = nil;
 
 	}
@@ -2740,15 +2813,69 @@ the current configuration.
 	}
 	return ret;
     }
+
+    /**
+      * Dialog for choosing what kind of devices to use
+      * @return wizard sequencer symbol
+      */
+    global define symbol runCupsUsbDeviceTypeDialog () ``{
+        term contents = `HBox (`HStretch (), `VBox (
+            `VStretch (),
+            `RadioButtonGroup (`id (`devtype),
+			// frame
+                `Frame (_("Use CUPS-like USB device names"),`HBox (
+                    `HSpacing (3),
+                    `VBox (
+                        `VSpacing (3),
+				// radiobutton
+                        `Left (`RadioButton (`id (`always), _("&Always"))),
+                        `Left (`RadioButton (`id (`serial),
+				// radiobutton
+                            _("If &serial number is known"))),
+			// radiobutton
+                        `Left (`RadioButton (`id (`never), _("&Never"))),
+                        `VSpacing (3)
+                    ),
+                    `HSpacing (3)
+                )
+            )),
+            `VStretch ()
+        ), `HStretch ());
+	// dialog caption
+	Wizard::SetContentsButtons (_("CUPS USB Device Name Type"), contents,
+	    getCupsUsbDeviceTypeHelp (), BackButtonLabel (), OKButtonLabel ());
+
+	UI::ChangeWidget (`id (`devtype), `CurrentButton,
+	    Printer::cups_usb_dev_names);
+	ret = nil;
+	while (ret == nil)
+	{
+	    ret = UI::UserInput ();
+	    if (ret == `abort)
+	    {
+		if (! reallyAbort ())
+		    ret = nil;
+	    }
+	    else if (ret == `next)
+	    {
+		Printer::cups_usb_dev_names
+		    = UI::QueryWidget (`id (`devtype), `CurrentButton);
+	    }
+	}
+	return ret;
+    }
+
+
     /**
      * Confirmation of an autodetected parallel/USB printer. User can skip it or
      * manually configure.
      * @return symbol for ws
      */
     global define symbol runProbedPrinterDialog () ``{
+	y2debug ("Configuring printer %1", Printer::printer);
 	if (Printer::confmode == `adm)
 	{
-	    y2milestone ("adm mode, going connection setting");
+	    y2debug ("adm mode, going connection setting");
 	    return `connection;
 	}
 	// state variables
@@ -2777,12 +2904,6 @@ the current configuration.
 	{
 	    devsel_needed = true;
 	}
-
-
-/*	foreach (`i, Printer::printcap, ``{
-	    if ("" != lookup (i, "unique_key", "") && lookup (Printer::printer,"unique_key", "") == lookup (i, "unique_key", ""))
-		already_configured = true;
-	});*/
 
 	if (Printer::db == `foomatic)
 	{
@@ -2817,80 +2938,27 @@ the current configuration.
 		    ]);
 	}
 
-	y2milestone ("Printer info: %1", info);
-
-/*	term contents =
-	    `VBox (
-		`VSpacing (1),
-		// in-dialog label 1/2
-		// Configuring printer:
-		//    HP Laser Jet
-		// on device:
-		//    First parallel port
-		`Label (`opt (`hstretch), _("Configuring printer:")),
-		`HBox (`HSpacing (5), `Label (`opt (`hstretch), SCR::Read (.printerdb.printername,
-			    [lookup (Printer::printer, "vendor", ""), lookup (Printer::printer, "device", ""),
-			     lookup (Printer::printer, "vendor_ieee", nil), lookup (Printer::printer, "device_ieee", nil) ]))),
-		// in-dialog label 2/2
-		// Configuring printer:
-		//    HP Laser Jet
-		// on device:
-		//    First parallel port
-		`Label (`opt (`hstretch), _("on device:")),
-		`HBox (`HSpacing (5), `Label (`opt (`hstretch), Printerlib::getDeviceNiceName (device))),
-		`VSpacing (1),
-		`HBox (`HSpacing (5), `RadioButtonGroup (
-		    `id (`action),
-		    `VBox (
-			// radio button label
-			`RadioButton (`id (`quick), `opt (`hstretch), _("&Quick automatic setup"), 0 == lookup (info, "type", 2) && !already_configured),
-			`VSpacing (0.3),
-			// radio button label
-			`RadioButton (`id (`auto), `opt (`hstretch), _("Normal &setup with option to change values"), 1 == lookup (info, "type", 2) || already_configured),
-			`VSpacing (0.3),
-			// radio button label
-			`RadioButton (`id (`manual), `opt (`hstretch), _("Ad&vanced setup with model selection"), 2 == lookup (info, "type", 2))
-			)
-		    )),
-		`VStretch ()
-		);
-
-	// dialog box label
-	Wizard::SetContentsButtons (_("Autodetected printer"), contents, getProbedPrinterHelp (2 != lookup (info, "type", 2)), BackButtonLabel (), NextButtonLabel ());
-	Wizard::RestoreBackButton ();
-	if (`none != runProbedPrinterDlg__current)
-	{
-// no need to change behaviour, just to use the previous
-	    UI::ChangeWidget (`id (`action), `CurrentButton, runProbedPrinterDlg__current);
-	}
-*/
+	y2debug ("Printer info: %1", info);
 
 //	}
 	if (2 == lookup (info, "type", 2) || 1 == lookup (info, "type", 2))
 	{
 	    if (2 == lookup (info, "type", 2))
 	    {
-//		UI::ChangeWidget (`id (`auto), `Enabled, false);
 		modelsel_needed = true;
 	    }
 	    // problematic support
-	    y2milestone ("Queue problematic, using configsel mode");
+	    y2debug ("Queue problematic, using configsel mode");
 	    configsel_needed = true;
-//	    UI::ChangeWidget (`id (`quick), `Enabled, false);
 
 	    string comment = lookup (info, "printer", lookup (info, "config", ""));
 	    if (comment!="")
 	    {
-		// label of message box
-//		UI::LongTextPopup (WarningMsg (), `RichText (comment), 40, 10);
 	    }
 	}
 	//if no spooler installed, disable quick
 	if (Printer::spooler != "cups" && Printer::spooler != "lprng")
 	{
-// FIXME: Using differnet database - don't know what to do!!!!!
-//	    UI::ChangeWidget (`id (`quick), `Enabled, false);
-//	    UI::ChangeWidget (`id (`action), `CurrentButton, `auto);
 	}
 
 	if (Printer::db == `foomatic)
@@ -2902,9 +2970,6 @@ the current configuration.
 	    if (size (PPDs) < 1)
 	    {
 		// No PPD file available
-//		UI::ChangeWidget (`id (`quick), `Enabled, false);
-//		UI::ChangeWidget (`id (`auto), `Enabled, false);
-//		UI::ChangeWidget (`id (`action), `CurrentButton, `manual);
 		modelsel_needed = true;
 	    }
 	}
@@ -2942,16 +3007,12 @@ the current configuration.
 	  });
 	  if (! (all_cups && all_lprng))
 	  {
-//	    UI::ChangeWidget (`id (`quick), `Enabled, false);
-//	    UI::ChangeWidget (`id (`action), `CurrentButton, `auto);
 	    configsel_needed = true;
 	  }
 	  if (Printer::spooler == "cups")
 	  {
 	    if (!any_cups)
 	    {
-//		UI::ChangeWidget (`id (`auto), `Enabled, false);
-//		UI::ChangeWidget (`id (`action), `CurrentButton, `manual);
 		manufsel_needed = true;
 	    }
 	  }
@@ -2959,32 +3020,10 @@ the current configuration.
 	  {
 	    if (!any_lprng)
 	    {
-//		UI::ChangeWidget (`id (`auto), `Enabled, false);
-//		UI::ChangeWidget (`id (`action), `CurrentButton, `manual);
 		modelsel_needed = true;
 	    }
 	  }
 	}
-/*	symbol ret = nil;
-	while (true)
-	{
-	    ret = UI::UserInput ();
-
-	    if (`abort == ret || `cancel == ret)
-	    {
-		ret = `abort;
-		if (reallyAbort ())
-		{
-		    break;
-		}
-	    }
-	    else
-	    {
-		break;
-	    }
-	}
-	if (`next == ret)
-	{*/
 /*	y2error ("Exists: %1, CfgNeed: %2, ModelNeed: %3, DeviceNeed: %4",
 	        already_configured,
 	        modelsel_needed,
@@ -2993,34 +3032,39 @@ the current configuration.
 */
 	    if (already_configured)
 	    {
-		y2milestone ("Already configured queue");
+		y2debug ("Already configured queue");
 		ret = `queue;
 	    }
 	    else if (devsel_needed)
 	    {
-		y2milestone ("Setting printer connection");
+		y2debug ("Setting printer connection");
 		ret = `connection;
 	    }
 	    else if (modelsel_needed)
 	    {
-		y2milestone ("Running model selection");
+		y2debug ("Running model selection");
 		Printer::printer["modelset_required"] = true;
 		ret = `model;
 	    }
 	    else if (configsel_needed)
 	    {
-		y2milestone ("Starting single queue wz");
+		y2debug ("Starting single queue wz");
 		ret = `queue;
 	    }
 	    else
 	    {
-		y2milestone ("Going quick configuration");
+		y2debug ("Going quick configuration");
 		ret = `quick;
 	    }
-
-//	    runProbedPrinterDlg__current = UI::QueryWidget (`id (`action), `CurrentButton);
-//	    ret = runProbedPrinterDlg__current;
-//	}
+	    if (Printer::spooler == "cups")
+	    {
+		Printerlib::setCupsUsbDevicesInfo ();
+		list problematic = Printerlib::getProblematicCupsUsbDevices ();
+		string device = Printerlib::getUriDevice (
+		    Printer::printer["uri"]:"");
+		if (contains (problematic, device))
+		    ret = `connection;
+	    }
 	return ret;
     }
 
@@ -3133,7 +3177,7 @@ the current configuration.
 	    string vendor = Printer::printer["vendor_db"]:"";
 	    string model = Printer::printer["device_db"]:"";
 	    string config = Printer::printer["config"]:nil;
-	    y2milestone ("Gettinq queues for %1", Printer::printer);
+	    y2debug ("Gettinq queues for %1", Printer::printer);
 	    if (Printer::printer["ownppd"]:"" != "")
 	    {
 		model = Printer::printer["ownppd"]:"";
@@ -3169,7 +3213,6 @@ the current configuration.
 	}
 	else
 	{
-		y2error ("New queues: %1", Printer::printcap);
 	    queues = Printer::printcap;
 	    Printer::printcap = printcap_backup;
 	    printcap_backup = nil;
@@ -3704,10 +3747,10 @@ All your changes will be lost.
       * @return symbol for wizard sequencer
       */
     global define symbol queueConfType () ``{
-	y2milestone ("Confmode is %1, utirype %2", Printer::confmode, Printer::getUriType ());
+	y2debug ("Confmode is %1, utirype %2", Printer::confmode, Printer::getUriType ());
 	if ("prefilter" == Printer::getUriType ())
 	{
-	    y2milestone ("Prefilter queue, going single");
+	    y2debug ("Prefilter queue, going single");
 	    return `single;
 	}
 	// FIXME if will be needed
@@ -3788,6 +3831,7 @@ All your changes will be lost.
 //	    "detected_wz" :	``(WizardSequencer (getAliases (), detected_sequence)),
 	    "add_queue_wz":	``(WizardSequencer (getAliases (), add_queue_sequence)),
 	    "single_printer_wz":``(WizardSequencer (getAliases (), single_printer_sequence)),
+	    "cups_usb" :	``(runCupsUsbDeviceTypeDialog ()),
 	    ];
     }
     /**
@@ -3869,10 +3913,15 @@ All your changes will be lost.
 		`this : "advanced",
 		`cups : "type",
 		`cupsd : "cupsd",
+		`cupsusb : "cups_usb",
 		`reinstall : `reinstall,
 		`switch : `switch,
 		`abort : `abort,
 		],
+	    "cups_usb" : $[
+		`next : "advanced",
+		`abort : `abort,
+	    ],
 	    "cupsd" : $[
 		`next : "advanced",
 		`abort : `abort,

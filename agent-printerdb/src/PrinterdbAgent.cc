@@ -379,6 +379,20 @@ YCPList PrinterdbAgent::Vendors (string&preselect, string&pre_ieee)
 YCPValue PrinterdbAgent::Read(const YCPPath &path, const YCPValue& arg)
 {
     /**
+     * @builtin Read (.translate, "test_to_translate")
+     */
+    if (path->component_str (0) == "translate")
+    {
+	if (! arg.isNull () && arg->isString ())
+	{
+	    y2error ("Translating %s to %s", arg->asString ()->value_cstr (),
+		_(arg->asString ()->value_cstr ()));
+	    return YCPString (_(arg->asString ()->value_cstr ()));
+	}
+	else
+	    return YCPError ("Incorrect argument for Read (.translate)");
+    }
+    /**
      * @builtin Read (.deep_check) --> Boolean
      * Checks if there are conflicts between options identifiers used in
      * config. See description of keyword <tt>As</tt> for explanation.

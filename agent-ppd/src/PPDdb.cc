@@ -29,6 +29,8 @@
 #include <map>
 #include <string>
 
+bool verbose = false;
+
 /*
     TODO
     - fix all FIXME
@@ -177,14 +179,18 @@ bool PPD::changed(int *count) {
  * Transform vendor name from PPD file/detection to key in database
  */
 string PPD::getVendorId (string vendor) {
+//    if (verbose) y2error ("Sourcve vendor: %s", vendor.c_str ());
     vendor = strupper (vendor);
+//    if (verbose) y2error ("Uppes: %s", vendor.c_str ());
     if(vendors_map.find(vendor)!=vendors_map.end()) {
+//	if (verbose) y2error ("Found, using %s", vendors_map[vendor].c_str ());
 	vendor = vendors_map[vendor];
     }
     else
     {
 	vendor = filternotchars (vendor, "/. -<>");
     }
+//    y2error ("Result: %s", vendor.c_str ());
     return vendor;
 }
 
@@ -499,7 +505,10 @@ void* PPD::createdbThread() {
 	    vendinfo = models_info[it1->first];
         F(f1) fprintf(file,str);
         fprintf(file,"\n  \"%s\" : $[\n", it1->first.c_str());
-	fprintf(file,"    `label : \"%s\",\n", it1->first.c_str());
+	string label = it1->first;
+	if (label == "UNKNOWN")
+	    label = "UNKNOWN MANUFACTURER";
+	fprintf(file,"    `label : \"%s\",\n", label.c_str());
         PPD::Models::const_iterator it2 = (*it1).second.begin();
         for(f2 = true; it2 != (*it1).second.end(); it2++) {
             F(f2) fprintf(file,str);
