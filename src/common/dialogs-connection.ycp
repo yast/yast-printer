@@ -554,10 +554,18 @@ only if a CUPS spooler is used
         else
             devices = [];
 
+	map<string,string> cups_devices_mapping = $[];
+
         if (type == "usb" && Spooler::Get () == "cups")
         {
             Printerlib::setCupsUsbDevicesInfo ();
             devices = Printerlib::getCupsUsbDevices ();
+	    integer index = -1;
+	    foreach (string d, devices, {
+		index = index + 1;
+		if (regexpmatch (d, "^\/\/.*"))
+		    cups_devices_mapping[d] = sformat ("/dev/usb/lp%1", index);
+	    });
             if (size (devices) != size (toset (devices)))
             {
                 problematic_usb = true;
@@ -710,7 +718,7 @@ actually selected.
 
             if (ret == `test)
             {
-                Printerlib::testDevice (device);
+                Printerlib::testDevice (cups_devices_mapping[device]:device);
             }
             else if (`abort == ret || `cancel == ret)
             {
