@@ -51,7 +51,7 @@
       * Shall be printers detected
       * If nil, ask user
       */
-    global boolean detect = nil;
+    global boolean detect = true;//nil;
     /**
      * Database passed on command line (or nil
      * in case flobal db should be used)
@@ -92,6 +92,14 @@
       * Settings of CUPS server
       */
     global map cups_server_settings = $[];
+    /**
+      * Used database type, `suse or `foomatic
+      */
+    global symbol db = nil;
+    /**
+      * map of foomatic printers database
+      */
+    global map foomatic = nil;
     /**
      * Print queue we are currently working with.
      * @example
@@ -182,11 +190,19 @@
      * Autodetect printers.
      */
     global define void Detect () ``{
+	dirty = true;
 	autodetected = Printerlib::Detect (false);
 	autodetected = maplist (`i, autodetected, ``{
 	    i = add (i, "uri", lookup (i, "bus", "parallel") + ":" + lookup (i, "dev_name", ""));
 	    i = add (i, "info", lookup (i, "vendor", "") + " " + lookup (i, "device", ""));
             i = add (i, "location", Printerlib::getUriNiceName (lookup (i, "uri", "")));
+	    if (Printer::db == `foomatic)
+	    {
+		i["vendor"] = SCR::Read (.ppd.db.vendorname, i["vendor"]:"");
+//		i["device"] = SCR::Read (.ppd.db.modelname, i["vendor"]:"",
+//							i["device"]:"");
+		i["device"] = toupper (i["device"]:"");
+	    }
 	    return i;
 	});
     }
@@ -263,6 +279,8 @@
     global define void assignDefault () ``{
 	boolean found_default = false;
 	boolean found_lp = false;
+	boolean found_normal = false;
+	boolean found_defstr = false;
 	string first = "";
 	string state_string = Printer::spooler + "-state";
 	foreach (`e, printcap, ``{
@@ -273,6 +291,10 @@
 		    found_lp = true;
 		if (name == default)
 		    found_default = true;
+		if (name == "normal")
+		    found_normal = true;
+		if (name == "default")
+		    found_defstrt = true;
 		if (first == "")
 		    first = name;
 	    }
@@ -284,6 +306,16 @@
 	else if (found_lp)
 	{
 	    default = "lp";
+	    dirty = true;
+	}
+	else if (found_normal)
+	{
+	    default = "normal";
+	    dirty = true;
+	}
+	else if (found_default)
+	{
+	    default = "default";
 	    dirty = true;
 	}
 	else
@@ -329,7 +361,7 @@
 	string q_type = Printerlib::getUriType (uri);
 //	y2error ("Q_Type: %1", q_type);
 	string config = lookup (p, "config", "");
-	map info = config == "" ? $[] : SCR::Read (.printerdb.configinfo, config);
+	map info = config == "" || p["database"]:"" == "foomatic" ? $[] : SCR::Read (.printerdb.configinfo, config);
 	foreach (`s, spoolers, ``{
 	    string key = s + "-state";
 	    boolean s_spool = testSupportedQueueBySpooler (q_type, s);
@@ -338,13 +370,14 @@
 //	y2error ("s_raw: %1", s_raw);
 	    boolean s_is_ppd = s == "cups" && lookup (p, "ownppd", "") != "";
 //	y2error ("s_is_ppd: %1", s_is_ppd);
+	    boolean s_is_foomatic = s == "cups" && lookup (p, "database", "") == "foomatic";
 	    boolean s_is_class = q_type == "class" && s == "cups";
 //	y2error ("s_is_class: %1", s_is_class);
 	    boolean s_conf = lookup (info, s, false);
 //	y2error ("s_conf: %1", s_conf);
 	    boolean s_is_raw = (lookup (p, "raw", false) || q_type == "lpd") && s != "cups";
 //	y2error ("s_is_raw: %1", s_is_raw);
-	    boolean s_pri = s_is_raw || (s_is_class) || (! lookup (p, "raw", false) && (s_is_ppd || (lookup (p, "ownppd", "") == "" && s_conf)));
+	    boolean s_pri = s_is_raw || (s_is_class) || (! lookup (p, "raw", false) && (s_is_ppd || s_is_foomatic || (lookup (p, "ownppd", "") == "" && s_conf)));
 //	y2error ("s_pri: %1", s_pri);
 	    boolean sup = s_spool && s_pri;
 //	y2error ("sup: %1", sup);
@@ -386,6 +419,7 @@
      */
     global define void storePrinter () ``{
 	printer = assignStates (printer, true);
+	y2milestone ("Storing printer %1", printer);
 	if (-1 == index)
 	{
 	    if (lookup (printer, "create_remote_queue", false))
@@ -456,7 +490,11 @@
      * @return Map of module settings.
      */
     global define map Export () ``{
-	return $[ "printcap" : printcap, "default"  : default, ];
+	return $[
+	    "printcap" : printcap,
+	    "default"  : default,
+            "database" : db,
+	];
     }
     /**
      * Import module settings.
@@ -466,6 +504,7 @@
 	dirty = true;
 	default = lookup (settings, "default", "");
 	printcap = lookup (settings, "printcap", []);
+        db = settings["database"]:nil;
 	index = -1;
 	deleted = [];
     }
@@ -573,6 +612,7 @@ END { if (!used) print \"ServerName %1\" }
         if (0 == cupsInstallationType ())
         {
 	    startCupsServer ();
+//	    foomatic = SCR::Read (.target.ycp, "/var/lib/YaST2/ppd_db.ycp");
             list ret = SCR::Read (.cups.printers);
 	    ret = filter (`e, ret, ``(lookup (e, "uri", "") != ""));
             list classes = SCR::Read (.cups.classes);
@@ -673,6 +713,7 @@ END { if (!used) print \"ServerName %1\" }
 	    printcap = lookup (state, "printers", []);
 	    deleted = lookup (state, "deleted", []);
 	    default = lookup (state, "default", "");
+	    db = state["database"]:nil;
 	    printcap = maplist (`e, printcap, ``(
 		add (e, "type", "yast2")
 	    ));
@@ -960,10 +1001,10 @@ the selected spooler does not support it.
 	});
 	if (spooler == "cups")
 	{
-	    SCR::Execute (.target.bash, "/usr/sbin/rccups reload");
 	    SCR::Write (.sysconfig.printer.DEFAULT_PRINTER, default_printer_found ? default : "none");
 	    SCR::Write (.sysconfig.printer, nil);
 	    SCR::Write (.cups.default_dest, default_printer_found ? default : "");
+	    SCR::Execute (.target.bash, "/usr/sbin/rccups reload");
 	    if (size (Printer::printcap) > 0)
 		Runlevel::ServiceAdjust ("cups", "enable");
 	    else
@@ -1016,7 +1057,8 @@ the selected spooler does not support it.
 	list l = filter (`e, printcap, ``(lookup (e, "type", "yast2") == "yast2"));
 	l = maplist (`e, l, ``(filter (`k, `v, e, ``(k != "changed" && k != "ppd"))));
 	cleanDeletedPrinters ();
-	map save = $["printers" : l, "deleted" : deleted, "default" : default ];
+	map save = $["printers" : l, "deleted" : deleted, "default" : default,
+	    "database" : db ];
 	if (! SCR::Write (.target.ycp, "/var/lib/YaST2/printers", save))
 	{
 	    // error report. %1 is filename
@@ -1150,6 +1192,7 @@ the selected spooler does not support it.
 	list summary = [];
 	list used = [];
 	// autodetected printer
+	y2milestone ("Listing autodetected");
 	foreach (`i, Printer::autodetected, ``{
 	    string found = "";
 	    string vendor = lookup (i, "vendor", "");
@@ -1186,9 +1229,23 @@ the selected spooler does not support it.
 		    }
 		    else
 		    {
-			found = found + ("" != found ? "<br>" : "") + cache + "  -  " +
-			    SCR::Read (.printerdb.configname, [lookup (entry, "vendor",""),
-				lookup (entry,"device", ""), lookup (entry, "config","")]);
+			string comment = "";
+			if (entry["database"]:"" == "foomatic")
+			{
+			    comment = entry["comment"]:"";
+			}
+			else
+			{
+			    comment = SCR::Read (.printerdb.configname,
+				[lookup (entry, "vendor",""),
+				lookup (entry,"device", ""),
+				lookup (entry, "config","")]);
+			}
+			if (comment != "" && comment != nil)
+			    comment = "  -  " + comment;
+			else
+			    comment = "";
+			found = found + ("" != found ? "<br>" : "") + cache + comment;
 		    }
 		}
 	    });
@@ -1200,6 +1257,7 @@ the selected spooler does not support it.
 	    else
 		summary = add (summary, Summary::Device (dev, contains (style, `short) ? sformat (format, found) : sformat (format + "<br>", found)));
 	});
+	y2milestone ("Listing others");
 	// other than autodetected printers
 	map other_printers = $[];
 	foreach (`i, printcap, ``{
@@ -1210,10 +1268,19 @@ the selected spooler does not support it.
 		string cfg = "";
 		if (type == "yast2")
 		{
-	            string model = SCR::Read (.printerdb.printername, [ lookup (i, "vendor", ""), lookup (i, "device", ""),
+		    string model = "";
+//		    if (Printer::db == `foomatic)
+		    if (i["database"]:"" == "foomatic")
+		    {
+			model = i["vendor"]:"" + " " + i["device"]:"";
+		    }
+		    else
+		    {
+	                model = SCR::Read (.printerdb.printername, [ lookup (i, "vendor", ""), lookup (i, "device", ""),
                                 lookup (i, "vendor_ieee", nil), lookup (i, "device_ieee", nil)]);
-		    if (model == "")
-			model = lookup (i, "info", "");
+		        if (model == "")
+			    model = lookup (i, "info", "");
+		    }
 		    string ppd = lookup (i, "ownppd", "");
 	            if (ppd != "" && ! isPpd (ppd))
 	                ppd = lookup (i, "ppd", "");
@@ -1243,7 +1310,14 @@ the selected spooler does not support it.
 		    }
 		    if (!contains (style, `short))
 		    {
-			cfg = SCR::Read (.printerdb.configname, [lookup (i, "vendor", ""), lookup (i, "device", ""), lookup (i, "config", "")]);
+			if (i["database"]:"" == "foomatic")
+			{
+
+			}
+			else
+			{
+			    cfg = SCR::Read (.printerdb.configname, [lookup (i, "vendor", ""), lookup (i, "device", ""), lookup (i, "config", "")]);
+			}
 			if (nil != cfg && "" != cfg)
 			    cache = cache + "  -  " + cfg;
 		    }
@@ -1321,6 +1395,8 @@ the selected spooler does not support it.
     global define boolean changeDb (string s) ``{
 	if (s == current_database)
 	    return true;
+	if (s == "foomatic")
+	    return true;
 	current_database = s;
 	if (nil == s)
 	    s = "/usr/share/YaST2/data/printerdb/suse.prdb";
@@ -1384,10 +1460,21 @@ the selected spooler does not support it.
 	foreach (`i, autodetected, ``{
 	    if (!alreadyConfigured (lookup (i, "unique_key", "")))
 	    {
-		list detected = SCR::Read (.printerdb.detect, [ lookup (i, "vendor", ""), lookup (i, "device", "") ]);
+		list detected = [];
+		if (Printer::db == `foomatic)
+		{
+		    detected = [i["vendor"]:"", i["device"]:""];
+		    detected = filter (`d, detected, ``(d != ""));
+		}
+		else
+		    detected = SCR::Read (.printerdb.detect, [ lookup (i, "vendor", ""), lookup (i, "device", "") ]);
 		if (2 == size (detected))
 		{
-		    map info = SCR::Read (.printerdb.info, detected);
+		    map info = $[];
+		    if (Printer::db == `foomatic)
+			info = $["supported":true, "type":0];// FIXME type
+		    else
+			info = SCR::Read (.printerdb.info, detected);
 		    if (0 == lookup (info, "type", 2))
 		    {
 			editDetected (i);
@@ -1396,17 +1483,39 @@ the selected spooler does not support it.
 			    "vendor" : select (detected, 0, ""),
 			    "device" : select (detected, 1, ""),
 			]);
-			list new_queues = SCR::Read (.printerdb.auto, lookup (i, "device", ""));
+			list new_queues = [];
+			if (Printer::db == `foomatic)
+			{
+			    new_queues = getFoomaticAutoQueues
+				(i["vendor"]:"", i["device"]:"");
+			}
+			else
+			{
+			    new_queues = SCR::Read (.printerdb.auto,
+				i["device"]:"");
+			}
 			string suffix = getQueueSuffix (new_queues);
 			foreach (`v, new_queues, ``{
-			    map paper = getQuickPaperSize (lookup (v, "config", ""));
-			    if (nil != paper)
-				v = add (v, "options", paper);
+			    if (! (Printer::db == `foomatic))
+			    {
+				map paper = getQuickPaperSize (lookup (v, "config", ""));
+				if (nil != paper)
+				    v = add (v, "options", paper);
+			    }
 			    string k = adjustQueueName (lookup (v, "name", "lp") + suffix, forbidden_names);
 			    v = add (v, "name", k);
 			    forbidden_names = add (forbidden_names, lookup (v, "name", ""));
 
-			    map info = SCR::Read (.printerdb.configinfo, lookup (v, "config", ""));
+			    map info = $[];
+			    if (Printer::db == `foomatic)
+			    {
+// FIXME bellow - LPRng support
+//				info = $["lprng" : false];
+			    }
+			    else
+			    {
+			        info = SCR::Read (.printerdb.configinfo, lookup (v, "config", ""));
+			    }
 			    if ((lookup (info, "cups", true) && lookup (info, "lprng", true)))
 				printcap = add (printcap, union (v, i));
 			});
@@ -1467,9 +1576,14 @@ the selected spooler does not support it.
 	    foreach (`i, printcap, ``{
 		if (substring (lookup (i, "name", ""), 0, end) == lookup (v, "name", ""))
 		{
-		    work = tointeger (substring (lookup (i, "name", ""), end));
-		    if (work + 1 > highest)
-			highest = work + 1;
+		    if (regexpmatch (substring (lookup (i, "name", ""), end),
+			"^[0-9]*$"))
+		    {
+			work = tointeger (substring (lookup (i, "name", ""),
+			    end));
+			if (work + 1 > highest)
+			    highest = work + 1;
+		    }
 		}
 	    });
 	});

@@ -23,6 +23,199 @@
     import "Printerlib";
     import "PackageCallbacks";
 
+
+    global define list getFoomaticAutoQueues (string vendor, string model) ``{
+	y2milestone ("Getting auto queues for %1 %2", vendor, model);
+	loadFoomaticIfNeeded ();
+	list new_queues = [];
+            map ppds = getPpdFiles (vendor, model);
+            string ppdfile_orig = getAutoPpdFile (ppds, vendor, model);
+            string config = ppds[ppdfile_orig]:"";
+            string ppdfile = SCR::Read (.ppd.file.open, [ppdfile_orig, "/tmp"]);
+            map options = SCR::Read (.ppd.file.options, [ppdfile, ""]);
+            list opts = options["data"]:$[];
+// FIXME multiple composite options checking ????
+            integer ind = -1;
+            boolean found = true;
+            find (`i, opts, ``{
+                ind = ind + 1;
+                found = i["name"]:"" == "PrintoutMode";
+                return found;
+            });
+            map composite = $[];
+            if (found)
+                composite = opts[ind]:$[];
+            if (composite != $[])
+            {
+                foreach (`v, composite["valorder"]:[], ``{
+                string optname = composite["name"]:"";
+                    map new_options = $[
+                        optname : v,
+                    ];
+                    new_queues = add (new_queues, $[
+                        "config" : config,
+                        "name" : tolower (v),
+                        "comment" : composite["values", v]:v,
+                        "database" : "foomatic",
+                        "options" : new_options,
+                    ]);
+
+                });
+            }
+            else
+            {
+                new_queues = [ $[
+                    "config" : config,
+                    "name" : "lp",
+                        // table cell
+                    "comment" : _("default configuration"),
+                    "database" : "foomatic",
+                ]];
+            }
+
+            string suffix = Printer::getQueueSuffix (new_queues);
+            new_queues = maplist (`v, new_queues, ``{
+                v = add (v, "name", Printer::adjustQueueName (lookup (v, "name", "lp") + suffix, forbidden_names));
+                if (nil == first_queue)
+                {
+                    first_queue = lookup (v, "name", "");
+                }
+                forbidden_names = add (forbidden_names, lookup (v, "name", ""));
+                return union (Printer::printer, v);
+            });
+
+
+	return new_queues;
+    }
+
+
+    /**
+      * Check whether foomatic database has been loaded, and if not, then
+      * load it
+      */
+    global define void loadFoomaticIfNeeded () ``{
+	if (Printer::foomatic != nil)
+	    return;
+        y2milestone ("Checking foomatic database");
+        if (SCR::Read (.ppd.db.changed))
+        {
+            y2milestone ("Database changed");
+            SCR::Write (.ppd.db.create, "");
+	    UI::OpenDialog (`ProgressBar (`id(`pr),
+		_("Initializing database of printers"), 100, 0));
+	    integer result = 0;
+	    while (true)
+	    {
+		result = SCR::Read (.ppd.db.creation_status);
+		if (result < 0)
+		    break;
+		if (result == 100)
+		    break;
+		UI::ChangeWidget (`id (`pr), `Value, result);
+                sleep (1000);
+            }
+	    UI::CloseDialog ();
+	    if (result < 0)
+	    {
+		Report::Error (_("An error occured while creating database
+of printers"));
+	    }
+        }
+	Printer::foomatic= SCR::Read (.target.ycp, "/var/lib/YaST2/ppd_db.ycp");
+    }
+
+    /**
+      * Get the PPD file for automatic installation
+      * @param ppds map of ppd files
+      * @param vend string vendor name
+      * @param mdo string model name
+      * @return name of the PPD file
+      */
+    global define string getAutoPpdFile (map ppds, string vend, string mod) ``{
+	vendor = SCR::Read (.ppd.db.vendorname, vendor);
+	map order = $[
+	    "__default__": [".*hpijs.*", ".*gimp.*", ".*escp.*", ".*upp.*", ".*stcolor.*", ".*cdj[0-9].*", ".*pcl3.*", ".*cdj.*"],
+	];
+
+	list(string) preferred = [];
+	foreach (`k, `v, order, ``{
+	    if (regexpmatch (vend, k))
+	    {
+		if (preferred == [])
+		{
+		    preferred = order[k, "__default__"]:[];
+		}
+
+	    }
+	});
+	if (preferred == [])
+	    preferred = order["__default__"]:[];
+	y2milestone ("Autoinst preferred list: %1", preferred);
+	boolean found = false;
+	string choosen = "";
+	string fallback = "";
+	foreach (`i, preferred, ``{
+	    if (! found)
+	    {
+		foreach (`k, `v, ppds, ``{
+		    if (fallback == "")
+			fallback = k;
+		    if (choosen == "" && regexpmatch (v, i))
+			choosen = k;
+		});
+	    }
+	});
+	if (choosen == "")
+	    choosen = fallback;
+	return choosen;
+    }
+
+    /**
+      * get configurations, which may be usable for detected printer
+      * @param vendor string name of printer vendor
+      * @param device string printer model name
+      * @return map of ppd files
+      */
+    global define map getPpdFiles (string vendor, string device) ``{
+	vendor = SCR::Read (.ppd.db.vendorname, vendor);
+y2error ("Getting PPDs for %1", vendor);
+	map models = $[];
+	string cache = filterchars (tolower (vendor),
+	    "abcdefghijklmnopqrstuvwxyz0123456789");
+        foreach (`k, `v, Printer::foomatic, ``{
+	    if (filterchars (tolower (k),
+		"abcdefghijklmnopqrstuvwxyz0123456789") == cache)
+	    {
+		models = v;
+	    }
+	});
+	map ppds = $[];
+	cache = filterchars (tolower (device),
+	    "abcdefghijklmnopqrstuvwxyz0123456789");
+	foreach (`k1, `v1, models, ``{
+	  if (is (k1, string))
+	  {
+	    foreach (`k2, `v2, v1, ``{
+		if (is (k2, string) && size (v2) > 2)
+		{
+		    if (filterchars (tolower (select (v2, 2, "")),
+			"abcdefghijklmnopqrstuvwxyz0123456789") == cache) // compare ieee1248 id
+		    {
+			ppds = add (ppds, select (v2, 0, ""), k2);
+		    }
+		    else if (filterchars (tolower (k1),
+			"abcdefghijklmnopqrstuvwxyz0123456789") == cache)
+		    {   // if it does not match, try printer name
+			ppds = add (ppds, select (v2, 0, ""), k2);
+		    }
+		}
+	    });
+	  }
+	});
+	return ppds;
+    }
+
+
     /**
       * display CUPS initialization popup
       */
@@ -356,11 +549,15 @@ queue you want to use."));
     global define boolean testPrinter (map printer, integer testpage_type) ``{
 
     boolean do_not_test = false;
+    boolean foomatic = Printer::printer["database"]:"" == "foomatic";
 
-    if (Printer::getPrinterState(Printer::printer, Printer::spooler) == "void")
+    if (foomatic)
+	loadFoomaticIfNeeded ();
+
+    if (Printer::getPrinterState(printer, Printer::spooler) == "void")
         do_not_test = true;
 
-    if (!do_not_test) {
+    if (foomatic && !do_not_test) {
         // checking if printing is possible - could be done faster?
         string model = lookup (printer, "device", "");
         string config = lookup (printer, "config", "");
@@ -529,7 +726,74 @@ press 'OK'.
 	{
 	    map consolefonts = SCR::Read (.target.yast2, "consolefonts.ycp");
 	    string ce = select (lookup (consolefonts, UI::GetLanguage (false), []), 4, "X");
-	    string p = sformat (".printerdb.testpg_options.\"%1\".\"%2\".\"%3\".\"%4\".\"%5\".\"%6\"",
+	    string opts = SCR::Read (.target.tmpdir) + "/testpg.options";
+	    if (foomatic)
+	    {
+		string os = "";
+		// encoding first
+		ce = toupper (ce);
+		if (ce != "ISO-8859-2" && ce != "ASCII" && ce != "ISO-8859-15" && ce != "ISO-8859-1")
+		    ce = "X";
+		string enc = "ISO-8859-2" == ce ? "h02" : "h01";
+		os = os + sformat ("----X-ENCODING: %1\n", enc);
+
+		os = os + sformat ("----X-VENDOR: (%1 %2)\n",
+		    printer["vendor"]:"",
+		    printer["device"]:"");
+		os = os + sformat ("----X-CONFIG: (%1)\n",
+		    printer["config"]:"");
+		// TRANSLATORS: keep this short! Only translations in languages
+		// with encodings ISO-8859-[1|2|15] will be used.
+		os = os + sformat ("----X-QUEUE-L: (%1)\n", _("Print queue:"));
+                // TRANSLATORS: keep this short! Only translations in languages
+                // with encodings ISO-8859-[1|2|15] will be used.
+		os = os + sformat ("----X-PRINTER-L: (%1)\n", _("Printer:"));
+		os = os + sformat ("----X-CONFIG-L: (%1)\n",
+		    // TRANSLATORS: keep this short! Only
+		    // translations in languages
+		    // with encodings ISO-8859-[1|2|15] will be used.
+		    _("Configuration:"));
+                // TRANSLATORS: keep this short! Only translations in languages
+                // with encodings ISO-8859-[1|2|15] will be used.
+		os = os + sformat ("----X-OPTION-L: (%1)\n", _("Options:"));
+                // TRANSLATORS: keep this short! Only translations in languages
+                // with encodings ISO-8859-[1|2|15] will be used.
+		os = os + sformat ("----X-HEAD: (%1)\n", _("YaST2 test page"));
+
+		// options
+		string filename = SCR::Read (.ppd.file.open, [Printer::foomatic[printer["vendor"]:"", printer["device"]:"", printer["config"]:"", 0]:"", "/tmp"]);
+		map options = SCR::Read (.ppd.file.options, [filename, ""]);
+		list optlist = options["data"]:[];
+		optlist = maplist (`i, optlist, ``{
+		    string name = i["name"]:"";
+		    string label = i["gui"]:"";
+		    string value = printer["options", name]:"";
+		    if (value == "")
+			value = i["current"]:"";
+		    string valuelabel = i["values", value]:"";
+		    if (label == "")
+			label = name;
+		    if (valuelabel == "")
+			valuelabel = value;
+		    if (label != "" && valuelabel != "")
+			return sformat ("(%1: %2) mm", label, valuelabel);
+		    else
+			return "";
+		});
+		optlist = filter (`o, optlist, ``(o != "" && o != nil));
+		os = os + mergestring (optlist, "\n");
+
+		if (ce != "X")
+		{
+		    os = UI::Recode ("UTF-8", ce, os);
+		}
+		SCR::Write (.target.string, opts, os);
+		test_page = Printerlib::preparePsTestPage
+		    (virtual_name, opts, true);
+	    }
+	    else
+	    {
+	        string p = sformat (".printerdb.testpg_options.\"%1\".\"%2\".\"%3\".\"%4\".\"%5\".\"%6\"",
 		    lookup (printer, "vendor", ""),
 		    lookup (printer, "device", ""),
 		    lookup (printer, "raw", false) ? "raw" : lookup (printer, "config", ""),
@@ -537,11 +801,11 @@ press 'OK'.
 		    lookup (printer, "device_ieee", ""),
 		    ce
 		    );
-	    string opts = SCR::Read (.target.tmpdir) + "/testpg.options";
-	    SCR::Write (topath (p), opts, lookup (printer, "options", $[]));
-	    string upp_file = SCR::Write (add (.printerdb.upp, lookup (printer, "config", "")), lookup (printer, "options", $[]));
+	        SCR::Write (topath (p), opts, lookup (printer, "options", $[]));
+	        string upp_file = SCR::Write (add (.printerdb.upp, lookup (printer, "config", "")), lookup (printer, "options", $[]));
 
-	    test_page = Printerlib::preparePsTestPage (virtual_name, opts, -1 != find (upp_file, "-sDEVICE=PS") || "" != lookup (printer, "ownppd", ""));
+	        test_page = Printerlib::preparePsTestPage (virtual_name, opts, -1 != find (upp_file, "-sDEVICE=PS") || "" != lookup (printer, "ownppd", ""));
+	    }
 	}
 	else
 	{
@@ -1233,14 +1497,15 @@ for any file in directory /etc/lpdfilter"));
       * @param none boolean show leaving current status
       * @return term RadioButtonGroup widget
       */
-    global define term getSpoolerItems (string spooler, boolean none) ``{
+    global define term getSpoolerItems (string spooler, boolean none, symbol db) ``{
         return `RadioButtonGroup (
                         `id (`spooler),
                         `HBox (`HSpacing (1),
                             `VBox (
                                 `VSpacing (1),
 				// radiobutton
-                                `RadioButton (`id (`cups_server), `opt (`hstretch, `notify), _("CUPS full &server installation"), spooler == "cups"),
+                                `RadioButton (`id (`cups_server), `opt (`hstretch, `notify), _("CUPS with &SuSE printer database"), spooler == "cups" && db != `foomatic),
+				`RadioButton (`id (`foomatic), `opt (`hstretch, `notify), _("CUPS with &Foomatic database"), spooler == "cups" && db == `foomatic),
                                 `VSpacing (0.5),
 				// radiobutton
                                 `RadioButton (`id (`cups_client), `opt (`hstretch, `notify), _("CUPS &client-only installation"), spooler == "cups-client"),
@@ -1269,7 +1534,7 @@ for any file in directory /etc/lpdfilter"));
 	UI::OpenDialog (
             `VBox (
 		`Label (msg),
-		getSpoolerItems ("current", true),
+		getSpoolerItems ("current", true, Printer::db),
 		`HBox (
 		    `HWeight (1, `PushButton (`id (`ok), OKButtonLabel ())),
 		    `HWeight (1, `PushButton (`id (`cancel), abort_msg))))
@@ -1335,8 +1600,15 @@ to install and configure.
 	    else if (`cups_server == result)
 	    {
 		Printerlib::switchTo ("cups");
+		Printer::db = `suse;
 		return "switched";
 	    }
+            else if (`foomatic == result)
+            {
+                Printerlib::switchTo ("cups");
+		Printer::db = `foomatic;
+                return "switched";
+            }
 	    else if (`cups_client == result)
 	    {
 		Printerlib::switchTo ("cups_client");
@@ -1361,9 +1633,16 @@ to leave installed and configure.
                 Printerlib::switchTo ("lprng");
                 return "switched";
             }
+            else if (`foomatic == result)
+            {
+                Printerlib::switchTo ("cups");
+		Printer::db = `foomatic;
+                return "switched";
+            }
             else if (`cups_server == result)
             {
                 Printerlib::switchTo ("cups");
+		Printer::db = `suse;
                 return "switched";
             }
 	    else if (`cups_client == result)
@@ -1393,8 +1672,15 @@ run properly.<
 	    if (`cups_server == result)
 	    {
 		Printerlib::switchTo ("cups");
+		Printer::db = `suse;
 		return "switched";
 	    }
+            else if (`foomatic == result)
+            {
+                Printerlib::switchTo ("cups");
+		Printer::db = `foomatic;
+                return "switched";
+            }
 	    else if (`cups_client == result)
 	    {
                 Printerlib::switchTo ("cups_client");
@@ -1427,8 +1713,15 @@ may not run properly.<
 	    if (`cups_server == result)
 	    {
 		Printerlib::switchTo ("cups");
+		Printer::db = `suse;
 		return "switched";
 	    }
+            else if (`foomatic == result)
+            {
+                Printerlib::switchTo ("cups");
+		Printer::db = `foomatic;
+                return "switched";
+            }
 	    else if (`cups_client == result)
             {
                 Printerlib::switchTo ("cups_client");

@@ -42,19 +42,9 @@
             return false;
         }
 
-        boolean raw = false;//true;
-        string ppdfile = SCR::Write (add (.printerdb.ppd, lookup (entry, "config", "")), lookup (entry, "options", $[]));
-        string ppdfilename = lookup (entry, "ppd", "");
-
-        // --
-        // Just a hack to avoid strange ends of files
-        // see bug #19354
-        list ppd_l = splitstring(ppdfile, "\n");
-        list hacked = filter(`line, ppd_l, ``( substring(line, 0, 1) == "*" ));
-        ppdfile = mergestring(hacked, "\n") + "\n";
-        // --
-
+	string ppdfilename = lookup (entry, "ppd", "");
         string ownppd = lookup (entry, "ownppd", "");
+	boolean raw = false;//true;
         if (raw)
         {
             ppdfilename = "";
@@ -65,6 +55,50 @@
             ppdfilename = SCR::Read (.target.tmpdir);
             ppdfilename = ppdfilename + "/ppdfile";
         }
+
+	string ppdfile = "";
+	if (entry["database"]:"" == "foomatic")
+	{
+	    ppdfile = Printer::foomatic[entry["vendor"]:"",
+		entry["device"]:"",
+		entry["config"]:"", 0]:"";
+	    y2milestone ("Using PPD file %1", ppdfile);
+//	    ppdfile = SCR::Read (.target.string, ppdfile);
+//	    y2error ("Contains %1", ppdfile);
+	}
+	else
+            ppdfile = SCR::Write (add (.printerdb.ppd, lookup (entry, "config", "")), lookup (entry, "options", $[]));
+
+        // --
+        // Just a hack to avoid strange ends of files
+        // see bug #19354
+	if (entry["database"]:"" != "foomatic")
+	{
+            list ppd_l = splitstring(ppdfile, "\n");
+	    list hacked = filter(`line, ppd_l, ``( substring(line, 0, 1) == "*" ));
+	    ppdfile = mergestring(hacked, "\n") + "\n";
+	    y2error ("File after hacking: %1", ppdfile);
+	}
+        // --
+
+        if (ownppd == "")
+        {
+            if (ppdfilename != "")
+            {
+		if (entry["database"]:"" == "foomatic")
+		{
+		    SCR::Write (.ppd.file.modify, [ppdfile, ppdfilename, entry["options"]:$[]]);
+		}
+		else
+		{
+                    SCR::Write (.target.string, ppdfilename, ppdfile);
+		}
+                entry = add (entry, "ppd", ppdfilename);
+            }
+        }
+        else
+            if (isPpd (ownppd))
+                entry = add (entry, "ppd", ownppd);
 
         if (Printerlib::getUriType (uri) == "usb")
         {
@@ -110,17 +144,7 @@
             if (dev_name != "")
                 entry = add (entry, "uri", "lpd:/" + dev_name);
         }
-        if (ownppd == "")
-        {
-            if (ppdfilename != "")
-            {
-                SCR::Write (.target.string, ppdfilename, ppdfile);
-                entry = add (entry, "ppd", ppdfilename);
-            }
-        }
-        else
-            if (isPpd (ownppd))
-                entry = add (entry, "ppd", ownppd);
+
 	string ppd = lookup (entry, "ppd", "");
 	if (ppd != "" && -1 == SCR::Read (.target.size, ppd))
 	{
@@ -132,7 +156,8 @@
         boolean res = SCR::Write (.cups.printers.add, entry);
         if (! res)
 	    // popup
-            UI::MessagePopup (sformat (_("Error occurred while saving queue %1.
+            UI::MessagePopup (sformat (_("Error while communicating with CUPS server
+occurred while saving queue %1.
 \n%2"), name, SCR::Read (.cups.last_error)));
         return res;
     }
