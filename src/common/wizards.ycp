@@ -97,6 +97,7 @@
             "cupsacladmin" :	``(runCupsAclDialog (`admin)),
             "cupsaclprinters" :	``(runCupsAclDialog (`printers)),
             "cupsaclclasses" :	``(runCupsAclDialog (`classes)),
+	    "cupsaclbcast" :	``(runCupsAclDialog (`bcast)),
 	    "cups_client_main":	``(runCupsClientDialog (true)),
 	    "useppd" :		``(runSelectPpdFile ()),
 	    "downloadppd" :	``(runDownloadPpdFile ()),
@@ -314,7 +315,12 @@
 	    "other" : $[ `next : "name_auto", `abort : `abort, ],
             "ppdetails" : $[ `abort : `abort, `next : "parallel", ],
             "spdetails" : $[ `abort : `abort, `next : "serial", ],
-	    "listen_ipp_bcast" : $[ `abort : `abort, `next : "storeprinter" ],
+	    "listen_ipp_bcast" : $[
+		`abort : `abort,
+		`next : "storeprinter",
+		`perm : "cupsaclbcast",
+	    ],
+	    "cupsaclbcast" : $[ `abort : `abort, `next : "listen_ipp_bcast"],
 	    "cups_client" : $[ `abort : `abort, `next : "storeprinter" ],
 	    // end of connection types
 	    "inst_printer" : $[ `next : `edit, `abort : `abort, ],
@@ -513,7 +519,9 @@
 	    "listen_ipp_bcast" : $[
 		`next : "detected",
 		`abort : `abort,
+		`perm : "cupsaclbcast",
 	    ],
+	    "cupsaclbcast" : $[ `abort : `abort, `next : "listen_ipp_bcast"],
 	];
 	aliases = (map<string,any>)filter (string k, any v, aliases, ``(haskey (sequence, k)));
 	return Sequencer::Run(aliases, sequence);
