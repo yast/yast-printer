@@ -1057,7 +1057,6 @@ void PPD::preprocess(PPD::PPDInfo info, PPDInfo *newinfo) {
     string vendor = killbraces(info.vendor);
     string printer = killbraces(info.printer);
     set<string> products = info.products;
-    set<string> fixed_products;
     string lang = killbraces(info.lang);
     string nick = info.nick;
     string shortnick = info.shortnick;
@@ -1070,18 +1069,10 @@ void PPD::preprocess(PPD::PPDInfo info, PPDInfo *newinfo) {
     off_t filesize = info.size;
 
     y2debug ("New PPD file");
-    y2debug ("Set size: %d", products.size ());
-
-  for (set<string>::const_iterator it = products.begin (); it != products.end (); it++)
-  {
-
-    string product = killbraces (*it);
-
-    y2debug ("Having product %s", product.c_str ());
 
     /* Prepare vendor */
     if(vendor=="ESP") vendor = "";
-    if(vendor=="") vendor = product;
+    if(vendor=="") vendor = printer;
     vendor = strupper(vendor);
 
     if(vendors_map.find(vendor)!=vendors_map.end()) {
@@ -1096,15 +1087,15 @@ void PPD::preprocess(PPD::PPDInfo info, PPDInfo *newinfo) {
             vendor = vendors_map[tmp];
         }
         else {
-            tmp = strupper(first(product," "));
-            y2debug("2: %s",product.c_str());
+            tmp = strupper(first(printer," "));
+            y2debug("2: %s",printer.c_str());
             y2debug("2: %s",tmp.c_str());
             if(vendors_map.find(tmp)!=vendors_map.end()) {
                 y2debug("2: %s",tmp.c_str());
                 vendor = vendors_map[tmp];
             }
             else {
-                tmp = strupper(first(product));
+                tmp = strupper(first(printer));
                 y2debug("3: %s",tmp.c_str());
                 if(vendors_map.find(tmp)!=vendors_map.end()) {
                     y2debug("3: %s",tmp.c_str());
@@ -1151,13 +1142,10 @@ void PPD::preprocess(PPD::PPDInfo info, PPDInfo *newinfo) {
 
     /* Prepare printer */ //-- product first*/
     string orig_printer = printer;
-    if (validateModel (vendor, product))
-	printer = product;
+    if (validateModel (vendor, printer))
+    {}
     else if (validateModel (vendor, shortnick))
 	printer = shortnick;
-    else if (validateModel (vendor, printer))
-    {
-    }
     else if (validateModel (vendor, nick))
         printer = nick;
 
@@ -1165,6 +1153,10 @@ void PPD::preprocess(PPD::PPDInfo info, PPDInfo *newinfo) {
     int br = printer.find (", ");
     if (br > 0)
 	printer = printer.substr (0, br);
+
+
+    set<string>::const_iterator products_it = products.begin ();
+    string product = killbraces (*products_it);
 
     /* special vendor/printer hacks */
     if(vendor=="CANON" && strupper(first(product," "))=="BIRMY")
@@ -1314,10 +1306,6 @@ void PPD::preprocess(PPD::PPDInfo info, PPDInfo *newinfo) {
 	y2debug("  Nick: %s",nick.c_str());
     }
 
-    fixed_products.insert (printer);
-
-  }
-
     /* finally, update the DB or newinfo (if not NULL) */
     
     if(newinfo) {
@@ -1326,7 +1314,6 @@ void PPD::preprocess(PPD::PPDInfo info, PPDInfo *newinfo) {
 	newinfo->printer = info.printer;
         newinfo->vendor_db = vendor;
         newinfo->printer_db = printer;
-        newinfo->products = fixed_products;
         newinfo->lang = lang;
         newinfo->nick = nick;
 	newinfo->shortnick = shortnick;
