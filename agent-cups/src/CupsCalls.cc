@@ -633,12 +633,11 @@ struct rdt_struct {
     const char*host;
     YCPList ret;
     ipp_op_t what_to_get;
+    bool get_remote;
 };
 
 
-/*bool*/ void* remoteDestinationsThread(void *rdt_v)
-//const char*host,YCPList&ret,
-//    ipp_op_t what_to_get)
+void* remoteDestinationsThread(void *rdt_v)
 {
     struct rdt_struct *rdt = (struct rdt_struct *)rdt_v;
     http_t*http = httpConnect(rdt->host, ippPort());
@@ -725,7 +724,7 @@ struct rdt_struct {
                         }
                     if(!name->toString().empty())
                         {
-                            if(printer_type & 0x2)
+                            if ((printer_type & 0x2) && ! rdt->get_remote)
                                 {
                                     Y2_DEBUG("Skipping remote printer %s",name->value_cstr());
                                 }
@@ -765,7 +764,8 @@ out_err:
 
 }
 
-bool getRemoteDestinations(const char*host,YCPList&ret, ipp_op_t what_to_get)
+bool getRemoteDestinations(const char*host,YCPList&ret, ipp_op_t what_to_get,
+    bool get_remote)
 {
     pthread_cond_init (&reply_cv, NULL);
     pthread_mutex_init (&operation, NULL);
@@ -775,6 +775,7 @@ bool getRemoteDestinations(const char*host,YCPList&ret, ipp_op_t what_to_get)
     rdt.host = host;
     rdt.ret = ret;
     rdt.what_to_get = what_to_get;
+    rdt.get_remote = get_remote;
     pthread_create (&checker, NULL, remoteDestinationsThread, (void*)&rdt);
     pthread_create (&timebomb, NULL, timebombThread, NULL);
     while (detect_status == 0)

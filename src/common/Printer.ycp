@@ -27,6 +27,7 @@
     import "Mode";
     import "HTML";
     import "Popup";
+    import "Arch";
     include "printer/misc.ycp";
     include "printer/misc-lprng.ycp";
     include "printer/misc-cups.ycp";
@@ -210,6 +211,7 @@
       * Configuring printer, which is result of detection?
       */
     global boolean conf_detected = false;
+
 
 
     /**
@@ -667,7 +669,7 @@ END { if (!used) print \"ServerName %1\" }
      * If only client is installed or remote server to use is set,
      * returns 1, if this is real server installation, returns 0
      * Also sets server_hostname and cups_installation
-     * @return integer client or server?
+     * @return symbol `client or `server
      */
     global define symbol cupsInstallationType () ``{
         if (nil != cups_installation)
@@ -742,11 +744,200 @@ END { if (!used) print \"ServerName %1\" }
 	non_yast = sort (`x, `y, non_yast, ``(lookup (x, "name", "") <= lookup (y, "name", "")));
 	printcap = merge (printcap, non_yast);
     }
+
+
+
     /**
      * Read settings from disk or where.
      * @return boolean success?
      */
     global define boolean Read () ``{
+	boolean skip_autodetection = Arch::s390;
+	boolean test_mode = false;
+	boolean skip_io = false;
+	list stages = [
+	    // progress stage, text in dialog (short) (infinitive)
+	    _("Check environment"),
+	    // progress stage, text in dialog (short) (infinitive)
+	    _("Load current settings"),
+	    // progress stage, text in dialog (short) (infinitive)
+	    _("Check database of printers"),
+	];
+	list titles = [
+	    // progress stage, text in dialog (short)
+	    _("Checking environment..."),
+	    // progress stage, text in dialog (short)
+	    _("Loading current settings..."),
+	    // progress stage, text in dialog (short)
+	    _("Checking database of printers..."),
+	];
+	if (!skip_autodetection)
+	{
+	    // progress stage, text in dialog (short) (infinitive)
+	    stages = add (stages, _("Autodetect printers"));
+	    // progress stage, text in dialog (short)
+	    titles = add (titles, _("Autodetecting printers..."));
+	}
+
+	Progress::New (_("Initializing printer configuration tool..."),
+	    " ", skip_autodetection ? 12 : 16, stages, titles, "");
+
+	// step 0
+	Progress::NextStageStep (0); if (testAbort ()) return false;
+
+
+
+	// make sure we are root
+	if (!Printerlib::amIRoot () && !test_mode)
+	{
+	    if (! Popup::AnyQuestion ("",
+		// popup
+		_("You must be root to run the printer configuration tool. 
+ If you continue, you will not be able to save your settings. 
+ Continue?"),
+		Label::YesButton (), Label::NoButton (), `focus_no))
+	    {
+		return false;
+	    }
+	}
+
+	Printer::spooler = checkSpoolSystem();
+	if (Printer::spooler == "switched")
+	{
+	    Printer::save_all = true;
+	    Printer::reread = true;
+	    Printer::sys_forbidden_names = nil;
+	    return Read ();
+	}
+	if (Printer::spooler == "exit")
+	    return false;
+
+
+	if (!test_mode)
+	{
+	    if (Printer::spooler == "cups")
+	    {
+		if (`server == Printer::cupsInstallationType ())
+		{
+		    integer status = SCR::Execute (.target.bash,
+			"/usr/bin/lpq 2>/dev/null");
+		    if (status == 0)
+		    {
+			// step 1,2
+			Progress::NextStep (); if (testAbort ()) return false;
+			Progress::NextStep (); if (testAbort ()) return false;
+		    }
+		    else
+		    {
+			restartSpoolerIfNeeded (true);
+			// step 1,2
+			Progress::NextStep (); if (testAbort ()) return false;
+			Progress::NextStep (); if (testAbort ()) return false;
+		    }
+		}
+		else
+		{
+		    // step 1,2
+		    Progress::NextStep (); if (testAbort ()) return false;
+		    Progress::NextStep (); if (testAbort ()) return false;
+		}
+	    }
+	    else if (Printer::spooler == "lprng")
+	    {
+		SCR::Execute (.target.bash,
+		    "/usr/bin/touch /etc/printcap; /bin/chmod u=rw,g=r,o=r /etc/printcap; /etc/init.d/lpd stop");
+		// step 1
+		Progress::NextStep (); if (testAbort ()) return false;
+		integer lpdaemon = SCR::Execute (.target.bash,
+		    "/etc/init.d/lpd start");
+		// step 2
+		Progress::NextStep (); if (testAbort ()) return false;
+		if (lpdaemon != 0)
+		{
+		    // message box
+		    if (!Popup::AnyQuestion (
+			Label::ErrorMsg (),
+			// error popup
+			_("Unable to restart the lpd daemon."),
+			Label::ContinueButton (),
+			Label::AbortButton (),
+			`focus_no))
+		    {
+			UI::CloseDialog ();
+			return false;
+		    }
+		}
+	    }
+	    else
+	    {
+		// step 1,2
+		Progress::NextStep();
+		Progress::NextStep();
+	    }
+	}
+	// step 3
+	Progress::NextStep (); if (testAbort ()) return false;
+
+	if (SCR::Execute (.target.bash, "/usr/bin/which gs") != 0)
+	{
+	    // message box
+	    Report::Warning (_("It seems that you do not have GhostScript
+installed on your computer. It is needed
+to print."));
+	}
+
+	// step 4
+	Progress::NextStageStep (4); if (testAbort ()) return false;
+
+	if (!skip_io && (Printer::spooler != "cups"
+	    || Printer::cupsInstallationType () == `server))
+	{
+	    if (!Printer::oldRead ())
+	    {
+		// message box
+		Report::Error (_("Unable to read the current configuration."));
+                return false;
+	    }
+	}
+
+	// step 8
+	Progress::NextStageStep (8); if (testAbort ()) return false;
+
+	if (Printer::spooler != "cups"
+	    || Printer::cupsInstallationType () == `server)
+	{
+	    loadFoomaticIfNeeded ();
+	}
+
+	// Autodetection
+	if (!skip_autodetection)
+	{
+	    // step 12
+	    Progress::NextStageStep (12); if (testAbort ()) return false;
+	    if (Printer::detect != false)
+		Printer::detect = Crash::AskRun ("printer_detection",
+		    // popup
+		    _("During the following step, YaST2 will try to detect local printers only.
+
+Printer detection can now start. In some cases, detection can cause a
+system freeze. If a freeze happens, select Skip Detection
+when next running the printer configuration.
+
+Detect your printers?"));
+
+	    if (Printer::detect)
+	    {
+		Crash::Run ("printer_detection");
+		runProbeDialog ();
+		Crash::Finish ("printer_detection");
+	    }
+	}
+	// Progress finish
+	Progress::Finish (); if (testAbort ()) return false;
+	return true;
+    }
+
+    global define boolean oldRead () ``{
 	list tmplist = [];
 	list tmpdellist = [];
 	boolean ret = true;
@@ -921,6 +1112,47 @@ END { if (!used) print \"ServerName %1\" }
      * @return success state
      */
     global define boolean Write () ``{
+	boolean ret = true;
+	boolean skip_io = false;
+	if (!skip_io)
+	{
+	    ret = Printer::oldWrite ();
+	    SCR::Execute (.target.bash, "/sbin/SuSEconfig -quick --nonewpackage --module profiles");
+	    Runlevel::RunInitScript ("lpd", "restart");
+	    // popup
+	    Popup::Message (
+		_("The new configuration \nwas stored successfully."));
+	}
+
+	if (Mode::cont)
+	{
+	    if (Printer::spooler == "cups")
+		SCR::Execute (.target.bash, "/etc/init.d/cups stop");
+	    else if (Printer::spooler == "lprng")
+		SCR::Execute (.target.bash, "/etc/init.d/lpd stop");
+	}
+	else if (size (Printer::printcap) > 0)
+	{
+	    if (Printer::spooler == "cups")
+	    {
+		if (Printer::cupsInstallationType () == `server)
+		{
+		    SCR::Execute (.target.bash_background,
+			"/etc/init.d/cups restart");
+		}
+		else
+		{
+		    SCR::Execute (.target.bash, "/etc/init.d/cups stop");
+		}
+	    }
+	    else if (Printer::spooler == "lprng")
+	    {
+		SCR::Execute (.target.bash, "/etc/init.d/lpd restart");
+	    }
+	}
+	return ret;
+    }
+    global define boolean oldWrite () ``{
 	Printerlib::stopServices();
 	if (spooler == "cups")
 	{
@@ -1665,5 +1897,62 @@ to access queues of remote CUSP servers.</LI>"));
 	if (lookup (p, "bannerend", "") == "")
 	    p = add (p, "bannerend", "none");
 	return p;
+    }
+
+    /**
+      * List all available queues (local and remote)
+      * @return list of strings all available queues
+      */
+    global define list(string) GetAvailableQueues () ``{
+	list(string) ret = [];
+	string state = spooler + "-state";
+	list(map) relevant = filter (`e, printcap, ``(e[state]:"" != "void"));
+	if (spooler != "cups")
+	{
+	    list pc = SCR::Read (.etc.printcap);
+	    foreach (`e, pc, ``{
+		ret = add (ret, e["name"]:"");
+		string printcap_part = e["saved", "printcap_part"]:"";
+		list l = splitstring (printcap_part, "\n");
+		l = maplist (`i, l, ``{
+		    integer hash = findfirstof (i, "#");
+		    if (hash != nil)
+			i = substring (i, 0, hash);
+		    if (substring (i, size (i)) == "\\")
+			i = substring (i, 0, size (i) - 1);
+		    return i;
+		});
+		printcap_part = mergestring (l, "");
+		l = splitstring (printcap_part, ":");
+		string names = l[0]:"";
+		l = splitstring (names, "|");
+		l = filter (`n, l, ``(n != "" && ! issubstring (n, " ")));
+		foreach (`n, l, ``{
+		    ret = add (ret, n);
+		});
+	    });
+	    ret = toset (filter (string r, ret, ``(r != "")));
+	}
+	else
+	{
+	    string hostname = "localhost";
+	    if (cupsInstallationType () == `client && server_hostname != "")
+		hostname = server_hostname;
+	    ret = SCR::Read (.cups.remote, hostname);
+	    ret = maplist (string r, ret, ``{
+		r = substring (r, 6);
+		integer slash = findfirstof (r, "/");
+		if (slash != nil)
+		    r = substring (r, slash + 1);
+		if (substring (r, 0, 9) == "printers/")
+		    r = substring (r, 9);
+		else if (substring (r, 0, 8) == "classes/")
+		    r = substring (r, 0, 8);
+		return r;
+	    });
+	    ret = toset (ret);
+	}
+	y2error ("Ret: %1", ret);
+	return ret;
     }
 }
