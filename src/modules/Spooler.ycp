@@ -27,7 +27,7 @@
     import "Label";
     import "Popup";
     import "Require";
-    import "Runlevel";
+    import "Service";
 
 // local variables
 
@@ -297,8 +297,8 @@ Install them now?"));
 	    return;
 	}
 	StopServices ();
-	Runlevel::ServiceAdjust ("lpd", "disable");
-	Runlevel::ServiceAdjust ("cups", "disable");
+	Service::Disable ("lpd");
+	Service::Disable ("cups");
 	del = filter (string e, del, ``(Pkg::IsProvided (e) == true));
 	inst = filter (string i, inst, ``(! Pkg::IsProvided (i)));
 	if (! (Pkg::IsProvided ("ghostscript-x11")
@@ -414,23 +414,23 @@ Install them now?"));
 	if (Spooler::Get () == "cups")
 	{
 	    if ((boolean)SCR::Read (.init.scripts.exists, "lpd"))
-		Runlevel::ServiceAdjust ("lpd", "disable");
+		Service::Disable ("lpd");
             if (`client == CUPS::InstallationType ())
 	    {
 		if ((boolean)SCR::Read (.init.scripts.exists, "cups"))
-		    Runlevel::ServiceAdjust ("cups", "disable");
+		    Service::Disable ("cups");
 	    }
 	    else
 	    {
-		Runlevel::ServiceAdjust ("cups", "enable");
+		Service::Enable ("cups");
 	    }
 	}
 	else
 	{
 	    if ((boolean)SCR::Read (.init.scripts.exists, "cups"))
-		Runlevel::ServiceAdjust ("cups", "disable");
+		Service::Disable ("cups");
 	    if ((boolean)SCR::Read (.init.scripts.exists, "lpd") && have_some_queue)
-		Runlevel::ServiceAdjust ("lpd", "enable");
+		Service::Enable ("lpd");
 	}
 	Spooler::RestartIfNeeded (true);
 	return true;
