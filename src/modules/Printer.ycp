@@ -37,6 +37,7 @@
     import "Report";
     import "Service";
     import "Spooler";
+    import "String";
     import "Summary";
     import "SuSEFirewall";
 
@@ -1478,6 +1479,11 @@ the selected spooler does not support it."), name));
      * @return summary string
      */
     global define string Summary (list style) ``{
+	// to be used in summary after queue name - means verb
+	// is clickable link
+	// eg. HP DeskJet configured as lp0 [test]
+	string test_link = _("test");
+
 	if (Spooler::Get () == "cups" && CUPS::cups_installation == `client)
 	{
 	    string ret =
@@ -1526,13 +1532,14 @@ the selected spooler does not support it."), name));
 		    {
 			if (entry["valid"]:true)
 			{
-			    cache = sformat ("%1 [<a href=\"%1\">test</a>]", cache);
+			    cache = sformat ("%1 [<a href=\"%1\">%1</a>]",
+				cache, test_link);
 			}
 		    }
 		    else if (contains (style, `test_proposal))
 			if (entry["valid"]:true)
 			{
-			    cache = sformat ("%1 [<a href=\"printer--test_queue_%1\">test</a>]", cache);
+			    cache = sformat ("%1 [<a href=\"printer--test_queue_%1\">%2</a>]", cache, test_link);
 			}
 		    {
 
@@ -1616,7 +1623,8 @@ the selected spooler does not support it."), name));
 		    {
 			if (i["valid"]:true)
 			{
-			    cache = sformat ("%1 [<a href=\"%1\">test</a>]", cache);
+			    cache = sformat ("%1 [<a href=\"%1\">%1</a>]",
+				cache, test_link);
 			}
 		    }
 		    if (!contains (style, `short))
@@ -1678,14 +1686,17 @@ the selected spooler does not support it."), name));
 	    if (contains (style, `ipp_listen_modify))
 	    {
 		ipp_listen_modify = sformat (
-		    " <a href=\"change_ipp_listen\">%1</a>",
-		    // link in rich text
-		    _("Change"));
+		    "<a href=\"change_ipp_listen\">%1</a>",
+		    // link in rich text for summary
+		    _("change"));
 	    }
 	    if (contains (CUPS::cups_server_settings["Browsing"]:["On"], "On"))
 	    {
-		// part of summary
-		summary = add (summary, _("<LI>Listen to remote CUPS servers to get comfortable access to remote queues.</LI>") + ipp_listen_modify);
+		summary = add (summary, "<li>" + sformat (
+		    // part of summary
+		    // %1 is link to change the listenning to CUPS servers
+		    _("Listen to remote CUPS servers to get comfortable access to remote queues. (%1)"),
+		    ipp_listen_modify) + "</li>");
 		if (! Mode::config && SuSEFirewall::start)
 		{
 		    map<string,boolean> service_status = $[];
@@ -1711,14 +1722,19 @@ the selected spooler does not support it."), name));
 		    });
 		    if (size (allowed_interfaces) == 0)
 		    {
-			// part of summary
-			summary = add (summary, _("<li>Port for listening to remote CUPS servers is closed by firewall.</li>") + ipp_listen_modify);
+			summary = add (summary, "<li>" + sformat (
+			    // part of summary
+			    // %1 is link to change the firewall settings
+			    _("Port for listening to remote CUPS servers is closed by firewall. (%1)"), ipp_listen_modify) + "</li>");
 		    }
 		    else
 		    {
 			string il = mergestring (allowed_interfaces, ", ");
-			// part of summary, %1 is list of interfaces
-			summary = add (summary, sformat (_("<li>Port for listening to remote CUPS servers is open on %1.</li>"), il) + ipp_listen_modify);
+			il = String::EscapeTags (il);
+			summary = add (summary, "<li>" + sformat (
+			    // part of summary, %1 is list of interfaces
+			    // %2 is link to change the firewall settings
+			    _("Port for listening to remote CUPS servers is open on %1. (%2)"), il, ipp_listen_modify) + "</li>");
 		    }
 		}
 	    }
