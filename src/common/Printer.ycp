@@ -1129,91 +1129,186 @@ Detect your printers?"));
      * @return success state
      */
     global define boolean Write () ``{
-	boolean ret = Printer::oldWrite ();
+	y2milestone ("Write called; spooler: %1, cups inst type: %2", spooler,
+	    cupsInstallationType ());
+	boolean with_daemon = spooler != "cups"
+	    || `client != cupsInstallationType ();
+	y2milestone ("Daemon will run for this configuration: %1", with_daemon);
+	if (with_daemon)
+	{
+	    // caption of progress
+	    Progress::New (_("Saving settings of printers. Please wait..."),
+		" ", size (printcap) + 6,
+		    // progress bar states
+		[ _("Adjust spooler services"),
+		    // progress stage
+		    _("Delete old printers"),
+		    // progress bar states
+		    _("Save printers"),
+		    // progress bar states
+		    _("Set default queue"),
+		    // progress bar stage
+		    _("Save system settings"),
+		    // progress bas stage
+		    _("Restart spooler"), ],
+		    // progress step
+		[ _("Adjusting spooler services"),
+		    // progress step
+		    _("Deleting old printers..."),
+		    // progress step
+		    _("Saving printer..."),
+		    // progress step
+		    _("Settings default queue"),
+		    // progress step
+		    _("Saving system settings..."),
+		    // progress step
+		    _("Restarting spooler..."),
+		    // progress step
+		    _("Finished")],
+	    "");
+	}
+	else
+	{
+	    // caption of progress
+	    Progress::New (_("Saving settings of printers. Please wait..."),
+		" ", 2,
+		    // progress stage
+		[ _("Adjust spooler services"),
+                    // progress stage
+		    _("Save system settings"),],
+		    // progress step
+		[ _("Adjusting spooler services"),
+                    // progress step
+		    _("Saving system settings..."),
+		    // progress step
+		    _("Finished")],
+	    "");
+	}
 
-	if (Mode::cont)
+	boolean ret = true;
+
+	Progress::NextStage (); // adjst services
+	ret = adjustServices () && ret;
+
+	if (with_daemon)
 	{
-	    Printerlib::stopServices ();
-	}
-	else if (size (Printer::printcap) > 0)
-	{
-	    if (Printer::spooler == "cups")
-	    {
-		if (Printer::cupsInstallationType () == `server)
-		{
-		    SCR::Execute (.target.bash_background,
-			"/etc/init.d/cups restart");
-		}
-		else
-		{
-		    SCR::Execute (.target.bash, "/etc/init.d/cups stop");
-		}
-	    }
-	    else if (Printer::spooler == "lprng")
-	    {
-		SCR::Execute (.target.bash, "test -f /etc/init.d/lpd && /etc/init.d/lpd restart");
-	    }
-	}
-	return ret;
-    }
-    /**
-      * Old write function, called from new Write function
-      * TODO: integrate
-      * @return boolean true on success
-      */
-    global define boolean oldWrite () ``{
-	Printerlib::stopServices();
-	if (spooler == "cups")
-	{
-	    if (SCR::Read (.init.scripts.exists, "lpd"))
-		Runlevel::ServiceAdjust ("lpd", "disable");
-	    if (`server == cupsInstallationType ())
+	    if (spooler == "cups")
 	    {
 		writeCupsSettings ();
 		server_hostname = "";
 		saveClientHostName ();
 	    }
+
+	    Progress::NextStage (); // delete old printers
+	    ret = deleteDeletedPrinters () && ret;
+
+	    Progress::NextStage (); // save printers
+	    ret = savePrinters () && ret;
+
+	    Progress::NextStage (); // set default queue
+	    ret = saveDefaultQueue () && ret;
+
+	    Progress::NextStage (); // save system settings
+	    ret = saveTheConfiguration() && ret;
+
+	    Progress::NextStage ();// restart spooler
+	    ret = restartServices () && ret;
+
+	}
+	else
+	{
+	    Progress::NextStage (); // save system settings
+	    ret = saveCupsClient () && ret;
+	    ret = saveTheConfiguration() && ret;
+	}
+
+
+	Progress::NextStage (); // finished
+        // progress stage
+        Progress::Title(_("Finished"));
+	sleep (500);
+	return ret;
+    }
+
+    /**
+      * Adjust services for runlevel, set them to state needed for writing
+      * @return boolean true on success
+      */
+    global define boolean adjustServices () ``{
+	// FIXME error checking
+	Printerlib::stopServices();
+
+	if (spooler == "cups")
+	{
+	    if (SCR::Read (.init.scripts.exists, "lpd"))
+		Runlevel::ServiceAdjust ("lpd", "disable");
             if (`client == cupsInstallationType ())
 	    {
-		Printerlib::stopServices();
 		if (SCR::Read (.init.scripts.exists, "cups"))
 		    Runlevel::ServiceAdjust ("cups", "disable");
-		saveClientHostName ();
-
-		if (server_default)
+	    }
+	    else
+	    {
+		if (SCR::Read (.init.scripts.exists, "cups")
+		    && (size (printcap) > 0
+			|| cups_server_settings["Browsing"]:"On" == "On"))
 		{
-		    default = "";
+		    Runlevel::ServiceAdjust ("cups", "enable");
 		}
-		SCR::Write (.cups.default_dest, default, "local");
-		saveTheConfiguration ();
-		return true;
 	    }
 	}
 	else
 	{
 	    if (SCR::Read (.init.scripts.exists, "cups"))
 		Runlevel::ServiceAdjust ("cups", "disable");
+	    if (SCR::Read (.init.scripts.exists, "lpd") && size (printcap) > 0)
+		Runlevel::ServiceAdjust ("lpd", "enable");
 	}
 	restartSpoolerIfNeeded (true);
-	// caption of progress
-	Progress::New (_("Saving settings of printers. Please wait..."),
-		       // progress stages, short texts
-		       " ", size (printcap) + 3,
-			// progress bar states
-		       [ _("Delete old printers"),
-			// progress bar states
-			 _("Save printers"),
-			// progress bar states
-			 _("Save system settings") ],
-			// progress bar states
-		       [ _("Deleting old printers..."),
-			// progress bar states
-			 _("Saving printer..."),
-			// progress bar states
-			 _("Saving system settings...")],
-		       "");
-	Progress::NextStage ();
+	return true;
 
+    }
+
+    /**
+      * Save CUPS client-only configuration
+      * @return boolean true on success
+      */
+    global define boolean saveCupsClient () ``{
+	saveClientHostName ();
+	if (server_default)
+	{
+	    default = "";
+	}
+	SCR::Write (.cups.default_dest, default, "local");
+	return true;
+    }
+
+    /**
+      * Restart printer daemon
+      * @return boolean true on success
+      */
+    global define boolean restartServices () ``{
+	Printerlib::stopServices ();
+	if (! write_only)
+	{
+	    if (size (printcap) > 0 || (spooler == "cups" &&
+		cups_server_settings["Browsing"]:"On" == "On"))
+	    {
+		if (spooler == "cups")
+		    SCR::Execute (.target.bash, "test -f /etc/init.d/cups && /etc/init.d/cups start");
+		else
+		    SCR::Execute (.target.bash, "test -f /etc/init.d/lpd && /etc/init.d/lpd start");
+	    }
+	}
+	return true;
+    }
+
+    /**
+      * Delete printers marked for being deleted
+      * @return boolean true on success
+      */
+    global define boolean deleteDeletedPrinters () ``{
+	// FIXME error checking
 	deletePrinters (deleted);
 	deleted = maplist (`e, deleted, ``{
 	    map states = lookup (e, "states", $[]);
@@ -1228,12 +1323,16 @@ Detect your printers?"));
 	    e = add (e, "states", states);
 	    return e;
 	});
+	return true;
+    }
 
-	Progress::NextStage ();
+    global define boolean savePrinters () ``{
+	// FIXME error checking
 	list unique_keys = [];
 	//
-	// We are not sure if default printer exists, someone could have deleted it.
-	// If default printer does not exist, set default printer to "".
+	// We are not sure if default printer exists, someone could have
+	// deleted it. If default printer does not exist, set default
+	// printer to "".
 	//
 	boolean default_printer_found = false;
 	printcap = maplist (`entry, printcap, ``{
@@ -1295,12 +1394,7 @@ the selected spooler does not support it."), name));
 	    Progress::NextStep ();
 	    return entry;
 	});
-	Progress::NextStage ();
-	saveTheConfiguration();
-	if (spooler == "cups")
-	{
-	}
-	else
+	if (spooler != "cups")
 	{
 	    // set 0644 mode to /etc/printcap (file does not exist if there is no printer)
 	    if (-1 != SCR::Read(.target.size, "/etc/printcap"))
@@ -1311,35 +1405,20 @@ the selected spooler does not support it."), name));
 	foreach (`k, `v, original_unique_keys, ``{
 	    SCR::Write (.probe.status.configured, k, v ? `no : `yes);
 	});
+	if (! default_printer_found)
+	    default = "";
+	return true;
+    }
+
+    global define boolean saveDefaultQueue () ``{
 	if (spooler == "cups")
 	{
-	    SCR::Write (.cups.default_dest,
-		default_printer_found
-		    ? default
-		    : "");
-	    SCR::Execute (.target.bash, "/usr/sbin/rccups restart");
-	    if (size (printcap) > 0)
-		Runlevel::ServiceAdjust ("cups", "enable");
-	    else
-	    {
-		Printerlib::stopServices();
-		if (SCR::Read (.init.scripts.exists, "cups"))
-		    Runlevel::ServiceAdjust ("cups", "disable");
-	    }
+	    SCR::Write (.cups.default_dest, default);
 	}
 	else
 	{
-	    SCR::Execute (.target.bash, sformat ("/usr/lib/YaST2/bin/assign_printcap_default %1", default_printer_found ? default : "\"\""));
-	    if (size (printcap) > 0)
-		Runlevel::ServiceAdjust ("lpd", "enable");
-	    else
-	    {
-		Printerlib::stopServices();
-		if (SCR::Read (.init.scripts.exists, "lpd"))
-		    Runlevel::ServiceAdjust ("lpd", "disable");
-	    }
+	    SCR::Execute (.target.bash, sformat ("/usr/lib/YaST2/bin/assign_printcap_default %1", default != "" ? default : "\"\""));
 	}
-	    Progress::NextStage ();
 	return true;
     }
 
