@@ -1,0 +1,174 @@
+<?xml version="1.0" encoding='ISO-8859-1'?>
+<!DOCTYPE article PUBLIC "-//OASIS//DTD DocBook XML V4.1.2//EN"
+          "/usr/share/sgml/db41xml/docbookx.dtd"
+[
+<!ENTITY version "0.01">
+<!ENTITY dx "DocBook-XML">
+]>
+
+<article>
+<title>PPD agent</title>
+<section>
+    <title>Tasks</title>
+	<para>
+The tasks of the PPD agent will be following:
+<itemizedlist>
+<listitem><para>Maintain list of all supported Printer models and their vendors and their PPD files</para></listitem> 
+<listitem><para>Maintain list of mapping from Model names mentioned in PPD files and IEEE names because of detection</para></listitem>
+<listitem><para>Create list of options in PPD file and their values</para></listitem>
+<listitem><para>Examine and set default value of each option</para></listitem>
+<listitem><para>Create options list for test page -- low priority</para></listitem>
+<listitem><para>Generate parameters for LPDfilter -- low priority</para></listitem>
+</itemizedlist>
+</para>
+<para>
+All of these functions must be provided without requiring any spooler runing, because the agent may be used
+without any concrete spooler running. Using of library functions of spoolers is possible, if required packages
+can't conflict.
+</para>
+<para>
+Much time wasting functions should be able to be done asynchronous, because of need to show any progress. The only
+currently known function, which will take a lot of time, is generating database of PPD files when running first
+time, ot when some PPD file changes, is added or removed. Checking of these situations should be fast enough.
+</para>
+</section>
+<section>
+    <title>SCR agent interface</title>
+
+<section><title>Write paths</title>
+<section>
+<title>Write (.db.create) -> boolean</title>
+<para>
+starts creation of the database of PPD files (drivers). Returns immediately, generates database using other thread.
+Returns true if creation started successfully.
+</para>
+<para>
+Format of the database file will be following:
+<screen>
+$[
+    "VENDOR" : $[
+	`label : "READABLE_VENDOR",
+        "MODEL" : $[
+	    `label : "READABLE_MODEL",
+	    "DESCRIPTION1" : ["FILENAME", "VENDOR_IEEE", "MODEL_IEEE"],
+	    "DESCRIPTION2" : ["FILENAME2", "VENDOR_IEEE", "MODEL_IEEE"],
+        ],
+	"MODEL2" : $[
+	    ....
+ 	],
+	....
+    ],
+    "VENDOR2" : $[
+        ....
+    ],
+    ....
+]
+</screen>
+</para>
+<para>
+When creating database, because of detection equivalence lists for vendors and models will be used.
+</para>
+</section>
+
+<section>
+<title>Write (.file.changes, [string filename, map changes] -> boolean</title>
+<para>
+writes to specified file settings in the parameter. Only changes default values for mentioned options, other options leaves with their previous default values.
+</para>
+</section>
+
+</section>
+<section><title>Read paths</title>
+<section>
+<title>Read (.db.changed) -> boolean</title>
+<para>
+checks whether some PPD file was changed/added/removed and database needs to get rebuilt
+</para>
+</section>
+
+<section>
+<title>Read (.db.creation_status) -> integer</title>
+<para>
+returns current status of database of printers initialization. Returned number is in interval 0 -- 100 (where 100 means already finished)
+If returned nil, creation failed.
+</para>
+</section>
+
+<section>
+<title>Read (.file.open, [string filename, string dir]) -> string</title>
+<para>
+copies the file from database to specified directory, where it will be able to be modified.
+If original PPD file is compressed, decompression runs too.
+</para>
+</section>
+
+<section>
+<title>Read (.file.option_groups, [string filename]) -> map</title>
+<para>
+returns list of option groups present in PPD file. Returned list looks like
+<screen>
+$[
+    "charset" : "CHARSET",
+    "data" : [ // list of option groups
+	    "GROUP1_NAME",
+	    "GROUP2_NAME",
+	    ....
+    ]
+]
+</screen>
+</para>
+</section>
+
+
+<section>
+<title>Read (.file.options, [list (string filename, string group]) -> map</title>
+<para>
+returns list of options of specified option group in PPD file, with marked current default options. Returned list looks like
+<screen>
+$[
+    "charset" : "CHARSET",
+    "data: : [ // list of options
+	$[
+            "name"		: "OPTION_NAME",
+	    "gui"		: "READABLE_OPTION_NAME",
+	    "current"		: "CURRENT_VALUE",
+	    "type"		: "boolean" | "pickone" | "pickmany",
+	    "values"	: $[
+	        "VALUENAME"		: "READABLE_VALUE_NAME",
+	        "VALUENAME"		: "READABLE_VALUE_NAME",
+	        ....
+	    ]
+        ],
+	$[
+            "name"		: "OPTION_NAME",
+            "gui"		: "READABLE_OPTION_NAME",
+            "current"		: "CURRENT_VALUE",
+	    "type"		: "slider" | "int",
+	    "lowermargin"	: integer,
+	    "uppermargin"	: integer,
+	],
+	$[
+            "name"		: "OPTION_NAME",
+            "gui"		: "READABLE_OPTION_NAME",
+            "current"       	: "CURRENT_VALUE",
+	    "type"		: "yseno",
+	],
+	....
+    ]
+]
+</screen>
+</para>
+</section>
+
+<section>
+<title></title>
+<para>
+
+</para>
+</section>
+
+</section>
+</section>
+</article>
+      
+	    

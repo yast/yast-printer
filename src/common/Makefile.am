@@ -6,7 +6,8 @@ yncludedir = @yncludedir@/printer
 
 module_DATA =			\
 	Printer.ycp		\
-	Printerlib.ycp
+	Printerlib.ycp		\
+	Crash.ycp
 
 ynclude_DATA =			\
 	misc.ycp		\

@@ -15,12 +15,12 @@ Write	.sysconfig.printer.CUPS_SERVER nil true
 Write	.sysconfig.printer nil true
 Execute	.target.bash "/sbin/SuSEconfig --module profiles" 0
 Execute	.target.bash "/usr/bin/lpq 2>/dev/null" 0
-Write	.target.ycp "/var/lib/YaST2/printers" $["default":"", "deleted":[], "printers":[]] true
+Write	.target.ycp "/var/lib/YaST2/printers" $["database":nil, "default":"", "deleted":[], "printers":[]] true
 Execute	.target.bash "/bin/chmod 600 /var/lib/YaST2/printers" 0
-Execute	.target.bash "/usr/sbin/rccups reload" 0
 Write	.sysconfig.printer.DEFAULT_PRINTER "none" true
 Write	.sysconfig.printer nil true
 Write	.cups.default_dest "" true
+Execute	.target.bash "/usr/sbin/rccups reload" 0
 Log	Pkg::`IsProvided (plp): false
 Log	Pkg::`IsProvided (lprold): false
 Log	Pkg::`IsProvided (lprng): false
@@ -47,17 +47,18 @@ Write	.sysconfig.printer nil true
 Execute	.target.bash "/sbin/SuSEconfig --module profiles" 0
 Execute	.target.bash "/usr/bin/lpq 2>/dev/null" 0
 Write	.cups.printers.remove "lpx" true
-Write	.printerdb.ppd."" $[] "*#PPDFile"
 Read	.target.tmpdir "/tmp"
+Write	.printerdb.ppd."" $[] "*#PPDFile"
+Log	File after hacking: *#PPDFile
 Write	.target.string "/tmp/ppdfile" "*#PPDFile\n" true
 Read	.target.size "/tmp/ppdfile" 0
 Write	.cups.printers.add $["accepting":true, "bannerend":"none", "bannerstart":"none", "changed":true, "name":"lp", "ppd":"/tmp/ppdfile", "state":"idle", "uri":"parallel://dev/lp0"] true
-Write	.target.ycp "/var/lib/YaST2/printers" $["default":"lp", "deleted":[$["name":"lpx", "states":$["cups-state":"commited", "lprng-state":"changed"], "type":"printer"]], "printers":[$["accepting":true, "bannerend":"none", "bannerstart":"none", "cups-state":"commited", "name":"lp", "state":"idle", "uri":"parallel://dev/lp0"]]] true
+Write	.target.ycp "/var/lib/YaST2/printers" $["database":nil, "default":"lp", "deleted":[$["name":"lpx", "states":$["cups-state":"commited", "lprng-state":"changed"], "type":"printer"]], "printers":[$["accepting":true, "bannerend":"none", "bannerstart":"none", "cups-state":"commited", "name":"lp", "state":"idle", "uri":"parallel://dev/lp0"]]] true
 Execute	.target.bash "/bin/chmod 600 /var/lib/YaST2/printers" 0
-Execute	.target.bash "/usr/sbin/rccups reload" 0
 Write	.sysconfig.printer.DEFAULT_PRINTER "lp" true
 Write	.sysconfig.printer nil true
 Write	.cups.default_dest "lp" true
+Execute	.target.bash "/usr/sbin/rccups reload" 0
 Read	.init.scripts.exists "cups" true
 Read	.init.scripts.exists "cups" true
 Read	.init.scripts.runlevel "cups" $[]
