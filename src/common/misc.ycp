@@ -772,20 +772,28 @@ All changes will be lost.
       * @param name string queue name
       * @return boolean true if correct
       */
-    global define boolean checkLocalQueueName (string name) ``{
+    global define boolean checkLocalQueueName (string name, list forbidden_names) ``{
 	if (size (name) > 0 && size (name) <= 32 &&
 	    size (filterchars (substring (name, 0, 1),
 		"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")) > 0 &&
 	    name == filterchars (name,
-		"_0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"))
+		"_0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
+	    && ! contains (forbidden_names, name))
 	    {
+		if (contains (Printer::getSystemForbiddenNames (), name))
+		{
+		    // message box
+		   UI::MessagePopup (_("Invalid name! The name must not be used
+for any file in directory /etc/lpdfilter"));
+		   return false;
+		}
 		return true;
 	    }
 	    else
 	    {
 		// popup
 		 UI::MessagePopup (_("Invalid queue name. It must be
-shorter than 127 characters, start with a letter,
+shorter than 32 characters, start with a letter,
 and only contain 0...9, A...Z, a...z, and _.
 "));
 		return false;
@@ -816,43 +824,6 @@ It cannot contain the characters @ and :.
 	return false;
     }
 
-    /**
-     * Check first and optionally 3rd name. 2nd name is 1st name+"-ascii" so it does not bother us,
-     * but is checked because of length. Do not allow '-' in names. Do not allow name lp<number>.
-     * In names are not OK, show dialog
-     *
-     * @param forbidden_names list of names that were already used
-     * @param name name for current printer
-     * @return boolean true if names are OK.
-     */
-    global define boolean checkName (list forbidden_names, string name) ``{
-	boolean ok = true;
-	if (size (name)<=0 ||
-		size (name)>=20 ||
-		name != filterchars (name, "_0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz-") ||
-		contains (forbidden_names, name) ||
-		substring (name, 0, 1) == "-" ||
-		"all" == name
-		)
-	{
-	    // message box
-	    UI::MessagePopup (_("Invalid name! The name should be less than 20 characters long
-and can only use the characters 0..9, a..z, - and _. It must
-not start with -. Additionally, you cannot use the name 'all' 
-because of its special function.
-
-The name must not be used for another printer."));
-	    return false;
-	}
-	if (contains (Printer::getSystemForbiddenNames (), name))
-	{
-	    // message box
-	    UI::MessagePopup (_("Invalid name! The name must not be used
-for any file in directory /etc/lpdfilter"));
-	    return false;
-	}
-	return true;
-    }
     /**
      * Get value from UI
      * @param vals values
