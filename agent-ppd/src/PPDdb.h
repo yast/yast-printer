@@ -136,6 +136,8 @@ class PPD {
 	YCPList sortItems (const YCPMap& items);
 
     private:
+	friend class PPDfile;
+
         Vendors db;
 	PpdFiles ppdfiles;
 	ModelLabels modellabels;
@@ -172,7 +174,6 @@ class PPD {
 	bool cleanupEmptyEntries ();
 	string fileChecksum (const string &filename);
 	off_t fileSize (const string &filename);
-	string fileFilter (const string &filename);
 	string updateLabel (const string& label);
 
     protected:

@@ -1394,6 +1394,9 @@ void PPD::preprocess(PPD::PPDInfo info, PPDInfo *newinfo) {
 	newinfo->shortnick = shortnick;
         newinfo->pnp_vendor = pnp_vendor;
         newinfo->pnp_printer = pnp_printer;
+	newinfo->checksum = checksum;
+	newinfo->size = filesize;
+	newinfo->filter = filter;
 
 	y2debug("File: %s", filename.c_str());
 	y2debug("  Vendor: %s", vendor.c_str());
@@ -1844,12 +1847,6 @@ off_t PPD::fileSize (const string &filename) {
     if (! lstat (filename.c_str(), &fileinfo))
 	size = fileinfo.st_size;
     return size;
-}
-
-string PPD::fileFilter (const string &filename) {
-    
-
-
 }
 
 bool PPD::setCheckMethod (YCPSymbol method) {
