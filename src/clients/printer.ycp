@@ -77,7 +77,7 @@
 	Printer::selectPrinterByName (options["queue"]:"");
 	if (Printer::printer == $[])
 	{
-	    CommandLine::Print (sformat (_("Queue %1 doesn't exist"),
+	    CommandLine::Print (sformat (_("Queue %1 does not exist."),
 		options["queue"]:""));
 	    return false;
 	}
@@ -99,13 +99,13 @@
 // URI handling
 	if (options["uri"]:"" != "" && options["detected_index"]:nil != nil)
 	{
-	    CommandLine::Print (_("Can not specify URI and detected printer in one command"));
+	    CommandLine::Print (_("Cannot specify URI and detected printer in one command."));
 	    return false;
 	}
 	if (Printer::printer["uri"]:"" == "" && options["uri"]:"" == ""
 	    && options["detected_index"]:nil == nil)
 	{
-	    CommandLine::Print (sformat (_("URI for queue %1 not specified"),
+	    CommandLine::Print (sformat (_("URI for queue %1 not specified."),
 		options["new_name"]:Printer::printer["name"]:""));
 	    return false;
 	}
@@ -118,7 +118,7 @@
 	    integer index = tointeger (s_index);
 	    if (0 >= index || size (Printer::autodetected) < index)
 	    {
-		CommandLine::Print (sformat (_("Printer %1 wasn't detected"),
+		CommandLine::Print (sformat (_("Printer %1 was not detected."),
 		    index));
 		return false;
 	    }
@@ -128,14 +128,14 @@
 // queue name handling
 	if (Printer::printer["name"]:"" == "" && options["new_name"]:"" == "")
 	{
-	    CommandLine::Print (_("Queue name not specified"));
+	    CommandLine::Print (_("Queue name not specified."));
 	    return false;
 	}
 	if (options["new_name"]:"" != Printer::printer["name"]:""
 	    && contains (Printer::getForbiddenNames(), options["new_name"]:""))
 	{
 	    CommandLine::Print (sformat (
-		_("Specified queue name %1 is already used"),
+		_("Specified queue name %1 is already used."),
 		options["new_name"]:""));
 	    return false;
 	}
@@ -166,7 +166,7 @@
 // manufacturer handling
 	if (haskey (options, "manufacturer") && ! haskey (options, "model"))
 	{
-	    CommandLine::Print (sformat (_("Model not specified for queue %1"),
+	    CommandLine::Print (sformat (_("Model not specified for queue %1."),
 		Printer::printer["name"]:""));
 	    return false;
 	}
@@ -177,7 +177,7 @@
 		options["manufacturer"]:"");
 	    if (! haskey (Printerdb::foomatic, manufacturer))
 	    {
-		CommandLine::Print (sformat (_("Unknown manufacturer: %1"),
+		CommandLine::Print (sformat (_("Unknown Manufacturer: %1"),
 		    options["manufacturer"]:""));
 		return false;
 	    }
@@ -195,7 +195,7 @@
 		[manufacturer, options["model"]:""]);
 	    if (! haskey (Printerdb::foomatic[manufacturer]:$[], model))
 	    {
-		CommandLine::Print (sformat (_("Unknown model: %1"),
+		CommandLine::Print (sformat (_("Unknown Model: %1"),
 		    options["model"]:""));
 		return false;
 	    }
@@ -212,7 +212,7 @@
 	    nick = options["nick"]:"";
 	    if (! haskey (Printerdb::foomatic[manufacturer, model]:$[], nick))
 	    {
-		CommandLine::Print (sformat (_("Unknown PPD file nickname: %1"),
+		CommandLine::Print (sformat (_("Unknown PPD File Nickname: %1"),
 		    options["nick"]:""));
 		return false;
 	    }
@@ -249,7 +249,7 @@
 // allow and deny users
 	if (haskey (options, "allowusers") && haskey (options, "denyusers"))
 	{
-	    CommandLine::Print (_("Only one of 'allowusers' and 'denyusers' can be specified"));
+	    CommandLine::Print (_("Only one of 'allowusers' and 'denyusers' can be specified."));
 	    return false;
 	}
 	list string2list = ["allowusers", "denyusers"];
@@ -303,7 +303,7 @@
     define boolean PrinterListHandler (map options) ``{
 	if (! haskey (options, "configured"))
 	{  // list detected
-	    CommandLine::Print (_("Detected printers:"));
+	    CommandLine::Print (_("Detected Printers:"));
 	    integer index = 0;
 	    foreach (map p, Printer::autodetected, ``{
 		index = index + 1;
@@ -317,7 +317,7 @@
 	}
 	if (! haskey (options, "detected"))
 	{  // list configured
-	    CommandLine::Print (_("Configured queues:"));
+	    CommandLine::Print (_("Configured Queues:"));
 	    foreach (map p, Printer::printcap, ``{
 		CommandLine::Print (sformat ("%1: %2",
 		    p["name"]:"",
@@ -372,7 +372,7 @@
 	});
 	if (0 == found)
 	{
-	    CommandLine::Print (_("No spooler specified"));
+	    CommandLine::Print (_("No spooler specified."));
 	    return false;
 	}
 	if (1 < found)
@@ -394,7 +394,7 @@
 	{
 	    if (options["server"]:"" == "")
 	    {
-		CommandLine::Print (_("CUPS server not specified"));
+		CommandLine::Print (_("CUPS server not specified."));
 		return false;
 	    }
 	    Spooler::switchTo ("cups_client");
@@ -417,7 +417,7 @@
 	Printer::selectPrinterByName (queue_name);
 	if (Printer::printer == $[])
 	{
-	    CommandLine::Print (sformat (_("Queue %1 does not exist"),
+	    CommandLine::Print (sformat (_("Queue %1 does not exist."),
 		queue_name));
 	    return false;
 	}
@@ -437,7 +437,7 @@
      */
     define boolean PrinterManufacturersHandler (map options) ``{
 	Printerdb::loadFoomaticIfNeeded ();
-	CommandLine::Print (_("Known manfacturers:"));
+	CommandLine::Print (_("Known Manfacturers:"));
 	foreach (string k, map v, Printerdb::foomatic, ``{
 	    CommandLine::Print (v[`label]:k);
 	});
@@ -458,7 +458,7 @@
 	}
 	string manufacturer = (string)SCR::Read (.ppd.db.vendorname,
 	    options["manufacturer"]:"");
-	CommandLine::Print (_("Known models"));
+	CommandLine::Print (_("Known Models"));
 	foreach (string k, map v,
 	    filter (any k, any v, Printerdb::foomatic[manufacturer]:$[],
 	    ``(
@@ -491,7 +491,7 @@
 	}
 	string model = (string)SCR::Read (.ppd.db.modelname,
 	    [manufacturer, options["model"]:""]);
-	CommandLine::Print (_("Known nick names"));
+	CommandLine::Print (_("Known Nick Names"));
 	foreach (string k, map v,
 	    filter (any k, any v,
 		Printerdb::foomatic[manufacturer, model]:$[],
@@ -518,7 +518,7 @@
     map cmdline = $[
 	"id"		: "printer",
 	// command line help text for Printer module
-	"help"		: _("Printers configuration module."),
+	"help"		: _("Printer configuration module."),
 	"guihandler"	: GuiHandler,
 	"initialize"	: Printer::Read,
 	"finish"	: Printer::Write,
@@ -610,7 +610,7 @@
 		"type"		: "string",
 	    ],
 	    "raw"	: $[
-		"help"		: _("Queue will not be filtering"),
+		"help"		: _("Queue will not be filtering."),
 	    ],
 	    "manufacturer" : $[
 		"help"		: _("Printer manufacturer"),
