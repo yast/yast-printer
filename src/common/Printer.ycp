@@ -591,7 +591,7 @@
 	server_hostname = lookup (settings, "server_hostname", "");
 	default = lookup (settings, "default", "");
 	printcap = lookup (settings, "printcap", []);
-        db = settings["database"]:nil;
+        db = settings["database"]:"foomatic";//nil;
 	cups_usb_dev_names = `always;
 	index = -1;
 	deleted = [];
@@ -1647,12 +1647,16 @@ the selected spooler does not support it.
 			}
 			string suffix = getQueueSuffix (new_queues);
 			foreach (`v, new_queues, ``{
+			    map paper = getQuickPaperSize (lookup (v, "config", ""));
+                            if (nil != paper)
+                                v = add (v, "options", paper);
+
 			    if (! (Printer::db == `foomatic))
 			    {
-				map paper = getQuickPaperSize (lookup (v, "config", ""));
+/*				map paper = getQuickPaperSize (lookup (v, "config", ""));
 				if (nil != paper)
 				    v = add (v, "options", paper);
-
+*/
 			        string k = adjustQueueName (lookup (v, "name", "lp") + suffix, forbidden_names);
 			        v = add (v, "name", k);
 			    }
