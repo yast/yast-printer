@@ -1089,9 +1089,9 @@ Detect your printers?"));
 
 	if (! Mode::test ())
 	{
-	    Progress::off ();
+	    boolean progress_orig = Progress::set (false);
 	    SuSEFirewall::Read ();
-	    Progress::on ();
+	    Progress::set (progress_orig);
 	}
 
 	Progress::NextStageStep (8); // step 8-11 - check and load the database
@@ -1418,9 +1418,9 @@ the selected spooler does not support it."), name));
 	    if (testAbort ()) return false;
 	    if (! Mode::test ())
 	    {
-		Progress::off ();
+		boolean progress_orig = Progress::set (false);
 		SuSEFirewall::Write ();
-		Progress::on ();
+		Progress::set (progress_orig);
 	    }
 
 	    Progress::NextStage ();// restart spooler
@@ -1440,9 +1440,9 @@ the selected spooler does not support it."), name));
 	    if (testAbort ()) return false;
 	    if (! Mode::test ())
 	    {
-		Progress::off ();
+		boolean progress_orig = Progress::set (false);
 		SuSEFirewall::Write ();
-		Progress::on ();
+		Progress::set (progress_orig);
 	    }
 	}
 
@@ -1702,7 +1702,7 @@ the selected spooler does not support it."), name));
 		    // %1 is link to change the listenning to CUPS servers
 		    _("Listening to CUPS servers to provide access to remote queues. (%1)"),
 		    ipp_listen_modify) + "</li>");
-		if (! Mode::config () && SuSEFirewall::start)
+		if (! Mode::config () && SuSEFirewall::IsEnabled ())
 		{
 		    map<string,boolean> service_status = $[];
 		    map<string,map<string,boolean> > ifaces_info
