@@ -86,9 +86,21 @@ YCPMap ppdInfo (const char *filename)
     ppd = ppdOpenFile(ppd_filename);
     if (ppd)
     {
-        m->add (YCPString ("manufacturer"), YCPString (ppd->manufacturer));
-        m->add (YCPString("model"), YCPString(ppd->modelname));
-        m->add (YCPString ("nick"), YCPString(ppd->nickname));
+        // added tests for NULL to avoid bug #19714
+        if (ppd->manufacturer)
+          m->add (YCPString ("manufacturer"), YCPString (ppd->manufacturer));
+        else
+          m->add (YCPString ("manufacturer"), YCPString (""));
+
+        if (ppd->modelname)
+          m->add (YCPString("model"), YCPString(ppd->modelname));
+        else
+          m->add (YCPString("model"), YCPString(""));
+
+        if (ppd->nickname)
+          m->add (YCPString ("nick"), YCPString(ppd->nickname));
+        else
+          m->add (YCPString ("nick"), YCPString(""));
     }
     if (ungzipped)
         free (ungzipped);
