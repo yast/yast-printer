@@ -20,6 +20,10 @@
 #include <map>
 
 #include <Y2.h>
+#include <ycp/YCPMap.h>
+#include <ycp/YCPString.h>
+#include <ycp/YCPBoolean.h>
+#include <ycp/YCPList.h>
 
 using namespace std;
 

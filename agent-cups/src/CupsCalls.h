@@ -13,6 +13,8 @@
 #include <set>
 #include <string>
 #include <cups/ipp.h>
+#include <ycp/YCPMap.h>
+#include <ycp/YCPPath.h>
 
 using namespace std;
 

@@ -21,6 +21,10 @@
 #include <vector>
 #include <set>
 
+#include <ycp/YCPSymbol.h>
+#include <ycp/YCPList.h>
+#include <ycp/YCPMap.h>
+
 using namespace std;
 
 #define MAX        2048

@@ -15,6 +15,8 @@
 #include <list>
 #include <set>
 #include <Y2.h>
+#include <ycp/YCPMap.h>
+#include <ycp/YCPBoolean.h>
 
 using namespace std;
 
