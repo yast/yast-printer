@@ -2,23 +2,27 @@
 
 my $opts_file = $ARGV[0];
 my $out_file = $ARGV[1];
-my $logo_file = "/local/testpg/SUSE-logo.eps";
-my $photo_file = "/local/testpg/chameleon-photo.eps";
+my $logo_file = $ARGV[2];
+my $photo_file = $ARGV[3];
+
 
 open (OPTS, "$opts_file");
 open (SOURCE, "/usr/share/YaST2/data/printer/testpg.ps");
 open (OUT, ">$out_file");
 
 my %strings = ();
-my @options = ();
 
-$strings{"section1-value-text"} = "()";
-$strings{"section2-value-text"} = "()";
-$strings{"section3-value-text"} = "()";
-$strings{"section4-value-text"} = "()";
+my $have_logo = 1;
+my $have_photo = 1;
 
-my $have_logo = 0;
-my $have_photo = 0;
+if (! defined ($photo_file))
+{
+    $have_photo = 0;
+}
+if (! defined ($logo_file))
+{
+    $have_logo = 0;
+}
 
 my $line = "";
 
@@ -112,31 +116,43 @@ close (OPTS);
 
 # process the logo
 
-open (LOGO, "$logo_file");
-my @logo_bbox = ();
-while ($line = <LOGO>)
+if ($have_logo && ! open (LOGO, "$logo_file"))
 {
-    if ($line =~ /\%\%BoundingBox: [0-9]+ [0-9]+ [0-9]+ [0-9]+/)
-    {
-	@logo_bbox
-	    = $line =~ /\%\%BoundingBox: ([0-9]+) ([0-9]+) ([0-9]+) ([0-9]+)/;
-    }
+    $have_logo = 0;
 }
-close (LOGO);
+my @logo_bbox = ();
+if ($have_logo)
+{
+    while ($line = <LOGO>)
+    {
+	if ($line =~ /\%\%BoundingBox: [0-9]+ [0-9]+ [0-9]+ [0-9]+/)
+	{
+	    @logo_bbox = $line
+		=~ /\%\%BoundingBox: ([0-9]+) ([0-9]+) ([0-9]+) ([0-9]+)/;
+	}
+    }
+    close (LOGO);
+}
 
 #process the photo
 
-open (PHOTO, "$photo_file");
-my @photo_bbox = ();
-while ($line = <PHOTO>)
+if ($have_photo && ! open (PHOTO, "$photo_file"))
 {
-    if ($line =~ /\%\%BoundingBox: [0-9]+ [0-9]+ [0-9]+ [0-9]+/)
-    {
-	@photo_bbox
-	    = $line =~ /\%\%BoundingBox: ([0-9]+) ([0-9]+) ([0-9]+) ([0-9]+)/;
-    }
+    $have_photo = 0;
 }
-close (PHOTO);
+my @photo_bbox = ();
+if ($have_photo)
+{
+    while ($line = <PHOTO>)
+    {
+	if ($line =~ /\%\%BoundingBox: [0-9]+ [0-9]+ [0-9]+ [0-9]+/)
+	{
+	    @photo_bbox = $line
+		=~ /\%\%BoundingBox: ([0-9]+) ([0-9]+) ([0-9]+) ([0-9]+)/;
+	}
+    }
+    close (PHOTO);
+}
 
 # process the testpage template
 
@@ -167,23 +183,23 @@ while ($line = <SOURCE>)
 	$value = $strings{$key};
 	print OUT "/$key $value def\n";
     }
-    elsif ($line =~ /\/logoBBoxLeft .* def/)
+    elsif ($line =~ /\/logoBBoxLeft .* def/ && $have_logo)
     {
 	print OUT "/logoBBoxLeft $logo_bbox[0] def\n";
     }
-    elsif ($line =~ /\/logoBBoxBottom .* def/)
+    elsif ($line =~ /\/logoBBoxBottom .* def/ && $have_logo)
     {
 	print OUT "/logoBBoxBottom $logo_bbox[1] def\n";
     }
-    elsif ($line =~ /\/logoBBoxRight .* def/)
+    elsif ($line =~ /\/logoBBoxRight .* def/ && $have_logo)
     {
 	print OUT "/logoBBoxRight $logo_bbox[2] def\n";
     }
-    elsif ($line =~ /\/logoBBoxTop .* def/)
+    elsif ($line =~ /\/logoBBoxTop .* def/ && $have_logo)
     {
 	print OUT "/logoBBoxTop $logo_bbox[3] def\n";
     }
-    elsif ($line =~ /^logoContent$/)
+    elsif ($line =~ /^logoContent$/ && $have_logo)
     {
 	open (LOGO, "$logo_file");
 	while ($line = <LOGO>)
@@ -192,23 +208,23 @@ while ($line = <SOURCE>)
 	}
 	close (LOGO);
     }
-    elsif ($line =~ /\/photoBBoxLeft .* def/)
+    elsif ($line =~ /\/photoBBoxLeft .* def/ && $have_photo)
     {
 	print OUT "/photoBBoxLeft $photo_bbox[0] def\n";
     }
-    elsif ($line =~ /\/photoBBoxBottom .* def/)
+    elsif ($line =~ /\/photoBBoxBottom .* def/ && $have_photo)
     {
 	print OUT "/photoBBoxBottom $photo_bbox[1] def\n";
     }
-    elsif ($line =~ /\/photoBBoxRight .* def/)
+    elsif ($line =~ /\/photoBBoxRight .* def/ && $have_photo)
     {
 	print OUT "/photoBBoxRight $photo_bbox[2] def\n";
     }
-    elsif ($line =~ /\/photoBBoxTop .* def/)
+    elsif ($line =~ /\/photoBBoxTop .* def/ && $have_photo)
     {
 	print OUT "/photoBBoxTop $photo_bbox[3] def\n";
     }
-    elsif ($line =~ /^photoContent$/)
+    elsif ($line =~ /^photoContent$/ && $have_photo)
     {
 	open (PHOTO, "$photo_file");
 	while ($line = <PHOTO>)
