@@ -29,12 +29,12 @@
     import "HTML";
     import "Label";
     import "Mode";
+    import "Package";
     import "Popup";
     import "Printerdb";
     import "Printerlib";
     import "Progress";
     import "Report";
-    import "Require";
     import "Spooler";
     import "Summary";
 
@@ -343,9 +343,7 @@ $["bus":"USB", "bus_hwcfg":"usb", "class_id":265, "dev_name":"/dev/usb/lp0", "de
 		    boolean req_ret = true;
 		    if (! Pkg::IsProvided ("hp-officeJet"))
 		    {
-			req_ret = Require::RequireAndConflict (
-			    ["hp-officeJet"],
-			    [],
+			req_ret = Package::InstallMsg ("hp-officeJet",
 			    // question, %1 is package name
 			    _("An HP all-in-one device has been detected. To
 use it as both printer and scanner,
@@ -354,7 +352,7 @@ package %1 must be installed.
 Install it now?
 "));
 		    }
-		    if (! req_ret && ! Require::LastOperationCanceled ())
+		    if (! req_ret && ! Package::LastOperationCanceled ())
 		    {
 			// error report
 			Report::Error (_("Failed to install required package."));

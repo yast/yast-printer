@@ -26,10 +26,10 @@
     import "Mode";
     import "Label";
     import "Package";
+    import "PackageAI";
     import "PackageSystem";
     import "Popup";
     import "Report";
-    import "Require";
     import "Service";
 
 // local variables
@@ -302,14 +302,18 @@ This usually takes one or two minutes")),
 	if (Mode::config)
 	{
 	    Spooler::Set (to);
-	    Require::RequireAndConflictTarget (inst, del, "");
+	    PackageAI::RemoveAll (del);
+	    PackageAI::InstallAll (inst);
 	    if (Spooler::Get () == "cups")
-		// question popup
-		Require::RequireAndConflict (inst, del, _("For the selected function, the additional packages
-%1
-must be installed.
-
-Install them now?"));
+	    {
+		// using the fact that if I mark package for deletion, it gets
+		// deleted during the PackageSystem::InstallAll () call.
+		PackageSystem::EnsureTargetInit ();
+		PackageSystem::EnsureSourceInit ();
+		foreach (string p, del, {Pkg::PkgDelete (p);});
+		PackageSystem::InstallAll (inst);
+		foreach (string p, del, {Pkg::PkgNeutral (p);});
+	    }
 	    return;
 	}
 	StopServices ();
@@ -350,8 +354,6 @@ Install them now?"));
 	    SCR::Execute (.target.bash,
 		"/bin/ln -sf /etc/cups/printcap /etc/printcap");
 	}
-
-//	Require::DoInstallAndRemove (inst, del);
 
 	sys_forbidden_names = nil;
     }
@@ -426,11 +428,11 @@ Install them now?"));
 		return available;
 	    });
 	    y2milestone ("Available packages: %1", packages);
-	    i_result = Require::RequireAndConflictTarget (packages, [],
+	    i_result = Package::InstallAllMsg (packages,
 		// question popup, %1 is list of package names
 		_("Printer drivers are not installed. YaST will install
 packages %1."));
-	    if (! (i_result || Require::LastOperationCanceled ()))
+	    if (! (i_result || Package::LastOperationCanceled ()))
 	    {
 		// error report
 		Report::Error (_("Installing packages failed."));
