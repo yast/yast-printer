@@ -368,10 +368,13 @@ only if a CUPS spooler is used
 		_("&Other Kind of Setup"),
 		selected == `other)));
 	// dialog caption
-	return runGenericConnectionTypeDialog (items, _("Printer Type"),
+	symbol ret = runGenericConnectionTypeDialog (items, _("Printer Type"),
 	    // frame label
 	    _("Select Your Printer Type:"),
 	    getConnectionTypeHelp (add_queue), `connection_type);
+	if (ret == `lpd)
+	    Printer::printer["proposed_raw"] = true;
+	return ret;
     }
 
     /**
@@ -450,6 +453,7 @@ only if a CUPS spooler is used
 "),
 		selected == `ipp))
 	);
+	Printer::printer["proposed_raw"] = true;
 	// dialog caption
 	return runGenericConnectionTypeDialog (items, _("Connection type"),
 	    // frame label
@@ -484,7 +488,10 @@ only if a CUPS spooler is used
 		_("Remote &IPP Queue"),
 		selected == `ipp))
 	);
+	Printer::printer["proposed_raw"] = false;
+	// dialog caption
 	return runGenericConnectionTypeDialog (items, _("Printer Type"),
+	    // frame label
 	    _("Select Your Printer Type:"),
 	    getDirectConnectionsHelp (), `connection_direct);
 
@@ -517,7 +524,10 @@ only if a CUPS spooler is used
 		_("&Other Printer (set URI)"),
 		selected == `uri))
 	);
+	Printer::printer["proposed_raw"] = false;
+	// dialog caption
 	return runGenericConnectionTypeDialog (items, _("Printer Type"),
+	    // frame label
 	    _("Select Your Printer Type:"),
 	    getOtherConnectionsHelp (), `connection_other);
     }

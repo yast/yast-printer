@@ -665,12 +665,17 @@ y2error ("File: %1", file);
 	string uri = Printer::printer["uri"]:"";
 	string uri_type = Printerlib::getUriType (uri);
 	boolean raw = (boolean) (Printer::printer["raw"]:nil);
+
 	if (raw == nil)
 	{
 	    if (uri_type == "lpd" || uri_type == "ipp")
-		raw = true;
+	    {
+		raw = Printer::printer["proposed_raw"]:true;
+	    }
 	    else
+	    {
 		raw = false;
+	    }
 	}
 	boolean ff = Printer::printer["ff"]:false;
 	boolean is_class = uri_type == "class";
