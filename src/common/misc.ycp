@@ -523,66 +523,14 @@ of printers.
       * @return name of the PPD file
       */
     global define string getAutoPpdFile (map ppds, string vend, string mod) ``{
-	vend = SCR::Read (.ppd.db.vendorname, vend);
-	mod = SCR::Read (.ppd.db.modelname, [vend, mod]);
-	SCR::Execute (.target.bash, sformat ("/usr/bin/touch %1/ppd_preference_list", Printerlib::baseDataDir));
-	map order = SCR::Read (.target.ycp, sformat ("%1/ppd_preference_list", Printerlib::baseDataDir));
-	if (order == nil)
-	    order = $[];
-	boolean have_recom = false;
-
-	list(string) preferred = [];
-	foreach (`k, `v, order, ``{
-	    if (regexpmatch (vend, k))
-	    {
-		foreach (`kk, `vv, v, ``{
-		    if (regexpmatch (mod, kk))
-		    {
-			y2debug ("Matched %1, %2", k, kk);
-			preferred = order[k, kk]:[];
-		    }
-		});
-		if (preferred == [])
-		{
-		    preferred = order[k, "__default__"]:[];
-		}
-
-	    }
+	list(string) names = [];
+	map mapping = $[];
+	foreach (`k, `v, ppds, ``{
+	    mapping[v] = k;
+	    names = add (names, v);
 	});
-	if (preferred == [])
-	    preferred = order["__default__"]:[];
-	y2debug ("Autoinst preferred list: %1", preferred);
-	boolean found = false;
-	string choosen = "";
-	string fallback = "";
-	foreach (`i, preferred, ``{
-	    if (! found)
-	    {
-		foreach (`k, `v, ppds, ``{
-		    if (fallback == "")
-		    {
-			y2debug ("Setting fallback to %1", k);
-			fallback = k;
-		    }
-		    if (choosen == "" && regexpmatch (v, i))
-		    {
-			y2debug ("Setting choosen to %1", k);
-			choosen = k;
-		    }
-		    else if ((! have_recom)&&(issubstring (v, "(recommended)")))
-		    {
-			y2debug ("Setting preferred to %1", k);
-			found = true;
-			have_recom = true;
-			choosen = k;
-		    }
-		});
-	    }
-	});
-	if (choosen == "")
-	    choosen = fallback;
-	y2debug ("Choosen PPD file: %1", choosen);
-	return choosen;
+	string ret = select (sortPpds (vend, mod, names), 0, "");
+	return mapping[ret]:ret;
     }
 
     /**
