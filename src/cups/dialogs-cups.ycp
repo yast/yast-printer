@@ -694,7 +694,13 @@
      * @return symbol `next or `back
      */
     define symbol runCupsAclDialog (symbol type) ``{
-	string pth = type == `root ? "/" : type == `admin ? "/admin" : type == `printers ? "/printers" : "/classes";
+	string pth = type == `root
+	    ? "/"
+	    : (type == `admin
+		? "/admin"
+		: (type == `printers
+		    ? "/printers"
+		    : "/classes"));
 	boolean show_ignore = type != `root && type != `admin;
 	term contents = `HBox (
 	    `HSpacing (2),
@@ -727,7 +733,7 @@
 
 	// dialog caption
         Wizard::SetContentsButtons (sformat (_("CUPS permissionss for %1"), pth), contents, getCupsAclHelp (show_ignore), Label::BackButton (), Label::NextButton ());
-	map<string, list<string> > settings = lookup (CUPS::cups_server_permissions, pth, $[]);
+	map<string, list<string> > settings = CUPS::cups_server_permissions[pth]:$[];
 	if (settings["Order"]:["Deny,Allow"] == ["Allow,Deny"])
 	    UI::ChangeWidget (`id (`ad), `Value, true);
 	else
