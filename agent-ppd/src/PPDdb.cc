@@ -550,6 +550,7 @@ start_from_scratch:
 		fprintf(file,"        \"checksum\" : \"%s\",\n", (*it3).second.checksum.c_str());
 		fprintf(file,"        \"size\" : %d,\n", (*it3).second.size);
 		fprintf(file,"        \"filter\" : \"%s\",\n", (*it3).second.filter.c_str());
+		fprintf(file,"        \"language\" : \"%s\",\n", (*it3).second.language.c_str());
                 fprintf(file,"      ]");
             }
             fprintf(file,"\n    ]");
@@ -1234,8 +1235,8 @@ void PPD::preprocess(PPD::PPDInfo info, PPDInfo *newinfo) {
 	nick = filename;
     nick = addbrace(nick);
 
-    if(lang!="English")
-        nick = nick+" ("+lang+")";
+//    if(lang!="English")
+//        nick = nick+" ("+lang+")";
 
     /* Modify the model db key */
     signed ind = (signed) printer.find_last_of("(");
@@ -1296,6 +1297,7 @@ void PPD::preprocess(PPD::PPDInfo info, PPDInfo *newinfo) {
 	item.checksum = checksum;
 	item.size = filesize;
 	item.filter = filter;
+	item.language = lang;
 	bool updating_model = false;
 	VendorInfo vi;
 	if (db.find (vendor) != db.end ())
@@ -1540,6 +1542,16 @@ bool PPD::loadPrebuiltDatabase () {
                                         goto error_exit;
                                     }
                                     di.filter = it4.value()->asString()
+                                        ->value_cstr();
+                                }
+                                if (ak == "language")
+                                {
+                                    if (! it4.value()->isString ())
+                                    {
+                                        y2error ("Incorrect database format");
+                                        goto error_exit;
+                                    }
+                                    di.language = it4.value()->asString()
                                         ->value_cstr();
                                 }
 			    }

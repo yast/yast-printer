@@ -33,6 +33,30 @@
     import "Spooler";
     import "Wizard";
 
+/**
+ * Get description of the PPD file
+ * @param nick string the nick name of the PPD file
+ * @param language string langauge of the PPD file
+ * @param filename string file name of the PPD file
+ * @return string description of the PPD file
+ */
+define string GetPpdFileDescription (string nick, string language,
+    string filename)
+{
+    string label = nick;
+    if (language != "" && language != "English")
+    {
+	label = sformat ("%1 (%2)", label, language);
+    }
+    if (filename != "")
+    {
+	if (substring (filename, 0, 22) == "/usr/share/cups/model/")
+	    filename = substring (filename, 22);
+	label = label + sformat (" (%1)", filename);
+    }
+    return label;
+}
+
     /**
       * Get auto queues for printer when using foomatic database
       * @param vendor string vendor db key

@@ -82,6 +82,39 @@ string Language2Encoding (string language) ``{
 }
 
 /**
+ * Translate the country code (eg. cs_CZ) to language name "czech"
+ * @param string the country code
+ * @return string language name
+ */
+string Code2Language (string code) {
+    string orig_code = code;
+    if (regexpmatch (code, ".*\\..*"))
+	code = regexpsub (code, "(.*)\\..*", "\\1");
+    if (regexpmatch (code, ".*_.*"))
+	code = regexpsub (code, ".*_(.*)", "\\1");
+    map<string,string> mapping = $[
+	"EN" : "English",
+	"US" : "English",
+	"DK" : "Danish",
+	"NL" : "Dutch",
+	"FI" : "Finnish",
+	"FR" : "French",
+	"DE" : "German",
+	"IT" : "Italian",
+	"JA" : "Japanese",
+	"NO" : "Norwegian",
+	"PT" : "Portuguese",
+	"ES" : "Spanish",
+	"SW" : "Swedish",
+	"CZ" : "Czech",
+	"SK" : "Slowak",
+    ];
+    string lang = tolower (mapping[toupper (code)]:code);
+    y2milestone ("Code %1 -> Language %2", orig_code, lang);
+    return lang;
+}
+
+/**
  * Get the characters encoding from the form in it is present in PPD file
  * to the form that can be passed to iconv
  * @param ppd_enc string encoding in the form for PPD file
@@ -155,17 +188,43 @@ global boolean GetDriversAreInstalled () {
      * @param vendor_db string database key of the vendor
      * @param device_db string database key of the model
      * @param nick string nick name
+     * @param lang string preferred language version
      * @return a list of all files with the specified nick name
      */
     global define list<string> getFilesFromNickName (
 	string vendor_db,
 	string device_db,
-	string nick)
+	string nick,
+	string lang)
     {
-	map<string,any> ppds = foomatic[vendor_db, device_db]:$[];
-	ppds = filter (string fn, any v, ppds, {
+	lang = tolower (lang);
+	map<string,any> ppds_tmp = foomatic[vendor_db, device_db]:$[];
+	ppds_tmp = filter (string fn, any v, ppds_tmp, {
 	    return is (v, map) && ((map)v)["nickname"]:"" == nick;
 	});
+	map<string,map> ppds = (map<string,map>) ppds_tmp;
+	map<string,map> backup = ppds;
+	if (lang != "")
+	{
+	    ppds = filter (string fn, map v, ppds, {
+		return tolower (v["language"]:"") ==lang;
+	    });
+	}
+	// try english one if none found
+	if (size (ppds) == 0)
+	{
+	    ppds = backup;
+	    lang = "english";
+	    ppds = filter (string fn, map v, ppds, {
+		return tolower (v["language"]:"") ==lang;
+	    });
+	}
+	// well, take them all
+	if (size (ppds) == 0)
+	{
+	    ppds = backup;
+	}
+
 	list<string> ret = maplist (string fn, any v, ppds, {return fn;});
 	y2milestone ("File names of %1: %2", nick, ret);
 	return ret;
@@ -177,15 +236,17 @@ global boolean GetDriversAreInstalled () {
      * @param vendor_db string database key of the vendor
      * @param device_db string database key of the model
      * @param nick string nick name
+     * @param lang string preferred language of the PPD file
      * @return string file with the specified nick name
      */
     global define string getFileFromNickName (
 	string vendor_db,
 	string device_db,
-	string nick)
+	string nick,
+	string lang)
     {
-	list<string> all = getFilesFromNickName (vendor_db, device_db, nick);
-	// FIXME in case of localized files
+	list<string> all = getFilesFromNickName (vendor_db, device_db, nick,
+	    lang);
 	return all[0]:"";
     }
 
@@ -550,14 +611,42 @@ global define string getAutoPpdFile (string vendor_db, string device_db) {
     list<string> ppds = sortPpds (vendor_db, device_db);
     if (size (ppds) == 0)
 	return nil;
-    if (known_filters == nil)
-	return (string) (ppds[0]:nil);
     // if not all filters are supported, choose the first PPD file that is
-    return (string)find (string s, ppds, {
-	return contains (
-	    known_filters,
-	    foomatic[vendor_db, device_db, s, "filter"]:"");
+    if (known_filters != nil)
+    {
+	ppds = filter (string p, ppds, {
+	    return contains (
+		known_filters,
+		foomatic[vendor_db, device_db, p, "filter"]:"");
+	});
+    }
+    string first_nick
+	= foomatic[vendor_db, device_db, ppds[0]:"", "nickname"]:"";
+    ppds = filter (string p, ppds, {
+	return foomatic[vendor_db, device_db, p, "nickname"]:"" == first_nick;
     });
+    string lang = (string)SCR::Read (.sysconfig.language.RC_LANG);
+    lang = Code2Language (lang);
+    string ret = find (string p, ppds, {
+	return tolower (foomatic[vendor_db, device_db, p, "language"]:"")
+	    == lang;
+    });
+    // try English as fallback
+    if (ret == nil)
+    {
+	lang = "english";
+	string ret = find (string p, ppds, {
+	    return tolower (foomatic[vendor_db, device_db, p, "language"]:"")
+		== lang;
+	});
+    }
+    // well, take the first of none found
+    if (ret == nil)
+    {
+	ret = ppds[0]:"";
+    }
+    y2milestone ("Selected file: %1", ret);
+    return ret;
 }
 
     /**
