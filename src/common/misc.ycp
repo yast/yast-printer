@@ -133,6 +133,94 @@
     }
 
     /**
+      * Sort PPD files according to preference list
+      * @param vendor string vendor name
+      * @param model string model name
+      * @param ppds list of PPD file nicknames
+      * @return list of sorted PPD nicknames
+      */
+    global define list sortPpds (string vend, string mod, list ppds) ``{
+        vend = SCR::Read (.ppd.db.vendorname, vend);
+	mod = SCR::Read (.ppd.db.modelname, [vend, mod]);
+        SCR::Execute (.target.bash, sformat ("/usr/bin/touch %1/ppd_preference_list", Printerlib::baseDataDir));
+        map order = SCR::Read (.target.ycp, sformat ("%1/ppd_preference_list", Printerlib::baseDataDir));
+        if (order == nil)
+            order = $[];
+
+        list(string) preferred = [];
+        foreach (`k, `v, order, ``{
+            if (regexpmatch (vend, k))
+            {
+                foreach (`kk, `vv, v, ``{
+                    if (regexpmatch (mod, kk))
+                    {
+                        y2debug ("Matched %1, %2", k, kk);
+                        preferred = order[k, kk]:[];
+                    }
+                });
+                if (preferred == [])
+                {
+                    preferred = order[k, "__default__"]:[];
+                }
+
+            }
+        });
+        if (preferred == [])
+            preferred = order["__default__"]:[];
+        y2debug ("Order preferred list: %1", preferred);
+
+	map recom = $[];
+	map other = $[];
+
+	foreach (`k, ppds, ``{
+	    boolean found = false;
+	    foreach (`i, preferred, ``{
+		if (! found && regexpmatch (k, i))
+		{
+		    if (issubstring (k, "(recommended)"))
+		    {
+			recom[i] = add (recom[i]:[], k);
+		    }
+		    else
+		    {
+			other[i] = add (other[i]:[], k);
+		    }
+		    found = true;
+		}
+
+	    });
+	    if (! found)
+	    {
+                if (issubstring (k, "(recommended)"))
+                {
+                    recom["other"] = add (recom["other"]:[], k);
+                }
+                else
+                {
+                    other["other"] = add (other["other"]:[], k);
+                }
+	    }
+	});
+
+	list result = [];
+
+	y2milestone ("Recom: %1, other: %2", recom, other);
+
+	foreach (`i, preferred, ``{
+	    result = merge (result, recom[i]:[]);
+	});
+	result = merge (result, recom["other"]:[]);
+
+        foreach (`i, preferred, ``{
+            result = merge (result, other[i]:[]);
+        });
+        result = merge (result, other["other"]:[]);
+
+	y2milestone ("Sorteed PPD files: %1", result);
+	return result;
+    }
+
+    /**
       * Get auto queues for printer when using foomatic database
       * @param vendor string vendor db key
       * @param model string model db key
@@ -154,8 +242,10 @@
             ppdfile_orig = getAutoPpdFile (ppds, vendor, model);
 	else
 	    ppdfile_orig = Printer::foomatic[vendor, model, config, 0]:"";
+	y2milestone ("Choosen PPD file: %1", ppdfile_orig);
         string config = ppds[ppdfile_orig]:"";
-        string ppdfile = SCR::Read (.ppd.file.open, [ppdfile_orig, "/tmp"]);
+        string ppdfile = SCR::Read (.ppd.file.open,
+	    [ppdfile_orig, SCR::Read (.target.tmpdir)]);
         map options = SCR::Read (.ppd.file.options, [ppdfile, ""]);
         list opts = options["data"]:[];
 // FIXME multiple composite options checking ????
@@ -210,6 +300,7 @@
                 return union (Printer::printer, v);
         });
 	y2milestone ("Proposing queues %1", maplist (`q, new_queues, ``(q["name"]:"")));
+	y2debug ("Proposed queues: %1", new_queues);
 	return new_queues;
     }
 
@@ -229,6 +320,7 @@
             y2milestone ("Database changed");
             SCR::Write (.ppd.db.create, "");
 	    UI::OpenDialog (`ProgressBar (`id(`pr),
+		// progress bar label
 		_("Initializing database of printers"), 100, 0));
 	    integer result = 0;
 	    while (true)
@@ -244,13 +336,14 @@
 	    UI::CloseDialog ();
 	    if (result < 0)
 	    {
+		// error report
 		Report::Error (_("An error occured while creating database
 of printers"));
 	    }
         }
 	Printer::foomatic= SCR::Read (.target.ycp, "/var/lib/YaST2/ppd_db.ycp");
 
-	string res = "";
+/*	string res = "";
 	foreach (`k, `v, Printer::foomatic, ``{
 	    foreach (`kk, `vv, v, ``{
 		if (is (kk, string) && vv[`support]:3 == 3)
@@ -259,18 +352,19 @@ of printers"));
 		}
 	    });
 	});
-	SCR::Write (.target.string, "/tmp/ppdfiles", res);
+	SCR::Write (.target.string, "/tmp/ppdfiles", res);*/
     }
 
     /**
       * Get the PPD file for automatic installation
       * @param ppds map of ppd files
       * @param vend string vendor name
-      * @param mdo string model name
+      * @param mod string model name
       * @return name of the PPD file
       */
     global define string getAutoPpdFile (map ppds, string vend, string mod) ``{
-	vendor = SCR::Read (.ppd.db.vendorname, vendor);
+	vend = SCR::Read (.ppd.db.vendorname, vend);
+	mod = SCR::Read (.ppd.db.modelname, [vend, mod]);
 	SCR::Execute (.target.bash, sformat ("/usr/bin/touch %1/ppd_preference_list", Printerlib::baseDataDir));
 	map order = SCR::Read (.target.ycp, sformat ("%1/ppd_preference_list", Printerlib::baseDataDir));
 	if (order == nil)
@@ -297,7 +391,7 @@ of printers"));
 	});
 	if (preferred == [])
 	    preferred = order["__default__"]:[];
-//	y2milestone ("Autoinst preferred list: %1", preferred);
+	y2milestone ("Autoinst preferred list: %1", preferred);
 	boolean found = false;
 	string choosen = "";
 	string fallback = "";
@@ -307,14 +401,17 @@ of printers"));
 		foreach (`k, `v, ppds, ``{
 		    if (fallback == "")
 		    {
+			y2milestone ("Setting fallback to %1", k);
 			fallback = k;
 		    }
 		    if (choosen == "" && regexpmatch (v, i))
 		    {
+			y2milestone ("Setting choosen to %1", k);
 			choosen = k;
 		    }
 		    else if ((! have_recom)&&(issubstring (v, "(recommended)")))
 		    {
+			y2milestone ("Setting preferred to %1", k);
 			found = true;
 			have_recom = true;
 			choosen = k;
@@ -322,9 +419,11 @@ of printers"));
 		});
 	    }
 	});
+	y2milestone ("Choosen PPD file: %1", choosen);
 	if (choosen == "")
 	    choosen = fallback;
 //	y2milestone ("Chose file %1, %2", choosen, ppds[choosen]:"");
+	y2milestone ("Choosen PPD file: %1", choosen);
 	return choosen;
     }
 
@@ -347,7 +446,7 @@ of printers"));
 	    }
 	});
 	map ppds = $[];
-	string device_db = device; // FIXME
+	string device_db = SCR::Read (.ppd.db.modelname, [vendor_db, device]);
 	cache = filterchars (tolower (device_db),
 	    "abcdefghijklmnopqrstuvwxyz0123456789");
 	foreach (`k1, `v1, models, ``{
@@ -402,6 +501,7 @@ of printers"));
     global define void showCupsInitPopup () ``{
 	// popup
 	UI::OpenDialog(`opt(`decorated ),`VBox (
+		// label
 	    `Label(_("Initializing CUPS server...
 This usually takes one or two minutes")),
 	    `ProgressBar (`id (`cups_prog), "", 60 * 10)));
@@ -758,6 +858,7 @@ queue you want to use."));
     }
 
     if (do_not_test) {
+		// message popup
 	    UI::MessagePopup (_("Unable to print a test page, you are using different spooler."));
         return false;
     }
@@ -946,7 +1047,12 @@ press 'OK'.
 		os = os + sformat ("----X-HEAD: (%1)\n", _("YaST2 test page"));
 
 		// options
-		string filename = SCR::Read (.ppd.file.open, [Printer::foomatic[printer["vendor_db"]:"", printer["device_db"]:"", printer["config"]:"", 0]:"", "/tmp"]);
+		string filename = SCR::Read (.ppd.file.open,
+		    [Printer::foomatic[
+			printer["vendor_db"]:"",
+			printer["device_db"]:"",
+			printer["config"]:"", 0]:"",
+		    SCR::Read (.target.tmpdir)]);
 		map options = SCR::Read (.ppd.file.options, [filename, ""]);
 		list optlist = options["data"]:[];
 		optlist = maplist (`i, optlist, ``{
@@ -1119,6 +1225,7 @@ When the whole page is printed, press
                 return true;
             }
 	return UI::AnyQuestionPopup( NoHeadline(),
+// question popup
 _("Really leave Printers configuration without saving?
 All changes will be lost!"),
                                       YesButtonLabel(),

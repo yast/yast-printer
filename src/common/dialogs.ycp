@@ -181,6 +181,9 @@ Install them now?"), mergestring (packages, ", "));
 	else
 	    devices = [];
 
+//	if (type == "usb")
+//	    devices = merge (Printerlib::getCupsUsbDevices (), devices);
+
 	if (size (devices) == 0)
 	{
 	    if (type == "parallel")
@@ -221,6 +224,8 @@ that your parallel port is not properly configured.
 	if (device == "")
 	    device = select (devices, 0, "");
 	list device_val = getDevicesItems (devices, device);
+//	if (type == "usb")
+//	    device_val = merge (Printerlib::getCupsUsbDevices (), device_val);
 	term details = `VBox (
 	    // PushButton
 	    `HBox (`HStretch (), `PushButton (`id (`details), _("&Other...")))
@@ -961,6 +966,7 @@ with SuSE database of printers only</B></P>") + info_text;
 
 	// selection box label
 	term manufsel = `SelectionBox (`id (`manufsel), `opt (`notify),
+		// selection boc title
 	    _("&Select manufacturer:"),
 	    Printer::db == `foomatic
 // FIXME vendor labels
@@ -1257,7 +1263,8 @@ with SuSE database of printers only</B></P>") + info_text;
 		    map ppd = Printer::ppdInfo (filename);
 		    filename = lookup (ppd, "manufacturer", "") + " : " + lookup (ppd, "model", "");
 		}
-		y2error ("Has own ppd, %1, printer is %2", filename, p);
+		y2milestone ("Has own ppd, %1, printer is %2", filename, p);
+		// selection box entry: <filename>, Parallel printer on /dev/lp0
 		return `item (`id (counter), sformat (_("%1, %2"),
 		    filename,
 		    Printerlib::getUriNiceName (lookup (p, "uri", ""))));
@@ -1270,6 +1277,7 @@ with SuSE database of printers only</B></P>") + info_text;
 
 	term contents = `HBox (`HSpacing (2), `VBox (
 	    `VSpacing (2),
+		// selection box label
 	    `SelectionBox (`id (`printers), `opt (`hstretch), _("&Select printer:"), sel_items),
 	    `VSpacing (2)
 	), `HSpacing (2));
@@ -1320,7 +1328,8 @@ with SuSE database of printers only</B></P>") + info_text;
 	map info = $[];
 	list cfgs = [];
 	map cfgsmap = $[];
-	boolean foomatic = Printer::printer["database"]:"" == "foomatic";
+	boolean foomatic = Printer::printer["database"]:"" == "foomatic"
+	    || Printer::printer["ownppd"]:"" != "";
 	y2milestone ("Configuring queue %1", Printer::printer);
 	if (foomatic)
 	{
@@ -1338,20 +1347,32 @@ with SuSE database of printers only</B></P>") + info_text;
 
 	    }
 
-	    list ppds = maplist (`k, `v, filter (`kk, `vv, Printer::foomatic[manuf_db, model_db]:$[], ``(kk != `label)), ``(k));
+	    list ppds = maplist (`k, `v, filter (`kk, `vv, Printer::foomatic[manuf_db, model_db]:$[], ``(is (kk, string))), ``(k));
 
-	    if (Printer::printer["ownppd"]:"" != "" && ! ppd_only)
+	    if (Printer::printer["ownppd"]:"" != "")
 	    {
 		y2milestone ("proposing from custom PPD file");
 		ppds = [`ownppd];
 	    }
+	    else
+	    {
+		ppds = sortPpds (manuf_db, model_db, ppds);
+	    }
 
 	    cfgs = [];
 	    foreach (`k, ppds, ``{
-		string ppdfile_orig = Printer::foomatic[manuf_db, model_db,
-		    k, 0]:"";
+		string ppdfile_orig = "";
+
 		if (k == `ownppd && Printer::printer["ownppd"]:"" != "")
 		    ppdfile_orig = Printer::printer["ownppd"]:"";
+		else if (is (k, string))
+		{
+		    y2debug ("V: %1, M: %2, K: %3", manuf_db, model_db, k);
+		    ppdfile_orig = Printer::foomatic[manuf_db, model_db, k, 0]:"";
+		}
+
+		if (ppdfile_orig == "")
+		    return;
 
 		if (k == `ownppd)
 		{
@@ -1362,7 +1383,7 @@ with SuSE database of printers only</B></P>") + info_text;
 		}
 		else if (is (k, symbol))
 		{
-		    continue;
+		    return;
 		}
 		else
 		{			// done inside agent
@@ -1380,7 +1401,7 @@ with SuSE database of printers only</B></P>") + info_text;
 		    return;
 		}
 		string ppdfile = SCR::Read (.ppd.file.open,
-		    [ppdfile_orig, "/tmp"]);
+		    [ppdfile_orig, SCR::Read (.target.tmpdir)]);
 		map options = SCR::Read (.ppd.file.options, [ppdfile, ""]);
 		list opts = options["data"]:$[];
 // FIXME multiple composite options checking ????
@@ -1411,8 +1432,6 @@ with SuSE database of printers only</B></P>") + info_text;
 		{
 		    ppd_label_part = select (regexptokenize (k, ".*, (.*)"), 0, k);
 		}
-                cfgs = add (cfgs, `item (`id (k), k));
-                cfgsmap[k] = k;
 
                 foreach (`v, composite["valorder"]:[], ``{
                     string optname = composite["name"]:"";
@@ -1752,6 +1771,7 @@ with SuSE database of printers only</B></P>") + info_text;
 	contents = `HBox (`HSpacing (4),
 		// frame
 		`VBox (
+			// frame label
 		    `Frame (_("Queue name and spooler settings"), contents),
 		    `VSpacing (2),
 		    insert3
@@ -1794,7 +1814,6 @@ with SuSE database of printers only</B></P>") + info_text;
 		    raw = false;
 		    ff = false;
 		}
-y2error ("Setting raw to %1", raw);
 		name = tolower (UI::QueryWidget (`id (`name), `Value));
 		if (Printer::spooler != "lprng")
 		{
@@ -2042,13 +2061,16 @@ y2error ("Setting raw to %1", raw);
 		orig_name = Printer::printer["ownppd"]:"";
 	    if (orig_name == "")
 	    {
+		// error report
 		Report::Error (_("Unknown PPD file. Select printer model."));
 		return `back;
 	    }
-	    filename = SCR::Read (.ppd.file.open, [orig_name, "/tmp"]);
+	    filename = SCR::Read (.ppd.file.open,
+		[orig_name, SCR::Read (.target.tmpdir)]);
 	    if (filename == "")
 	    {
 		Report::Error (sformat (
+			// error report
 		    _("Error occured while opening PPD file\n%1"),
 		    orig_name));
 		return `back;
@@ -2384,6 +2406,7 @@ y2error ("Setting raw to %1", raw);
                 {
 			// table entry
                     items = add (items, `item (`id (`model), _("Printer model"), know ? model_text : _("unknown")));
+			// table entry
                     items = add (items, `item (`id (`config), _("Printer configuration"), config_text));
                 }
             }
@@ -3061,6 +3084,10 @@ the current configuration.
       */
     global map printer_backup = $[];
     /**
+      * Newely created queue
+      */
+    global map new_added_queue = $[];
+    /**
       * Backup of printer URI
       */
     global string uri_backup = nil;
@@ -3083,16 +3110,25 @@ the current configuration.
 	string vendor = Printer::printer["vendor"]:"";
 	string device = Printer::printer["device"]:"";
 
+	y2debug ("Single printer dialog: cap: %1,\nter: %2\nuri: %3\nagain: %4", printcap_backup, printer_backup, uri_backup, running_again);
+	y2debug ("Single printer dialog: Real: cap: %1\nter: %2\n", Printer::printcap, Printer::printer);
 
 	list mb_items = [
+		// menubutton item
 	    `item (`id (`clear), _("&Remove everything")),
+		// menubutton item
 	    `item (`id (`again), _("Re&propose")),
 	];
 	if (Printer::db == `foomatic)
 	{
 	    mb_items = add (mb_items, `item (`id (`choose_ppd),
+		// menubutton item
 		_("&Choose PPD file")));
 	}
+
+	mb_items = add (mb_items, `item (`id (`choose_model),
+	    // menubutton item
+	    _("Choose &model")));
 
         if (uri_backup != nil)
         {
@@ -3152,6 +3188,7 @@ the current configuration.
 	}
 	else
 	{
+		y2error ("New queues: %1", Printer::printcap);
 	    queues = Printer::printcap;
 	    Printer::printcap = printcap_backup;
 	    printcap_backup = [];
@@ -3161,6 +3198,12 @@ the current configuration.
 	{
 	    Printer::printer = printer_backup;
 	    printer_backup = $[];
+	}
+
+	if (new_added_queue != $[])
+	{
+	    queues = add (queues, new_added_queue);
+	    new_added_queue = $[];
 	}
 
 	first_queue = nil;
@@ -3181,6 +3224,7 @@ the current configuration.
 		// frame label
 		`VBox (
 		    `Heading (
+			// heading label
 			_("The following print queues have been configured:")
 		    ),
 		    `HBox (
@@ -3194,7 +3238,11 @@ the current configuration.
 				 _("Comment"),
 				// table header
 				_("New")),
-				maplist (`v, queues, ``(`item (`id (v["name"]:""), v["name"]:"", v["comment"]:"", v["new"]:false ? _("Yes") : _("No"))))
+				maplist (`v, queues, ``(`item (`id (v["name"]:""), v["name"]:"", v["comment"]:"", v["new"]:false ?
+					// tabel entry
+					_("Yes") :
+					// table entry
+					_("No"))))
 				),
 			    `VSpacing (0.5),
 			    `HBox (
@@ -3247,7 +3295,8 @@ the current configuration.
 			testPrinter (e, -1);
 		});
 	    }
-	    else if (ret == `clear || ret == `again || ret == `choose_ppd)
+	    else if (ret == `clear || ret == `again || ret == `choose_ppd
+		|| ret == `choose_model)
 	    {
 		// yes-no popup 1/3
 		string warning = _("Warning!
@@ -3273,11 +3322,6 @@ for proposing new queues.");
 		{
 		    break;
 		}
-//maplist (`v, queues, ``(`item (`id (v["name"]:""), v["name"]:"", v["comment"]:"", v["new"]:false ? _("Yes") : _("No")))));
-	    }
-	    else if (ret == `choose_ppd)
-	    {
-
 	    }
 	    else if (ret == `edit)
 	    {
@@ -3299,8 +3343,12 @@ for proposing new queues.");
 		    queues = filter (`q, queues, ``(
 			q["name"]:"" != i
 		    ));
-		    UI::ChangeWidget (`id (`table), `Items, maplist (`v, queues, ``(`item (`id (v["name"]:""), v["name"]:"", v["comment"]:"", v["new"]:false ? _("Yes") : _("No")))));
-// TODO		    UI::ChangeWidget (`id (`table), `CurrentItem, 
+		    UI::ChangeWidget (`id (`table), `Items, maplist (`v, queues, ``(`item (`id (v["name"]:""), v["name"]:"", v["comment"]:"",
+			// table entry
+			v["new"]:false ? _("Yes")
+			// table entry
+			: _("No")))));
+// TODO		    UI::ChangeWidget (`id (`table), `CurrentItem,
 		}
 	    }
 	    else
@@ -3353,7 +3401,7 @@ for proposing new queues.");
 	    }
 
 	}
-	else if (ret == `choose_ppd || ret == `again)
+	else if (ret == `choose_ppd || ret == `again || ret == `choose_model)
 	{
 	    list tmp_printcap = Printer::printcap;
 	    list deleted_queues = maplist (`q, queues, ``(q["name"]:""));
@@ -3388,6 +3436,7 @@ for proposing new queues.");
 	    }
 	    return `item (`id (current),
 		isPrinterConfigured (i)
+			// table entry, eg. Queue for Epson Stylus Photo on First parallel port (/dev/lp0)
 			? sformat (_("Queue for %1 %2 on %3"), lookup (i, "vendor", ""), lookup (i, "device", ""),
 				Printerlib::getDeviceNiceName (lookup (i, "dev_name", "")))
 			  // Translators: "... on ...": will be st. like: Canon BJC-6100 on first parallel port.
@@ -3668,6 +3717,10 @@ All your changes will be lost.
 	return `db;
     }
 
+    /**
+      * Get configuration type for queue
+      * @return symbol for wizard sequencer
+      */
     global define symbol queueConfType () ``{
 	y2milestone ("Confmode is %1, utirype %2", Printer::confmode, Printer::getUriType ());
 	if ("prefilter" == Printer::getUriType ())
@@ -3679,6 +3732,16 @@ All your changes will be lost.
 	symbol ret = `all;//Printer::confmode == `adm ? `all : `single;
 	return ret;
     }
+
+    /**
+      * Store queue to temporary storage
+      * @return symbol for wizard sequencer
+      */
+    global define symbol storeQueue () ``{
+	new_added_queue = Printer::printer;
+	return `next;
+    }
+
     /**
      * Get map of aliases for wizard sequencer.
      * @return aliases
@@ -3731,6 +3794,7 @@ All your changes will be lost.
 	    "single" :		``(runSinglePrinterDialog ()),
 	    "redetect" :	[ ``(runProbeDialog ()), true ],
 	    "storeprinter" :	[ ``(storePrinter ()) , true ],
+	    "storequeue" :	[ ``(storeQueue ()), true ],
 	    "ppdetails" :	[ ``(Printerlib::editParallelPort ()), true ],
 	    "spdetails" :	[ ``(Printerlib::editSerialPort ()), true ],
 	    "revertdb" :	[ ``(revertDbPopup ()), true ],
@@ -3866,7 +3930,6 @@ All your changes will be lost.
 		`switch : `switch,
 		],
 	    ];
-	// FIXME custom PPD file
 	map single_printer_sequence = $[
 	    "ws_start" : "single",
 	    "single" : $[
@@ -3876,10 +3939,14 @@ All your changes will be lost.
 		`add : "add_queue_wz",
 		`again : "single",
 		`choose_ppd : "ppdselect",
+		`choose_model : "model",
 	    ],
 	    "edit_printer_wz" : $[ `abort : `abort, `next : "single"],
 	    "add_queue_wz" : $[ `abort : `abort, `next : "single"],
 	    "ppdselect" : $[ `abort : `abort, `next : "single", ],
+	    "model" : $[ `abort : `abort, `next : "ppdselect", `useppd : "useppd", ],
+            "useppd" : $[ `abort : `abort, `db : "model", `next: "ppdselect" ],
+
 	];
 	map add_printer_sequence = $[
 	    "ws_start"   : "revertdb",
@@ -3934,7 +4001,7 @@ All your changes will be lost.
 	    "add_queue_wz" : $[ `next : "storeprinter", `abort : `abort, ],
 
 	    "model" : $[ `abort : `abort, `next : "queue_conf", `useppd : "useppd", ],
-	    "useppd" : $[ `abort : `abort, `advanced : "cups_wz", `db : "model", `next: "queue_conf" ],
+	    "useppd" : $[ `abort : `abort, `db : "model", `next: "queue_conf" ],
 	    "queue_conf" : $[ `abort : `abort, `all : "single_printer_wz", `single : "add_queue_wz" ],
 	    "single_printer_wz" : $[ `abort : `abort, `next : `next ],
 
@@ -3946,13 +4013,14 @@ All your changes will be lost.
 
 	map add_queue_sequence = $[
 	    "ws_start" : "name",
-            "name" : $[ `abort : `abort, `next : "config", `raw : `next, `class : "members", ],
-            "config" : $[ `abort : `abort, `advanced : "filter", `next: `next, ],
+            "name" : $[ `abort : `abort, `next : "config", `raw : "storequeue", `class : "members", ],
+            "config" : $[ `abort : `abort, `advanced : "filter", `next: "storequeue", ],
             "filter" : $[ `abort : `abort, `next_cups : "cups_wz", `next : "features", ],
             "features" : $[ `abort : `abort, `next_cups : "cups_wz", `next : "config", ],
             "cups_wz" : $[ `abort : `abort, `next : "c_type", ],
-            "c_type" : $[ `db : "config", `class : "members", `ppd : "useppd", ],//FIXME, composite option might help
-	    "members" : $[ `abort : `abort, `advanced : "cups_wz", `next : `next, ],
+            "c_type" : $[ `db : "config", `class : "members", `ppd : "config", ],
+	    "members" : $[ `abort : `abort, `advanced : "cups_wz", `next : "storequeue", ],
+	    "storequeue" : $[ `abort: `abort, `next: `next],
 	];
 
 	map edit_printer_sequence = $[
@@ -4013,7 +4081,7 @@ All your changes will be lost.
 	    "config" : $[ `abort : `abort, `advanced : "filter", `next: "edit", ],
 	    "name" : $[ `abort : `abort, `next : "edit", `raw : "edit", `class : "edit" ],
 	    "filter" : $[ `abort : `abort, `next : "edit", `next_cups : "edit", ],
-	    "useppd" : $[ `abort : `abort, `advanced : "cups_wz", `db : "model", `next: "edit" ],
+	    "useppd" : $[ `abort : `abort, `db : "model", `next: "edit" ],
 	    "members" : $[ `abort : `abort, `next : "edit", ],
 	    "cups_wz" : $[ `abort : `abort, `next : "edit", ],
 	    "ppdetails" : $[ `abort : `abort, `next : "parallel", ],
