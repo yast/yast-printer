@@ -1112,6 +1112,7 @@ void PPD::preprocess(PPD::PPDInfo info, PPDInfo *newinfo) {
     if(vendor=="") vendor = "Other";
 
     /* Prepare printer */ //-- product first*/
+    string orig_printer = printer;
     if (validateModel (vendor, product))
 	printer = product;
     else if (validateModel (vendor, shortnick))
@@ -1192,6 +1193,20 @@ void PPD::preprocess(PPD::PPDInfo info, PPDInfo *newinfo) {
     if(ind!=-1) 
     {
 	printer.erase(ind, printer.size());
+    }
+    printer = killbraces(printer);
+    if (strupper (printer.substr (0, 10)) == "GIMP-PRINT")
+	printer = shortnick;
+    else if (strupper (printer.substr (0,5)) == "CUPS ")
+	printer = shortnick;
+    else if (strupper (printer) == "UNKNOWN")
+	printer = orig_printer;
+    else if (strupper (printer) == "SEE NOTES")
+	printer = shortnick;
+    ind = (signed) printer.find_last_of("(");
+    if(ind!=-1)
+    {
+        printer.erase(ind, printer.size());
     }
     printer = killbraces(printer);
     if (printer == "")
