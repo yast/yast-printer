@@ -25,6 +25,7 @@
     import "Popup";
     import "Printer";
     import "Printerlib";
+    import "PrinterTest";
     import "Spooler";
 
     include "printer/wizards.ycp";
@@ -93,13 +94,22 @@ Detect your printers?"), Label::YesButton (),
 	    }
 	    if (size (Printer::printcap) > 0 && ! Printer::tested)
 	    {
+	      if (false) {
 		ret = $[
 		    // warning message (part of richtext)
 		    "warning" :_("<p><a href=\"printer_conf\">Test</a> your printer configuration before proceeding.</p>"),
 		    "warning_level" : `notice,
 		    ];
+	      }
 	    }
-	    proposal = Printer::Summary ([]);
+	    proposal = Printer::Summary ([`test_proposal]);
+	    list<string> queues = maplist (
+		map<string,any> p,
+		Printer::printcap,
+	    {
+		return sformat ("printer--test_queue_%1", p["name"]:"");
+	    });
+	    ret["links"] = queues;
 	}
 	else
 	{
@@ -112,10 +122,29 @@ to configure your printers."),
 	    ];
 	    proposal = " ";
 	}
-	ret = add (ret, "preformatted_proposal", proposal);
-    }
-    else if (func == "AskUser")
+	ret["preformatted_proposal"] = proposal;
+}
+else if (func == "AskUser")
+{
+    any chosen_id = param["chosen_id"]:nil;
+    y2milestone("Printer Proposal wanted to change with id %1", chosen_id);
+
+    // user clicked on any clickable <a href> in proposal
+    if (is (chosen_id, string)
+	&& regexpmatch ((string)chosen_id, "^printer--test_queue_.*$"))
     {
+	string queue_name = regexpsub (
+	    (string)chosen_id,
+	    "^printer--test_queue_(.*)$",
+	    "\\1");
+	y2milestone ("Test page of queue %1", queue_name);
+	Printer::selectPrinterByName (queue_name);
+	PrinterTest::testPrinter (Printer::printer, `ask);
+	ret = $[ "workflow_sequence" : `back ];
+    }
+    else
+    {
+
 	map<string, any> saved = Printer::Export ();
 	symbol seq = PrinterAutoSequence ();
 	if (`next != seq)
@@ -123,8 +152,9 @@ to configure your printers."),
 	y2milestone ("Printer WS return: %1", seq);
 	ret = $[ "workflow_sequence" : seq, ];
     }
-    else if (func == "Description")
-    {
+}
+else if (func == "Description")
+{
 	// richtext label
 	ret = $[ "rich_text_title" :	_("Printers"),
 		// menu title
