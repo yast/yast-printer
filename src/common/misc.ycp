@@ -24,6 +24,16 @@
 
 
     /**
+      * Inform user that function isn't available during preparatino of AI
+      * via a popup
+      */
+    global define void DisplayUnavailableAIPopup () ``{
+	// popup message
+	UI::MessagePopup (_("This function isn't available during
+preparation of autoinstallation"));
+    }
+
+    /**
       * replaces all occurences of 'from' to 'to' in src
       * @param src input string
       * @param from string to be replaced
@@ -546,6 +556,8 @@ This usually takes one or two minutes")),
       * @param showPopup boolean true if shall show a popup if needed
       */
     global define void restartSpoolerIfNeeded (boolean showPopup) ``{
+	if (Mode::config)
+	    return;
         if (Printer::spooler == "cups")
         {
             if (0 == Printer::cupsInstallationType ())
@@ -607,6 +619,11 @@ This usually takes one or two minutes")),
      * @return boolean true if success
      */
     global define boolean reinstallAll () ``{
+	if (Mode::config)
+	{
+	    DisplayUnavailableAIPopup ();
+	    return true;
+	}
 	import "PackageCallbacks";
 	Printer::printcap = [];
 	Printer::default = "";
@@ -862,7 +879,12 @@ queue you want to use."));
      * @param testpage_type type of page. Now supports only (0==ps, 1==ascii)
      * @return boolean true if success
      */
-    global define boolean testPrinter (map printer, integer testpage_type) ``{
+global define boolean testPrinter (map printer, integer testpage_type) ``{
+    if (Mode::config)
+    {
+	DisplayUnavailableAIPopup ();
+	return true;
+    }
 
     boolean do_not_test = false;
     boolean foomatic = Printer::printer["database"]:"" == "foomatic";
@@ -1237,13 +1259,13 @@ When the whole page is printed, press
      * @return boolean true if user really wants to abort
      */
     global define boolean reallyAbort ()``{
-	if (do_abort_now || !Printer::dirty)
+	boolean abort_now = false;
+	if (abort_now || !Printer::dirty)
 	    {
-		do_abort_now = true;
 		return true;
 	    }
-	do_abort_now = UI::ReallyAbortPopup (true);
-	return do_abort_now;
+	abort_now = UI::ReallyAbortPopup (true);
+	return abort_now;
     }
 
     /**

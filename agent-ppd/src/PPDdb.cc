@@ -198,6 +198,8 @@ string PPD::getVendorId (string vendor) {
  * Transform model name from PPD file/detection to key in database
  */
 string PPD::getModelId (string vendor, string model) {
+
+    bool found = false;
     string modres = "";
     model = strupper (model);
     model = filternotchars (model, "/. -<>");
@@ -206,6 +208,7 @@ string PPD::getModelId (string vendor, string model) {
 	model.erase (0,size);
     if (models_map.find (vendor) != models_map.end ())
     {
+	found = true;
 	vector <pair<string, string> > vend = models_map[vendor];
 	vector <pair<string, string> >::iterator it = vend.begin ();
 	while (it != vend.end ())
@@ -216,6 +219,23 @@ string PPD::getModelId (string vendor, string model) {
 	    it++;
 	}
     }
+    if (modres != "")
+	model = modres;
+    modres = "";
+//    y2error ("Result of manuf: %s", model.c_str ());
+//    if (! found)
+//    {
+        vector <pair<string, string> > vend = models_map["_ALL_"];
+        vector <pair<string, string> >::iterator it = vend.begin ();
+        while (it != vend.end ())
+        {
+//	    y2error ("All checking against %s/%s", it->first.c_str (), it->second.c_str ());
+            modres = regexpsub (model, it->first, it->second);
+            if (modres != "")
+                break;
+            it++;
+        }
+//    }
     if (modres == "")
 	modres = model;
 
