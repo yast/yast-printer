@@ -216,12 +216,6 @@
       */
     global boolean conf_detected = false;
 
-    /**
-      * Currently queue is edited
-      */
-    global boolean edit_seq = false;
-
-
 
     /**
      * Get list of names that are forbidden because they are used as
@@ -515,6 +509,22 @@
      * Save currently edited printer.
      */
     global define void storePrinter () ``{
+	cups_installation = `server;
+	if (Printer::printer["uri"]:"" == "listen_ipp")
+	{
+	    if (Printer::cups_server_settings["Browsing"] == "On")
+	    {
+		// TODO make sure CUPS server will be running
+
+	    }
+	    return;
+	}
+	else if (Printer::printer["uri"]:"" == "cups_client")
+	{
+	    cups_installation = `client;
+	    return;
+	}
+
 	printer = assignStates (printer, true);
 
 	y2milestone ("Storing printer %1, index %2", printer, index);
@@ -781,7 +791,10 @@ END { if (!used) print \"ServerName %1\" }
 		state = $[];
 	    }
 	    integer read_version = state["version"]:0;
-	    printcap = lookup (state, "printers", []);
+	    if ( !(spooler == "cups" && cupsInstallationType () == `client))
+	    {
+		printcap = state["printers"]:[];
+	    }
 	    if (read_version < version)
 	    {
 	        printcap = maplist (`p, printcap, ``{
@@ -1131,7 +1144,8 @@ the selected spooler does not support it.
 
     define boolean saveTheConfiguration () ``{
 	list l = filter (`e, printcap, ``(lookup (e, "type", "yast2") == "yast2"));
-	list forbidden_keys = ["changed", "ppd", "auto_propose", "modelset_required"];
+	list forbidden_keys = ["changed", "ppd", "auto_propose",
+	    "modelset_required", "composite"];
 	l = maplist (`e, l, ``(filter (`k, `v, e,
 	    ``(! contains (forbidden_keys, k)))));
 	cleanDeletedPrinters ();
@@ -1441,6 +1455,13 @@ the selected spooler does not support it.
 	foreach (`k, `v, other_printers, ``{
 	    summary = add (summary, Summary::Device (k, sformat (format, v)));
 	});
+y2error ("CSS: %1", cups_server_settings);
+	if (cups_server_settings["Browsing"]:"On" == "On")
+	{
+	    // part of summary
+	    summary = add (summary, _("<LI>Listenning to IPP broadcasts
+to access queues of remote CUSP servers.</LI>"));
+	}
 	return Summary::DevicesList (summary);
     }
     /**
@@ -1495,6 +1516,11 @@ the selected spooler does not support it.
             "accepting": true,
             "state": "idle",
 	    "options" : $[],
+	    "name" : generateQueueName (nil, det["uri"]:"",
+		det["vendor_db"]:"", det["device_db"]:"",
+		getForbiddenNames ()),
+	    "config" : getAutoPpdFile (
+		det["vendor_db"]:"", det["device_db"]:"", nil),
 	];
 	y2milestone ("Detected printer after editation: %1", printer);
     }
@@ -1527,7 +1553,7 @@ the selected spooler does not support it.
 		editDetected (i);
 		string vdb = printer["vendor_db"]:"";
 		string mdb = printer["device_db"]:"";
-		string ppd_file = getAutoPpdFile (vdb, mdb);
+		string ppd_file = getAutoPpdFile (vdb, mdb, nil);
 		boolean configure
 		    = 0 == Printer::foomatic[vdb, mdb, `support]:0;
 		if (ppd_file != nil && configure)

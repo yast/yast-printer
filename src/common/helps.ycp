@@ -215,34 +215,54 @@ and you will not need to select vendor, model, and connection again.</P>
      * @param raw include help text for raw printer
      * @return help text
      */
-    global define string getSpoolInfoHelp (boolean raw) ``{
-	string t =
-	    // Help, 1 of 6
-	    _("<P><B><BIG>Name for printing:</BIG></B><BR>To print with this configuration, use this name as the queue name.</P>");
-	if (Printer::spooler != "lprng")
+    global define string getSpoolInfoHelp (boolean is_class) ``{
+	// Help text 1/7
+	string t = _("<P><B><BIG>Name for printing:</BIG></B><BR>
+To print with this configuration, use this name as the queue name.</P>");
+	if (is_class)
 	{
-	    // Help text 2/6
-	    t = t + _("<p><b><big>Description of printer:</big></b><br>Optionally enter a description of this printer. 
-</p>
-");
-	    // Help text 3/6
-	    t = t + _("<p><b><big>Location of printer:</big></b><br>Optionally enter a description of the location of this printer.
-</p>
-");
+	    // Help text 2/7, CUPS-class alternative
+	    t = t + _("<p><b><big>Description of class:</big></b><br>
+Optionally enter a description of this printer.</p>");
+	    // Help text 3/7, CUPS-class alternative
+	    t = t + _("<p><b><big>Location of class:</big></b><br>
+Optionally enter a description of the location of this printer.</p>");
 	}
-        if (raw)
-            // help text 4/6
-            t = t + _("<p><b><big>Raw queue:</big></b><br>With this option set, no filtering is done.
- It means that data will be sent to the printer as is.
- This option cannot be changed when editing the printer.</p>
-");
+	else
+	{
+	    // Help text 2/7, printer alternative
+	    t = t + _("<p><b><big>Description of printer:</big></b><br>
+Optionally enter a description of this printer.</p>");
+	    // Help text 3/7, printer alternative
+	    t = t + _("<p><b><big>Location of printer:</big></b><br>
+Optionally enter a description of the location of this printer.</p>");
+	    // help text 4/7, only for printer
+	    t = t + _("<p><b><big>Local filtering:</big></b><br>
+By checking <B>Do local filtering</B> specify whether you want to do
+local filtering for this queue. It is not recommended if you use
+print server that does filtering (eg. IPP and LPD servers),
+but it is needed for local printers and
+servers that do not do any filtering (eg. SMB and IPX servers,
+network printers and print server boxes).</p>");
 
-	if (Printer::spooler != "cups")
-	{
-	// help text 5/6, 6/6 dropped
-	    t = t + _("<p><b><big>Print form feed between jobs:</big></b><br>Some printers need this
- option to eject the last paper of the print job.</p>");
+	    if (Printer::spooler != "cups")
+	    {
+		// help text 5/7, only for printer, not present for CUPS
+		t = t + _("<p><b><big>Print form feed between jobs:
+</big></b><br>Some printers need this
+option to eject the last paper of the print job.</p>");
+	    }
+
+	    // help text 6/7, only for printer
+	    t = t + _("<P><B><BIG>Proposing multiple queues:</BIG></B><BR>
+To let YaST2 propose multiple queues for various configurations of the
+printer, check <B>Automatically propose &multiple queues</B>.</P>");
+	    // help text 7/7, only for printer
+	    t = t + _("<P><B><BIG>Testing the queue</big></b><br>
+If you do not do local filtering, you can test printing by pressing the
+<B>Test</B> button.</p>");
 	}
+
 	return t;
     }
     /**
@@ -289,17 +309,21 @@ For some languages, this choice is important to get correct output from
      * @param type string type of remote printer
      * @param raw boolean true if is it raw printer?
      * @param ppd boolean true if queue has non-YaST PPD file
+     * @param allow_edit boolean true if allow editing help should be shown
      * @return help text
      */
-    global define string getEditHelp (string type, boolean raw, boolean ppd) ``{
-	// help text 1/4 or 1/7
-	string help_text = _("<P><B><BIG>Allowing Editing</BIG></B><BR>
+    global define string getEditHelp (string type, boolean raw, boolean ppd, boolean allow_edit) ``{
+	string help_text = "";
+	if (allow_edit)
+	{
+	    // help text 1/4 or 1/7, sometimes missing
+	    help_text = _("<P><B><BIG>Allowing Editing</BIG></B><BR>
 If you do not allow editing of this queue, the queue will
 become a 'non-YaST' queue, which means that YaST will never
 again change this queue. Therefore, you should make a queue
 'non-YaST' if you decide to use another tool to change 
-queue settings.</P>
-");
+queue settings.</P>");
+	}
 	// help text 2/4 or 2/7
 	help_text = help_text + _("<P><B><BIG>Name:</BIG></B><BR>
 You may change the name under which to access the configuration in the spool system.
@@ -581,25 +605,24 @@ List of printers that belong to a class.
     }
     /**
       * Get help text
+      * @param main boolean if dialog is used instead of "Complex" dialog
       * @return string help text
       */
-    global define string getCupsClientHelp () ``{
-	// Help text 1/6
-	string help_text = _("<P>This module allows you to configure your CUPS printing system as a client of other network servers.</p>")
-	// Help text 2/6
-	+ _("<P><B><BIG>Host name:</BIG></B><BR>
+    global define string getCupsClientHelp (boolean main) ``{
+	// Help text 1/4
+	string help_text = _("<P><B><BIG>Host name:</BIG></B><BR>
 Enter the host name of your CUPS server.</P>")
-	// Help text 3/6
-	+ _("<P>To verify the name, use <B>Test</B>.</P>")
-	// Help text 4/6
-	+ _("<P><B><BIG>Full server installation:</BIG></B><BR>
-Click <B>Configure full server installation</B> for a stand-alone CUPS printing system. </P>
-")
-	// Help text 5/6
-	+ _("<P><B><BIG>Saving changes:</BIG></B><BR>Press <b>Finish</b> to save changes.</P>")
-        // Help text 6/6
-        + _("<P><B><BIG>Discarding changes:</BIG></B><BR>
+	// Help text 2/4
+	+ _("<P>To verify the name, use <B>Test</B>.</P>");
+	if (main)
+	{
+	    // Help text 3/4
+	    help_text = help_text + _("<P><B><BIG>Saving changes:</BIG></B><BR>
+Press <b>Finish</b> to save changes.</P>")
+	    // Help text 4/4
+	    + _("<P><B><BIG>Discarding changes:</BIG></B><BR>
 Press <b>Cancel</b> if you do not want to save changes.</P>");
+	}
 	return help_text;
     }
     /**
@@ -611,6 +634,13 @@ Press <b>Cancel</b> if you do not want to save changes.</P>");
 	return _("<P>Select the PPD file to use. The frame below  provides some information about the selected PPD file. 
 Choose <B>Advanced Settings</B> to set advanced features of the queue.</P>
 ");
+    }
+
+    global define string getListenIPPHelp () ``{
+	// help text 1/1
+	return _("<P><B><BIG>Listening to remote CUPS servers</BIG></B><BR>
+To access all broadcasted remote IPP queues, check
+<B>Listen to IPP broadcast packets</B>.</P>");
     }
 
 }

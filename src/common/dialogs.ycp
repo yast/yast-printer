@@ -33,12 +33,6 @@
 
 
     /**
-      * for temporary storing of printer model
-      * because of `back button
-      */
-    global map tmp_printer_manuf_model = $[];
-
-    /**
       * Casts value type to integer if you know what I am talking about.
       * @param a value
       * @return integer representation of a
@@ -98,14 +92,6 @@ with the SuSE database of printers only.</B></P>
 	y2milestone ("Manuf/model dialog started for %1", Printer::printer);
 	string manuf_db = lookup (Printer::printer, "vendor_db", "");
 	string model_db = lookup (Printer::printer, "device_db", "");
-	if (Printer::edit_seq)
-	{
-	    if (tmp_printer_manuf_model == $[])
-	    {
-		y2debug ("tmp Storing printer %1", Printer::printer);
-		tmp_printer_manuf_model = eval (Printer::printer);
-	    }
-	}
 	map info = $[];
 	boolean info_instead_next = false;
 
@@ -184,6 +170,16 @@ with the SuSE database of printers only.</B></P>
 			return sortitems (modelsmap);
 		    });
 		UI::ReplaceWidget (`id (`modelsel_rep), modelsel);
+		if (! haskey (Printer::foomatic[manuf_db]:$[], model_db))
+		{
+		    foreach (`k, `v, Printer::foomatic[manuf_db]:$[], ``{
+			if ((model_db == "" || model_db == nil)
+			    && is (k, string) && k != "" && k != nil)
+			{
+			    model_db = k;
+			}
+		    });
+		}
 		if (model_db != "")
 		    UI::ChangeWidget (`id (`modelsel), `CurrentItem, model_db);
 		ret = `modelsel;
@@ -227,7 +223,10 @@ with the SuSE database of printers only.</B></P>
 	{
 	    string manuf_ieee = Printer::foomatic[manuf_db, `label]:manuf_db;
 	    string model_ieee
-		    = Printer::foomatic[manuf_db, model_db, `label]:model_db;;
+		    = Printer::foomatic[manuf_db, model_db, `label]:model_db;
+	    string ppd_file = getAutoPpdFile (manuf_db, model_db, nil);
+	    if (ppd_file == nil)
+		ppd_file = "";
 	    Printer::printer = union (Printer::printer, $[
 		    "vendor_db" : manuf_db,
 		    "device_db" : model_db,
@@ -235,21 +234,8 @@ with the SuSE database of printers only.</B></P>
 		    "device_ieee" : model_ieee,
 		    "database" : "foomatic",
 		    "ownppd" : "",
-		    "config" : "",
+		    "config" : ppd_file,
 		    ]);
-	}
-	else if (ret == `back || ret == `abort)
-	{
-	    if (Printer::edit_seq)
-	    {
-	        if (tmp_printer_manuf_model != $[])
-	        {
-		    y2debug ("Setting printer back to %1", tmp_printer_manuf_model);
-	            Printer::printer = eval (tmp_printer_manuf_model);
-		    tmp_printer_manuf_model = $[];
-	        }
-	    }
-
 	}
 	y2milestone ("Returning %1, printer set to %2", ret, Printer::printer);
 	return ret;
@@ -318,9 +304,12 @@ with the SuSE database of printers only.</B></P>
 		Printer::printer = eval (printers[ind]:$[]);
 		y2milestone ("Selected printer %1", Printer::printer);
 		Printer::index = -1;
-		Printer::printer["name"] = "";
-		Printer::printer["options"] = $[];
-		Printer::printer["config"] = "";
+		Printer::printer["name"] = generateQueueName (
+		    Printer::printer["name"]:nil,
+		    Printer::printer["uri"]:"",
+                    Printer::printer["vendor_ieee"]:"",
+                    Printer::printer["device_ieee"]:"",
+		    Printer::getForbiddenNames ());
 		break;
 	    }
 	    ret = UI::UserInput ();
@@ -336,8 +325,8 @@ with the SuSE database of printers only.</B></P>
      *   to composite options
      * @return symbol for wizard sequencer
      */
-    global define symbol runConfigDialog (boolean ppd_only) ``{
-	y2milestone ("Running config dialog, ppd_only: %1", ppd_only);
+    global define symbol runPpdSelectDialog () ``{
+	y2milestone ("Running config dialog");
 	string manuf_db = lookup (Printer::printer, "vendor_db", "");
 	string model_db = lookup (Printer::printer, "device_db", "");
 	string config = lookup (Printer::printer, "config", "");
@@ -353,16 +342,6 @@ with the SuSE database of printers only.</B></P>
 	    loadFoomaticIfNeeded ();
 
 	    map opts = Printer::printer["options"]:$[];
-	    if (! ppd_only
-		&& config != "" && Printer::printer["composite"]:"" != ""
-		&& opts[Printer::printer["composite"]:""]:"" != "")
-	    {
-		config = sformat ("%1__\n__%2__\n__%3",
-		    config,
-		    Printer::printer["composite"]:"",
-		    opts[Printer::printer["composite"]:""]:"");
-
-	    }
 
 	    list ppds = maplist (`k, `v, filter (`kk, `vv, Printer::foomatic[manuf_db, model_db]:$[], ``(is (kk, string))), ``(k));
 
@@ -409,56 +388,7 @@ with the SuSE database of printers only.</B></P>
 		    cfgsmap[k] = label;
 		}
 
-		if (ppd_only)
-		{
-		    return;
-		}
-		if (ppdfile_orig == "")
-		{
-		    return;
-		}
-		string ppdfile = SCR::Read (.ppd.file.open,
-		    [ppdfile_orig, SCR::Read (.target.tmpdir)]);
-		map options = SCR::Read (.ppd.file.options, [ppdfile, ""]);
-		list opts = options["data"]:$[];
-		integer ind = -1;
-		boolean found = true;
-		find (`i, opts, ``{
-		    ind = ind + 1;
-		    found = i["name"]:"" == "PrintoutMode";
-		    return found;
-		});
-		map composite = $[];
-		if (found)
-		    composite = opts[ind]:$[];
-		if (composite == $[])
-		{
-		    return;
-		}
-
-		string ppd_label_part = "";
-		if (k != `ownppd)
-		    ppd_label_part = k;
-		else
-		{
-		    // selection box item
-		    ppd_label_part = _("Custom PPD File");
-		}
-		if (regexpmatch (k, ".*, .*"))
-		{
-		    ppd_label_part = select (regexptokenize (k, ".*, (.*)"), 0, k);
-		}
-
-                foreach (`v, composite["valorder"]:[], ``{
-                    string optname = composite["name"]:"";
-		    string complabel = composite["values", v]:v;
-		    cfgs = add (cfgs, `item (
-			`id (sformat ("%1__\n__%2__\n__%3", k, optname, v)),
-			sformat ("    %1", complabel)));
-		    cfgsmap[sformat ("%1__\n__%2__\n__%3", k, optname, v)]
-			= sformat ("%1", complabel);
-                });
-
+		return;
 	    });
 	    Printer::printer["database"] = "foomatic";
 	}
@@ -532,28 +462,6 @@ with the SuSE database of printers only.</B></P>
         // before saving:
 		if (lookup (tmpPrinter, "config", "") != config)
 		    tmpPrinter = add (tmpPrinter, "options", $[]);
-		if (foomatic && regexpmatch (config, ".*__\n__.*__\n__.*"))
-		{
-	            list tokenized
-	                = regexptokenize (config, "(.*)__\n__(.*)__\n__(.*)");
-	            config = tokenized[0]:"";
-	            string key = tokenized[1]:"";
-	            string val = tokenized[2]:"";
-		    tmpPrinter["composite"] = key;
-	            map opts = Printer::printer["options"]:$[];
-	            opts[key] = val;
-	            tmpPrinter["options"] = opts;
-		}
-		else if (foomatic && regexpmatch (config, "SuSE___.*"))
-		{
-		    tmpPrinter["database"] = nil;
-		    tmpPrinter["composite"] = "";
-		    config = regexpsub (config, "SuSE___(.*)", "\\1");
-		}
-		else
-		{
-		    tmpPrinter["composite"] = "";
-		}
 		tmpPrinter = adjustPaperSize (tmpPrinter);
 		tmpPrinter = add (tmpPrinter, "config", config);
 
@@ -568,29 +476,6 @@ with the SuSE database of printers only.</B></P>
 	    config = UI::QueryWidget (`id (`selection), `CurrentItem);
 	    if (lookup (Printer::printer, "config", "") != config)
 		Printer::printer = add (Printer::printer, "options", $[]);
-            if (foomatic && regexpmatch (config, ".*__\n__.*__\n__.*"))
-            {
-		list tokenized
-		    = regexptokenize (config, "(.*)__\n__(.*)__\n__(.*)");
-		config = tokenized[0]:"";
-		string key = tokenized[1]:"";
-		Printer::printer["composite"] = key;
-		string val = tokenized[2]:"";
-		map opts = Printer::printer["options"]:$[];
-		opts[key] = val;
-		Printer::printer["options"] = opts;
-		Printer::printer = adjustPaperSize (Printer::printer);
-            }
-            else if (foomatic && regexpmatch (config, "SuSE___.*"))
-            {
-                Printer::printer["database"] = nil;
-                Printer::printer["composite"] = "";
-                config = regexpsub (config, "SuSE___(.*)", "\\1");
-            }
-	    else
-	    {
-		Printer::printer["composite"] = "";
-	    }
 
 	    Printer::printer = add (Printer::printer, "config", config);
 	    return ret;
@@ -602,35 +487,6 @@ with the SuSE database of printers only.</B></P>
 	    if (lookup (Printer::printer, "config", "") != config)
 		Printer::printer = add (Printer::printer, "options", $[]);
 	    string config_id = config;
-            if (foomatic && regexpmatch (config, ".*__\n__.*__\n__.*"))
-            {
-	        list tokenized
-		    = regexptokenize (config, "(.*)__\n__(.*)__\n__(.*)");
-	        config = tokenized[0]:"";
-	        string key = tokenized[1]:"";
-		Printer::printer["composite"] = key;
-	        string val = tokenized[2]:"";
-	        map opts = Printer::printer["options"]:$[];
-	        opts[key] = val;
-	        Printer::printer["options"] = opts;
-		Printer::printer = adjustPaperSize (Printer::printer);
-            }
-            else if (foomatic && regexpmatch (config, "SuSE___.*"))
-            {
-                Printer::printer["database"] = nil;
-                Printer::printer["composite"] = "";
-                config = regexpsub (config, "SuSE___(.*)", "\\1");
-            }
-	    else if (config == "___SuSEdb___")
-	    {
-		Printer::printer["database"] = nil;
-		Printer::printer["composite"] = "";
-		config = "";
-	    }
-            else
-            {
-                Printer::printer["composite"] = "";
-            }
 	    // add comment
 	    Printer::printer["comment"] = cfgsmap[config_id]:config_id;
 
@@ -667,6 +523,9 @@ with the SuSE database of printers only.</B></P>
 	boolean is_class = uri_type == "class";
 	boolean auto_propose = Printer::printer["auto_propose"]:false;
 
+	if (allow_auto)
+	    allow_auto = ! is_class;
+
 	if (-1 != Printer::index)
 	{
 	    // remove me from forbidden names
@@ -683,7 +542,7 @@ with the SuSE database of printers only.</B></P>
 	    ? `VSpacing (0)
 	    : `CheckBox (`id (`raw), `opt (`hstretch),
 		// checkbox
-		_("&Do local filtering"), ! raw);
+		_("Do local &filtering"), ! raw);
 
 	term ff_insert = "cups" == Printer::spooler ? `VSpacing (0) :
 	    // check box
@@ -692,7 +551,7 @@ with the SuSE database of printers only.</B></P>
 
 	term aa_insert = allow_auto
 	    ? `CheckBox (`id (`auto), `opt (`notify, `hstretch),
-		_("Automatically &propose multiple queues"), auto_propose)
+		_("Automatically propose &multiple queues"), auto_propose)
 	    : `VSpacing (0);
 
 	term contents = `VBox (
@@ -734,7 +593,7 @@ with the SuSE database of printers only.</B></P>
 		// dialog caption
 		is_class ? _("Class name") : _("Queue name"),
 		contents,
-		getSpoolInfoHelp (true),
+		getSpoolInfoHelp (is_class),
 		BackButtonLabel (),
 		NextButtonLabel ()
 		);
@@ -1228,14 +1087,6 @@ be tested here."));
 		Printer::printer["device_ieee"]:"");
 	string config_text = "";
 	    config_text = Printer::printer["config"]:"";
-	    if (Printer::printer["composite"]:"" != "")
-	    {
-		string composite = Printer::printer["composite"]:"";
-		if (composite != "")
-		{
-		    config_text = Printer::printer["comment"]:"";
-		}
-	    }
 	string name_text = lookup (Printer::printer, "name", "");
 	string connection_text = "";
 	list items = [];
@@ -1304,14 +1155,20 @@ be tested here."));
 	    }
 	}
 
+	term allow_cbox = Printer::index >= 0
+	    ? `VBox (
+		`Left (`CheckBox (`id (`yast), `opt (`notify),
+		    // check box
+		    _("&Allow editing of this queue"), conf_type)),
+		`VSpacing (1))
+	    : `VSpacing (0);
+
 	term contents = `VBox (
 	    `VSpacing (1),
 	    `HBox (
 		`HSpacing (1),
 		`VBox (
-			// check box
-		    `Left (`CheckBox (`id (`yast), `opt (`notify), _("&Allow editing of this queue"), conf_type)),
-		    `VSpacing (1),
+		    allow_cbox,
 			// table header
 		    `Table (`id (`options), `opt(`keepSorting, `notify), `header ( _("Option area"),
 			// table header
@@ -1330,7 +1187,7 @@ be tested here."));
 	);
 
 	// dialog caption
-	Wizard::SetContentsButtons (_("Edit configuration"), contents, getEditHelp (uri_type, raw, lookup (Printer::printer, "ownppd", "") != ""),
+	Wizard::SetContentsButtons (_("Edit configuration"), contents, getEditHelp (uri_type, raw, Printer::printer["ownppd"]:"" != "", Printer::index >= 0),
 	    BackButtonLabel (), OKButtonLabel ());
 	Wizard::RestoreBackButton ();
     }
@@ -1340,8 +1197,6 @@ be tested here."));
      * @return symbol for wizard seq.
      */
     global define symbol runEditDialog () ``{
-	Printer::edit_seq = true;
-	tmp_printer_manuf_model = $[];
 	any ret = nil;
 	createEditDialog ();
 	if (lookup (Printer::printer, "type", "yast2") == "yast2")
@@ -1452,8 +1307,6 @@ with a prefilled name?
 		    ret = nil;
 		}
 	    }
-	if (ret == `back || ret == `next || ret == `abort)
-	    Printer::edit_seq = false;
 	return ret;
     }
 
@@ -2288,6 +2141,24 @@ system will be saved.")))
 	    }
 	    else if (`configure_button == ret)
 	    {
+		if (Printer::spooler == "cups"
+		    && Printer::cups_installation == `client)
+		{
+		    // popup
+		    boolean b = UI::YesNoPopup (_("Warning!
+
+Your system is configured as CUPS client-only.
+Setting any queue will discard these settings.
+
+Continue?"));
+		    if (! b)
+			continue;
+		    else
+		    {
+			Printer::reread = true;
+			Printer::Read ();
+		    }
+		}
 		Printer::conf_detected = true;
 		runAutoprobedListDialog__current
 		    = UI::QueryWidget (`id (`detected_selbox), `CurrentItem);
@@ -2559,6 +2430,8 @@ All your changes will be lost.
 	    "samba" :           ``(runRemoteDialog ("samba")),
 	    "novell" :          ``(runRemoteDialog ("novell")),
 	    "socket" :          ``(runRemoteDialog ("socket")),
+	    "listen_ipp_bcast": ``(runListenIPPDialog ()),
+	    "cups_client" :	``(runCupsClientDialog (false)),
 		    // other
 	    "pipe" :            ``(runPipeDialog ()),
 	    "other" :           ``(runUriDialog()),
@@ -2578,12 +2451,11 @@ All your changes will be lost.
             "cupsacladmin" :	``(runCupsAclDialog (`admin)),
             "cupsaclprinters" :	``(runCupsAclDialog (`printers)),
             "cupsaclclasses" :	``(runCupsAclDialog (`classes)),
-	    "cups_client" :	``(runClientDialog ()),
+	    "cups_client_main":	``(runCupsClientDialog (true)),
 	    "model" :		``(runManufModelDialog ()),
 	    "inst_printer" :	``(runInstalledPrinterDialog ()),
 	    "useppd" :		``(runSelectPpdFile ()),
-	    "config" :		``(runConfigDialog (false)),
-	    "ppdselect" :	``(runConfigDialog (true)),
+	    "ppdselect" :	``(runPpdSelectDialog ()),
 	    "members" :		``(runMembersDialog ()),
 	    "filter" :		``(runOptionsDialog ()),
 	    "features" :	``(runFeaturesDialog ()),
@@ -2640,8 +2512,7 @@ All your changes will be lost.
      */
     global define symbol runWizard (boolean skip_detection) ``{
 	map detected_sequence = $[
-	    "ws_start" : "config_type",
-	    "config_type" : $[`server : "detected", `client : "main_wz"],
+	    "ws_start" : "detected",
 	    "redetect" : $[`next : "detected", ],
 	    "detected" : $[
 		`next : `next,
@@ -2663,13 +2534,13 @@ All your changes will be lost.
 	    ];
 	map main_sequence = $[
 	    "ws_start" : "config_type",
-	    "config_type" : $[`server : "complex", `client : "cups_client"],
+	    "config_type" : $[`server : "complex", `client : "cups_client_main"],
 	    "complex"  : $[
 		`next : `next,
 		`add  : "add_printer_wz",
 		`edit : "edit_printer_wz",
 		`abort : `abort,
-		`client : "cups_client",
+		`client : "cups_client_main",
 		`advanced : "advanced",
 		],
 	    "advanced" : $[
@@ -2718,7 +2589,7 @@ All your changes will be lost.
 		`next: "complex",
 		`abort : `abort,
 		],
-	    "cups_client" : $[
+	    "cups_client_main" : $[
 		`next : `next,
 		`abort : `abort,
 		`advanced : "advanced",
@@ -2762,7 +2633,7 @@ All your changes will be lost.
 		`smb : "samba",
 		`ipx : "novell",
 		`direct : "connection_direct",
-//		`queue : "queue",
+		`queue : "inst_printer",
 		`other : "connection_other",
 		`abort : `abort,
 	    ],
@@ -2774,8 +2645,8 @@ All your changes will be lost.
 		`abort : `abort,
 		],
 	    "connection_cups" : $[
-//		`client : "client",
-//		`listen : "listen",
+		`cups_client : "cups_client",
+		`listen_ipp : "listen_ipp_bcast",
 		`ipp : "ipp",
 		`abort : `abort,
 	    ],
@@ -2786,7 +2657,7 @@ All your changes will be lost.
 		`abort : `abort,
 	    ],
 	    "connection_other" : $[
-		`class : "add_queue_wz",
+		`class : "name_auto",
 		`pipe : "pipe",
 		`uri : "other",
 		`abort : `abort,
@@ -2803,13 +2674,17 @@ All your changes will be lost.
 	    "ipp" : $[ `next : "name_auto", `abort : `abort, ],
 	    "socket" : $[ `next : "name_auto", `abort : `abort, ],
 	    "other" : $[ `next : "name_auto", `abort : `abort, ],
+            "ppdetails" : $[ `abort : `abort, `next : "parallel", ],
+            "spdetails" : $[ `abort : `abort, `next : "serial", ],
+	    "listen_ipp_bcast" : $[ `abort : `abort, `next : "storeprinter" ],
+	    "cups_client" : $[ `abort : `abort, `next : "storeprinter" ],
 	    // end of connection types
 
 	    "name_auto" : $[
 		`abort : `abort,
 		`next : "model",
 		`raw : "storeprinter",
-		`class : "edit_printer_wz",// FIXME
+		`class : "members",
 	    ],
 	    "model" : $[
 		`abort : `abort,
@@ -2821,18 +2696,19 @@ All your changes will be lost.
 		`db : "model",
 		`next: "edit_printer_wz",
 	    ],
+	    "members" : $[
+		`abort : `abort,
+		`next : "edit_printer_wz",
+	    ],
+
 	    "edit_printer_wz" : $[ `abort : `abort, `next : `next ],
 	    "single_printer_wz" : $[ `abort : `abort, `next : `next ],
 
-	    "ppdetails" : $[ `abort : `abort, `next : "parallel", ],
-	    "spdetails" : $[ `abort : `abort, `next : "serial", ],
-	    "storeprinter" : $[`next : `next, ],
-
-            "inst_printer" : $[ `next : "add_queue_wz", `abort : `abort, ],
+            "inst_printer" : $[ `next : "edit_printer_wz", `abort : `abort, ],
             "add_queue_wz" : $[ `next : "storeprinter", `abort : `abort, ],
 
-
-	    ];
+	    "storeprinter" : $[`next : `next, ],
+	];
 
 
 	map add_queue_sequence = $[
@@ -2890,7 +2766,7 @@ All your changes will be lost.
 		`connection : "connection_local",
 		`name : "name",
 		`model : "model",
-		`config : "config",
+		`config : "ppdselect",
 		`settings : "filter",
 		`ascii : "features",
 		`state : "state",
@@ -2922,19 +2798,18 @@ All your changes will be lost.
 	    "parallel" : $[ `abort : `abort, `next : "edit", `ppdetails : "ppdetails", ],
 	    "ppdetails" : $[ `abort : `abort, `next : "parallel", ],
 	    "serial" : $[ `abort : `abort, `next : "edit", `spdetails : "spdetails",],
+	    "spdetails" : $[ `abort : `abort, `next : "serial", ],
 	    "usb" : $[ `abort : `abort, `next : "edit", ],
 	    "irda" : $[ `next : "edit", `abort : `abort, ],
 	    "lpd" : $[ `abort: `abort, `next: "edit", ],
 	    "pipe" : $[ `abort : `abort, `next : "edit", ],
-	    "model" : $[ `abort : `abort, `next : "config", `useppd: "useppd",],
-	    "config" : $[ `abort : `abort, `advanced : "filter", `next: "edit", ],
+	    "model" : $[ `abort : `abort, `next : "edit", `useppd: "useppd",],
+	    "ppdselect" : $[ `abort : `abort, `advanced : "filter", `next: "edit", ],
 	    "name" : $[ `abort : `abort, `next : "edit", `raw : "edit", `class : "edit" ],
 	    "filter" : $[ `abort : `abort, `next : "edit", `next_cups : "edit", ],
 	    "useppd" : $[ `abort : `abort, `db : "model", `next: "edit" ],
 	    "members" : $[ `abort : `abort, `next : "edit", ],
 	    "cups_wz" : $[ `abort : `abort, `next : "edit", ],
-	    "ppdetails" : $[ `abort : `abort, `next : "parallel", ],
-	    "spdetails" : $[ `abort : `abort, `next : "serial", ],
 	    "storeprinter" : $[`next : `next, ],
 	    ];
 	map cups_sequence = $[

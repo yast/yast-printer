@@ -652,7 +652,10 @@ Install them now?"));
      * @see getUriType
      */
     global define integer getUriBaudrate (string uri) ``{
-	return tointeger (getUriValue (uri, "baudrate"));// not defined for ""
+	string br = getUriValue (uri, "baudrate");
+	if (br == "" || br != filterchars (br, "0123456789"))
+	    return 0;
+	return tointeger (br);
     }
     /**
      * Get any parameter from uri. Suppose uri has form:

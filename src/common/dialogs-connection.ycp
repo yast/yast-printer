@@ -47,7 +47,8 @@
 	    `novell : "novell",
 	    `pipe : "pipe",
 	    `class : "class",
-	    `listen : "listen",
+	    `listen_ipp : "listen_ipp",
+	    `cups_client : "cups_client",
 	];
 	if (Printer::old_uri != "")
 	    Printer::old_uri = Printer::printer["uri"]:"";
@@ -98,11 +99,13 @@ is not possible if not using CUPS spooler"));
       * @return the same as selected radio button if proceed, nil otherwise
       */
     global define symbol checkConnectionCups (symbol selected) ``{
-	if (selected == `client)
+	if (selected == `cups_client)
 	{
+	    // yes-no popup
 	    if (UI::YesNoPopup (_("If you set up CUPS client-only configuration,
 you will not be able to configure local printers
 nor queues of other remote servers.
+All changes you made will be discarded.
 
 Continue?")))
 		return selected;
@@ -249,22 +252,22 @@ only if CUPS spooler is used"));
       * @return symbol wizard sequencer symbol
       */
     global define symbol runCupsConnectionDialog () ``{
-	symbol selected = `client;
+	symbol selected = `cups_client;
 	string uri_type = Printerlib::getUriType (Printer::printer["uri"]:"");
 	if (uri_type == "ipp")
             selected = `ipp;
-	if (uri_type == "listen")
-	    selected = `listen;
+	if (uri_type == "listen_ipp")
+	    selected = `listen_ipp;
 
 	term items = `VBox (
-	    `Left (`RadioButton (`id (`client),
+	    `Left (`RadioButton (`id (`cups_client),
 		// radio button
 		_("CUPS &client-only\n(the most secure solution)"),
-		selected == `client)),
-	    `Left (`RadioButton (`id (`listen),
+		selected == `cups_client)),
+	    `Left (`RadioButton (`id (`listen_ipp),
 		// radio button
-		_("CUPS using &broadcasting\n(recommended for trusted networks)"
-		), selected == `listen)),
+		_("CUPS &using broadcasting\n(recommended for trusted networks)"
+		), selected == `listen_ipp)),
 	    `Left (`RadioButton (`id (`ipp),
 		// radio button
 		_("Remote &IPP queue\n(only for special cases)"),
