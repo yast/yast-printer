@@ -1770,7 +1770,7 @@ the selected spooler does not support it."), name));
      * TODO: create test case
      * @param name printer name
      * @param uri string queue uri
-     * @param vendor_name string name of the printer vendor
+     * @param vendor_name string name of the printer vendor (now unused)
      * @param device_name string name of the printer device
      * @param forbidden_names list of forbidden names
      * @return new queue name
@@ -1795,15 +1795,9 @@ the selected spooler does not support it."), name));
 	    }
 	    if (name == "" && device_name != "")
 	    {
-	        name = filterchars (
-		    tolower (vendor_name + "_" + device_name),
+		name = filterchars (
+		    tolower (device_name),
 		    "_0123456789abcdefghijklmnopqrstuvwxyz");
-		if (size (name) >= 20)
-		{
-		    name = filterchars (
-			tolower (device_name),
-			"_0123456789abcdefghijklmnopqrstuvwxyz");
-		}
 		if (size (name) >= 20)
 		    name = substring (name, 0, 20);
 	    }
@@ -1815,7 +1809,7 @@ the selected spooler does not support it."), name));
 	string original = name;
 	while (contains (forbidden_names, name))
 	{
-	    name = sformat ("%1%2", original, i);
+	    name = sformat ("%1_%2", original, i);
 	    i = i + 1;
 	}
 	return name;
@@ -1827,11 +1821,11 @@ the selected spooler does not support it."), name));
       * @return new class name
       */
     global string generateClassName (list forbidden_names) ``{
-	string name = "class1";
+	string name = "class_1";
 	integer i = 2;
 	while (contains (forbidden_names, name))
 	{
-	    name = sformat ("class%1", i);
+	    name = sformat ("class_%1", i);
 	    i = i + 1;
 	}
 	return name;
