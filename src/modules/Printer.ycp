@@ -35,6 +35,7 @@
     import "Printerlib";
     import "Progress";
     import "Report";
+    import "Service";
     import "Spooler";
     import "Summary";
     import "SuSEFirewall";
@@ -1744,6 +1745,41 @@ the selected spooler does not support it."), name));
 	    {
 		// part of summary
 		summary = add (summary, _("<LI>Listen to remote CUPS servers to get comfortable access to remote queues.</LI>"));
+		if (! Mode::config && Service::Enabled("SuSEfirewall2_init"))
+		{
+		    map<string,boolean> service_status = $[];
+		    map<string,map<string,boolean> > ifaces_info
+			= SuSEFirewall::GetServices ([ "ipp-udp" ]);
+		    foreach (string s, map<string,boolean> status, ifaces_info,{
+			foreach (string iface, boolean en, status, {
+			    service_status[iface]
+				= service_status[iface]:true && en;
+			});
+		    });
+		    service_status = filter (string iface, boolean en,
+			service_status,
+		    {
+			return en;
+		    });
+		    list<string> allowed_interfaces = maplist (
+			string iface,
+			boolean en,
+			service_status,
+		    {
+			return iface;
+		    });
+		    if (size (allowed_interfaces) == 0)
+		    {
+			// part of summary
+			summary = add (summary, _("<li>Port for listening to remote CUPS servers is closed by firewall.</li>"));
+		    }
+		    else
+		    {
+			string il = mergestring (allowed_interfaces, ", ");
+			// part of summary, %1 is list of interfaces
+			summary = add (summary, sformat (_("<li>Port for listening to remote CUPS servers is open on %1.</li>"), il));
+		    }
+		}
 	    }
 	}
 	return Summary::DevicesList (summary);
