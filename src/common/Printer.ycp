@@ -782,140 +782,70 @@ END { if (!used) print \"ServerName %1\" }
 	Progress::New (_("Initializing printer configuration tool..."),
 	    " ", skip_autodetection ? 12 : 16, stages, titles, "");
 
-	// step 0
-	Progress::NextStageStep (0); if (testAbort ()) return false;
+	Progress::NextStageStep (0); // step 0 - check root permission
+	if (testAbort ()) return false;
 
 	if (! checkRootPerm ())
 	    return false;
 
+	Progress::NextStep (); // step 1 - check installed spooler
+	if (testAbort ()) return false;
+
 	if (! checkSpooler ())
 	    return false;
 
+	Progress::NextStep (); // step 2 - check ghostscript package
+	if (testAbort ()) return false;
+
+	if (spooler != "cups" || cupsInstallationType () == `server)
+	{
+	    checkGhostscript ();
+	}
+
+	Progress::NextStep (); // step 3 - initialize spooler
+	if (testAbort ()) return false;
+
 	if (!test_mode)
 	{
-	    if (Printer::spooler == "cups")
+	    spoolerInitialize ();
+	}
+
+	Progress::NextStageStep (4); // step 4-7 - read the settings
+	if (testAbort ()) return false;
+
+	if (!skip_io)
+	{
+	    if (spooler == "cups" && cupsInstallationType () == `client)
 	    {
-		if (`server == Printer::cupsInstallationType ())
-		{
-		    integer status = SCR::Execute (.target.bash,
-			"/usr/bin/lpq 2>/dev/null");
-		    if (status == 0)
-		    {
-			// step 1,2
-			Progress::NextStep (); if (testAbort ()) return false;
-			Progress::NextStep (); if (testAbort ()) return false;
-		    }
-		    else
-		    {
-			restartSpoolerIfNeeded (true);
-			// step 1,2
-			Progress::NextStep (); if (testAbort ()) return false;
-			Progress::NextStep (); if (testAbort ()) return false;
-		    }
-		}
-		else
-		{
-		    // step 1,2
-		    Progress::NextStep (); if (testAbort ()) return false;
-		    Progress::NextStep (); if (testAbort ()) return false;
-		}
-	    }
-	    else if (Printer::spooler == "lprng")
-	    {
-		SCR::Execute (.target.bash,
-		    "/usr/bin/touch /etc/printcap; /bin/chmod u=rw,g=r,o=r /etc/printcap; test -f /etc/init.d/lpd && /etc/init.d/lpd stop");
-		// step 1
-		Progress::NextStep (); if (testAbort ()) return false;
-		integer lpdaemon = SCR::Execute (.target.bash,
-		    "test -f /etc/init.d/lpd && /etc/init.d/lpd start");
-		// step 2
-		Progress::NextStep (); if (testAbort ()) return false;
-		if (lpdaemon != 0)
-		{
-		    // message box
-		    if (!Popup::AnyQuestion (
-			Label::ErrorMsg (),
-			// error popup
-			_("Unable to restart the lpd daemon."),
-			Label::ContinueButton (),
-			Label::AbortButton (),
-			`focus_no))
-		    {
-			UI::CloseDialog ();
-			return false;
-		    }
-		}
+		if (! cupsClientRead ())
+		    return false;
 	    }
 	    else
 	    {
-		// step 1,2
-		Progress::NextStep();
-		Progress::NextStep();
+		if (! queuesRead ())
+		{
+		    return false;
+		}
 	    }
 	}
-	Progress::NextStep (); // step 3 - check ghostscript
+
+	Progress::NextStageStep (8); // step 8-11 - check and load database
 	if (testAbort ()) return false;
 
-	checkGhostscript ();
-
-	// step 4
-	Progress::NextStageStep (4); if (testAbort ()) return false;
-
-	if (!skip_io && (Printer::spooler != "cups"
-	    || Printer::cupsInstallationType () == `server))
-	{
-	    if (!Printer::oldRead ())
-	    {
-		// message box
-		Report::Error (_("Unable to read the current configuration."));
-                return false;
-	    }
-	}
-	else if (Printer::spooler == "cups"
-	    && Printer::cupsInstallationType () == `client)
-	{
-	    map state = SCR::Read (.target.ycp, "/var/lib/YaST2/printers");
-	    if (nil == state)
-	    {
-		state = $[];
-	    }
-	    server_default = state["server_default"]:true;
-	    default = state["default"]:"";
-	}
-
-	// step 8
-	Progress::NextStageStep (8); if (testAbort ()) return false;
-
-	if (Printer::spooler != "cups"
-	    || Printer::cupsInstallationType () == `server)
+	if (spooler != "cups" || cupsInstallationType () == `server)
 	{
 	    loadFoomaticIfNeeded ();
 	}
 
 	printcap = maplist (`e, printcap, ``{return assignStates (e, false);});
 
-	// Autodetection
+	Progress::NextStageStep (12); // step 12-15 - autodetection
+	if (testAbort ()) return false;
+
 	if (!skip_autodetection)
 	{
-	    // step 12
-	    Progress::NextStageStep (12); if (testAbort ()) return false;
-	    if (Printer::detect != false)
-		Printer::detect = Crash::AskRun ("printer_detection",
-		    // popup
-		    _("During the following step, YaST2 will try to detect local printers only.
-
-Printer detection can now start. In some cases, detection can cause a
-system freeze. If a freeze happens, select Skip Detection
-when next running the printer configuration.
-
-Detect your printers?"));
-
-	    if (Printer::detect)
-	    {
-		Crash::Run ("printer_detection");
-		Detect ();
-		Crash::Finish ("printer_detection");
-	    }
+	    if (! doPrinterDetection ())
+		return false;
 	}
 	// Progress finish
 	Progress::Finish (); if (testAbort ()) return false;
@@ -955,6 +885,11 @@ Detect your printers?"));
 
 	return true;
     }
+
+    /**
+      * Check if GhostScript is installed
+      * @return boolean true if is installed
+      */
     global define boolean checkGhostscript () ``{
 	if (SCR::Execute (.target.bash, "/usr/bin/which gs") != 0)
 	{
@@ -968,39 +903,120 @@ to print."));
     }
 
     /**
-      * Old read function, called from new Read function
-      * TODO: integrate
-      * @return boolean true on success
+      * Update configuration if cfg. saved by previous version
+      * @param read_version integere version written in cfg. file
       */
-    global define boolean oldRead () ``{
-	list tmplist = [];
-	list tmpdellist = [];
-	boolean ret = true;
-//	boolean update = false;
-	list nonyast = [];
-	string old_default = default;
+    global define void updateConfig (integer read_version) ``{
+	if (read_version < version)
+	{
+	    printcap = maplist (`p, printcap, ``{
+		if (substring (p["uri"]:"", 0, 12) == "prefilter://")
+		    p["uri"] = "filtering://localhost/"
+			+ substring (p["uri"]:"", 12);
+		if (substring (p["uri"]:"", 0, 6) == "lpd://")
+		    p["raw"] = true;
+		if (substring (p["uri"]:"", 0, 12) == "filtering://")
+		    p["uri"] = "lpd://" + substring (p["uri"]:"", 12);
+		return p;
+	    });
+	}
+    }
 
+    /**
+      * Read settings of CUPS client-only
+      * @return boolean true on success
+      * TODO prefer lpoptions
+      * TODO error handling
+      */
+    global define boolean cupsClientRead () ``{
+	map state = SCR::Read (.target.ycp, "/var/lib/YaST2/printers");
+	if (nil == state)
+	{
+	    state = $[];
+	}
+	server_default = state["server_default"]:true;
+	default = state["default"]:"";
+	return true;
+    }
+
+    global define boolean spoolerInitialize () ``{
+	if (Printer::spooler == "cups")
+	{
+	    if (`server == Printer::cupsInstallationType ())
+	    {
+		integer status = SCR::Execute (.target.bash,
+		    "/usr/bin/lpq 2>/dev/null");
+		if (status != 0)
+		{
+		    restartSpoolerIfNeeded (true);
+		}
+	    }
+	}
+	else if (Printer::spooler == "lprng")
+	{
+	    SCR::Execute (.target.bash,
+		"/usr/bin/touch /etc/printcap; /bin/chmod u=rw,g=r,o=r /etc/printcap");
+	    integer lpdaemon = SCR::Execute (.target.bash,
+		 "test -f /etc/init.d/lpd && /etc/init.d/lpd restart");
+	    if (lpdaemon != 0)
+	    {
+		// error report
+	        Report::Error (_("Unable to restart the lpd daemon."));
+	    }
+	}
+    }
+
+    /**
+      * Check if it is safe, ask user if needed, and detect local printers
+      * @return boolean true on success
+      * TODO error checking
+      */
+    global define boolean doPrinterDetection () ``{
+	if (Printer::detect != false)
+	    Printer::detect = Crash::AskRun ("printer_detection",
+		// popup
+		_("During the following step, YaST2 will try to detect local printers only.
+
+Printer detection can now start. In some cases, detection can cause a
+system freeze. If a freeze happens, select Skip Detection
+when next running the printer configuration.
+
+Detect your printers?"));
+
+	if (Printer::detect)
+	{
+	    Crash::Run ("printer_detection");
+	    Detect ();
+	    Crash::Finish ("printer_detection");
+	}
+	return true;
+    }
+
+    /**
+      * Read queues set for spooler
+      * @return list of queues
+      */
+    global define list spoolerSpecQueuesRead () ``{
 	if (spooler == "cups")
         {
-            nonyast = cupsRead();
+            return cupsRead();
         }
-        else if (spooler == "lprng")
+        if (spooler == "lprng")
         {
-            nonyast = printcapRead();
+            return printcapRead();
         }
+	return [];
+    }
+
+    /**
+      * Read the contents of /var/lib/YaST2/printers
+      * @return boolean true on success
+      * TODO error handling
+      */
+    global define boolean stateRead () ``{
 	if (! reread)
 	{
 	    printcap = filter (`e, printcap, ``(lookup (e, "type", "yast2") == "yast2"));
-	    foreach (`e, printcap, ``{
-		string name = lookup (e, "name", "");
-		if ("" != name)
-		    tmplist = add (tmplist, name);
-	    });
-	    foreach (`e, deleted, ``{
-		string name = lookup (e, "name", "");
-		if ("" != name)
-		    tmpdellist = add (tmpdellist, name);
-	    });
 	}
 	else
 	{
@@ -1016,36 +1032,32 @@ to print."));
 	    {
 		printcap = state["printers"]:[];
 	    }
-	    if (read_version < version)
-	    {
-	        printcap = maplist (`p, printcap, ``{
-		    if (substring (p["uri"]:"", 0, 12) == "prefilter://")
-		        p["uri"] = "filtering://localhost/"
-			    + substring (p["uri"]:"", 12);
-		    if (substring (p["uri"]:"", 0, 6) == "lpd://")
-			p["raw"] = true;
-		    if (substring (p["uri"]:"", 0, 12) == "filtering://")
-			p["uri"] = "lpd://" + substring (p["uri"]:"", 12);
-		    return p;
-		});
-	    }
+
+	    updateConfig (read_version);
+
 	    deleted = lookup (state, "deleted", []);
-	    default = lookup (state, "default", "");
+	    if (default == "" || default == nil)
+		default = lookup (state, "default", "");
 	    cups_usb_dev_names = state["cups_usb_devices"]:`always;
 	    printcap = maplist (`e, printcap, ``(
 		add (e, "type", "yast2")
 	    ));
-	    foreach (`e, printcap, ``{
-		string name = lookup (e, "name", "");
-		if ("" != name)
-		    tmplist = add (tmplist, name);
-	    });
-	    foreach (`e, deleted, ``{
-		string name = lookup (e, "name", "");
-		if ("" != name)
-		    tmpdellist = add (tmpdellist, name);
-	    });
 	}
+	return true;
+    }
+
+    /**
+      * Set unique keys after configuration reading
+      */
+    global define void setUniqueKeys () ``{
+        original_unique_keys = $[];
+        foreach (`i, printcap, ``{
+            if (haskey (i, "unique_key"))
+                original_unique_keys = add (original_unique_keys, lookup (i, "unique_key", ""), true);
+        });
+    }
+
+    global define void updateStatesAfterRead (list nonyast) ``{
 	list nyl = maplist (`e, nonyast, ``{return lookup (e, "name", "");});
 	nyl = filter (`e, nyl, ``(e != ""));
 	printcap = maplist (`e, printcap, ``{
@@ -1055,13 +1067,21 @@ to print."));
 	    e[state] = ready ? e[state]:"changed" : "changed";
 	    return e;
 	});
-	if (old_default != "" && old_default != nil)
-	    default = old_default;
+    }
+
+    global define void mergeNonYaST (list nonyast) ``{
+	list yast2_queue_names = filter (string f,
+	    maplist (map e, printcap, ``(e["name"]:"")),
+	    ``(f != ""));
+	list marked_for_delete =filter (string f,
+	    maplist (map e, deleted, ``(e["name"]:"")),
+	    ``(f != ""));
+
         foreach (`e, nonyast, ``{
             string name = lookup (e, "name", "");
-	    if (! contains (tmpdellist, name))
+	    if (! contains (marked_for_delete, name))
 	    {
-                if (! contains (tmplist, name))
+                if (! contains (yast2_queue_names, name))
                 {
 		    string uri = lookup (e, "uri", "");
 		    e = add (e, "type", "nonYaST");
@@ -1086,13 +1106,30 @@ to print."));
 	        }
 	    }
         });
-        original_unique_keys = $[];
-        foreach (`i, printcap, ``{
-            if (haskey (i, "unique_key"))
-                original_unique_keys = add (original_unique_keys, lookup (i, "unique_key", ""), true);
-        });
+    }
+
+    /**
+      * Old read function, called from new Read function
+      * TODO: better integrate
+      * TODO: error handling
+      * @return boolean true on success
+      */
+    global define boolean queuesRead () ``{
+	boolean ret = true;
+	list nonyast = spoolerSpecQueuesRead ();
+
+	stateRead ();
+	updateStatesAfterRead (nonyast);
+	mergeNonYaST (nonyast);
+
+	setUniqueKeys ();
 	read_done = true;
 	assignDefault ();
+	if (! ret)
+	{
+	    // message box
+	    Report::Error (_("Unable to read the current configuration."));
+	}
         return ret;
      }
     /**
@@ -1462,6 +1499,50 @@ the selected spooler does not support it."), name));
 	    return res;
 	});
     }
+
+    /**
+      * Remove from list of deleted printers suplicated entries
+      */
+    define void removeDuplicatedDeletedPrinters () ``{
+	map tmp = $[
+	    "class" : $[],
+	    "printer" : $[],
+	];
+	foreach (map d, deleted, ``{
+	    if (! haskey (tmp[(d["type"]:"printer")]:$[], d["name"]:""))
+	    {
+		tmp[d["type"]:"printer", d["name"]:""] = d["states"]:$[];
+	    }
+	    else
+	    {
+		map old_states = tmp[d["type"]:"printer", d["name"]:""]:$[];
+		map new_states = d["states"]:$[];
+		old_states = mapmap (`k, `v, old_states, ``{
+		    if (v != "changed")
+			v = new_states[k]:"changed";
+		    return [k, v];
+		});
+		tmp[d["type"]:"printer", d["name"]:""] = old_states;
+	    }
+	});
+	deleted = merge (
+	    maplist (`k, `v, tmp["class"]:$[], ``(
+		$[
+		    "type" : "class",
+		    "name" : k,
+		    "states" : v,
+		]
+	    )),
+	    maplist (`k, `v, tmp["printer"]:$[], ``(
+		$[
+		    "type" : "printer",
+		    "name" : k,
+		    "states" : v,
+		]
+	    ))
+	);
+    }
+
     /**
      * Write /var/lib/yast2/printers
      * @return boolean true if successful
@@ -1474,6 +1555,7 @@ the selected spooler does not support it."), name));
 	    "newer_gs_upp", "database", ];
 	l = maplist (`e, l, ``(filter (`k, `v, e,
 	    ``(! contains (forbidden_keys, k)))));
+	removeDuplicatedDeletedPrinters ();
 	cleanDeletedPrinters ();
 	map save = $[
 	    "printers" : l,
