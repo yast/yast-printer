@@ -32,14 +32,6 @@ using namespace std;
 class PPD {
     public:
 
-        /* typedef string Info; */
-        class Info {
-            public:
-                string filename;
-                string pnp_vendor;
-                string pnp_printer;
-        };
-
         class PPDInfo {
             public:
                 string filename;
@@ -51,14 +43,72 @@ class PPD {
                 string lang;
                 string pnp_vendor;
                 string pnp_printer;
+		string checksum;
         };
 
-        typedef string Vendor;
-        typedef string Model;
-        typedef string Driver;
-        typedef map<Driver,Info> Drivers;
-        typedef map<Model,Drivers> Models;
-        typedef map<Vendor,Models> Vendors;
+        typedef string VendorKey;
+        typedef string ModelKey;
+        typedef string DriverKey;
+
+        /* typedef string Info; */
+        class DriverInfo {
+            public:
+                string filename;
+                string pnp_vendor;
+                string pnp_printer;
+		string checksum;
+	    DriverInfo () {
+		filename = "";
+		pnp_vendor = "";
+		pnp_printer = "";
+		checksum = "";
+	    }
+        };
+
+	typedef map<DriverKey, DriverInfo> Drivers;
+
+	class ModelInfo {
+	    public:
+		string label;
+		int support;
+		string mcomment;
+		Drivers drivers;
+	    ModelInfo () {
+		support = -1;
+		label = "";
+		mcomment = "";
+	    }
+	};
+
+	typedef map<ModelKey, ModelInfo> Models;
+
+	class VendorInfo {
+	    public:
+		string label;
+		string vcomment;
+		Models models;
+	    VendorInfo () {
+		label = "";
+		vcomment = "";
+		models = Models ();
+	    }
+	};
+
+	typedef map<VendorKey, VendorInfo> Vendors;
+
+        class PpdFileInfo {
+            public:
+                bool file_newer;
+                bool dir_newer;
+		bool update;
+            PpdFileInfo () {
+                file_newer = "";
+                dir_newer = "";
+		update = true;
+            }
+        };
+
+	typedef map<string, PpdFileInfo> PpdFiles;
 
         PPD(const char *ppddir = PPD_DIR, const char *ppddb = PPD_DB);
         ~PPD();
@@ -74,17 +124,18 @@ class PPD {
 
     private:
         Vendors db;
-	
+	PpdFiles ppdfiles;
+
+	string datadir;
+	string var_datadir;
         char ppd_dir[MAX];
         char ppd_db[MAX];
         time_t mtime;
 
-        typedef map<string,string> VendorsMap;
-        VendorsMap vendors_map;
+	typedef map<string, string> VendorsMap;
+	VendorsMap vendors_map;
 	typedef map<string, vector<pair <string, string> > > ModelsMap;
 	ModelsMap models_map;
-	typedef map<string, map <string, map <string, string> > > ModelsInfoMap;
-	ModelsInfoMap models_info;
 
         bool mtimes(const char *dirname, time_t mtime, int *count);
 	int  countFiles (const char *dirname);
@@ -96,6 +147,13 @@ class PPD {
 	volatile int creation_status;
 	volatile int total_files;
 	volatile int done_files;
+
+	bool loadPrebuiltDatabase ();
+	bool createFileList(const char *dirname, time_t mtime);
+	bool cleanupLists ();
+	bool processNewFiles ();
+	bool cleanupEmptyEntries ();
+	string fileChecksum (const string &filename);
 
     protected:
         string strupper(const string s);
