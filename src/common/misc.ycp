@@ -121,7 +121,8 @@ This usually takes one or two minutes")));
 	fn = fn + "/script.sw_single";
 	SCR::Write (.target.ycp, fn, script);*/
 
-	Pkg::DoRemove (to_delete);
+	foreach (`e, to_delete, ``{Pkg::PkgDelete (e);});
+	Pkg::PkgCommit ();
 	SCR::Execute (.target.bash, "/bin/rm -rf /etc/cups/");
 	SCR::Execute (.target.bash, "/bin/rm -rf /etc/lpdfilter/");
 	SCR::Execute (.target.bash, "/bin/rm -rf /etc/printcap");
@@ -131,7 +132,10 @@ This usually takes one or two minutes")));
 	SCR::Execute (.target.bash, "/bin/rm -rf /var/spool/lpd/");
 	SCR::Execute (.target.bash, "/bin/rm -rf /var/spool/cups/");
 	SCR::Execute (.target.bash, "/bin/rm -rf /var/lib/YaST2/printers");
-	Pkg::DoProvide (to_install);
+	foreach (`e, to_install, ``{Pkg::DoProvide (e);});
+	Pkg::PkgSolve ();
+	Pkg::PkgCommit ();
+	WFM::CallModule("inst_suseconfig", []);
 
 //	CallFunction (`sw_single (fn));
 

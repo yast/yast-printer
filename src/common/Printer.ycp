@@ -684,6 +684,15 @@ END { if (!used) print \"ServerName %1\" }
 		    tmpdellist = add (tmpdellist, name);
 	    });
 	}
+	list nyl = maplist (`e, nonyast, ``{return lookup (e, "name", "");});
+	nyl = filter (`e, nyl, ``(e != ""));
+	printcap = maplist (`e, printcap, ``{
+	    boolean ready = contains (nyl, lookup (e, "name", ""));
+	    string state = Printer::spooler + "-state";
+	    e = add (e, state, ready ? lookup (e, "cups-state", "changed") : "changed");
+//	    e = add (e, "lprng-state", ready ? lookup (e, "lprng-state", "changed") : "changed");
+	    return e;
+	});
 	printcap = maplist (`e, printcap, ``{return assignStates (e, false);});
 	if (old_default != "" && old_default != nil)
 	    default = old_default;
@@ -822,7 +831,9 @@ Remove them?
 		    fn = fn + "/script.sw_single";
 		    SCR::Write (.target.ycp, fn, script);
 		    CallFunction (`sw_single (fn));*/
-		    Pkg::Doremove (del);
+		    foreach (`d, del, ``{Pkg::PkgDelete (d);});
+		    Pkg::PkgSolve ();
+		    Pkg::PkgCommit ();
 		    WFM::CallModule("inst_suseconfig", []);
 		}
 		return true;

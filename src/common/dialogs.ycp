@@ -549,6 +549,28 @@ that your parallel port is not properly configured.
 	string hostname = "";
 	integer port = 0;
 
+	// check necessary packages
+	if (type == "samba")
+	{
+	    if (! Pkg::isProvided ("samba-client"))
+	    {
+		Pkg::Provide ("samba-client");
+		Pkg::Solve ();
+		Pkg::Commit ();
+		WFM::CallModule("inst_suseconfig", []);
+	    }
+	}
+	else if (type == "novell")
+	{
+	    if (! Pkg::isProvided ("ncpfs"))
+	    {
+		Pkg::Provide ("ncpfs");
+		Pkg::Solve ();
+		Pkg::Commit ();
+		WFM::CallModule("inst_suseconfig", []);
+	    }
+	}
+
 	boolean supported = testSupportedQueue (type);
 	if (! supported)
 	{
