@@ -151,6 +151,7 @@ struct { char *key, *val; } array_map[] = {
 
 struct { char *manuf, *key, *val; } array_model_map[] = {
     { "HP", "DESKJET", "LASERJET" },
+// TODO
     { NULL, NULL, NULL }
 };
 

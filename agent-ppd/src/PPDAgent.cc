@@ -48,8 +48,17 @@ YCPValue PPDAgent::Read(const YCPPath &path, const YCPValue& arg)
             return YCPBoolean(database.changed(NULL));
 	if (path->component_str(1)=="vendorname" && arg->isString ())
 	    return YCPString (database.getVendorId (arg->asString()->value_cstr ()));
-	if (path->component_str(1)=="modelname" && arg->isString ())
-	    return YCPString (arg->asString ());// FIXME TODO
+	if (path->component_str(1)=="modelname" && arg->isList ())
+	{
+	    YCPList l = arg->asList ();
+	    if (l->size () == 2 && l->value(0)->isString ()
+		&& l->value(1)->isString())
+	    {
+		return YCPString (database.getModelId (
+		    l->value(0)->asString ()->value_cstr (),
+		    l->value(1)->asString ()->value_cstr ()));
+	    }
+	}
     }
     else if (path->length() == 2 && path->component_str(0) == "file")
     {

@@ -123,11 +123,28 @@ bool PPD::changed(int *count) {
     return ret;
 }
 
+/**
+ * Transform vendor name from PPD file/detection to key in database
+ */
 string PPD::getVendorId (string vendor) {
+    vendor = strupper (vendor);
     if(vendors_map.find(vendor)!=vendors_map.end()) {
 	vendor = vendors_map[vendor];
     }
+    else
+    {
+	vendor = filterchars (vendor, "ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890");
+    }
     return vendor;
+}
+
+/**
+ * Transform model name from PPD file/detection to key in database
+ */
+string PPD::getModelId (string vendor, string model) {
+    model = strupper (model);
+    model = filterchars (model, "ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890");
+    return model;
 }
 
 /**
@@ -277,7 +294,11 @@ void* PPD::createdbThread() {
         PPD::Models::const_iterator it2 = (*it1).second.begin();
         for(f2 = true; it2 != (*it1).second.end(); it2++) {
             F(f2) fprintf(file,str);
-            fprintf(file,"    \"%s\" : $[\n",strupper(it2->first).c_str());
+            fprintf(file,"    \"%s\" : $[\n", getModelId
+		(it1->first, it2->first).c_str ());
+
+
+//strupper(it2->first).c_str());
 	    fprintf(file,"      `label : \"%s\",\n", it2->first.c_str());
             PPD::Drivers::const_iterator it3 = (*it2).second.begin();
             for(f3 = true; it3 != (*it2).second.end(); it3++) {
@@ -368,6 +389,20 @@ string PPD::killchars(const string s, const string chr) {
         tmp.erase(ind);
 
     return killspaces(tmp);
+}
+
+/**
+ * Filter characters, leavo only listed ones
+ */
+string PPD::filterchars(const string s, const string chr) {
+    string tmp = s;
+    signed ind = tmp.find_first_not_of(chr);
+    while (ind >= 0)
+    {
+	tmp.erase (ind, 1);
+	ind = tmp.find_first_not_of(chr);
+    }
+    return tmp;
 }
 
 /**
@@ -705,6 +740,7 @@ void PPD::preprocess(PPD::PPDInfo info, PPDInfo *newinfo) {
                             }
                             else {
                                 y2debug("8: _%s_", tmp.c_str());
+				vendor = getVendorId (vendor);
 //                                vendor = "";
                             }
                         }

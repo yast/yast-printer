@@ -83,8 +83,6 @@
                 forbidden_names = add (forbidden_names, lookup (v, "name", ""));
                 return union (Printer::printer, v);
             });
-
-
 	return new_queues;
     }
 
@@ -159,14 +157,19 @@ of printers"));
 	    {
 		foreach (`k, `v, ppds, ``{
 		    if (fallback == "")
+		    {
 			fallback = k;
+		    }
 		    if (choosen == "" && regexpmatch (v, i))
+		    {
 			choosen = k;
+		    }
 		});
 	    }
 	});
 	if (choosen == "")
 	    choosen = fallback;
+	y2milestone ("Chose file %1, %2", choosen, ppds[choosen]:"");
 	return choosen;
     }
 
@@ -177,10 +180,9 @@ of printers"));
       * @return map of ppd files
       */
     global define map getPpdFiles (string vendor, string device) ``{
-	vendor = SCR::Read (.ppd.db.vendorname, vendor);
-y2error ("Getting PPDs for %1", vendor);
+	string vendor_db = SCR::Read (.ppd.db.vendorname, vendor);
 	map models = $[];
-	string cache = filterchars (tolower (vendor),
+	string cache = filterchars (tolower (vendor_db),
 	    "abcdefghijklmnopqrstuvwxyz0123456789");
         foreach (`k, `v, Printer::foomatic, ``{
 	    if (filterchars (tolower (k),
@@ -190,7 +192,8 @@ y2error ("Getting PPDs for %1", vendor);
 	    }
 	});
 	map ppds = $[];
-	cache = filterchars (tolower (device),
+	string device_db = device; // FIXME
+	cache = filterchars (tolower (device_db),
 	    "abcdefghijklmnopqrstuvwxyz0123456789");
 	foreach (`k1, `v1, models, ``{
 	  if (is (k1, string))
@@ -761,7 +764,7 @@ press 'OK'.
 		os = os + sformat ("----X-HEAD: (%1)\n", _("YaST2 test page"));
 
 		// options
-		string filename = SCR::Read (.ppd.file.open, [Printer::foomatic[printer["vendor"]:"", printer["device"]:"", printer["config"]:"", 0]:"", "/tmp"]);
+		string filename = SCR::Read (.ppd.file.open, [Printer::foomatic[printer["vendor_db"]:"", printer["device_db"]:"", printer["config"]:"", 0]:"", "/tmp"]);
 		map options = SCR::Read (.ppd.file.options, [filename, ""]);
 		list optlist = options["data"]:[];
 		optlist = maplist (`i, optlist, ``{

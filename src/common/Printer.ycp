@@ -198,11 +198,13 @@
             i = add (i, "location", Printerlib::getUriNiceName (lookup (i, "uri", "")));
 	    if (Printer::db == `foomatic)
 	    {
-		i["vendor"] = SCR::Read (.ppd.db.vendorname, i["vendor"]:"");
+		i["vendor_db"] = SCR::Read (.ppd.db.vendorname, i["vendor"]:"");
 //		i["device"] = SCR::Read (.ppd.db.modelname, i["vendor"]:"",
 //							i["device"]:"");
-		i["device"] = toupper (i["device"]:"");
+		i["device_db"] = SCR::Read (.ppd.db.modelname,
+		    [i["vendor_db"]:"", i["device"]:""]);
 	    }
+	    y2milestone ("Detected printer %1", i);
 	    return i;
 	});
     }
@@ -281,6 +283,7 @@
 	boolean found_lp = false;
 	boolean found_normal = false;
 	boolean found_defstr = false;
+	string norm_name = "";
 	string first = "";
 	string state_string = Printer::spooler + "-state";
 	foreach (`e, printcap, ``{
@@ -291,10 +294,13 @@
 		    found_lp = true;
 		if (name == default)
 		    found_default = true;
-		if (name == "normal")
+		if (name == "normal" || regexpmatch (name, "normal[0-9]"))
+		{
+		    norm_name = name;
 		    found_normal = true;
+		}
 		if (name == "default")
-		    found_defstrt = true;
+		    found_defstr = true;
 		if (first == "")
 		    first = name;
 	    }
@@ -310,7 +316,7 @@
 	}
 	else if (found_normal)
 	{
-	    default = "normal";
+	    default = norm_name;
 	    dirty = true;
 	}
 	else if (found_default)
@@ -1479,6 +1485,16 @@ the selected spooler does not support it.
 		    {
 			editDetected (i);
 			i = printer;
+			if (Printer::db == `foomatic)
+			{
+			    string v_db = SCR::Read (.ppd.db.vendorname,
+				i["vendor_ieee"]:"");
+			    i = union (i, $[
+				"vendor_db" : v_db,
+				"device_db" : SCR::Read (.ppd.db.modelname,
+				    [v_db, i["device_ieee"]:""]),
+			    ]);
+			}
 			i = union (i, $[
 			    "vendor" : select (detected, 0, ""),
 			    "device" : select (detected, 1, ""),
@@ -1487,7 +1503,7 @@ the selected spooler does not support it.
 			if (Printer::db == `foomatic)
 			{
 			    new_queues = getFoomaticAutoQueues
-				(i["vendor"]:"", i["device"]:"");
+				(i["vendor_db"]:"", i["device_db"]:"");
 			}
 			else
 			{
@@ -1501,9 +1517,10 @@ the selected spooler does not support it.
 				map paper = getQuickPaperSize (lookup (v, "config", ""));
 				if (nil != paper)
 				    v = add (v, "options", paper);
+		
+			        string k = adjustQueueName (lookup (v, "name", "lp") + suffix, forbidden_names);
+			        v = add (v, "name", k);
 			    }
-			    string k = adjustQueueName (lookup (v, "name", "lp") + suffix, forbidden_names);
-			    v = add (v, "name", k);
 			    forbidden_names = add (forbidden_names, lookup (v, "name", ""));
 
 			    map info = $[];
@@ -1516,6 +1533,7 @@ the selected spooler does not support it.
 			    {
 			        info = SCR::Read (.printerdb.configinfo, lookup (v, "config", ""));
 			    }
+			    y2milestone ("Proposing queue %1", union (v, i));
 			    if ((lookup (info, "cups", true) && lookup (info, "lprng", true)))
 				printcap = add (printcap, union (v, i));
 			});
