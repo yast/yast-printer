@@ -94,6 +94,16 @@ YCPValue PPDAgent::Read(const YCPPath &path, const YCPValue& arg)
 		    l->value(1)->asString ());
 	    }
 	}
+	if (path->component_str (1) == "isppd"
+	    && !arg.isNull () && arg->isString ())
+	{
+	    return fileops.isPpd (arg->asString()->value_cstr ());
+	}
+	if (path->component_str (1) == "ppdinfo"
+	    && !arg.isNull () && arg->isString ())
+	{
+	    return fileops.ppdInfo (arg->asString()->value_cstr ());
+	}
     }
     // fallback...
     return YCPError(string ("Wrong path '") + path->toString() + string ("' in Read()."));

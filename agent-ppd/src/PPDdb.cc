@@ -1918,6 +1918,4 @@ YCPList PPD::sortItems (const YCPMap& items) {
     return ret;
 }
 
-
-
 /* EOF */

@@ -32,6 +32,9 @@ class PPDfile {
 	YCPMap getOptionsGroups (YCPString filename);
 	YCPMap getOptions (YCPString filename, YCPString section);
 	YCPString openPpdFile (YCPString filename, YCPString tmpdir);
+	YCPBoolean isPpd (const char* filename);
+	YCPMap ppdInfo (const char *filename);
+
 
     private:
 
