@@ -11,6 +11,7 @@ ybin_SCRIPTS =			\
 	test_remote_novell	\
 	listen_remote_ipp	\
 	real_resolution		\
-	process_ppd_files
+	process_ppd_files	\
+	assign_printcap_default
 
 EXTRA_DIST = $(ybin_SCRIPTS)

@@ -1381,7 +1381,10 @@ the selected spooler does not support it."), name));
 	}
 	else
 	{
-	    SCR::Write (.sysconfig.printer.DEFAULT_PRINTER, default_printer_found ? default : "none");
+	    SCR::Write (.sysconfig.printer.DEFAULT_PRINTER, nil);
+// see above
+//	    SCR::Write (.sysconfig.printer.DEFAULT_PRINTER, default_printer_found ? default : "none");
+	    SCR::Execute (.target.bash, sformat ("/usr/lib/YaST2/bin/assign_printcap_default %1", default_printer_found ? default : "\"\""));
 	    SCR::Write (.sysconfig.printer, nil);
 	    if (size (printcap) > 0)
 		Runlevel::ServiceAdjust ("lpd", "enable");
