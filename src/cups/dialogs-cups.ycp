@@ -874,9 +874,14 @@
 		// selectionbox label
 		`HBox (`HSpacing (3), `ReplacePoint (`id( `replace_addr), `SelectionBox (`id (`addr), _("Browse Addre&sses"))), `HSpacing (3)),
 		`HBox (
+		    `HSpacing (3),
 		    `PushButton (`id (`add), `opt (`key_F3), Label::AddButton ()),
 		    `PushButton (`id (`edit), `opt (`key_F4), Label::EditButton ()),
-		    `PushButton (`id (`del), `opt (`key_F5), Label::DeleteButton ())
+		    `PushButton (`id (`del), `opt (`key_F5), Label::DeleteButton ()),
+		    `HStretch (),
+		    // push button
+		    `PushButton (`id (`propose_server), _("&Propose")),
+		    `HSpacing (3)
 		)
 	    )),
 	    // frame
@@ -918,6 +923,12 @@
 	    }
 	    else if (`back == ret)
 		break;
+	    else if (`propose_server == ret)
+	    {
+		CUPS::ProposeServerSettings ();
+		addresses = CUPS::cups_server_settings["BrowseAddress"]:[];
+		UI::ReplaceWidget (`id (`replace_addr), `SelectionBox (`id (`addr), _("Browse Addre&sses"), addresses));
+	    }
 	    else if (`change == ret)
 	    {
 		ret = (symbol)UI::QueryWidget (`id (`loc), `CurrentButton);
