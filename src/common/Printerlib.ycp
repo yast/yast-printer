@@ -361,7 +361,14 @@
 
 	UI::MessagePopup (textTestDeviceResult (tst));
     };
-
+    /**
+      * Test remote queue accessibility if username and password needed
+      * @param hname string hostname of remote host
+      * @param rname string name of remote queue
+      * @param user string username to access remote queue
+      * @param pass string password to access remote queue
+      * @param type string "samba" or "novell"
+      */
     global define void testRemoteUP (string hname, string rname, string user, string pass, string type) ``{
 	UI::OpenDialog (`opt (`decorated), `Label (sformat (textTestRemotePrinter (false), hname)));
 	map test_return = $[];
@@ -464,7 +471,9 @@
 	    }
 	return 0;
     }
-
+    /**
+      * stop currently running printer spooler service
+      */
     global define void stopServices () ``{
 	if (SCR::Read (.targetpkg.installed, "plp"))
 	    SCR::Execute (.target.bash, "test -f /etc/init.d/lpd && /etc/init.d/lpd stop");
@@ -872,9 +881,9 @@
     }
     /**
      * get paper size from system and returns 0 for a4 or 1 for letter
-     * @return 0 for a4, 1 for letter
+     * @return integer 0 for a4, 1 for letter
      */
-    global define getDefaultPaperSize () ``{
+    global define integer getDefaultPaperSize () ``{
 	if (-1 != paper_size)
 	    return paper_size;
 	paper_size = SCR::Execute (.target.bash, "/usr/bin/locale -k LC_PAPER | /usr/bin/grep width=210");

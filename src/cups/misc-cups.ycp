@@ -24,7 +24,7 @@
 
     /**
       * Write configuration to CUPS
-      * @param list of entries
+      * @param entry map of printer entry
       * @return boolean true if successfull
       */
     global define boolean writeCupsPrinter (map entry) ``{
@@ -112,13 +112,22 @@
         else
             if (isPpd (ownppd))
                 entry = add (entry, "ppd", ownppd);
+	string ppd = lookup (entry, "ppd", "");
+	if (ppd != "" && -1 == SCR::Read (.target.size, ppd))
+	{
+	    y2error ("Unexsistent PPD file: %1", ppd);
+	    UI::MessagePopup (sformat (_("Error occurred while saving queue %1."), name));
+	    return false;
+	}
         boolean res = SCR::Write (.cups.printers.add, entry);
         if (! res)
 	    // popup
             UI::MessagePopup (sformat (_("Error occurred while saving queue %1."), name));
         return res;
     }
-
+    /**
+      * Reads CUPS server settings from /etc/cups/cupsd.conf file
+      */
     global define void readCupsSettings () ``{
 	map out = SCR::Execute (.target.bash_output, "
 /bin/cp /etc/cups/cupsd.conf /etc/cups/cupsd.conf.y2
@@ -174,8 +183,12 @@ BEGIN {location = \"\";}
         });
 	Printer::cups_server_settings = settings;
     }
-
+    /**
+      * Writes CUPS server settings to /etc/cups/cupsd.conf file
+      */
     global define void writeCupsSettings () ``{
+	if (Printer::cups_server_settings == $[])
+	    readCupsSettings ();
 	map settings = Printer::cups_server_settings;
         string run = "function write_browsing(x){\n";
         if (lookup (settings, "Browsing", "") != "")

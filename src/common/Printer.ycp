@@ -313,7 +313,8 @@
     }
     /**
       * Assign states to a printer
-      * @param map printer
+      * @param p map printer
+      * @param changed boolean true if queue was changed (to assign correct state)
       * @return map printer with assigned states
       */
     define map assignStates (map p, boolean changed) ``{
@@ -362,8 +363,8 @@
     }
     /**
       * Gets state of printer for choosen spooler
-      * @param map printer
-      * @param string spooler
+      * @param p map printer
+      * @param spooler string spooler (cups or lprng)
       * @return string state
       */
     global define string getPrinterState (map p, string spooler) ``{
@@ -372,8 +373,8 @@
     }
     /**
       * Adds a queue to the deleted list
-      * @param string name
-      * @param string printer_type "printer" or "class"
+      * @param name string queue name
+      * @param printer_type string "printer" or "class"
       */
     global define void addToDeleted (string name, string printer_type) ``{
 	deleted = add (deleted, $[ "name" : name, "type" : printer_type, "states" : $["cups-state" : "changed", "lprng-state" : "changed"]]);
@@ -485,7 +486,8 @@
 	deleted = [];
 	autodetected = [];
     }
-    /** read printers from /etc/printcap
+    /**
+     * read printers from /etc/printcap
      * @return list of printers
      */
     global define list printcapRead () ``{
@@ -734,7 +736,7 @@ END { if (!used) print \"ServerName %1\" }
      }
     /**
       * deletes printers
-      * @param list of strings representing names
+      * @param l list of strings representing names
       * @return success state
       */
     global define boolean deletePrinters (list l) ``{
@@ -783,13 +785,13 @@ END { if (!used) print \"ServerName %1\" }
      * @return success state
      */
     global define boolean Write () ``{
-	restartSpoolerIfNeeded (true);
 	if (Printer::spooler == "cups")
 	{
 	    if (0 == cupsInstallationType ())
 	    {
 		writeCupsSettings ();
 		Printer::server_hostname = "";
+		saveClientHostName ();
 	    }
             if (0 != cupsInstallationType ())
 	    {
@@ -813,8 +815,7 @@ Remove them?
 		return true;
 	    }
 	}
-	Printer::server_hostname = "";
-	saveClientHostName ();
+	restartSpoolerIfNeeded (true);
 	// caption of progress
 	Progress::New (_("Saving settings of printers. Please wait..."),
 		       // progress stages, short texts
@@ -1469,7 +1470,7 @@ the selected spooler does not support it.
     }
     /**
       * does file exist?
-      * @param filename
+      * @param file string filename to test
       * @return true if exists
       */
     global define boolean isFile (string file) ``{
@@ -1480,7 +1481,7 @@ the selected spooler does not support it.
     }
     /**
       * Is file a ppd file?
-      * @param filename
+      * @param file string filename to test
       * @return true if yes
       */
     global define boolean isPpd (string file) ``{
@@ -1493,7 +1494,7 @@ the selected spooler does not support it.
     }
     /**
       * Get PPD file info
-      * @param filename
+      * @param file string filename to get info from
       * @return map of informations
       */
     global define map ppdInfo (string file) ``{
@@ -1501,7 +1502,7 @@ the selected spooler does not support it.
     }
     /**
       * Add unpresent entries into a map
-      * @param map printer
+      * @param p map of printer
       * @return modified map
       */
     global define map fixPrinter (map p) ``{

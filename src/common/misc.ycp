@@ -33,7 +33,7 @@ This usually takes one or two minutes")));
 
     /**
       * check whether spooler (if needed to be running) runns, if not start it
-      * @param boolean true if shall show a popup if needed
+      * @param showPopup boolean true if shall show a popup if needed
       */
     global define void restartSpoolerIfNeeded (boolean showPopup) ``{
         if (Printer::spooler == "cups")
@@ -65,6 +65,10 @@ This usually takes one or two minutes")));
 			close_dialog = true;
 			showCupsInitPopup ();
 		    }
+		    if (attempts>60*10)
+		    {
+			break;
+		    }
                     sleep (1000);
                     status = SCR::Execute (.target.bash, "/etc/init.d/cups status");
                     if (0 != status)
@@ -84,10 +88,8 @@ This usually takes one or two minutes")));
     }
 
     /**
-     * Get list of available banners from /usr/share/cups/banners, adds
-     * "none" and sorts.
-     * I think it isn't worth to have it in separate agent.
-     * @return list of strings -- banners
+     * Reinstall all printing related packages using package-manager
+     * @return boolean true if success
      */
     global define boolean reinstallAll () ``{
 	Printer::printcap = [];
@@ -148,7 +150,10 @@ This usually takes one or two minutes")));
         return sort (hosts);
     }
 
-
+    /**
+      * Get list of possible banners for CUPS server
+      * @return list banners names
+      */
     global define list getBannerList () ``{
         map out = SCR::Execute (.target.bash_output, "/bin/ls -1 /usr/share/cups/banners");
         list ban = splitstring (lookup (out, "stdout", ""), "\n");
@@ -166,7 +171,12 @@ This usually takes one or two minutes")));
             return i != item;
         });
     }
-
+    /**
+      * Test whether spooler supports queue type
+      * @param queue string queue type (eg. parallel)
+      * @param spooler string "cups" or "lprng"
+      * @return boolean true if supports
+      */
     global define boolean testSupportedQueueBySpooler (string queue, string spooler) ``{
 	map supported = $[ "cups" : [ "parallel", "usb", "serial", "filtering", "ipp", "samba", "socket", "irda", "file", "class", ],
 			   "lprng" : [ "parallel", "usb", "serial", "lpd", "prefilter", "samba", "novell", "irda", "filtering", "socket", "pipe", "ipp", "file", ]];
@@ -175,11 +185,14 @@ This usually takes one or two minutes")));
 	    return true;
 	return contains (l, queue);
     }
-
+    /**
+      * Test whether currently used spooler supports queue type
+      * @param queue string queue type (eg. parallel)
+      * @return boolean true if supports
+      */
     global define boolean testSupportedQueue (string queue) ``{
 	return testSupportedQueueBySpooler (queue, Printer::spooler);
     }
-
     /**
      * Displays message when baud rate is 0.
      * @param brate Baud rate.
@@ -284,7 +297,7 @@ queue you want to use."));
 
     /**
       * generate class name
-      * @param forbidden names
+      * @param forbidden_names list of forbidden names
       * @return new class name
       */
     global define string generateClassName (list forbidden_names) ``{
@@ -301,7 +314,7 @@ queue you want to use."));
     /**
      * FIXME: create test case
      * @param name printer name
-     * @param forbidden_names forbidden names
+     * @param forbidden_names list of forbidden names
      * @return new queue name
      */
     global define string generateQueueName (string name, list forbidden_names) ``{
@@ -334,9 +347,9 @@ queue you want to use."));
     /**
      * Saves printer under some new name and tests it.
      * It can also create NEW prefilter queue for it.
-     * @param printer printer to test
-     * @param type type of page. Now supports only (0==ps, 1==ascii)
-     * @return success?
+     * @param printer map of printer to test
+     * @param testpage_type type of page. Now supports only (0==ps, 1==ascii)
+     * @return boolean true if success
      */
     global define boolean testPrinter (map printer, integer testpage_type) ``{
 	if (Printer::spooler != "lprng" && Printer::spooler != "cups")
@@ -868,6 +881,7 @@ All changes will be lost!",
 
     /**
       * Is the name of local queue correct? If not, display message.
+      * @param name string queue name
       * @return boolean true if correct
       */
     global define boolean checkLocalQueueName (string name) ``{
@@ -1187,7 +1201,10 @@ for any file in directory /etc/lpdfilter"));
 	return selected;
     }
     /**
-      *
+      * get RadioButtonGroup for spooler selection
+      * @param spooler string currently used spooler (cups, cups-client, lprng or current)
+      * @param none boolean show leaving current status
+      * @return term RadioButtonGroup widget
       */
     global define term getSpoolerItems (string spooler, boolean none) ``{
         return `RadioButtonGroup (
@@ -1215,8 +1232,9 @@ for any file in directory /etc/lpdfilter"));
 
     /**
       * Shows a question to a user whether he wants the LPRng or CUPS spooler.
-      * @param Text to be displayed
-      * @return term specifying users selecion (lprng, cups, exit)
+      * @param msg string to be displayed
+      * @param abort_msg label of abort button
+      * @return symbol specifying users selecion (lprng, cups, exit)
       */
     global define symbol chooseSpooler(string msg, string abort_msg)
     ``{

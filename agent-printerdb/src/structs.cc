@@ -1,8 +1,26 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <ctype.h>
 
 #include "structs.h"
+
+
+#include "PrinterdbAgent.h"
+#include "suseprinterdb.h"
+#include "structs.h"
+
+#include <libintl.h>
+#include <stdarg.h>
+#include <langinfo.h>
+    
+#include <string.h>
+#include <stdio.h>
+#include <ctype.h>
+#include <unistd.h>
+#include <sys/stat.h>
+
+
 
 List*mains = 0;
 List*vendors = 0;
@@ -18,8 +36,6 @@ Printer**printerset = 0;
 int printersize = 0;
 Vendor**vendorset = 0;
 int vendorsize = 0;
-
-//string db_dir = "";
 
 void PasteOptions (Option*opt, const char*current_option);
 void PasteConfigs (Config*cfg, const char*current_cfg);
@@ -819,14 +835,25 @@ int is_supported (Printer*p)
 	return 1;
     return 2;
 }
-//FIXME: maybe literal comparation is not OK
+
+using namespace std;
+
+string removeBlanks (string arg)
+{
+    string res = "";
+    for (string::iterator i = arg.begin ();i != arg.end (); i++)
+    if (*i != ' ' && *i != '-' && *i != '.' && *i != '/')
+	res = res + (char)tolower (*i);
+    return res;
+}
 const Main*detectVendorStruct (const char*ieee)
 {
+    string fixed = removeBlanks (string (ieee));
     Main*use = 0;
     List*walk = mains;
     while (walk) {
 	Main*m = (Main*)walk->data;
-	if (m->ieee && !strcasecmp (ieee, m->ieee)) {
+	if (m->ieee && !strcasecmp (fixed.c_str(), removeBlanks (string (m->ieee)).c_str())) {
 	    use = m;
 	    break;
 	}
@@ -843,16 +870,16 @@ const char*detectVendor (const char*ieee)
     }
     return 0;
 }
-//FIXME: maybe literal comparation is not OK
 const Useprinter*detectModelStruct (const char*vendor,const char*ieee)
 {
+    string fixed = removeBlanks (string (ieee));
     Vendor**v = (Vendor**)findinset (vendorset, vendorsize, (char*)vendor);
     if (!v)
 	return 0;
     List*walk = (*v)->use;
     while (walk) {
 	Useprinter*m = (Useprinter*)walk->data;
-	if (m->ieee && !strcasecmp (ieee, m->ieee))
+	if (m->ieee && !strcasecmp (fixed.c_str(), removeBlanks (string (m->ieee)).c_str()))
 	    return m;
 	walk = walk->next;
     }

@@ -29,11 +29,14 @@
 
 
     /**
-     * Casts value type to integer if you know what I am talking about.
-     * @param a value
-     * @return integer representation of a
-     */
-    global define integer AnyToInteger (any a) ``{ integer c = a; return c; }
+      * Casts value type to integer if you know what I am talking about.
+      * @param a value
+      * @return integer representation of a
+      */
+    global define integer AnyToInteger (any a) ``{
+	integer c = a;
+	return c;
+    }
     /**
       * Change printer database
       * @return symbol `next, `abort or `back
@@ -104,9 +107,10 @@
         return ret;
     }
     /**
-     * Disk file specification
-     * @return symbol `next or `back
-     */
+      * Disk file specification
+      * @param type string "file" or "pipe"
+      * @return symbol `next or `back
+      */
     global define symbol runDiskFileDialog (string type) ``{
 	//
 	// parse Uri
@@ -2069,8 +2073,9 @@ All your changes will be lost.
                     Printerlib::switchTo ("cups");
                     ret = `switch;
                     Printer::cups_installation = -1;
+		    restartSpoolerIfNeeded (true);
                 }
-                else if (Printer::read_done == false)
+                if (Printer::read_done == false)
                 {
                     if (!Printer::Read ())
                     {
@@ -2081,6 +2086,8 @@ the current configuration.
                     }
                 }
 		Printer::cups_installation = 0;
+		Printer::saveClientHostName ();
+		restartSpoolerIfNeeded (true);
 		ret = `cups;
 		new_spooler = "cups";
 	    }
@@ -2703,7 +2710,10 @@ All your changes will be lost.
      */
     global define symbol revertDbPopup () ``{
 	Printer::revertDb ();
-	return `next;
+	if (Arch::s390)
+	    return `next_net;
+	else
+	    return `next;
     }
     /**
       * Detect installation type
@@ -2935,7 +2945,7 @@ All your changes will be lost.
 	    ];
 	map add_printer_sequence = $[
 	    "ws_start"   : "revertdb",
-	    "revertdb"	 : $[ `next : "connection", ],
+	    "revertdb"	 : $[ `next : "connection", `next_net : "advconnection" ],
 	    "connection" : $[
 		`parallel : "parallel",
 		`serial: "serial",

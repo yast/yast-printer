@@ -1,7 +1,3 @@
-Execute	.target.bash "test -f /etc/cups/client.conf && (/usr/bin/awk '\nBEGIN { used = 0 }\n/^ServerName/ { next }\n{ print $0; }\n' /etc/cups/client.conf > /etc/cups/client.conf.yast2; mv /etc/cups/client.conf.yast2 /etc/cups/client.conf)" 0
-Write	.sysconfig.printer.CUPS_SERVER nil true
-Write	.sysconfig.printer nil true
-Execute	.target.bash "/sbin/SuSEconfig --module profiles" 0
 Write	.target.ycp "/var/lib/YaST2/printers" $["default":"", "deleted":[], "printers":[]] true
 Execute	.target.bash "/bin/chmod 600 /var/lib/YaST2/printers" 0
 Read	.target.size "/etc/printcap" 0
@@ -15,10 +11,6 @@ Read	.init.scripts.comment "lpd" $[]
 Execute	.target.bash_output "/sbin/insserv -d /etc/init.d/lpd" $["exit":0, "srderr":"", "stdout":""]
 Return	true
 Dump	====================================================
-Execute	.target.bash "test -f /etc/cups/client.conf && (/usr/bin/awk '\nBEGIN { used = 0 }\n/^ServerName/ { next }\n{ print $0; }\n' /etc/cups/client.conf > /etc/cups/client.conf.yast2; mv /etc/cups/client.conf.yast2 /etc/cups/client.conf)" 0
-Write	.sysconfig.printer.CUPS_SERVER nil true
-Write	.sysconfig.printer nil true
-Execute	.target.bash "/sbin/SuSEconfig --module profiles" 0
 Execute	.target.bash "/usr/lib/lpdfilter/bin/lprsetup -lprng -delete lpx" 0
 Read	.target.size "/etc/printcap" 0
 Execute	.target.bash "/bin/rm -r /etc/lpdfilter/lpx /var/spool/lpd/lpx; \n" 0

@@ -660,7 +660,11 @@
     }
     /**
       * CUPS dialog for enetring IP address
-      *
+      * @param ad boolean true to show allow-deny radiobutton pair
+      * @param label string label of IP address textentry
+      * @param init string initial IP address (for textentry)
+      * @param state symbol `allow or `deny checked radiobutton
+      * @return term dialog contents
       */
     global define term ipAddrPopup (boolean ad, string label, string init, symbol state) ``{
 	return `VBox (
@@ -681,6 +685,7 @@
     }
     /**
      * CUPS access control list dialog
+     * @param type symbol `root, `admin, `printers of `classes specifying access configuration area
      * @return symbol `next or `back
      */
     global define symbol runCupsAclDialog (symbol type) ``{
@@ -832,6 +837,8 @@
      * @return symbol `next or `back
      */
     global define symbol runCupsServerDialog () ``{
+	if (Printer::cups_server_settings == $[])
+	    readCupsSettings ();
 	term contents = `HBox (`HSpacing (2), `VBox (
 	    `VSpacing (1),
 	    // frame
