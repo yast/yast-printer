@@ -21,7 +21,66 @@
     textdomain "printer";
     import "Printer";
     import "Printerlib";
+    import "Report";
     include "printer/misc.ycp";
+
+    /**
+      * Get PPD file updated according to printer options
+      * @param entry map of printer
+      * @return map updated printer map
+      */
+    global define map getUpdatedPpdFile (map entry) ``{
+        string ppdfilename = lookup (entry, "ppd", "");
+        string ownppd = lookup (entry, "ownppd", "");
+        boolean raw = entry["raw"]:false;
+        if (raw)
+        {
+            ppdfilename = "";
+            ownppd = "";
+            entry["ppd"] = "";
+        }
+        else if (ppdfilename == "")
+        {
+            ppdfilename = SCR::Read (.target.tmpdir);
+            ppdfilename = ppdfilename + "/ppdfile";
+        }
+
+        string ppdfile = "";
+        if (entry["ownppd"]:"" != "")
+            ppdfile = entry["ownppd"]:"";
+        else if (! raw)
+        {
+            ppdfile = Printer::foomatic[entry["vendor_db"]:"",
+                entry["device_db"]:"",
+                entry["config"]:"",
+		"filename"]:"";
+            y2milestone ("Using PPD file >>%1<<", ppdfile);
+            if (ppdfile == "")
+            {
+                // message popup
+                Report::Error (sformat (_("An error occurred while saving queue %1.
+
+Incorrect internal data. Try selecting the
+printer model again.
+"), name));
+                return nil;
+            }
+        }
+
+        if ((ownppd == "" || isPpd (ownppd)) && ! raw)
+        {
+            if (ppdfilename != "")
+            {
+                SCR::Write (.ppd.file.modify, [ppdfile, ppdfilename, entry["options"]:$[]]);
+                entry["ppd"] = ppdfilename;
+            }
+        }
+        else
+            if (isPpd (ownppd))
+                entry["ppd"] = ownppd;
+
+	return entry;
+    }
 
     /**
       * Write configuration to CUPS
@@ -51,54 +110,10 @@
         {
             return false;
         }
-
-	string ppdfilename = lookup (entry, "ppd", "");
-        string ownppd = lookup (entry, "ownppd", "");
+	entry = getUpdatedPpdFile (entry);
 	boolean raw = entry["raw"]:false;
-        if (raw)
-        {
-            ppdfilename = "";
-            ownppd = "";
-	    entry["ppd"] = "";
-        }
-        else if (ppdfilename == "")
-        {
-            ppdfilename = SCR::Read (.target.tmpdir);
-            ppdfilename = ppdfilename + "/ppdfile";
-        }
-
-	string ppdfile = "";
-	if (entry["ownppd"]:"" != "")
-	    ppdfile = entry["ownppd"]:"";
-	else if (! raw)
-	{
-	    ppdfile = Printer::foomatic[entry["vendor_db"]:"",
-		entry["device_db"]:"",
-		entry["config"]:"", 0]:"";
-	    y2milestone ("Using PPD file >>%1<<", ppdfile);
-	    if (ppdfile == "")
-	    {
-		// message popup
-		UI::MessagePopup (sformat (_("An error occurred while saving queue %1.
-
-Incorrect internal data. Try selecting the
-printer model again.
-"), name));
-		return false;
-	    }
-	}
-
-        if ((ownppd == "" || isPpd (ownppd)) && ! raw)
-        {
-            if (ppdfilename != "")
-            {
-		SCR::Write (.ppd.file.modify, [ppdfile, ppdfilename, entry["options"]:$[]]);
-                entry = add (entry, "ppd", ppdfilename);
-            }
-        }
-        else
-            if (isPpd (ownppd))
-                entry = add (entry, "ppd", ownppd);
+	if (entry == nil)
+	    return false;
 
         if (Printerlib::getUriType (uri) == "usb")
         {
@@ -159,6 +174,7 @@ The specified PPD file does not exist.
 	    SCR::Execute (.target.bash, sformat ("test -f %1 && rm %1",
 		sformat ("/etc/cups/ppd/%1.ppd", entry["name"]:"")));
 	}
+
         boolean res = SCR::Write (.cups.printers.add, entry);
         if (! res)
 	    // popup

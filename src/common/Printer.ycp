@@ -41,11 +41,11 @@
     global boolean write_only = false;
     /**
      * Type of cups installation.
-     * -1: unknown
-     * 0:  server
-     * !0: client
-     */  // FIXME: ambigious definition. Changing it to symbols would be the best idea
-    global integer cups_installation = -1;
+     * nil: unknown
+     * `server:  server
+     * `client: client
+     */
+    global symbol cups_installation = nil;
     /**
       * Use CUPS-like USB devices names
       * `always, `never, `serial
@@ -65,16 +65,6 @@
       * If nil, ask user
       */
     global boolean detect = true;
-    /**
-     * Database passed on command line (or nil
-     * in case flobal db should be used)
-     */
-    string default_database = nil;
-
-    /**
-     * Database currently loaded.
-     */
-    global string current_database = nil;
 
     /**
      * List of print queues. See description of map printer
@@ -87,7 +77,7 @@
       */
     global list printcap_backup = [];
     /**
-     * Default printer
+     * Default queue name
      */
     global string default = "";
     /**
@@ -110,10 +100,6 @@
       * Settings of CUPS server
       */
     global map cups_server_settings = $[];
-    /**
-      * Used database type, `suse or `foomatic
-      */
-    global symbol db = `foomatic;
     /**
       * map of foomatic printers database
       */
@@ -249,12 +235,9 @@
 	    i = add (i, "uri", lookup (i, "bus", "parallel") + ":" + lookup (i, "dev_name", ""));
 	    i = add (i, "info", lookup (i, "vendor", "") + " " + lookup (i, "device", ""));
             i = add (i, "location", Printerlib::getUriNiceName (lookup (i, "uri", "")));
-	    if (Printer::db == `foomatic)
-	    {
-		i["vendor_db"] = SCR::Read (.ppd.db.vendorname, i["vendor"]:"");
-		i["device_db"] = SCR::Read (.ppd.db.modelname,
+	    i["vendor_db"] = SCR::Read (.ppd.db.vendorname, i["vendor"]:"");
+	    i["device_db"] = SCR::Read (.ppd.db.modelname,
 		    [i["vendor_db"]:"", i["device"]:""]);
-	    }
 	    y2milestone ("Detected printer %1", i);
 	    return i;
 	});
@@ -440,6 +423,11 @@
     define map assignStates (map p, boolean changed) ``{
 	if (lookup (p, "type", "yast2") != "yast2")
 	    return p;
+	boolean supported = true;
+	if (p["database"]:"" != "foomatic")
+	{
+	    supported = false;
+	}
 //	y2error ("Name: %1", lookup (p, "name", ""));
 	list spoolers = ["cups", "lprng"];
 	string uri = lookup (p, "uri", "");
@@ -447,25 +435,26 @@
 	string q_type = Printerlib::getUriType (uri);
 //	y2error ("Q_Type: %1", q_type);
 	string config = lookup (p, "config", "");
-	map info = config == "" || p["database"]:"" == "foomatic" ? $[] : SCR::Read (.printerdb.configinfo, config);
 	foreach (`s, spoolers, ``{
+	    boolean spool_sup = supported;
 	    string key = s + "-state";
 	    boolean s_spool = testSupportedQueueBySpooler (q_type, s);
 //	y2error ("s_spool: %1", s_spool);
-	    boolean s_raw = true;//s != "cups" || ! lookup (p, "raw", false);
-//	y2error ("s_raw: %1", s_raw);
-	    boolean s_is_ppd = s == "cups" && lookup (p, "ownppd", "") != "";
+	    boolean s_is_ppd = s == "cups" && p["ownppd"]:"" != "";
 //	y2error ("s_is_ppd: %1", s_is_ppd);
-	    boolean s_is_foomatic = s == "cups" && lookup (p, "database", "") == "foomatic";
 	    boolean s_is_class = q_type == "class" && s == "cups";
 //	y2error ("s_is_class: %1", s_is_class);
-	    boolean s_conf = lookup (info, s, false);
+	    boolean s_conf = true;//FIXME according to filter
 //	y2error ("s_conf: %1", s_conf);
-	    boolean s_is_raw = (lookup (p, "raw", false) || q_type == "lpd");// && s != "cups";
+	    boolean s_is_raw = (p["raw"]:false || q_type == "lpd");
 //	y2error ("s_is_raw: %1", s_is_raw);
-	    boolean s_pri = s_is_raw || (s_is_class) || (! lookup (p, "raw", false) && (s_is_ppd || s_is_foomatic || (lookup (p, "ownppd", "") == "" && s_conf)));
+	    boolean s_pri = s_is_raw
+		|| (s_is_class)
+		|| (! p["raw"]:false
+		    && (s_is_ppd
+			|| (p["ownppd"]:"" == "" && s_conf)));
 //	y2error ("s_pri: %1", s_pri);
-	    boolean sup = s_spool && s_pri;
+	    boolean sup = s_spool && s_pri && spool_sup;
 //	y2error ("sup: %1", sup);
 	    p = add (p, key, sup
 		    ?
@@ -540,7 +529,8 @@
 			    lookup (printer, "ff", false) != lookup (i, "ff", false) ||
 			    lookup (printer, "ascii", false) != lookup (i, "ascii", false))
 			{
-			    printer = add (printer, "recreate", true);
+//			    printer = add (printer, "recreate", true);
+// FIXME LPRng saving
 			}
 			return printer;
 		    }
@@ -596,7 +586,7 @@
     global define void Import (map settings) ``{
 	dirty = true;
 	spooler = settings["spooler"]:"cups";
-	cups_installation = lookup (settings, "cups_installation", -1);
+	cups_installation = lookup (settings, "cups_installation", nil);
 	server_hostname = lookup (settings, "server_hostname", "");
 	default = lookup (settings, "default", "");
 	printcap = lookup (settings, "printcap", []);
@@ -615,7 +605,7 @@
 	    Printer::deletePrinters ([$["name": lookup (e, "name", ""), "type":  uri == "class" ? "class" : "printer"]]);
 	});
 	server_hostname = "";
-	cups_installation = -1;
+	cups_installation = nil;
 	dirty = true;
 	default = "";
 	printcap = [];
@@ -686,19 +676,19 @@ END { if (!used) print \"ServerName %1\" }
      * Also sets server_hostname and cups_installation
      * @return integer client or server?
      */
-    global define integer cupsInstallationType () ``{
-        if (-1 != cups_installation)
+    global define symbol cupsInstallationType () ``{
+        if (nil != cups_installation)
             return cups_installation;
 
         if (Pkg::IsProvided ("cups-libs") &&
             !Pkg::IsProvided ("cups"))
         {
             loadClientHostName ();
-            cups_installation = 1;
-            return 1;
+            cups_installation = `client;
+            return `client;
         }
         loadClientHostName ();
-        cups_installation = (("" != server_hostname) ? 1 : 0);
+        cups_installation = (("" != server_hostname) ? `client : `server);
         return cups_installation;
     }
     /**
@@ -706,7 +696,7 @@ END { if (!used) print \"ServerName %1\" }
      * @return list of printers
      */
     global define list cupsRead () ``{
-        if (0 == cupsInstallationType () && ! do_not_read_cups)
+        if (`server == cupsInstallationType () && ! do_not_read_cups)
         {
 	    restartSpoolerIfNeeded (true);
 //	    foomatic = SCR::Read (.target.ycp, "/var/lib/YaST2/ppd_db.ycp");
@@ -803,6 +793,12 @@ END { if (!used) print \"ServerName %1\" }
 		state = $[];
 	    }
 	    printcap = lookup (state, "printers", []);
+	    printcap = maplist (`p, printcap, ``{
+		if (substring (p["uri"]:"", 0, 12) == "prefilter://")
+		    p["uri"] = "filtering://localhost/"
+			+ substring (p["uri"]:"", 12);
+		return p;
+	    });
 	    deleted = lookup (state, "deleted", []);
 	    default = lookup (state, "default", "");
 	    cups_usb_dev_names = state["cups_usb_devices"]:`always;
@@ -827,8 +823,6 @@ END { if (!used) print \"ServerName %1\" }
 	    string state = Printer::spooler + "-state";
         // changed due to bug #19224, but I'm not sure, if it is really OK!
 	    e = add (e, state, ready ? lookup (e, state, "changed") : "changed");
-//	    e = add (e, state, ready ? lookup (e, "cups-state", "changed") : "changed");
-//	    e = add (e, "lprng-state", ready ? lookup (e, "lprng-state", "changed") : "changed");
 	    return e;
 	});
 	printcap = maplist (`e, printcap, ``{return assignStates (e, false);});
@@ -945,13 +939,13 @@ END { if (!used) print \"ServerName %1\" }
 	{
 	    if (SCR::Read (.init.scripts.exists, "lpd"))
 		Runlevel::ServiceAdjust ("lpd", "disable");
-	    if (0 == cupsInstallationType ())
+	    if (`server == cupsInstallationType ())
 	    {
 		writeCupsSettings ();
 		Printer::server_hostname = "";
 		saveClientHostName ();
 	    }
-            if (0 != cupsInstallationType ())
+            if (`client == cupsInstallationType ())
 	    {
 		Printerlib::stopServices();
 		if (SCR::Read (.init.scripts.exists, "cups"))
@@ -1261,7 +1255,7 @@ the selected spooler does not support it.
      * @return summary string
      */
     global define string Summary (list style) ``{
-	if (Printer::spooler == "cups" && Printer::cups_installation > 0)
+	if (Printer::spooler == "cups" && Printer::cups_installation == `client)
 	{
 	    string ret =
                 // summary text
@@ -1382,7 +1376,6 @@ the selected spooler does not support it.
 		if (type == "yast2")
 		{
 		    string model = "";
-//		    if (Printer::db == `foomatic)
 		    if (i["database"]:"" == "foomatic")
 		    {
 			model = i["vendor"]:"" + " " + i["device"]:"";
@@ -1549,23 +1542,20 @@ the selected spooler does not support it.
 	    {
 		list detected = [];
 		boolean is_foomatic = false;
-		if (Printer::db == `foomatic)
-		{
-		    loadFoomaticIfNeeded ();
-		    detected = [i["vendor"]:"", i["device"]:""];
-		    detected = filter (`d, detected, ``(d != ""));
+		loadFoomaticIfNeeded ();
+		detected = [i["vendor"]:"", i["device"]:""];
+		detected = filter (`d, detected, ``(d != ""));
 
-                    string vdb = SCR::Read (.ppd.db.vendorname,
+                string vdb = SCR::Read (.ppd.db.vendorname,
                         i["vendor"]:"");
-                    string mdb = SCR::Read (.ppd.db.modelname,
+                string mdb = SCR::Read (.ppd.db.modelname,
                         [vdb, i["device"]:""]);
 
-		    map ppd_files = getPpdFiles (vdb, mdb);
-		    integer queues_num = size (ppd_files);
-		    if (queues_num > 0)
-		    {
+		map ppd_files = getPpdFiles (vdb, mdb);
+		integer queues_num = size (ppd_files);
+		if (queues_num > 0)
+		{
 			is_foomatic = true;
-		    }
 		}
 
 		if (Printer::spooler == "cups")
@@ -1612,15 +1602,17 @@ the selected spooler does not support it.
 			    (i["vendor_db"]:"", i["device_db"]:"", nil);
 			string suffix = getQueueSuffix (new_queues);
 			foreach (`v, new_queues, ``{
-			    map paper = getQuickPaperSize (lookup (v, "config", ""));
-                            if (nil != paper)
-                                v = add (v, "options", paper);
+			    symbol page_size
+				= Printerlib::getDefaultPaperSize ();
+			    foreach (string entry, ["ImageableArea",
+				 "PageRegion", "PageSize", "PaperDimension"],
+			    ``{
+				if (page_size == `letter)
+				    v["options", "paper"] = "Letter";
+				else
+				    v["options", "paper"] = "A4";
+			    });
 
-			    if (! (is_foomatic))
-			    {
-			        string k = adjustQueueName (lookup (v, "name", "lp") + suffix, forbidden_names);
-			        v = add (v, "name", k);
-			    }
 			    forbidden_names = add (forbidden_names, lookup (v, "name", ""));
 
 			    map info = $[];
@@ -1638,27 +1630,6 @@ the selected spooler does not support it.
 	    }
 	});
 	assignDefault ();
-    }
-    /**
-     * Returns option to select regional paper size.
-     * @param config name of the config
-     * @return map $[ option : index ] or nil
-     */
-    global define map getQuickPaperSize (string config) ``{
-	list opts = SCR::Read (add (.printerdb.optionstree, config));
-	integer i = 0;
-	integer len = size (opts);
-	while (i < len)
-	{
-	    string s = lookup (select (opts, i, $[]), "ident", "");
-	    if (substring (s, 0, 10) == "papersize-")
-	    {
-		map m = add ($[], s, Printerlib::getDefaultPaperSize ());
-		return m;
-	    }
-	    i = i + 1;
-	}
-	return nil;
     }
     /**
      * Check if queue name is OK. Otherwise adds number at the end.
@@ -1715,7 +1686,7 @@ the selected spooler does not support it.
      */
     define boolean isPrinterNetwork (map pr) ``{
 	string type = Printerlib::getUriType (lookup (pr, "uri", ""));
-	return type == "samba" || type == "novell" || type == "prefilter" || type == "lpd" || type == "ipp" || type == "socket" || type == "filtering";
+	return type == "samba" || type == "novell" || type == "lpd" || type == "ipp" || type == "socket" || type == "filtering";
     }
     /**
      * Is current printer network printer?

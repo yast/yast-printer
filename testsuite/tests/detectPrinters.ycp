@@ -56,7 +56,7 @@
                 ],
 		"proc" : $[ "modules" : $[ "printer" : ""]],
             ];
-    DUMP ("--- Detection for printconf");
+    DUMP ("--- Detection for lprng");
     TEST (``(Printerlib::Detect (false)), [READ, $[], $[]], true);
     DUMP ("--- Detection for cups");
     TEST (``(Printerlib::Detect (true)), [READ, $[], $[]], true);
@@ -85,17 +85,8 @@
                 ],
 		"proc" : $[ "modules" : $[ "printer" : ""]],
             ];
-    map EXEC = $[
-            "target" : $[
-                "bash_output" :
-                $[
-                    "exit" : 0,
-                    "stdout" : "@EJL ID\nMFG:EPSON;CMD:ESCPL2,PRPXL24,BDC;MDL:Stylus COLOR 900;CLS:PRINTER;DES:EPSON Stylus COLOR 900;",
-                    "stderr" : ""
-                    ],
-                ],
-        ];
-    DUMP ("--- Detection for printconf");
+    map EXEC = $[];
+    DUMP ("--- Detection for lprng");
     TEST (``(Printerlib::Detect (false)), [READ, $[], EXEC], true);
     DUMP ("--- Detection for cups");
     TEST (``(Printerlib::Detect (true)), [READ, $[], EXEC], true);
@@ -122,7 +113,19 @@
                     ]
                 ],
 		"proc" : $[ "modules" : $[ "printer" : ""]],
+		"target" : $[ "size" : 555],
             ];
+    EXEC = $[
+	"target" : $[
+	    "bash_output" : $[
+		"exit" : 0,
+		"stderr" : "",
+		"stdout" : "direct usb://EPSON/Stylus%20Photo%20810?serial=W33040110201335050 \"EPSON Stylus Photo 810\" \"USB Printer #1\"
+direct usb:/dev/usb/lp1 \"Unknown\" \"USB Printer #2\"
+direct usb:/dev/usb/lp2 \"Unknown\" \"USB Printer #3\"",
+		]
+	    ],
+	];
     DUMP ("--- Detection for cups");
     TEST (``(Printerlib::Detect (true)), [READ, $[], EXEC], true);
 }
