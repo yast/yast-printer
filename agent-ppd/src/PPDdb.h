@@ -52,19 +52,19 @@ class PPD {
 
         typedef string VendorKey;
         typedef string ModelKey;
-        typedef string DriverKey;
+        typedef string DriverFile;
 
         /* typedef string Info; */
         class DriverInfo {
             public:
-                string filename;
+                string nickname;
                 string pnp_vendor;
                 string pnp_printer;
 		string checksum;
 		off_t size;
 		string filter;
 	    DriverInfo () {
-		filename = "";
+		nickname = "";
 		pnp_vendor = "";
 		pnp_printer = "";
 		checksum = "";
@@ -73,7 +73,7 @@ class PPD {
 	    }
         };
 
-	typedef map<DriverKey, DriverInfo> Drivers;
+	typedef map<DriverFile, DriverInfo> Drivers;
 
 	class ModelInfo {
 	    public:

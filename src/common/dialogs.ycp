@@ -305,13 +305,10 @@ additional PostScript module)."),
 	if (ret == `next)
 	{
 	    string ppd_file
-		= Printerdb::getAutoPpdFile (manuf_db, model_db, nil);
+		= Printerdb::getAutoPpdFile (manuf_db, model_db);
 
 	    if (ppd_file == nil)
 		ppd_file = "";
-
-	    ppd_file = Printerdb::foomatic[manuf_db, model_db, ppd_file,
-		"filename"]:"";
 
 	    ppd_file = (string)SCR::Read (.ppd.file.open,
 		[ppd_file, SCR::Read (.target.tmpdir)]);
@@ -501,12 +498,15 @@ user name, and password.
 	map ppd_info = Printer::printer["ppd_info"]:$[];
 	string manuf_db = ppd_info["manufacturer_db"]:"";
 	string model_db = ppd_info["model_db"]:"";
-	string config = ppd_info["nick"]:"";
-	string orig_config = config;
+	string nick = ppd_info["nick"]:"";
+	string file = Printerdb::getFileFromNickName (
+	    manuf_db,
+	    model_db,
+	    nick);
+	string orig_file = file;
 
 	map info = $[];
 	list cfgs = [];
-	map cfgsmap = $[];
 	y2milestone ("Vendor: %1, Model: %2", manuf_db, model_db);
 	if (! ((manuf_db != "" && model_db != "")))
 	{
@@ -518,23 +518,15 @@ Select the model first.
 	}
 	Printerdb::loadFoomaticIfNeeded ();
 
-	list<string> ppds = maplist (any k, any v,
-	    filter (any kk, any vv, Printerdb::foomatic[manuf_db, model_db]:$[],
-		``(is (kk, string))), ``((string)k));
-
-	ppds = Printerdb::sortPpds (manuf_db, model_db, ppds);
+	list<string> ppds = Printerdb::sortPpds (manuf_db, model_db);
 
 	cfgs = [];
 	foreach (string k, ppds, ``{
-	    string ppdfile_orig = "";
-
 	    y2debug ("V: %1, M: %2, K: %3", manuf_db, model_db, k);
-	    ppdfile_orig = Printerdb::foomatic[manuf_db, model_db, k,
-		"filename"]:"";
 
-	    string label = k;
-	    string filename = Printerdb::foomatic[manuf_db, model_db,
-		label, "filename"]:""; // config was here, don't know why
+	    string filename = k;
+	    string label = Printerdb::foomatic[manuf_db, model_db,
+		filename, "nickname"]:"";
 	    if (filename != "")
 	    {
 		if (substring (filename, 0, 22) == "/usr/share/cups/model/")
@@ -542,7 +534,6 @@ Select the model first.
 		label = label + sformat (" (%1)", filename);
 	    }
 	    cfgs = add (cfgs, `item (`id (k), label));
-	    cfgsmap[k] = label;
 	});
 
 	term contents = `HBox (
@@ -565,22 +556,22 @@ Select the model first.
 	string caption = _("PPD Files");
 	Wizard::SetContentsButtons (caption, contents, getPpdSelectHelp (), Label::BackButton (), Label::OKButton ());
 
-	if (config != "" && config != nil)
+	if (file != "" && file != nil)
 	{
-	    UI::ChangeWidget (`id (`selection), `CurrentItem, config);
+	    UI::ChangeWidget (`id (`selection), `CurrentItem, file);
 	}
-	if (config == "" || config == nil)
+	else
 	{
             {
 		term item = (term) (cfgs[0]:nil);
 		if (nil != item)
 		{
-		    config = select (select (item, 0, nil), 0, "");
+		    file = select (select (item, 0, nil), 0, "");
 		}
             }
-	    if (config != "" && config != nil)
+	    if (file != "" && file != nil)
 	    {
-		UI::ChangeWidget (`id (`selection), `CurrentItem, config);
+		UI::ChangeWidget (`id (`selection), `CurrentItem, file);
 	    }
 	}
 
@@ -603,19 +594,17 @@ Select the model first.
 	    if (`test == ret)
 	    {
 		map<string,any> tmpPrinter = Printer::printer;
-		config = (string)
+		file = (string)
 		    UI::QueryWidget (`id (`selection), `CurrentItem);
         // Why this? The new selected configuration cannot be tested
         // before saving:
 		boolean new_file_created = false;
-		if (orig_config != config)
+		if (orig_file != file)
 		{
 		    tmpPrinter["options"] = $[];
 		    tmpPrinter = adjustPaperSize (tmpPrinter);
-		    string ppd_file_orig = Printerdb::foomatic[manuf_db,
-			model_db, config, "filename"]:"";
 		    string filename = (string)SCR::Read (.ppd.file.open,
-			[ppd_file_orig, SCR::Read (.target.tmpdir)]);
+			[file, SCR::Read (.target.tmpdir)]);
 		    tmpPrinter["ppd"] = filename;
 		    tmpPrinter["ppd_info"] = Printer::ppdInfo (filename);
 		    new_file_created = true;
@@ -631,15 +620,12 @@ Select the model first.
 
 	if (ret == `advanced || ret == `next)
 	{
-	    config = (string)UI::QueryWidget (`id (`selection), `CurrentItem);
-	    if (orig_config != config)
+	    file = (string)UI::QueryWidget (`id (`selection), `CurrentItem);
+	    if (orig_file != file)
 	    {
 		Printer::printer["options"] = $[];
-		string ppd_file_orig = Printerdb::foomatic[manuf_db, model_db,
-		    config, "filename"]:"";
-
 		string filename = (string)SCR::Read (.ppd.file.open,
-		    [ppd_file_orig, SCR::Read (.target.tmpdir)]);
+		    [file, SCR::Read (.target.tmpdir)]);
 
 		if (SCR::Read (.target.size, Printer::printer["ppd"]:"") != -1)
 		    SCR::Execute (.target.remove, Printer::printer["ppd"]:"");
@@ -648,7 +634,7 @@ Select the model first.
 	    }
 	    // add comment
 	    if (Printer::printer["info"]:"" == "")
-		Printer::printer["info"] = config;
+		Printer::printer["info"] = Printerdb::foomatic[manuf_db, model_db, file, "nickname"]:"";
 	}
 	return (symbol)ret;
     }
@@ -1342,8 +1328,10 @@ and test the queue after the printer model is selected."));
 	    ppd_info["model"]:"");
 	string config_text = ppd_info["nick"]:"";
 
-	string filename = Printerdb::foomatic[manuf_db, model_db,
-	    config, "filename"]:"";
+	string filename = Printerdb::getFileFromNickName (
+	    manuf_db,
+	    model_db,
+	    config);
 	if (filename != "")
 	{
 	    if (substring (filename, 0, 22) == "/usr/share/cups/model/")

@@ -515,12 +515,12 @@ start_from_scratch:
 		y2debug ("PPD file information: %s:%s:%s",
 		    label.c_str(),
 		    it2->second.label.c_str (),
-		    (*it3).second.filename.c_str()
+		    (*it3).second.nickname.c_str()
 		);
                 F(f3) fprintf(file,str);
                 fprintf(file,"      \"%s\"", (*it3).first.c_str());
                 fprintf(file," : $[\n");
-                fprintf(file,"        \"filename\" : \"%s\",\n", (*it3).second.filename.c_str());
+                fprintf(file,"        \"nickname\" : \"%s\",\n", (*it3).second.nickname.c_str());
                 fprintf(file,"        \"pnp_vendor\" : \"%s\",\n", (*it3).second.pnp_vendor.c_str());
                 fprintf(file,"        \"pnp_printer\" : \"%s\",\n", (*it3).second.pnp_printer.c_str());
 		fprintf(file,"        \"checksum\" : \"%s\",\n", (*it3).second.checksum.c_str());
@@ -644,7 +644,7 @@ void PPD::debugdb() const {
             PPD::Drivers::const_iterator it3 = (*it2).second.drivers.begin();
             for(; it3 != (*it2).second.drivers.end(); it3++) {
                 y2debug("      %s", (*it3).first.c_str());
-                y2debug("      %s", (*it3).second.filename.c_str());
+                y2debug("      %s", (*it3).second.nickname.c_str());
             }
         }
     }
@@ -1231,10 +1231,12 @@ void PPD::preprocess(PPD::PPDInfo info, PPDInfo *newinfo) {
 
     if (! newinfo)
     {
-	y2debug ("Adding printer %s to database with nick %s", printer.c_str (), nick.c_str ());
+	y2debug ("Adding printer %s to database with filename %s",
+	    printer.c_str (),
+	    filename.c_str ());
         /* Info item = filename; */
         DriverInfo item;
-        item.filename = filename;
+        item.nickname = nick;
         item.pnp_vendor = pnp_vendor;
         item.pnp_printer = pnp_printer;
 	item.checksum = checksum;
@@ -1301,7 +1303,7 @@ void PPD::preprocess(PPD::PPDInfo info, PPDInfo *newinfo) {
 	    }
         }
 
-	mi.drivers[nick] = item;
+	mi.drivers[filename] = item;
 	vi.models[printer] = mi;
 	db[vendor] = vi;
 
@@ -1427,14 +1429,14 @@ bool PPD::loadPrebuiltDatabase () {
 				    goto error_exit;
 				}
 				string ak = it4.key()->asString()->value_cstr();
-				if (ak == "filename")
+				if (ak == "nickname")
 				{
 				    if (! it4.value()->isString ())
 				    {
 					y2error ("Incorrect database format");
 					goto error_exit;
 				    }
-				    di.filename = it4.value()->asString()
+				    di.nickname = it4.value()->asString()
 					->value_cstr();
 				}
                                 else if (ak == "pnp_vendor")
@@ -1673,8 +1675,8 @@ bool PPD::cleanupLists () {
             PPD::Drivers::iterator it3 = (*it2).second.drivers.begin();
             while(it3 != (*it2).second.drivers.end()){
 		DriverInfo di = it3->second;
-		string driver_name = it3->first;
-		string filename = di.filename;
+		string driver_name = di.nickname;
+		string filename = it3->first;
 		PPD::PpdFiles::iterator it4 = ppdfiles.find(filename);
 		if (it4 == ppdfiles.end())
 		{ // no more existing file

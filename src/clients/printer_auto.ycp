@@ -192,19 +192,23 @@
 		string model_db = (string)
 		    SCR::Read (.ppd.db.modelname, [vendor_db, p["model"]:""]);
 		Printerdb::loadFoomaticIfNeeded ();
-		string ppd_file = Printerdb::foomatic[vendor_db, model_db,
-		    p["nick"]:"", "filename"]:"";
+		string ppd_file = Printerdb::getFileFromNickName (
+		    vendor_db,
+		    model_db,
+		    p["nick"]:"");
 		if (ppd_file == "" || ppd_file == nil)
 		{
 		    y2warning ("PPD file not found, selecting the default PPD file for the printer model");
 		    y2debug ("VDB: %1, MDB: %2", vendor_db, model_db);
 		    ppd_file
-			= Printerdb::getAutoPpdFile (vendor_db, model_db, nil);
+			= Printerdb::getAutoPpdFile (vendor_db, model_db);
 		    y2debug ("PPD file: %1", ppd_file);
 		    if (ppd_file == nil)
 			ppd_file = "";
-		    ppd_file = Printerdb::foomatic[vendor_db, model_db,
-			ppd_file, "filename"]:"";
+		    ppd_file = Printerdb::getFileFromNickName (
+			vendor_db,
+			model_db,
+			ppd_file);
 		}
 		if (ppd_file == "" || ppd_file == nil)
 		{

@@ -36,11 +36,11 @@
       * Get auto queues for printer when using foomatic database
       * @param vendor string vendor db key
       * @param model string model db key
-      * @param config string choosen ppd file, nil = auto
+      * @param ppdfile_orig string choosen ppd file, nil = auto
       * @return a list of PPD files
       */
      define list<map<string,any> > getFoomaticAutoQueues (string vendor,
-	string model, string config)
+	string model, string ppdfile_orig)
     ``{
         list forbidden_names = Printer::getForbiddenNames ();
         y2debug ("Getting auto queues for >>%1<< >>%2<<", vendor, model);
@@ -50,10 +50,9 @@
         string ppdfile_orig = "";
         if (vendor == "__spec_ppd__")
             ppdfile_orig = model;
-        else if (config == nil || config == "")
-            ppdfile_orig = Printerdb::getAutoPpdFile (vendor, model, nil);
-        else
-            ppdfile_orig = Printerdb::foomatic[vendor, model, config, "filename"]:"";
+        else if (ppdfile_orig == nil || ppdfile_orig == "")
+            ppdfile_orig = Printerdb::getAutoPpdFile (vendor, model);
+
         y2debug ("Choosen PPD file: %1", ppdfile_orig);
         string config = ppds[ppdfile_orig]:"";
         string ppdfile = (string)SCR::Read (.ppd.file.open,

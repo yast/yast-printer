@@ -85,6 +85,46 @@
 // global functions
 
     /**
+     * Get file names of all PPD files for specified model with the specified
+     * nick name
+     * @param vendor_db string database key of the vendor
+     * @param device_db string database key of the model
+     * @param nick string nick name
+     * @return a list of all files with the specified nick name
+     */
+    global define list<string> getFilesFromNickName (
+	string vendor_db,
+	string device_db,
+	string nick)
+    {
+	map<string,any> ppds = foomatic[vendor_db, device_db]:$[];
+	ppds = filter (string fn, any v, ppds, {
+	    return is (v, map) && ((map)v)["nickname"]:"" == nick;
+	});
+	list<string> ret = maplist (string fn, any v, ppds, {return fn;});
+	y2milestone ("File names of %1: %2", nick, ret);
+	return ret;
+    }
+
+    /**
+     * Get file name of the PPD files for specified model with the specified
+     * nick name
+     * @param vendor_db string database key of the vendor
+     * @param device_db string database key of the model
+     * @param nick string nick name
+     * @return string file with the specified nick name
+     */
+    global define string getFileFromNickName (
+	string vendor_db,
+	string device_db,
+	string nick)
+    {
+	list<string> all = getFilesFromNickName (vendor_db, device_db, nick);
+	// FIXME in case of localized files
+	return all[0]:"";
+    }
+
+    /**
      * Get the options of the PPD file
      * @param filename string file name of the PPD file
      * @return a list of all options of the PPD file (in UTF-8)
@@ -196,16 +236,12 @@ of printers.
     }
 
     /**
-      * Sort PPD files according to preference list
+      * Sort PPD files for specified model according to preference list
       * @param vendor_db string vendor database key
       * @param device_db string model database key
-      * @param ppd_nicks a list of PPD file nicknames, if nil, then PPD
-      *   nicknames are taken from foomatic database
       * @return a list of sorted PPD nicknames
       */
-    global define list<string> sortPpds (string vendor_db, string device_db,
-	list<string> ppd_nicks)
-    ``{
+    global define list<string> sortPpds (string vendor_db, string device_db) {
 	vendor_db = (string)SCR::Read (.ppd.db.vendorname, vendor_db);
 	device_db = (string)SCR::Read (.ppd.db.modelname, [vendor_db, device_db]);
         SCR::Execute (.target.bash, sformat (
@@ -246,50 +282,41 @@ of printers.
 	map<string,list<string> > downrec = $[];
 	map<string,list<string> > downoth = $[];
 	loadFoomaticIfNeeded ();
-	map<string,map> ppds = $[];
 
-	if (ppd_nicks == nil)
-	{
-	    ppds = (map<string,map>)
-		filter (any k, any v, foomatic[vendor_db, device_db]:$[],
-		    ``(is (k, string) && is (v, map)));
-	}
-	else
-	{
-	    ppds = listmap (string k, ppd_nicks, ``($[k: $[]]));
-	}
+	map<string,map> ppds = (map<string,map>)
+	    filter (any k, any v, foomatic[vendor_db, device_db]:$[],
+		``(is (k, string) && is (v, map)));
 
-        foreach (string k, map v, ppds, ``{
+        foreach (string fn, map v, ppds, ``{
             boolean found = false;
             foreach (string i, preferred, ``{
-                if (! found && regexpmatch (k, i))
+                if (! found && regexpmatch (v["nickname"]:"", i))
                 {
-		  if (issubstring (v["filename"]:"",
-		    "/usr/share/cups/model/downloaded/"))
+		  if (issubstring (fn, "/usr/share/cups/model/downloaded/"))
 		  {
-                    if (issubstring (k, "(recommended)"))
+                    if (issubstring (v["nickname"]:"", "(recommended)"))
                     {
-                        downrec[i] = add (downrec[i]:[], k);
+                        downrec[i] = add (downrec[i]:[], fn);
                     }
                     else
                     {
-                        downoth[i] = add (downoth[i]:[], k);
+                        downoth[i] = add (downoth[i]:[], fn);
                     }
 		  }
-		  else if (issubstring (v["filename"]:"",
+		  else if (issubstring (fn,
 		    "/usr/share/cups/model/manufacturer-PPDs"))
 		  {
-			vend[i] = add (vend[i]:[], k);
+			vend[i] = add (vend[i]:[], fn);
 		  }
 		  else
 		  {
-                    if (issubstring (k, "(recommended)"))
+                    if (issubstring (v["nickname"]:"", "(recommended)"))
                     {
-                        recom[i] = add (recom[i]:[], k);
+                        recom[i] = add (recom[i]:[], fn);
                     }
                     else
                     {
-                        other[i] = add (other[i]:[], k);
+                        other[i] = add (other[i]:[], fn);
                     }
 		  }
                   found = true;
@@ -298,32 +325,31 @@ of printers.
             });
             if (! found)
             {
-	      if (issubstring (v["filename"]:"",
-		"/usr/share/cups/model/downloaded/"))
+	      if (issubstring (fn, "/usr/share/cups/model/downloaded/"))
 	      {
-                if (issubstring (k, "(recommended)"))
+                if (issubstring (v["nickname"]:"", "(recommended)"))
                 {
-                    downrec["other"] = add (downrec["other"]:[], k);
+                    downrec["other"] = add (downrec["other"]:[], fn);
                 }
                 else
                 {
-                    downoth["other"] = add (downoth["other"]:[], k);
+                    downoth["other"] = add (downoth["other"]:[], fn);
                 }
 	      }
-	      else if (issubstring (v["filename"]:"",
+	      else if (issubstring (fn,
 		"/usr/share/cups/model/manufacturer-PPDs"))
 	      {
-		    vend["other"] = add (vend["other"]:[], k);
+		    vend["other"] = add (vend["other"]:[], fn);
 	      }
 	      else
 	      {
-                if (issubstring (k, "(recommended)"))
+                if (issubstring (v["nickname"]:"", "(recommended)"))
                 {
-                    recom["other"] = add (recom["other"]:[], k);
+                    recom["other"] = add (recom["other"]:[], fn);
                 }
                 else
                 {
-                    other["other"] = add (other["other"]:[], k);
+                    other["other"] = add (other["other"]:[], fn);
                 }
 	      }
             }
@@ -394,13 +420,11 @@ of printers.
       * @param device_db string model database key
       * @param ppd_nicks list of PPD file nicknames, if nil, then PPD nicknames
       *   are taken from foomatic database
-      * @return name of the PPD file (of database, not filename),
+      * @return name of the PPD file (filename),
       *   nil if no is usable
       */
-    global define string getAutoPpdFile (string vendor_db, string device_db,
-	list<string> ppd_nicks)
-    ``{
-	list<string> ppds = sortPpds (vendor_db, device_db, ppd_nicks);
+    global define string getAutoPpdFile (string vendor_db, string device_db) {
+	list<string> ppds = sortPpds (vendor_db, device_db);
 	if (size (ppds) == 0)
 	    return nil;
 	if (Spooler::Get () == "cups")
@@ -466,8 +490,8 @@ printer model again.
 	    filter (any k, any v, ppd_db,
 		``(is (k, string) && is (v, map)));
 	map<string,string> ret = mapmap (string k, map v, ppd_db_f, ``{
-	    string filename = v["filename"]:"";
-	    return $["filename" : k];
+	    string nickname = v["nickname"]:"";
+	    return $[k : nickname];
 	});
 	ret = filter (string k, string v, ret, ``(k != "" && v != ""));
 	return ret;
