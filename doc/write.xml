@@ -1,0 +1,96 @@
+<?xml version="1.0" encoding='ISO-8859-1'?>
+<chapter id = "write">
+  <title>Configuration Writing</title>
+  <para>
+Printer configuration writing has several steps. They are described below.
+  </para>
+  <section id="adjust_service">
+    <title>Adjust printing services</title>
+    <para>
+Services are adjusted (so that print daemons start or don't start with next
+reboot properly. Spooler is started if it is needed for saving the changes.
+    </para>
+  </section>
+  <section id="delete_old_queues">
+    <title>Delete removed queues</title>
+    <para>
+YaST doesn't replace the whole configuration while saving the queues, but
+saves only the modified queues. Before creating new queues, the old ones
+must be deleted.
+    </para>
+    <para>
+This step is skipped in the CUPS client-only mode.
+    </para>
+  </section>
+  <section id="save_modified_queues">
+    <title>Save modified queues</title>
+    <para>
+After deleted queues are removed from the system, the changed queues
+are saved.
+    </para>
+    <para>
+The queues are saved via the CUPS IPP calls. Before saving a queue, the PPD
+file for the queue is updated so that it contains default values of all options
+the way they were set in the appropriate dialog.
+    </para>
+    <para>
+This step is skipped in the CUPS client-only mode.
+    </para>
+  </section>
+  <section id="set_default_queue">
+    <title>Set the default queue</title>
+    <para>
+After the queues are saved, the default queue is adjusted. It is adjusted
+via IPP calls. The default queue is stored in /etc/cups/printers.conf if CUPS
+is used in full server mode (and in this case it is ensured that no queue
+is marked as default in /etc/cups/lpoptions), or in /etc/cups/lpoptions
+if running in the CUPS client-only mode and user wants other queue than the
+server default one as his default.
+    </para>
+  </section>
+  <section id="save_system_settings">
+    <title>Save system settings</title>
+    <para>
+The way system settings are saved differs between CUPS full server and CUPS
+client-only mode. 
+    </para>
+    <section id="save_system_cups_server">
+      <title>CUPS full server mode</title>
+      <para>
+CUPS server settings are stored in
+<computeroutput>/etc/cups/cupsd.conf</computeroutput> which is saved via
+the INI agent. In <computeroutput>/etc/cups/client.conf</computeroutput>
+the entry saying what CUPS server should be used is removed (which means
+that the localhost will be used).
+      </para>
+    </section>
+    <section id="save_system_cups_client">
+      <title>CUPS full server mode</title>
+      <para>
+The only setting that are saved in CUPS client-only mode is the name of the
+CUPS server to use to print. It is stored in
+<computeroutput>/etc/cups/client.conf</computeroutput>, which is saved via
+the INI agent.
+      </para>
+    </section>
+  </section>
+  <section id="save_firewall_settings">
+    <title>Save Firewall Settings</title>
+    <para>
+Firewall settings are saved via the
+<computeroutput>SuSEFirewall.ycp</computeroutput> module directly from
+its internal state.
+    </para>
+  </section>
+  <section id="restart_spooler">
+    <title>Restart Spooler</title>
+    <para>
+As saving the system settings is done directly in the configuration files
+of the bootloader, then the bootloader itself must be restarted so that
+configuration is reread.
+    </para>
+    <para>
+This step is skipped in the CUPS client-only mode.
+    </para>
+  </section>
+</chapter>
