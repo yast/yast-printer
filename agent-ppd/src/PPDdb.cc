@@ -17,13 +17,14 @@
 #include <unistd.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <sys/wait.h>
 #include <cups/ppd.h>
 #include <zlib.h>
 #include <ctype.h>
 #include <regex.h>
 #include <stdio.h>
 #include <fcntl.h>
-
+#include <xcrypt.h>
 
 
 #include <map>
@@ -37,13 +38,14 @@ bool verbose = false;
     - update only changed files
 */
 
-#ifndef _DEVEL_
+//#ifndef _DEVEL_
 
 #include "ycp/y2log.h"
+#include <ycp/YCPParser.h>
 #include "PPDdb.h"
 
 /*****************************************************************/
-
+/*
 #undef y2debug
 #define y2debug(format, args...)
 
@@ -54,7 +56,7 @@ bool verbose = false;
 
 #include "PPDdb.h"
 #endif
-
+*/
 /*****************************************************************/
 
 /**
@@ -71,6 +73,19 @@ PPD::PPD(const char *ppddir, const char *ppddb) {
     strncpy(ppd_dir,ppddir,sizeof(ppd_dir));
     strncpy(ppd_db,ppddb,sizeof(ppd_db));
 
+    string yast2_dir;
+    if (char* tmp_yast2_dir = getenv ("Y2DIR"))
+    {
+	yast2_dir = tmp_yast2_dir;
+    }
+    else
+    {
+	yast2_dir = "/usr/share/YaST2";
+    }
+
+    datadir = yast2_dir + "/data/printer/";
+    var_datadir = "/var/lib/YaST2/";
+
     /* Load strings mappings */
     #include "PPDVendors.h"
 
@@ -83,7 +98,8 @@ PPD::PPD(const char *ppddir, const char *ppddb) {
         vendors_map[string(v)]=string(array_map[i].val);
 
     char buf[256];
-    FILE* f = fopen ("/usr/share/YaST2/data/printer/models.equiv", "r");
+    string filename = datadir + "models.equiv";
+    FILE* f = fopen (filename.c_str(), "r");
     if (f)
     {
 	while (fgets (buf, 255, f))
@@ -272,7 +288,7 @@ bool PPD::mtimes(const char *dirname, time_t mtime, int *count) {
         if(stat(filename, &fileinfo))
             continue;
 
-        if(fileinfo.st_mtime >= mtime) {
+        if(fileinfo.st_mtime >= mtime || fileinfo.st_ctime >= mtime) {
             closedir(dir);
             return true;
         }
@@ -351,15 +367,50 @@ void* PPD::startCreatedbThread (void* instance) {
  * @return operation succeeded
  */
 void* PPD::createdbThread(const char* filename) {
+    y2debug ("CreateDbThread started");
     bool f1 = false;
     bool f2 = false;
     bool f3 = false;
     char str[3] = "x\n";
 //    bool ret = true;
     void* ret = (void*)1;
+    bool updated = false;
+    bool update_failed = false;
 
     total_files = countFiles (ppd_dir);
     done_files = 0;
+
+    {
+	y2debug ("Checking database file");
+	struct stat fileinfo;
+	if(stat(ppd_db, &fileinfo))
+            goto start_from_scratch;
+	if(fileinfo.st_size==0)
+	    goto start_from_scratch;
+	time_t mtime = fileinfo.st_mtime;
+
+	y2debug ("Loading prebilt database");
+	if (! loadPrebuiltDatabase ())
+	    goto start_from_scratch;
+	creation_status = 2;
+	y2debug ("Creating list of PPD files");
+	if (! createFileList (ppd_dir, mtime))
+            goto start_from_scratch;
+	creation_status = 4;
+	y2debug ("Cleaning up lists");
+	if (! cleanupLists ())
+	    goto start_from_scratch;
+	creation_status = 10;
+	y2debug ("Processing new files");
+	if (! processNewFiles ())
+	    update_failed = true;
+	y2debug ("Emptying empty entries");
+	if (! cleanupEmptyEntries ())
+	    update_failed = true;
+	updated = true;
+    }
+
+start_from_scratch:
 
     FILE *file;
     if (filename)
@@ -373,23 +424,30 @@ void* PPD::createdbThread(const char* filename) {
         return NULL;//false;
     }
 
-    creation_status = 10;
+    if (! updated)
+    {
+	y2debug ("deleting database");
+	creation_status = 10;
+	db = Vendors();
 
-    db = Vendors();
-
-    if(process_dir(ppd_dir)!=true) {
-        y2error("Error during creation of ppd db");
-        ret = NULL;//false;  // FIXME (return) // LOCK unlock
+	if(process_dir(ppd_dir)!=true) {
+	    y2error("Error during creation of ppd db");
+	    ret = NULL;//false;  // FIXME (return) // LOCK unlock
+	}
     }
 
     creation_status = 90;
 
     // process list of SuSE database printers
-    
-    char buf[16384];
-    FILE* f = fopen ("/usr/share/YaST2/data/printer/printers.susedb", "r");
-    if (f)
-    {
+   
+    if (! updated)
+    { 
+      y2debug ("Reading YaST2 file");
+      char buf[16384];
+      string filename = datadir + "printers.susedb";
+      FILE* f = fopen (filename.c_str(), "r");
+      if (f)
+      {
 	y2milestone ("File with SuSE database entries found, processing...");
         while (fgets (buf, 16384, f))
         {
@@ -447,40 +505,32 @@ void* PPD::createdbThread(const char* filename) {
 	    string mlabel = model;
 	    vendor = getVendorId (vendor);
 	    model = getModelId (vendor, model);
-	    int size = vendor.size ();
-	    if(strupper(mlabel.substr(0,size))==vendor) mlabel.erase(0,size+1);
+	    int size = vendor.size () + 1;
+	    if (strupper (mlabel.substr (0,size)) == vendor + " ")
+		mlabel.erase (0, size);
 
-	    Models mod;
-            if(db.find(vendor) != db.end())
-                mod = db[vendor];
-	    Drivers dri;
-	    if (mod.find(model) != mod.end ())
-		dri = mod[model];
+	    VendorInfo vi;
+	    if (db.find (vendor) != db.end ())
+		vi = db[vendor];
+	    ModelInfo mi;
+	    if (vi.models.find(model) != vi.models.end ())
+		mi = vi.models[model];
 	    else
 	    {
 		signed size = vendor.size();
-		if(strupper(model.substr(0,size))==vendor) model.erase(0,size);
-		if (mod.find(model) != mod.end ())
+		if (strupper (model.substr (0, size + 1)) == vendor + " ")
+		    model.erase(0,size);
+		if (vi.models.find(model) != vi.models.end ())
 		{
 		    y2warning (
 			"%s:%s found after removing vendor from model name",
 			vendor.c_str (), model.c_str ());
-		    dri = mod[model];
+		    mi = vi.models[model];
 		}
 		else
 		    y2warning ("Printer %s:%s not found in Foomatic database",
 			vendor.c_str (), model.c_str ());
 	    }
-
-            mod[model] = dri;
-            db[vendor] = mod;
-
-	    map <string, map <string, string> > vendinfo;
-	    if (models_info.find (vendor) != models_info.end ())
-		vendinfo = models_info[vendor];
-	    map <string, string> modinfo;
-	    if (vendinfo.find (model) != vendinfo.end ())
-		modinfo = vendinfo[model];
 
 	    string tmp = vendor_comment;
 	    vendor_comment = "";
@@ -500,19 +550,25 @@ void* PPD::createdbThread(const char* filename) {
             }
 
 
-	    modinfo["vendor_comment"] = vendor_comment;
-	    modinfo["model_comment"] = model_comment;
-	    modinfo["support_status"] = support;
-	    modinfo["mlabel"] = mlabel;
+	    vi.vcomment = vendor_comment;
+	    mi.mcomment = model_comment;
+            int sup_status = 0;
+            if (support == "problematic")
+                sup_status = 1;
+            else if (support != "full")
+                sup_status = 2;
+	    mi.support = sup_status;
+	    mi.label = mlabel;
 
-	    vendinfo[model] = modinfo;
-	    models_info[vendor] = vendinfo;
-
+	    vi.models[model] = mi;
+	    db[vendor] = vi;
 	}
 	fclose (f);
+      }
     }
 
     creation_status = 98;
+    y2debug ("Flushing");
 
     fprintf(file,"/*\n");
     fprintf(file," * YCP database of all PPD files\n");
@@ -524,64 +580,45 @@ void* PPD::createdbThread(const char* filename) {
 
     PPD::Vendors::const_iterator it1 = db.begin ();
     for(f1 = true; it1 != db.end(); it1++) {
-	map <string, map <string, string> > vendinfo;
-	if (models_info.find (it1->first) != models_info.end ())
-	    vendinfo = models_info[it1->first];
         F(f1) fprintf(file,str);
         fprintf(file,"\n  \"%s\" : $[\n", it1->first.c_str());
-	string label = it1->first;
+	string label = it1->second.label;
+	if (label == "")
+	    label = it1->first;
 	if (label == "UNKNOWN")
 	    label = "UNKNOWN MANUFACTURER";
+	string vcomment = (*it1).second.vcomment;
 	fprintf(file,"    `label : \"%s\",\n", label.c_str());
-        PPD::Models::const_iterator it2 = (*it1).second.begin();
-        for(f2 = true; it2 != (*it1).second.end(); it2++) {
+	if (vcomment != "")
+	    fprintf(file,"    `vcomment : \"%s\",\n", vcomment.c_str ());
+        PPD::Models::const_iterator it2 = (*it1).second.models.begin();
+        for(f2 = true; it2 != (*it1).second.models.end(); it2++) {
             F(f2) fprintf(file,str);
             fprintf(file,"    \"%s\" : $[\n", it2->first.c_str ());
 
-	    string support, vcomment, mcomment;
-	    string vendor = it1->first.c_str();
-	    string model = it2->first.c_str ();
-            map <string, string> modinfo;
-            if (vendinfo.find (model) != vendinfo.end ())
-                modinfo = vendinfo[model];
-	    if (modinfo.find ("support_status") != modinfo.end ())
-		support = modinfo["support_status"];
-            if (modinfo.find ("vendor_comment") != modinfo.end ())
-                vcomment = modinfo["vendor_comment"];
-            if (modinfo.find ("model_comment") != modinfo.end ())
-                mcomment = modinfo["model_comment"];
-	    if (mcomment == " ")
-		mcomment = "";
-	    int sup_status = 0;
-	    if (support == "problematic")
-		sup_status = 1;
-	    else if (support != "full")
-		sup_status = 2;
+	    int support = (*it2).second.support;
+	    string mcomment = (*it2).second.mcomment;
 
-            if (modinfo.find ("label") != modinfo.end ())
+	    if (it2->second.label != "")
                 fprintf(file,"      `label : \"%s\",\n",
-                    modinfo["label"].c_str());
-	    else if (modinfo.find ("mlabel") != modinfo.end ())
-		fprintf(file,"      `label : \"%s\",\n",
-		    modinfo["mlabel"].c_str());
+		    it2->second.label.c_str ());
 	    else
 		fprintf(file,"      `label : \"%s\",\n", it2->first.c_str());
 
-	    if (support != "")
-		fprintf(file,"      `support : %d,\n", sup_status);
-            if (vcomment != "")
-                fprintf(file,"      `vcomment : \"%s\",\n", vcomment.c_str ());
-            if (mcomment != "")
+	    if (support != -1)
+		fprintf(file,"      `support : %d,\n", support);
+            if (mcomment != "" && mcomment != " ")
                 fprintf(file,"      `mcomment : \"%s\",\n", mcomment.c_str ());
 
-            PPD::Drivers::const_iterator it3 = (*it2).second.begin();
-            for(f3 = true; it3 != (*it2).second.end(); it3++) {
+            PPD::Drivers::const_iterator it3 = (*it2).second.drivers.begin();
+            for(f3 = true; it3 != (*it2).second.drivers.end(); it3++) {
                 F(f3) fprintf(file,str);
                 fprintf(file,"      \"%s\"", (*it3).first.c_str());
                 fprintf(file," : [\n");
                 fprintf(file,"        \"%s\",\n", (*it3).second.filename.c_str());
                 fprintf(file,"        \"%s\",\n", (*it3).second.pnp_vendor.c_str());
                 fprintf(file,"        \"%s\",\n", (*it3).second.pnp_printer.c_str());
+		fprintf(file,"        \"%s\",\n", (*it3).second.checksum.c_str());
                 fprintf(file,"      ]");
             }
             fprintf(file,"\n    ]");
@@ -613,11 +650,11 @@ void PPD::debugdb() const {
     PPD::Vendors::const_iterator it1 = db.begin ();
     for(; it1 != db.end(); it1++) {
         y2debug("  %s", it1->first.c_str());
-        PPD::Models::const_iterator it2 = (*it1).second.begin();
-        for(; it2 != (*it1).second.end(); it2++) {
+        PPD::Models::const_iterator it2 = (*it1).second.models.begin();
+        for(; it2 != (*it1).second.models.end(); it2++) {
             y2debug("    %s",it2->first.c_str());
-            PPD::Drivers::const_iterator it3 = (*it2).second.begin();
-            for(; it3 != (*it2).second.end(); it3++) {
+            PPD::Drivers::const_iterator it3 = (*it2).second.drivers.begin();
+            for(; it3 != (*it2).second.drivers.end(); it3++) {
                 y2debug("      %s", (*it3).first.c_str());
                 y2debug("      %s", (*it3).second.filename.c_str());
             }
@@ -1007,6 +1044,7 @@ bool PPD::process_file(const char *filename, PPDInfo *newinfo) {
     info.shortnick = shortnick;
     info.pnp_vendor = pnp_vendor;
     info.pnp_printer = pnp_printer;
+    info.checksum = fileChecksum (filename);
     preprocess(info, newinfo);
 
     creation_status = (done_files * 80) / (total_files) + 10;
@@ -1030,6 +1068,7 @@ void PPD::preprocess(PPD::PPDInfo info, PPDInfo *newinfo) {
     string pnp_printer = info.pnp_printer;
     string tmp;
     string label;
+    string checksum = info.checksum;
 
     y2debug ("New PPD file");
     y2debug ("Set size: %d", products.size ());
@@ -1123,48 +1162,6 @@ void PPD::preprocess(PPD::PPDInfo info, PPDInfo *newinfo) {
     else if (validateModel (vendor, nick))
         printer = nick;
 
-/*    string printer_back = printer;
-    string tmp = printer = product;
-    signed ind;
-    signed size = vendor.size();
-    if(strupper(printer.substr(0,size))==vendor) printer.erase(0,size);
-    printer = killbraces(printer);
-
-    ind = (signed) printer.find_last_of("(");
-    if(ind!=-1) printer.erase(ind, printer.size());
-    printer = killbraces(printer);*/
-
-    /* model not found -- use shortnick now */
-/*    if(printer=="") printer = killbraces(shortnick);
-    
-    if(strupper(printer.substr(0,size))==vendor) printer.erase(0,size);
-    printer = killbraces(printer);
-    
-    ind = (signed) printer.find_last_of("(");
-    if(ind!=-1) printer.erase(ind, printer.size());
-    printer = killbraces(printer); */
-
-    /* model not found -- use printer now */
-/*    if(printer=="") printer = killbraces(printer_back);
-
-    if(strupper(printer.substr(0,size))==vendor) printer.erase(0,size);
-    printer = killbraces(printer);
-
-    ind = (signed) printer.find_last_of("(");
-    if(ind!=-1) printer.erase(ind, printer.size());
-    printer = killbraces(printer);*/
-
-    /* model not found -- use nick */
-/*    if(printer=="") printer = killbraces(nick);
-
-    if(strupper(printer.substr(0,size))==vendor) printer.erase(0,size);
-//    printer = killbraces(printer);
-
-    ind = (signed) printer.find_last_of("(");
-    if(ind!=-1) printer.erase(ind, printer.size());
-    printer = killbraces(printer);
-    if(printer=="") printer = "Filename";*/
-
     /* remove ", Foomatic..." from printer name */
     int br = printer.find (", ");
     if (br > 0)
@@ -1222,7 +1219,8 @@ void PPD::preprocess(PPD::PPDInfo info, PPDInfo *newinfo) {
     if (fn.substr (0, 22) == "/usr/share/cups/model/")
 	fn = fn.erase (0,22);
     nick = nick + " (" + fn + ")";
-    Drivers nicks = db[vendor][printer];
+// FIXME may not exist in the map
+    Drivers nicks = db[vendor].models[printer].drivers;
     for(; nicks.find(nick)!=nicks.end(); nick+="I")
       if(space) {
         nick += " ";
@@ -1241,37 +1239,34 @@ void PPD::preprocess(PPD::PPDInfo info, PPDInfo *newinfo) {
     {
 	y2debug ("Adding printer %s to database with nick %s", printer.c_str (), nick.c_str ());
         /* Info item = filename; */
-        Info item;
+        DriverInfo item;
         item.filename = filename;
         item.pnp_vendor = pnp_vendor;
         item.pnp_printer = pnp_printer;
-        db[vendor][printer][nick]=item;
+	item.checksum = checksum;
+	VendorInfo vi;
+	if (db.find (vendor) != db.end ())
+	    vi = db[vendor];
+	ModelInfo mi;
+	if (vi.models.find(printer) != vi.models.end ())
+	    mi = vi.models[printer];
 
         /* Set the label */
-	signed size = vendor.size();
-	if(strupper(label.substr(0,size))==vendor) label.erase(0,size);
+	signed size = vendor.size() + 1;
+	if(strupper(label.substr(0,size))==vendor+" ") label.erase(0,size);
 
         signed ind = (signed) label.find_last_of("(");
         if(ind!=-1) label.erase(ind, label.size());
         label = killbraces(label);
 
-        map <string, map <string, string> > vendinfo;
-        if (models_info.find (vendor) != models_info.end ())
-            vendinfo = models_info[vendor];
-        map <string, string> modinfo;
-        if (vendinfo.find (getModelId (vendor, printer)) != vendinfo.end ())
-            modinfo = vendinfo[getModelId (vendor, printer)];
-        string old_label;
-         if (modinfo.find ("label") != modinfo.end ())
-            old_label = modinfo["label"];
-        if ((old_label == "" || old_label.size () > label.size ()))
+        if ((mi.label == "" || mi.label.size () > label.size ()))
         {
-            modinfo["label"] = label;
+            mi.label = label;
         }
-        vendinfo[getModelId (vendor, printer)] = modinfo;
-        models_info[vendor] = vendinfo;
-//        y2error ("Set label for %s to %s", printer.c_str(),
-//            models_info[vendor][printer]["label"].c_str ());
+
+	mi.drivers[nick] = item;
+	vi.models[printer] = mi;
+	db[vendor] = vi;
 
 	y2debug("File: %s", filename.c_str());
 	y2debug("  Vendor: %s", vendor.c_str());
@@ -1303,59 +1298,427 @@ void PPD::preprocess(PPD::PPDInfo info, PPDInfo *newinfo) {
     }
 }
 
-/*
-    int i,j;
-    ppd_file_t *ppd;
-    ppd = ppdOpenFile("/usr/share/cups/model/Canon/BJC-6100-stp.ppd");
-
-    y2debug("Nickname: %s",ppd->nickname);
-    y2debug("Short nickname: %s",ppd->shortnickname);
-    y2debug("Language: %s",ppd->lang_version);
-    y2debug("Language encoding: %s",ppd->lang_encoding);
-    y2debug("Model number: %d",ppd->model_number);
-    y2debug("Manufacturer: %s",ppd->manufacturer);
-    y2debug("Modelname: %s",ppd->modelname);
-    y2debug("Product: %s",ppd->product);
-    y2debug("Color device: %d",ppd->color_device);
-    y2debug("Throughput: %d",ppd->throughput);
-
-    y2debug("");
-    y2debug("UI groups: %d",ppd->num_groups);
-    for(i=0; i<ppd->num_groups; i++) {
-        y2debug("  %s: %d,%d",ppd->groups[i].text,ppd->groups[i].num_options,ppd->groups[i].num_subgroups);
-        for(j=0;j<ppd->groups[i].num_options;j++)
-            y2debug("    %s: %s",ppd->groups[i].options[j].keyword,ppd->groups[i].options[j].text);
-    }
-
-    ppdClose(ppd);
-
-    return 0;
-}
-*/
-
 bool PPD::validateModel (string vendor, string printer) {
     string model = getModelId (vendor, printer);
-
-/*    string model = getModelKey (vendor, model);
-    string model = printer;
-    int vsize = vendor.size ();
-    if(strupper(model.substr(0,vsize))==vendor) model.erase(0,vsize);
-
-    int ind = (signed) model.find_last_of("(");
-    if(ind!=-1) model.erase(ind, model.size());
-    model = killbraces(model); 
-    model = getModelId (vendor, model);*/
-
-    /* remove ", Foomatic..." */
-/*    int br = model.find (", ");
-    if (br > 0)
-        model = model.substr (0, br);*/
 
     /* test size */
     if (model.size () > 0)
 	return true;
     return false;
 }
+
+bool PPD::loadPrebuiltDatabase () {
+    YCPParser *parser = new YCPParser (); 
+    if (!parser) {
+	y2error ("Failed to create YCPParser");
+	return false;
+    }
+
+    FILE *infile = fopen (ppd_db, "r");
+    if (! infile)
+    {
+	delete parser;
+	y2error ("Unable to open current database file");
+	return false;
+    }
+
+    parser->setInput (infile, ppd_db);
+    parser->setBuffered ();
+
+    YCPValue val = parser->parse ();
+    bool ret = true;
+
+    if ((! val.isNull ()) && val->isMap ())
+    {
+	y2milestone ("Database file parsed correctly");
+	YCPMap m = val->asMap ();
+	for (YCPMapIterator it1 = m->begin (); it1 != m->end (); it1++)
+	{
+	    if (it1.key().isNull() || ! it1.key()->isString())
+	    {
+		y2error ("Incorrect database format");
+		goto error_exit;
+	    }
+	    VendorKey vk = string (it1.key()->asString()->value_cstr());
+            if (it1.value().isNull() || ! it1.value()->isMap())
+            {
+                y2error ("Incorrect database format");
+                goto error_exit;
+            }
+	    YCPMap vm = it1.value()->asMap();
+	    VendorInfo vi;
+	    for (YCPMapIterator it2 = vm->begin (); it2 != vm->end (); it2++)
+	    {
+		if ((! it2.key().isNull ()) && it2.key()->isString ())
+		{
+		    ModelKey mk = string (it2.key()->asString()->value_cstr());
+
+		    if (it2.value().isNull() || ! it2.value()->isMap())
+		    {
+			y2error ("Incorrect database format");
+			goto error_exit;
+		    }
+		    YCPMap mm = it2.value()->asMap();
+		    ModelInfo mi;
+		    // process model
+		    for (YCPMapIterator it3 = mm->begin ();
+			it3 != mm->end (); it3++)
+		    {
+			if ((! it2.key().isNull()) && it3.key()->isString ())
+			{
+			    string config = it3.key()->asString()->value_cstr();
+	                    if (it3.value().isNull() || ! it3.value()->isList())
+	                    {
+	                        y2error ("Incorrect database format");
+	                        goto error_exit;
+	                    }
+
+			    YCPList info = it3.value()->asList();
+			    DriverInfo di;
+			    for (int i = 0; i < 4; i++)
+			    {
+				if (info->value(i).isNull()
+				    || ! info->value(i)->isString())
+				{
+				    y2error ("Incorrect database format");
+				    goto error_exit;
+				}
+			    }
+			    di.filename
+				= info->value(0)->asString()->value_cstr();
+			    di.pnp_vendor
+				= info->value(1)->asString()->value_cstr();
+                            di.pnp_printer
+                                = info->value(2)->asString()->value_cstr();
+			    di.checksum
+				= info->value(3)->asString()->value_cstr();
+			    mi.drivers[config] = di;
+			}
+			else
+			{
+			    if (it3.key().isNull() || ! it3.key()->isSymbol())
+			    {
+	                        y2error ("Incorrect database format");
+                                goto error_exit;
+			    }
+			    string attrib = it3.key()->asSymbol()->toString();
+			    if (attrib == "`label")
+			    {
+				if (it3.value().isNull() ||
+				    ! it3.value()->isString())
+				{
+				    y2error ("Incorrect database format");
+				    goto error_exit;
+				}
+				mi.label
+				    = it3.value()->asString()->value_cstr();
+			    }
+			    else if (attrib == "`support")
+			    {
+                                if (it3.value().isNull() ||
+                                    ! it3.value()->isInteger())
+                                {
+                                    y2error ("Incorrect database format");
+                                    goto error_exit;
+                                }
+				mi.support = it3.value()->asInteger()->value();
+			    }
+                            else if (attrib == "`mcomment")
+                            {
+                                if (it3.value().isNull() ||
+                                    ! it3.value()->isString())
+                                {
+                                    y2error ("Incorrect database format");
+                                    goto error_exit;
+                                }
+                                string tmp 
+                                    = it3.value()->asString()->value_cstr();
+                                mi.mcomment = "";
+                                for (string::const_iterator i = tmp.begin (); 
+                                    i != tmp.end (); i++)
+                                {
+                                    if (*i == '\\' || *i == '\"')
+                                        mi.mcomment = mi.mcomment + '\\';
+                                    mi.mcomment = mi.mcomment + *i;
+                                }
+                            }
+			}
+
+		    }
+
+		    vi.models[mk] = mi;
+		}
+		else
+		{
+                    if (it2.key().isNull() || ! it2.key()->isSymbol())
+                    {
+                        y2error ("Incorrect database format");
+                        goto error_exit;
+                    }
+
+		    if (it2.key()->asSymbol()->toString() == "`label")
+		    {
+                        if (it2.value().isNull() ||
+                            ! it2.value()->isString())
+                        {
+                            y2error ("Incorrect database format");
+                            goto error_exit;
+                        }
+
+			vi.label = it2.value()->asString()->value_cstr();
+		    }
+		    else if (it2.key()->asSymbol()->toString() == "`vcomment")
+		    {
+			if (it2.value().isNull() ||
+			    ! it2.value()->isString())
+			{
+			    y2error ("Incorrect database format");
+			    goto error_exit;
+			}
+			string tmp = it2.value()->asString()->value_cstr();
+			vi.vcomment = "";
+			for (string::const_iterator i = tmp.begin ();
+			    i != tmp.end (); i++)
+			{
+			    if (*i == '\\' || *i == '\"')
+				vi.vcomment = vi.vcomment + '\\';
+			    vi.vcomment = vi.vcomment + *i;
+			}
+		    }
+		}
+	    }
+	    db[vk] = vi;
+	}
+    }
+    else
+    {	
+	y2error ("Incorrect database file structure");
+	ret = false;
+    }
+
+    fclose (infile);
+    delete parser;
+    return ret;
+
+error_exit:
+    fclose (infile);
+    delete parser;
+    db = Vendors ();
+    return false;
+}
+
+/**
+ * Creates a list of files with attrubutes about modification dates
+ */
+bool PPD::createFileList(const char *dirname, time_t mtime) {
+    bool dir_changed = false;
+
+
+    DIR *dir;
+    struct dirent *entry;
+    struct stat fileinfo;
+    char filename[MAX];
+
+    dir = opendir(dirname);
+    if(!dir) {
+        y2error("opendir failed: %s (%s)", dirname, strerror(errno));
+        return false;
+    }
+
+    if (stat (dirname, &fileinfo))
+    {
+	closedir(dir);
+	return false;
+    }
+
+    if (fileinfo.st_mtime >= mtime || fileinfo.st_ctime >= mtime)
+	dir_changed = true;
+
+    while((entry=readdir(dir))) {
+	bool file_changed = false;
+        if(entry->d_name[0]=='.') // parent dir, this dir ot begins with dor
+            continue;
+
+        snprintf(filename, sizeof(filename), "%s/%s", dirname, entry->d_name);
+
+        if(stat(filename, &fileinfo))
+	{
+	    closedir(dir);
+            return false;
+	}
+
+        if(fileinfo.st_mtime >= mtime || fileinfo.st_ctime >= mtime)
+	    file_changed = true;
+
+        if(S_ISDIR(fileinfo.st_mode))
+	{
+	    if (! createFileList (filename, mtime))
+	    {
+		closedir(dir);
+		return false;
+	    }
+	    continue;
+	}
+
+	PpdFileInfo info;
+	info.file_newer = file_changed;
+	info.dir_newer = dir_changed;
+	ppdfiles[filename] = info;
+    }
+
+    closedir(dir);
+    return true;
+}
+
+bool PPD::cleanupLists () {
+    PPD::Vendors::iterator it1 = db.begin ();
+    for(; it1 != db.end(); it1++) {
+        PPD::Models::iterator it2 = (*it1).second.models.begin();
+        for(; it2 != (*it1).second.models.end(); it2++) {
+            PPD::Drivers::iterator it3 = (*it2).second.drivers.begin();
+            while(it3 != (*it2).second.drivers.end()){
+		DriverInfo di = it3->second;
+		string driver_name = it3->first;
+		string filename = di.filename;
+		it3++;
+		PPD::PpdFiles::iterator it4 = ppdfiles.find(filename);
+		if (it4 == ppdfiles.end())
+		{ // no more existing file
+		    (*it2).second.drivers.erase (driver_name);
+		}
+/*		else if (it4->second.file_newer)
+		{ // file changed
+		    (*it2).second.drivers.erase (driver_name);
+		}*/
+		else if (it4->second.dir_newer || it4->second.file_newer)
+		{ // parent dir changed or file changed,
+		  // check MD5 for being sure
+		    string checksum = fileChecksum (filename);
+		    if (checksum != di.checksum)
+		    {
+			(*it2).second.drivers.erase (driver_name);
+		    }
+		    else
+		    {
+			ppdfiles[filename].update = false;
+		    }
+		}
+		else
+		{ // not changed, we can ignore it
+		    ppdfiles[filename].update = false;
+		}
+            }
+        }
+    }
+    return true;
+}
+
+bool PPD::processNewFiles () {
+    bool ret = true;
+    for (PPD::PpdFiles::iterator it = ppdfiles.begin(); it != ppdfiles.end ();
+	it++)
+    {
+	if (! (*it).second.update)
+	{
+	    done_files++;
+	    continue;
+	}
+
+	struct stat fileinfo;
+	string filename = it->first;
+
+        if(stat(filename.c_str(),&fileinfo))
+            continue;
+
+        if(S_ISDIR(fileinfo.st_mode)) {
+	    y2warning ("Directory appeared in PPD files list");
+	    continue;
+        }
+        else if(S_ISREG(fileinfo.st_mode))
+	{
+	    if(process_file(filename.c_str())!=true)
+	    {
+		y2error ("Failed processing filename %s", filename.c_str());
+                ret = false;
+	    }
+	}
+    }
+    return ret;
+}
+
+bool PPD::cleanupEmptyEntries () {
+
+
+    return true;
+}
+
+string PPD::fileChecksum (const string &filename) {
+    FILE* f;
+    char buf[16];
+    char sum[33];
+    string ret = "";
+
+    f = fopen (filename.c_str(), "r");
+    if (f)
+    {
+	if (! md5_stream (f, buf))
+	{
+	    for (int i = 0 ; i < 16 ; i++)
+	    {
+		sprintf (sum+2*i, "%02x", (unsigned char) buf[i]);
+	    }
+	    ret = sum;
+	}
+	fclose (f);
+    }
+    return ret;
+
+/*
+    int fd[2];
+
+    if (0 != pipe (fd))
+	return "";
+    int f = fork ();
+    if (f == -1)
+    {
+	close (fd[0]);
+	close (fd[1]);
+	return "";
+    }
+    if (f)
+    { // parent process
+	close (fd[1]);
+	int status;
+	waitpid (f, &status, 0);
+	char buf[MAX+1];
+	int r = read (fd[0], buf, MAX);
+	if (r <= 0)
+	    buf[0] = 0;
+	else
+	    buf[r] = 0;
+	close (fd[0]);
+	//y2error ("Checksum for %s is %s", filename.c_str(), buf);
+	string csum(buf);
+	int pos = csum.find (" ") + 1;
+	pos = csum.find (" ", pos);
+	csum.erase (pos);
+	return csum;
+    }
+    else
+    { // child process
+	close (fd[0]);
+	close (1);
+	dup2 (fd[1], 1);
+	execl ("/usr/bin/cksum", "/usr/bin/cksum", filename.c_str(), (char*) 0);
+	// this should neveer be reached
+	y2error ("Error executing checksum");
+	exit (-1);
+    }
+
+*/
+    return "";
+}
+
 
 
 /* EOF */
