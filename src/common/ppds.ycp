@@ -84,6 +84,8 @@
 
         map recom = $[];
         map other = $[];
+	map downrec = $[];
+	map downoth = $[];
 	loadFoomaticIfNeeded ();
 	map ppds = $[];
 
@@ -98,6 +100,20 @@
             foreach (`i, preferred, ``{
                 if (! found && regexpmatch (k, i))
                 {
+		  if (issubstring (v["filename"]:"",
+		    "/usr/share/cups/model/downloaded/"))
+		  {
+                    if (issubstring (k, "(recommended)"))
+                    {
+                        downrec[i] = add (downrec[i]:[], k);
+                    }
+                    else
+                    {
+                        downoth[i] = add (downoth[i]:[], k);
+                    }
+		  }
+		  else
+		  {
                     if (issubstring (k, "(recommended)"))
                     {
                         recom[i] = add (recom[i]:[], k);
@@ -106,12 +122,27 @@
                     {
                         other[i] = add (other[i]:[], k);
                     }
-                    found = true;
+		  }
+                  found = true;
                 }
 
             });
             if (! found)
             {
+	      if (issubstring (v["filename"]:"",
+		"/usr/share/cups/model/downloaded/"))
+	      {
+                if (issubstring (k, "(recommended)"))
+                {
+                    downrec["other"] = add (downrec["other"]:[], k);
+                }
+                else
+                {
+                    downoth["other"] = add (downoth["other"]:[], k);
+                }
+	      }
+	      else
+	      {
                 if (issubstring (k, "(recommended)"))
                 {
                     recom["other"] = add (recom["other"]:[], k);
@@ -120,12 +151,25 @@
                 {
                     other["other"] = add (other["other"]:[], k);
                 }
+	      }
             }
         });
 
         list result = [];
 
         y2debug ("Recom: %1, other: %2", recom, other);
+	y2debug ("Downloaded: Recom: %1, other: %2", downrec, downoth);
+
+        foreach (`i, preferred, ``{
+            result = merge (result, downrec[i]:[]);
+        });
+        result = merge (result, downrec["other"]:[]);
+
+        foreach (`i, preferred, ``{
+            result = merge (result, downoth[i]:[]);
+        });
+        result = merge (result, downoth["other"]:[]);
+
 
         foreach (`i, preferred, ``{
             result = merge (result, recom[i]:[]);
@@ -376,7 +420,38 @@ of printers.
 	return ret;
     }
 
+    global define boolean processPpdFiles (string dir) ``{
+	string log = dir + "/log";
+	string target_dir = "/usr/share/cups/model/downloaded";
+	integer test = SCR::Execute (.target.bash, sformat (
+	    "/usr/lib/YaST2/bin/process_ppd_files %1 %2 %3", dir,
+	    target_dir, log));
+	y2milestone ("Test status: %1", test);
+	if (test != 0)
+	{
+	    term text = `RichText (`opt (`plainText), SCR::Read (.target.string, log));
+	    UI::OpenDialog(`opt ( `decorated ),
+		`VBox (`HSpacing(75),
+		// heading
+		`Heading(_("Error: No suitable PPD file downloaded.")),
+		text,
+		`PushButton( `id(`ok), `opt(`default),
+		     Label::OKButton ())
+		)
+	    );
 
+	    UI::SetFocus(`id(`ok) );
+	    any r = UI::UserInput();
+	    UI::CloseDialog();
+	    return false;
+	}
+	integer count = tointeger (SCR::Read (.target.string, dir + "/count"));
+	Report::Message (sformat (_("%1 files were added to the database"),
+	    count));
+	Printer::foomatic = nil;
+	loadFoomaticIfNeeded ();
+	return true;
+    }
 
 
 }

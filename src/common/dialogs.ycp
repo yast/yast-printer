@@ -88,15 +88,7 @@
                         _("<P><B>Model:</B></P>") + model_info;
                     integer type = Printer::foomatic[vdb, mdb, `support]:1;
 
-                    if (type != 2 && size (filter (`k, `v,
-                            Printer::foomatic[vdb, mdb]:$[],
-                            ``(is (k, string)))) == 0)
-                    {
-/*                        info_text = _("<p><B>This printer can be configured
-with the SuSE database of printers only.</B></P>
-") + info_text;*/
-                    }
-                    else if (type == 2)
+		    if (type == 2)
                         // part of richtext
                         info_text = _("<p><B>This printer is not supported by SuSE Linux.</B></P>") + info_text;
 
@@ -134,8 +126,13 @@ with the SuSE database of printers only.</B></P>
 	    `HWeight (1, `ReplacePoint (`id (`modelsel_rep), `HSpacing ()))),
 	    `HBox (
 		`HStretch (),
-		// pushbutton
-		`PushButton (`id (`useppd), _("Use non-YaST2 &ppd file")),
+		// menubutton
+		`MenuButton (`id (`other_ppd), _("Add &PPD file to database"), [
+		    // menubutton item
+		    `item (`id (`specifyppd), _("Specify &local PPD file")),
+		    // menubutton item
+		    `item (`id (`downloadppd), _("&Download PPD file")),
+		]),
 		`HStretch (),
 		// Button which provides information about selected
 		// manufacturer/model
@@ -157,7 +154,8 @@ with the SuSE database of printers only.</B></P>
 	UI::ChangeWidget (`id (`manufsel), `CurrentItem, manuf_db);
 
 	symbol ret = `manufsel;
-	while (`abort != ret && `back != ret && ret != `next && ret != `useppd)
+	while (`abort != ret && `back != ret && ret != `next
+	    && ret != `specifyppd && ret != `downloadppd)
 	{
 	    if (ret == `infobut)
 	    {
@@ -266,6 +264,84 @@ with the SuSE database of printers only.</B></P>
 	    }
 	}
 	y2milestone ("Returning %1, printer set to %2", ret, Printer::printer);
+	return ret;
+    }
+
+    /**
+     * Run dialog
+     * @return symbol `back, `next, `abort
+     */
+    global define symbol runDownloadPpdFile () ``{
+	term contents = `HBox (`HStretch (),
+	    `VBox (
+		`VStretch (),
+		// text entry label
+		`TextEntry (`id (`url), _("&URL"), "ftp://"),
+		`VSpacing (2),
+		`HBox (
+		    `TextEntry (`id (`user), _("&User"), ""),
+		    `HSpacing (2),
+		    `Password (`id (`pass), _("&Password"), "")
+		),
+		`VStretch ()
+	    ), `HStretch ()
+	);
+	Wizard::SetContents (_("Download PPD file"), contents,
+	    downloadHelp(), true, true);
+
+	symbol ret = nil;
+
+	while (ret == nil)
+	{
+	    ret = UI::UserInput ();
+	    if (ret == `cancel)
+		ret = `abort;
+	    if (ret == `next)
+	    {
+		string url = UI::QueryWidget (`id (`url), `Value);
+		string user = UI::QueryWidget (`id (`user), `Value);
+		string pass = UI::QueryWidget (`id (`pass), `Value);
+		list url_parts = splitstring (url, "/");
+		string file = url_parts[size (url_parts) - 1]:"ppd.ppd";
+		string dir = SCR::Read (.target.tmpdir);
+		file = dir + "/" + file;
+		if (user != "" && pass != "")
+		{
+		    string userpass = sformat ("%1:%2", user, pass);
+		    SCR::Execute(.curl.setUserPassword, userpass, $[]);
+		}
+		else if (user != "")
+		{
+		    // error report
+		    Report::Error (_("Set the password!"));
+		    ret = nil;
+		    continue;
+		}
+		SCR::Execute (.target.bash, sformat (
+		    "/usr/bin/rm %1/*", dir));
+		UI::OpenDialog (`VBox (`Label (_("Downloading file"))));
+		y2milestone ("Downloading from %1 to %2", url, file);
+		map response = SCR::Execute (.curl.get, url,
+		    $["output": file]);
+		UI::CloseDialog ();
+		y2milestone ("Get file response: %1", response);
+		if (response["dsize"]:0 == 0)
+		{
+		    Report::Error (
+// error report
+_("Error occured while downloading PPD file.
+Check that you wrote correct URL and set
+correct user name and password."));
+		    ret = nil;
+		    continue;
+		}
+		if (! processPpdFiles (dir))
+		{
+		    ret = nil;
+		    continue;
+		}
+            }
+	}
 	return ret;
     }
 
@@ -439,10 +515,8 @@ database of printers. Select model first");
 	    `HSpacing (1)
 	);
 	// dialog box label
-	string caption = ppd_only ? _("PPD Files")
-		// dialog box label
-	    : _("Configurations");
-	Wizard::SetContentsButtons (caption, contents, ppd_only ? getPpdSelectHelp () : getConfigHelp (), Label::BackButton (), Label::OKButton ());
+	string caption = _("PPD Files");
+	Wizard::SetContentsButtons (caption, contents, getPpdSelectHelp (), Label::BackButton (), Label::OKButton ());
 
 	if (config != "" && config != nil)
 	{
@@ -2195,6 +2269,7 @@ All your changes will be lost.
             "cupsaclclasses" :	``(runCupsAclDialog (`classes)),
 	    "cups_client_main":	``(runCupsClientDialog (true)),
 	    "useppd" :		``(runSelectPpdFile ()),
+	    "downloadppd" :	``(runDownloadPpdFile ()),
 	    "ppdselect" :	``(runPpdSelectDialog ()),
 	    "members" :		``(runMembersDialog ()),
 	    "filter" :		``(runOptionsDialog ()),
@@ -2343,7 +2418,10 @@ All your changes will be lost.
 		`connection : "connection_type",
 	    ],
 	    "connection_type" : $[
-		`local : "connection_local",
+		`parallel : "parallel",
+		`serial: "serial",
+		`usb: "usb",
+		`irda: "irda",
 		`cups : "connection_cups",
 		`lpd : "lpd",
 		`smb : "samba",
@@ -2353,13 +2431,6 @@ All your changes will be lost.
 		`other : "connection_other",
 		`abort : `abort,
 	    ],
-	    "connection_local" : $[
-		`parallel : "parallel",
-		`serial: "serial",
-		`usb: "usb",
-		`irda: "irda",
-		`abort : `abort,
-		],
 	    "connection_cups" : $[
 		`cups_client : "cups_client",
 		`listen_ipp : "listen_ipp_bcast",
@@ -2415,12 +2486,16 @@ All your changes will be lost.
 		`abort : `abort,
 		`next : "edit_printer_wz",
 		`next_propose_queues : "queues_proposal",
-		`useppd : "useppd",
+		`specifyppd : "useppd",
+		`downloadppd : "downloadppd",
 	    ],
 	    "useppd" : $[
 		`abort : `abort,
-		`db : "model",
-		`next: "edit_printer_wz",
+		`next : "model",
+	    ],
+	    "downloadppd" : $[
+		`abort : `abort,
+		`next: "model",
 	    ],
 	    "members" : $[
 		`abort : `abort,
@@ -2452,7 +2527,6 @@ All your changes will be lost.
 		`ascii : "features",
 		`state : "state",
 		`perm : "users",
-		`ppd : "useppd",
 		`class_members : "members",
 		`add : "add_printer_wz",
 		`next : "storeprinter",
@@ -2492,7 +2566,12 @@ All your changes will be lost.
 	    "irda" : $[ `next : "edit", `abort : `abort, ],
 	    "lpd" : $[ `abort: `abort, `next: "edit", ],
 	    "pipe" : $[ `abort : `abort, `next : "edit", ],
-	    "model" : $[ `abort : `abort, `next : "edit", `useppd: "useppd",],
+	    "model" : $[
+		`abort : `abort,
+		`next : "edit",
+		`specifyppd : "useppd",
+		`downloadppd : "downloadppd",
+	    ],
 	    "ppdselect" : $[
 		`abort : `abort,
 		`advanced : "filter",
@@ -2508,7 +2587,11 @@ All your changes will be lost.
 		`abort : `abort,
 		`next : "edit",
 	    ],
-	    "useppd" : $[ `abort : `abort, `db : "model", `next: "edit" ],
+	    "useppd" : $[
+		`abort : `abort,
+		`next : "model",
+	    ],
+	    "downloadppd" : $[ `abort : `abort, `next : "model"],
 	    "members" : $[ `abort : `abort, `next : "edit", ],
 	    "storeprinter" : $[`next : `next, ],
 	    ];

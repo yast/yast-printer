@@ -193,173 +193,59 @@ system will be saved.")))
      * @return symbol `next, `abort or `back
      */
     global define symbol runSelectPpdFile () ``{
-
-	string file = lookup (Printer::printer, "ownppd", "");
-	if (file == "")
-	    file = "/usr/share/cups/model/Postscript.ppd.gz";
-	string manuf = "";
-	string model = "";
-	string nick = "";
-
 	term contents = `HBox (
-	    `HSpacing (5),
+	    `HStretch (),
 	    `VBox (
+		`VStretch (),
 		`HBox (
 		    // textentry
-		    `TextEntry (`id(`name), `opt (`notify), _("&File name:"), file),
+		    `TextEntry (`id(`name), _("&File name:"), "/"),
 		    `VBox (
 			`Label (" "),
 			// pushbutton
 			`PushButton (`id (`browse), _("Bro&wse..."))
 		    )
 		),
-		`VSpacing (3),
-		// frame
-		`Frame ( _("File info"),
-		    `HBox (
-			`HSpacing (4),
-			`VBox (
-			    `VSpacing (1),
-			    // label
-			    `Label (`id (`manuf), `opt (`hstretch), sformat (_("Manufacturer: %1"),
-			    // label
-				 _("File does not exist."))),
-			    // label
-			    `Label (`id (`model), `opt (`hstretch), sformat (_("Model: %1"),
-			    // label
-				 _("File does not exist."))),
-			    // label
-			    `Label (`id (`nick), `opt (`hstretch), sformat (_("Description: %1"),
-			    // label
-				 _("File does not exist."))),
-			    `VSpacing (1)
-			),
-			`HSpacing (4)
-		    )
-		),
-		`VSpacing (2),
-		`HBox (
-		    `HStretch (),
-		    // pushbutton
-		    `HWeight (1, `PushButton (`id (`test), `opt (`key_F6), _("&Test"))),
-		    `HStretch ()
-		),
-		`VSpacing (2),
-		`HBox (
-		    `HStretch (),
-		    // pushbutton
-		    `PushButton (`id (`db), _("Use &driver from printer database"))
-		)
-	    )
+		`VStretch ()
+	    ),
+	    `HStretch ()
 	);
 
 	// dialog caption
 	Wizard::SetContentsButtons (_("Select PPD file"), contents, getPpdFileHelp (), Label::BackButton (), Label::NextButton ());
 
-	if (Printer::isFile (file))
-	{
-	    if (Printer::isPpd (file))
-	    {
-		map info = Printer::ppdInfo(file);
-y2error ("Got info %1", info);
-		manuf = lookup (info, "manufacturer", "");
-		model = lookup (info, "model", "");
-		nick = lookup (info, "nick", "");
-y2error ("Got everything from info");
-		// label
-		UI::ChangeWidget (`id (`manuf), `Value, sformat (_("Manufacturer: %1"), manuf));
-		// label
-		UI::ChangeWidget (`id (`model), `Value, sformat (_("Model: %1"), model));
-		// label
-		UI::ChangeWidget (`id (`nick), `Value, sformat (_("Description: %1"), nick));
-y2error ("Widgets changed");
-	    }
-	    else
-	    {
-		// label
-		UI::ChangeWidget (`id (`manuf), `Value, sformat (_("Manufacturer: %1"),
-		// label
-		 _("Not a PPD file.")));
-		// label
-		UI::ChangeWidget (`id (`model), `Value, sformat (_("Model: %1"),
-		// label
-		 _("Not a PPD file.")));
-		// label
-		UI::ChangeWidget (`id (`nick), `Value, sformat (_("Description: %1"),
-		// label
-		 _("Not a PPD file.")));
-	    }
-	}
-
 	symbol ret = nil;
-	while (true){
+	while (ret == nil){
 	    ret = UI::UserInput ();
             if (ret == `cancel)
                 ret = `abort;
-	    if (`test == ret)
+	    if (`next == ret)
 	    {
-		file = UI::QueryWidget (`id (`name), `Value);
+		string file = UI::QueryWidget (`id (`name), `Value);
 		if (!is (file, string))
 		    file = "";
 		if (!Printer::isFile (file))
 		{
 		    // popup
 		    Popup::Message (_("Enter a valid file name."));
+		    ret = nil;
 		    continue;
 		}
-		if (!Printer::isPpd (file))
-		{
-		    // popup
-		    Popup::Message (_("The selected file is not a valid PPD file."));
-		    continue;
-		}
-		Printer::printer = add (Printer::printer, "vendor_ieee", manuf);
-		Printer::printer = add (Printer::printer, "device_ieee", model);
-		Printer::printer = add (Printer::printer, "ownppd", file);
-		Printer::printer = filter (`k, `v, Printer::printer, ``(k != "config" && k != "options"));
-		testPrinter (Printer::printer, `ask);
-	    }
-	    else if (`next == ret)
-	    {
-		file = UI::QueryWidget (`id (`name), `Value);
-		if (!is (file, string))
-		    file = "";
-		if (!Printer::isFile (file))
-		{
-		    // popup
-		    Popup::Message (_("Enter a valid file name."));
-		    continue;
-		}
-		if (!Printer::isPpd (file))
-		{
-		    // popup
-		    Popup::Message (_("The selected file is not a valid PPD file."));
-		    continue;
-		}
-		Printer::printer = add (Printer::printer, "ownppd", file);
-		Printer::printer = add (Printer::printer, "vendor_ieee", manuf);
-		Printer::printer = add (Printer::printer, "device_ieee", model);
-		Printer::printer = filter (`k, `v, Printer::printer, ``(k != "config" && k != "options"));
-		break;
-	    }
-	    else if (`db == ret)
-	    {
-		Printer::printer = add (Printer::printer, "ownppd", "");
-		break;
-	    }
-	    else if (`advanced == ret)
-	    {
-		Printer::printer = add (Printer::printer, "ownppd", file);
-		break;
-	    }
-	    else if (`back == ret)
-	    {
-		break;
+		string dir = SCR::Read (.target.tmpdir);
+		SCR::Execute (.target.bash, sformat (
+		    "/usr/bin/rm %1/*", dir));
+		SCR::Execute (.target.bash, sformat ("/bin/cp %1 %2",
+		    file, dir));
+                if (! processPpdFiles (dir))
+                {
+                    ret = nil;
+                    continue;
+                }
 	    }
 	    else if (`abort == ret)
 	    {
-		if (reallyAbort ())
-		    break;
+		if (! reallyAbort ())
+		    ret = nil;
 	    }
 	    else if (`browse == ret)
 	    {
@@ -373,45 +259,8 @@ y2error ("Widgets changed");
                     _("Select the PPD file to use."));
 		if (new_name != "")
 		    UI::ChangeWidget (`id (`name), `Value, new_name);
-		ret = `name;
+		ret = nil;
 	    }
-	    if (`name == ret)
-	    {
-		file = UI::QueryWidget (`id (`name), `Value);
-		if (! Printer::isFile (file))
-		{
-		    // label
-		    UI::ChangeWidget (`id (`manuf), `Value, sformat (_("Manufacturer: %1"), _("File does not exist.")));
-		    // label
-		    UI::ChangeWidget (`id (`model), `Value, sformat (_("Model: %1"), _("File does not exist.")));
-		    // label
-		    UI::ChangeWidget (`id (`nick), `Value, sformat (_("Description: %1"), _("File does not exist.")));
-		}
-		else if (Printer::isPpd (file))
-		{
-		    map info = Printer::ppdInfo(file);
-y2error ("Got Info 2");
-		    manuf = lookup (info, "manufacturer", "");
-		    model = lookup (info, "model", "");
-		    nick = lookup (info, "nick", "");
-		    // label
-		    UI::ChangeWidget (`id (`manuf), `Value, sformat (_("Manufacturer: %1"), manuf));
-		    // label
-                    UI::ChangeWidget (`id (`model), `Value, sformat (_("Model: %1"), model));
-		    // label
-		    UI::ChangeWidget (`id (`nick), `Value, sformat (_("Description: %1"), nick));
-		}
-		else
-		{
-		    // label
-		    UI::ChangeWidget (`id (`manuf), `Value, sformat (_("Manufacturer: %1"), _("Not a PPD file.")));
-		    // label
-		    UI::ChangeWidget (`id (`model), `Value, sformat (_("Model: %1"), _("Not a PPD file.")));
-		    // label
-		    UI::ChangeWidget (`id (`nick), `Value, sformat (_("Description: %1"), _("Not a PPD file.")));
-		}
-	    }
-
 	}
         return ret;
     }
