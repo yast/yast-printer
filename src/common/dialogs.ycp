@@ -1112,14 +1112,20 @@ that your parallel port is not properly configured.
 	    }
 	}
 
-	if (! found)
+	if (! found )
 	{
-	    list e = select (select (cfgs, 1, []), 0, nil);
+	    if (config != "" && contains (select (cfgs, 1, []), config))
+		    UI::ChangeWidget (`id (`selection), `CurrentItem, config);
+	    else
+	{
+	    term e = select (select (cfgs, 1, []), 0, nil);
 	    if (e != nil)
 	    {
 		string conf = select (select (e, 0, `id("0")), 0, "");
 		UI::ChangeWidget (`id (`selection), `CurrentItem, conf);
 	    }
+	}
+
 	}
 
 	any ret = `config;
@@ -1150,10 +1156,13 @@ that your parallel port is not properly configured.
 	    {
 		map tmpPrinter = Printer::printer;
 		config = UI::QueryWidget (`id (`selection), `CurrentItem);
+        // Why this? The new selected configuration cannot be tested
+        // before saving:
 		if (lookup (tmpPrinter, "config", "") != config)
 		    tmpPrinter = add (tmpPrinter, "options", $[]);
 		tmpPrinter = add (tmpPrinter, "config", config);
-		testPrinter (tmpPrinter, -1);
+
+		    testPrinter (tmpPrinter, -1);
 	    }
 	    ret = UI::UserInput ();
 	}
@@ -1592,8 +1601,11 @@ and if you do not like the result, just press Back.")
 	Printer::printer = add (Printer::printer, "saved", saved);
 	string config = lookup (Printer::printer, "config", "");
 	any vals = nil;
+
 	// pushbutton
-	term test_button = (!Printer::isNetAvailable () && Printer::isNetwork ()) ? `VSpacing (1) : `HWeight (1, `PushButton (`id (`test), _("&Test graphical printing")));
+    term test_button = (!Printer::isNetAvailable () && Printer::isNetwork ())
+    ? `VSpacing (1) : `HWeight (1, `PushButton (`id (`test), _("&Test graphical printing")));
+
 	// pushbutton
 	term advanced_button = `HWeight (1, `PushButton (`id (`advanced), _("Ad&vanced settings")));
 	// dialog caption
@@ -1685,7 +1697,7 @@ and if you do not like the result, just press Back.")
 		`VSpacing (2));
 
 	//label of the dialog
-	Wizard::SetContentsButtons (_("Connection for printer:"), contents, getConnectionHelp (), BackButtonLabel (), NextButtonLabel ());
+	Wizard::SetContentsButtons (_("Connection for printer:"), contents, show_all ? getConnectionHelp () : getLocalConnectionHelp (), BackButtonLabel (), NextButtonLabel ());
 	Wizard::RestoreBackButton ();
 	symbol ret = nil;
 	symbol type = nil;
@@ -1896,6 +1908,9 @@ and if you do not like the result, just press Back.")
 	    UI::ChangeWidget (`id (`test), `Enabled, false);
 	    UI::ChangeWidget (`id (`edit), `Enabled, false);
 	}
+	;
+
+
 
 	while (nil == ret)
 	    {
@@ -2048,8 +2063,7 @@ with a prefilled name?
 	    {
 		// popup
 		if (! UI::AnyQuestionPopup (WarningMsg(), _("Really discard your configuration?"),
-			// pushbutton
-			_("&Discard"), CancelButtonLabel (), `focus_no))
+			YesButtonLabel(), NoButtonLabel (), `focus_no))
 		{
 		    ret = nil;
 		    continue;
@@ -2103,7 +2117,7 @@ All your changes will be lost.
                 if (Printerlib::getSpoolSystem () != 2)
                 {
                     Printer::saveClientHostName ();
-                    Printerlib::switchTo ("cups");
+//                    Printerlib::switchTo ("cups");
                     ret = `switch;
                     Printer::cups_installation = -1;
 		    restartSpoolerIfNeeded (true);
@@ -3110,9 +3124,11 @@ All your changes will be lost.
 	    "model" : $[ `abort : `abort, `next : "config", `useppd : "useppd", `dbchange : "dbchange", ],
             "dbchange" : $[ `abort : `abort, `next : "model", ],
 	    "config" : $[ `abort : `abort, `advanced : "filter", `next: "edit", ],
-	    "name" : $[ `abort : `abort, `next : "edit", `raw : "edit",],
+//	    "name" : $[ `abort : `abort, `next : "edit", `raw : "edit",],
+	    "name" : $[ `abort : `abort, `next : "edit", `raw : "edit", `class : "edit" ],
 	    "filter" : $[ `abort : `abort, `next : "edit", `next_cups : "edit", ],
-	    "useppd" : $[ `abort : `abort, `next : "edit", `db : "model" ],
+//	    "useppd" : $[ `abort : `abort, `next : "edit", `db : "model" ],
+	    "useppd" : $[ `abort : `abort, `advanced : "cups_wz", `db : "model", `next: "edit" ],
 	    "members" : $[ `abort : `abort, `next : "edit", ],
 	    "cups_wz" : $[ `abort : `abort, `next : "edit", ],
 	    "ppdetails" : $[ `abort : `abort, `next : "parallel", ],

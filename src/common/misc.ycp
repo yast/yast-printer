@@ -115,15 +115,11 @@ This usually takes one or two minutes")));
 	    "cups-libs", "cups-devel", "lpdfilter", "filters", "ghostscript-fonts-other", "ghostscript-x11", "ghostscript-fonts-std", "ghostscript-library",
 	    "ghostscript-fonts-kanji", "ghostscript-serv", "ghostscript-fonts-rus", "ghostscript-library", "a2ps"];
 	to_delete = filter (`e, to_delete, ``(Pkg::IsProvided (e) == true));
-	list to_install = ["ghostscript-library", "ghostscript-x11", "ghostscript-fonts-std", "ghostscript-fonts-other", "a2ps"];
-/*	map script = $["userInput" : false];
-	script = add (script, "delete", to_delete);
-	script = add (script, "install", to_install);
-	string fn = SCR::Read (.target.tmpdir);
-	fn = fn + "/script.sw_single";
-	SCR::Write (.target.ycp, fn, script);*/
 
-    y2milestone("deleting: %1", to_delete);
+    // have to add "cups-libs", because it is not solved (bug #19426)
+	list to_install = ["ghostscript-library", "ghostscript-x11", "ghostscript-fonts-std", "ghostscript-fonts-other", "a2ps", "cups-libs"];
+
+	y2milestone("deleting: %1", to_delete);
 	foreach (`e, to_delete, ``{Pkg::PkgDelete (e);});
 	Pkg::PkgCommit (0);
 	SCR::Execute (.target.bash, "/bin/rm -rf /etc/cups/");
@@ -135,15 +131,13 @@ This usually takes one or two minutes")));
 	SCR::Execute (.target.bash, "/bin/rm -rf /var/spool/lpd/");
 	SCR::Execute (.target.bash, "/bin/rm -rf /var/spool/cups/");
 	SCR::Execute (.target.bash, "/bin/rm -rf /var/lib/YaST2/printers");
-    // DoProvide has a list as an argument:
-    Pkg::DoProvide (to_install);
-    //	foreach (`e, to_install, ``{Pkg::DoProvide (e);});
-    y2milestone("providing: %1", to_install);
+
+	foreach (`e, to_install, ``{Pkg::PkgInstall (e);});
+
+	y2milestone("installing: %1", to_install);
 	Pkg::PkgSolve ();
 	Pkg::PkgCommit (0);
 	WFM::CallModule("inst_suseconfig", []);
-
-//	CallFunction (`sw_single (fn));
 
 	return true;
 
@@ -360,6 +354,33 @@ queue you want to use."));
      * @return boolean true if success
      */
     global define boolean testPrinter (map printer, integer testpage_type) ``{
+
+    /* do not include in 8.1
+    boolean do_not_test = false;
+
+    if (Printer::getPrinterState(Printer::printer, Printer::spooler) == "void")
+        do_not_test = true;
+
+    if (!do_not_test) {
+        // checking if printing is possible - could be done faster?
+        string model = lookup (printer, "device", "");
+        string config = lookup (printer, "config", "");
+        list cfgs = SCR::Read (add (.printerdb.configsrt,model), Printer::spooler);
+        foreach (`e, select (cfgs, 1, []), ``{
+            string conf = select (select (e, 0, `id("0")), 0, "");
+            if (conf == config) {
+                // other combinations? (CUPS only and lprng spooler)
+                if (issubstring(select(e, 1, ""), "LPRng") && Printer::spooler == "cups")
+                    do_not_test = true;
+            }
+        });
+    }
+
+    if (do_not_test) {
+	    UI::MessagePopup (_("Unable to print a test page, you are using different spooler."));
+        return false;
+    }*/
+
 	restartSpoolerIfNeeded (true);
 	if (Printer::spooler != "lprng" && Printer::spooler != "cups")
 	{
@@ -650,8 +671,8 @@ When the whole page is printed, press
                 return true;
             }
 	return UI::AnyQuestionPopup( NoHeadline(),
-"Really leave Printers configuration without saving?
-All changes will be lost!",
+_("Really leave Printers configuration without saving?
+All changes will be lost!"),
                                       YesButtonLabel(),
                                       NoButtonLabel(),
                                       `focus_no );
