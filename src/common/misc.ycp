@@ -782,7 +782,7 @@ It cannot contain the characters @ and :.
 	    );
 	}
 	list vals = (list) values;
-	y2error ("value: %1", values);
+	y2debug ("value: %1", values);
 	// selectionbox label
 	return `SelectionBox (`id (`vals), `opt (`notify), _("Val&ues"),
 	    maplist (list entry, vals, ``(
@@ -901,7 +901,47 @@ It cannot contain the characters @ and :.
 	return ret;
     }
 
+    /**
+      * Get the default encoding of the PPD file according to the language
+      * @param language string language in the form it is present in PPD file
+      * @return encoding in the form it is present in PPD file
+      */
+    global define string Language2Encoding (string language) ``{
+	map mapping = $[
+	    "English" : "ISOLatin1",
+	    "Danish" : "ISOLatin1",
+	    "Dutch" : "ISOLatin1",
+	    "Finnish" : "ISOLatin1",
+	    "French" : "ISOLatin1",
+	    "German" : "ISOLatin1",
+	    "Italian" : "ISOLatin1",
+	    "Japanese" : "JIS83-RKSJ,",
+	    "Norwegian" : "ISOLatin1",
+	    "Portuguese" : "ISOLatin1",
+	    "Spanish" : "ISOLatin1",
+	    "Swedish" : "ISOLatin1",
+	    "Czech" : "ISOLatin2",
+	];
+	return mapping[language]:"None";
+    }
 
+    /**
+      * Get the characters encoding from the form in it is present in PPD file
+      * to the form that can be passed to iconv
+      * @param ppd_enc string encoding in the form for PPD file
+      * @return string encoding in the form for iconv
+      */
+    global define string PPDenc2UIenc (string ppd_enc) ``{
+	map mapping = $[
+	    "ISOLatin1" : "ISO-8859-1",
+	    "ISOLatin2" : "ISO-8859-2",
+	    "ISOLatin5" : "ISO-8859-5",
+	    "JIS83-RKSJ" : "SHIFT-JIS",
+	    "MacStandard" : "MAC",
+	    "WindowsANSI" : "MS_ANSI",
+	];
+	return mapping[ppd_enc]:"";
+    }
 
 
 

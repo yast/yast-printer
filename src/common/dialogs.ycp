@@ -998,9 +998,6 @@ and test the queue after the printer model is selected."));
 	return ret;
     }
 
-
-
-
     /**
      * Configuration of the filter. It is quite complicated because there can
      * be depended options so change of value (lower list) can change content
@@ -1050,62 +1047,90 @@ and test the queue after the printer model is selected."));
 		`VWeight (1, `ReplacePoint (`id (`upper), `VSpacing (1))),
 		`VWeight (1, `ReplacePoint (`id (`lower), `VSpacing (1))),
 		`HBox (`HStretch (), test_button, `HStretch ())
-		), getFilterHelp (), Label::BackButton (), Label::NextButton ());
+		), getFilterHelp (), Label::BackButton (),Label::NextButton ());
 
 	map selected = lookup (Printer::printer, "options", $[]);
 
 	list opts = [];
 	list optlist = [];
 
-	    map options = SCR::Read (.ppd.file.options, [filename, ""]);
-	    optlist = options["data"]:[];
-	    y2debug ("First option: %1", optlist[0]:$[]);
-	    optlist = filter (`o, optlist, ``(
-		o["name"]:"" != "PageRegion"
-		&& o["name"]:"" != "ImageableArea"
-		&& o["mame"]:"" != "PaperDimension"));
-	    optlist = add (optlist, $[
-		"current" : "3",
-			// list item
-		"gui" : _("Orientation"),
-		"name" : "orientation-requested",
-		"type" : "PickOne",
-		"valorder" : ["3", "4", "5", "6"],
-				// list item
-		"values" : $["3" : _("Portrait"),
-				// list item
-			"4" : _("Landscape"),
-				// list item
-			"5" : _("Reverse"),
-				// list item
-			"6" : _("Reverse portrait"),
-		],
-	    ]);
-	    optlist = add (optlist, $[
-		"current" : "1",
-			// list item
-		"gui" : _("Pages per sheet"),
-		"name" : "number-up",
-		"type" : "PickOne",
-		"valorder" : ["1", "2", "4"],
-		"values" : $[
-			"1" : "1",
-			"2" : "2",
-			"4" : "4",
-		],
-	    ]);
-	    opts = maplist (`i, optlist, ``(
+	map options = SCR::Read (.ppd.file.options, [filename, ""]);
+	optlist = options["data"]:[];
+	y2debug ("First option: %1", optlist[0]:$[]);
+	optlist = filter (`o, optlist, ``(
+	    o["name"]:"" != "PageRegion"
+	    && o["name"]:"" != "ImageableArea"
+	    && o["mame"]:"" != "PaperDimension"));
+
+	// change the encoding of printable strings
+	map ppdinfo = SCR::Read (.ppd.file.ppdinfo, filename);
+	string encoding = ppdinfo["lang_encoding"]:"";
+	if (encoding == "")
+	    encoding = Language2Encoding (ppdinfo["lang_version"]:"");
+	encoding = PPDenc2UIenc (encoding);
+
+	if (encoding != "")
+	{
+	    optlist = maplist (map o, optlist, ``{
+		if (o["name"]:"" != "PageSize"
+		    && o["name"]:"" != "InputSlot")
+		{
+		    o["gui"] = UI::Recode (encoding, "UTF-8", o["gui"]:"");
+		}
+		o["values"] = mapmap (string k, string v, o["values"]:$[], ``{
+		    if (k != "Custom" && i["name"]:"" != "PageSize")
+		    {
+			v = UI::Recode (encoding, "UTF-8", v);
+		    }
+		    return [k, v];
+		});
+		return o;
+	    });
+	}
+
+	optlist = add (optlist, $[
+	    "current" : "3",
+	    // list item
+	    "gui" : _("Orientation"),
+	    "name" : "orientation-requested",
+	    "type" : "PickOne",
+	    "valorder" : ["3", "4", "5", "6"],
+	    "values" : $[
+		// list item
+		"3" : _("Portrait"),
+		// list item
+		"4" : _("Landscape"),
+		// list item
+		"5" : _("Reverse"),
+		// list item
+		"6" : _("Reverse portrait"),
+	    ],
+	]);
+	optlist = add (optlist, $[
+	    "current" : "1",
+	    // list item
+	    "gui" : _("Pages per sheet"),
+	    "name" : "number-up",
+	    "type" : "PickOne",
+	    "valorder" : ["1", "2", "4"],
+	    "values" : $[
+		"1" : "1",
+		"2" : "2",
+		"4" : "4",
+	    ],
+	]);
+	opts = maplist (`i, optlist, ``(
 		`item (`id (i["name"]:""), i["gui"]:"")
-	    ));
+	));
 
 	symbol ret = `opts;
 	// selection box label
 	UI::ReplaceWidget (`id (`upper), `SelectionBox (`id (`opts), `opt (`notify), _("&Options"), opts));
 
-	    UI::ChangeWidget (`id (`opts), `CurrentItem,
-		lookup (select (lookup (SCR::Read (.ppd.file.options,
-			 [filename, ""]),
-		    "data", []), 0, $[]), "name", ""));
+	UI::ChangeWidget (`id (`opts), `CurrentItem,
+	    lookup (select (lookup (SCR::Read (.ppd.file.options,
+		    [filename, ""]),
+		"data", []), 0, $[]), "name", ""));
 
 	string option_type = "";
 	string option = "";
@@ -1288,7 +1313,7 @@ and test the queue after the printer model is selected."));
 	{
 	    if (! lookup (Printer::printer, "raw", false))
 	    {
-/*		if (lookup (Printer::printer, "ownppd", "") != "")
+		if (lookup (Printer::printer, "ownppd", "") != "")
 		{
 		   string filename = lookup (Printer::printer, "ownppd", "");
 		    if (filename != "" && Printer::isPpd (filename))
@@ -1303,14 +1328,14 @@ and test the queue after the printer model is selected."));
 			// table entry
 		    items = add (items, `item (`id (`ppd), _("PPD file"), know ? filename : _("unknown")));
 
-		}*/
-//		else
-//		{
+		}
+		else
+		{
 			// table entry
 		    items = add (items, `item (`id (`model), _("Printer model"), know ? model_text : _("unknown")));
 			// table entry
 		    items = add (items, `item (`id (`ppd), _("PPD file"), config_text));
-//		}
+		}
 	    }
 		// table entry
 	    items = add (items, `item (`id (`connection), _("Connection"), know ? Printerlib::getUriNiceName (uri) : _("unknown")));
