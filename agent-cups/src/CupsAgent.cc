@@ -12,8 +12,8 @@
 
 #include "Y2Logger.h"
 #include "CupsAgent.h"
-#include "PpdOptions.h"
 #include "CupsCalls.h"
+#include "PpdOptions.h"
 
 bool getClasses ();
 
@@ -69,7 +69,7 @@ YCPValue CupsAgent::Read(const YCPPath &path, const YCPValue& arg)
 		return YCPError (string ("Read(.cups.remote): Wrong argument: ") + arg->toString() + string (". Expecting <string>."));
             }
     }
-    if(path->length()==2 && path->component_str(0)=="ppd")
+/*    if(path->length()==2 && path->component_str(0)=="ppd")
         {
             if(path->component_str(1)=="changed")
                 return YCPBoolean(ppd.changed(NULL));
@@ -138,7 +138,7 @@ YCPValue CupsAgent::Read(const YCPPath &path, const YCPValue& arg)
                             return YCPError("Read(.cups.ppd.info): Expecting string as an argument.");
                         }
                 }
-        }
+        }*/
 
     // fallback...
     return YCPError(string ("Wrong path '") + path->toString() + string ("' in Read()."));
@@ -158,10 +158,10 @@ YCPValue CupsAgent::Write(const YCPPath &path, const YCPValue& value, const YCPV
             return defaultdest.Write(path,value,arg);
     }
 
-    if(path->length()==2 && path->component_str(0)=="ppd") {
+/*    if(path->length()==2 && path->component_str(0)=="ppd") {
         if(path->component_str(1)=="createdb")
             return YCPBoolean(ppd.createdb());
-    }
+    }*/
 
     return YCPError(string ("Wrong path '%s' in Write().") + path->toString());
 }
@@ -179,30 +179,3 @@ YCPValue CupsAgent::otherCommand(const YCPTerm& term) {
 
     return YCPNull();
 }
-
-#if 0
-/**
- * Y2CupsAgentComponent evaluate
- */
-YCPValue Y2CupsAgentComponent::evaluate(const YCPValue& value) {
-  if (!interpreter) {
-    agent = new CupsAgent();
-    interpreter = new SCRInterpreter(agent);
-  }
-
-  return interpreter->evaluate(value);
-}
-
-/**
- * Y2CCCupsAgent create
- */
-Y2Component *Y2CCCupsAgent::create(const char *name) const {
-  if (!strcmp(name, "ag_cups")) return new Y2CupsAgentComponent();
-  else return 0;
-}
-
-/**
- * Y2CCCupsAgent instance
- */
-Y2CCCupsAgent g_y2ccag_cups;
-#endif

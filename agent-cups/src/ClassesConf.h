@@ -264,8 +264,6 @@ private:
    */  
   list<ClassEntry>::iterator findClass(const string name);
 
-  void DeleteUnsavedClasses();  
-  void UnsaveClasses();
 public:
   /**
    * Default Constructor.

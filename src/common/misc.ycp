@@ -142,7 +142,9 @@ This usually takes one or two minutes")));
             hosts = SCR::Read (.net.hostnames, 515);
         else if ("socket" == type)
             hosts = SCR::Read (.net.hostnames, 9100);
-        else
+        else if ("" != type)
+	    hosts = SCR::Read (.net.hostnames, tointeger (type));
+	else
             hosts = SCR::Read (.net.hostnames);
         if (nil == hosts)
             hosts = [];
@@ -179,7 +181,7 @@ This usually takes one or two minutes")));
       */
     global define boolean testSupportedQueueBySpooler (string queue, string spooler) ``{
 	map supported = $[ "cups" : [ "parallel", "usb", "serial", "filtering", "ipp", "samba", "socket", "irda", "file", "class", ],
-			   "lprng" : [ "parallel", "usb", "serial", "lpd", "prefilter", "samba", "novell", "irda", "filtering", "socket", "pipe", "ipp", "file", ]];
+			   "lprng" : [ "parallel", "usb", "serial", "lpd", "prefilter", "samba", "novell", "irda", "filtering", "socket", "pipe", "file", ]];
 	list l = lookup (supported, spooler, []);
 	if (l == [])
 	    return true;
@@ -325,24 +327,6 @@ queue you want to use."));
 	    i = i + 1;
 	}
 	return name;
-    }
-    /**
-     * clean up after test print
-     * @param names printers to wipe
-     */
-    global define void wipePrinters (list names) ``{
-	//
-	// wipe printer and possibly prefilter
-	//
-	Printer::wipePrinter (select (names, 0, ""));
-	string n2 = select (names, 1, "");
-	if (nil != n2 && "" != n2)
-	    Printer::wipePrinter (n2);
-	//
-	// Restore printcap
-	//
-	if (Printer::spooler != "cups")
-	    SCR::Execute (.target.bash, "/bin/mv /etc/printcap.y2bak /etc/printcap");
     }
     /**
      * Saves printer under some new name and tests it.
@@ -530,7 +514,6 @@ Output from lpr:
 "), test_page) +
 		lookup (out, "stderr", ""));
 	    Printer::deletePrinters ([$["name": name, "type": printer_type ], $["name" : prefilter_name, "type": printer_type]]);
-//	    wipePrinters ([name, prefilter_name]);
 	    return false;
 	}
 
@@ -574,7 +557,6 @@ Again, check the manufacturer and printer model entries
 you made previously."));
 	}
 	Printer::deletePrinters ([$["name": name, "type": printer_type], $["name" : prefilter_name, "type": printer_type]]);
-//	wipePrinters ([name, prefilter_name]);
 //	SCR::Execute (.target.bash, sformat ("/bin/rm /var/lib/YaST2/printers/y2test; \n"));
 	return true;
     }
@@ -711,8 +693,6 @@ All changes will be lost!",
                     `RadioButton (`id (`prefilter),`opt (`hstretch), _("Prefilter queue for a LPD forwarding &queue"), type == "prefilter"),
 		    // radiobutton
                     `RadioButton (`id (`filtering),`opt (`hstretch), _("LPD fil&tering forwarding queue"), type == "filtering"),
-		    // radiobutton
-		    `RadioButton (`id (`ipp), `opt (`hstretch),    _("&IPP filtering and forwarding queue"), type == "ipp"),
 		    // label
 		    `Label (`opt (`hstretch), _("Other network printing:")),
 		    // radiobutton
@@ -727,6 +707,8 @@ All changes will be lost!",
 		    `RadioButton (`id (`pipe), `opt (`hstretch),     _("Pip&e printing"), type == "pipe"),
 		    // label
 		    `Label (`opt (`hstretch), _("Unsupported printing in LPRng:")),
+		    // radiobutton
+                    `RadioButton (`id (`ipp), `opt (`hstretch),    _("&IPP filtering and forwarding queue"), type == "ipp"),
 		    // radiobutton
 		    `RadioButton (`id (`other), `opt (`hstretch),   _("&Other Printer (set URI)"), "" == knowConnection (type) && type != "class"),
 		    // radiobutton
