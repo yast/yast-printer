@@ -20,7 +20,7 @@
 
     include "testsuite.ycp";
 
-    // testedfiles: Printer.ycp Spooler.ycp Printerlib.ycp
+    // testedfiles: Printer.ycp Spooler.ycp Printerlib.ycp CUPS.ycp
 
     map I_READ = $[
 	"target" : $[
@@ -113,6 +113,7 @@
 		    "modelname" : "",
 		],
 	    ],
+	    "target" : $[ "size" : -1],
 	];
     map EXEC= $[
 	"target" : $[
@@ -129,12 +130,9 @@
     Spooler::Set ("cups");
     TEST (``(Printer::Detect ()), [READ, $[], EXEC], true);
 
-    READ =
-        $[
-            "probe" :
-            $[
-                "printer" :
-                [
+    READ = $[
+            "probe" : $[
+                "printer" : [
                     $[
                         "bus":"USB",
                         "class_id":265,
@@ -148,16 +146,17 @@
                         "unique_key":"Q0jS.ZoQ4aZ8KEv3",
                         "vendor":"Epson Inc.",
                         "vendor_id":197801
-                        ]
-                    ]
+                    ],
                 ],
-		"proc" : $[ "modules" : $[ "printer" : ""]],
+	    ],
+	    "proc" : $[ "modules" : $[ "printer" : ""]],
     	    "ppd" : $[
 		"db" : $[
 		    "vendorname" : "",
 		    "modelname" : "",
 		],
 	    ],
+	    "target" : $[ "size" : -1],
         ];
     DUMP ("--- Detection for lprng");
     Spooler::Set ("lprng");
@@ -167,12 +166,9 @@
     TEST (``(Printer::Detect ()), [READ, $[], EXEC], true);
 
     // try to detect for cups but without vendor_id and device_id
-    READ =
-        $[
-            "probe" :
-            $[
-                "printer" :
-                [
+    READ = $[
+            "probe" : $[
+                "printer" : [
                     $[
                         "bus":"USB",
                         "class_id":265,
@@ -184,11 +180,11 @@
                         "sub_vendor":"Epson",
                         "unique_key":"Q0jS.ZoQ4aZ8KEv3",
                         "vendor":"Epson Inc.",
-                        ]
                     ]
-                ],
-		"proc" : $[ "modules" : $[ "printer" : ""]],
-		"target" : $[ "size" : 555],
+                ]
+            ],
+	    "proc" : $[ "modules" : $[ "printer" : ""]],
+	    "target" : $[ "size" : 555],
        	    "ppd" : $[
 		"db" : $[
 		    "vendorname" : "",
@@ -212,12 +208,9 @@ direct usb:/dev/usb/lp2 \"Unknown\" \"USB Printer #3\"",
     TEST (``(Printer::Detect ()), [READ, $[], EXEC], true);
 
     // try to detect all-in-one device
-    READ =
-        $[
-            "probe" :
-            $[
-                "printer" :
-                [
+    READ = $[
+            "probe" : $[
+                "printer" : [
                     $[
                         "bus":"USB",
                         "class_id":265,
@@ -230,11 +223,11 @@ direct usb:/dev/usb/lp2 \"Unknown\" \"USB Printer #3\"",
                         "unique_key":"Q0jS.ZoQ4aZ8KEv3",
                         "vendor":"HP",
 			"model" : "Hewlett-Packard PSC 2200 Series",
-                        ]
                     ]
-                ],
-                "proc" : $[ "modules" : $[ "printer" : ""]],
-                "target" : $[ "size" : 555],
+                ]
+            ],
+            "proc" : $[ "modules" : $[ "printer" : ""]],
+            "target" : $[ "size" : 555],
        	    "ppd" : $[
 		"db" : $[
 		    "vendorname" : "",
