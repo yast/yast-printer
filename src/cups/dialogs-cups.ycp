@@ -53,12 +53,12 @@
 	    `HBox (
 		`HStretch (),
 		// pushbutton
-		`PushButton (`id (`test), _("&Test remote IPP access")),
+		`PushButton (`id (`test), `opt (`key_F6), _("&Test remote IPP access")),
 		`HStretch ()
 	    ),
             `VSpacing (4),
 	    // pushbutton
-	    `PushButton (`id (`advanced), _("Ad&vanced")),
+	    `PushButton (`id (`advanced), `opt (`key_F7), _("Ad&vanced")),
 	    `VSpacing (2)
             );
         // dialog label
@@ -164,9 +164,10 @@
 		`HBox (
 		    `HStretch (),
 		    // pushbutton
-		    `HWeight (1, `PushButton (`id (`test), _("&Test printing"))),
-		    // pushbutton
-		    `HWeight (1, `PushButton (`id (`advanced), _("Ad&vanced settings"))),
+		    `HWeight (1, `PushButton (`id (`test), `opt (`key_F6), _("&Test"))),
+//		    `HStretch (),
+//		    // pushbutton
+//		    `HWeight (1, `PushButton (`id (`db), _("Use &driver from printer database"))),
 		    `HStretch ()
 		),
 		`VSpacing (2),
@@ -284,12 +285,13 @@
 	    }
 	    else if (`browse == ret)
 	    {
-		list mask = ["*.ppd", "*.ppd.gz"];
+//		list mask = ["*.ppd", "*.ppd.gz"];
 		string new_name = UI::QueryWidget (`id (`name), `Value);
 		new_name = substring (new_name, 0, findlastof(new_name, "/")) + "/";
 		if (new_name == "")
 		    new_name = "/";
-		new_name = PopupFileWithMask(new_name, mask);
+		new_name = UI::GetOpenFileName( new_name, "*.ppd *.ppd.gz",
+                    _("Select PPD file to use"));
 		if (new_name != "")
 		    UI::ChangeWidget (`id (`name), `Value, new_name);
 		ret = `name;
@@ -359,8 +361,8 @@
                         // text entry label
                         `TextEntry (`id (`user), _("Or type &user name:"), ""),
                         `HBox (
-                            `PushButton (`id (`ok), OKButtonLabel()),
-                            `PushButton (`id (`cancel), CancelButtonLabel ())
+                            `PushButton (`id (`ok), `opt (`key_F10), OKButtonLabel()),
+                            `PushButton (`id (`cancel), `opt (`key_F9), CancelButtonLabel ())
                             ),
                         `VSpacing (0.3),
 			`HSpacing (40)
@@ -440,7 +442,7 @@
 		`ComboBox (`id (`type), `opt (`notify),  "", items),
 		// selectionbox label
 		`ReplacePoint (`id( `replace_users), `SelectionBox (`id (`users), _("&Users"), maplist (`i, users, ``{return `item (`id (i), i);}))),
-		`HBox (`PushButton (`id (`add), AddButtonLabel ()), `PushButton (`id (`delete), DeleteButtonLabel ()))
+		`HBox (`PushButton (`id (`add), `opt (`key_F3), AddButtonLabel ()), `PushButton (`id (`delete), `opt (`key_F4), DeleteButtonLabel ()))
 	    );
 
         // dialog label
@@ -684,8 +686,8 @@
 	    ) : `VSpacing (0),
 	    `TextEntry (`id (`ad), label, init),
 	    `HBox (
-		`PushButton (`id (`ok), `opt (`default), OKButtonLabel()),
-		`PushButton (`id (`cancel), CancelButtonLabel())
+		`PushButton (`id (`ok), `opt (`default, `key_F10), OKButtonLabel()),
+		`PushButton (`id (`cancel), `opt (`key_F9), CancelButtonLabel())
 	    )
 	);
     }
@@ -714,9 +716,9 @@
                 `ReplacePoint (`id (`replace_acl), `SelectionBox (`id (`acl), _("&Permissions"))),
 		`VSpacing (1),
                 `HBox (
-                    `PushButton (`id (`add), AddButtonLabel ()),
-                    `PushButton (`id (`edit), EditButtonLabel ()),
-                    `PushButton (`id (`del), DeleteButtonLabel ())
+                    `PushButton (`id (`add), `opt (`key_F3), AddButtonLabel ()),
+                    `PushButton (`id (`edit), `opt (`key_F4), EditButtonLabel ()),
+                    `PushButton (`id (`del), `opt (`key_F5), DeleteButtonLabel ())
                 ),
 		show_ignore ? `VSpacing (1) : `VSpacing (0),
 		// push button
@@ -862,9 +864,9 @@
 		// selectionbox label
 		`HBox (`HSpacing (3), `ReplacePoint (`id( `replace_addr), `SelectionBox (`id (`addr), _("Browse Addre&sses"))), `HSpacing (3)),
 		`HBox (
-		    `PushButton (`id (`add), AddButtonLabel ()),
-		    `PushButton (`id (`edit), EditButtonLabel ()),
-		    `PushButton (`id (`del), DeleteButtonLabel ())
+		    `PushButton (`id (`add), `opt (`key_F3), AddButtonLabel ()),
+		    `PushButton (`id (`edit), `opt (`key_F4), EditButtonLabel ()),
+		    `PushButton (`id (`del), `opt (`key_F5), DeleteButtonLabel ())
 		)
 	    )),
 	    `VSpacing (1),

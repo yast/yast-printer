@@ -47,75 +47,6 @@
 	return c;
     }
     /**
-      * Change printer database
-      * @return symbol `next, `abort or `back
-      */
-    global define symbol ChangeDatabase () ``{
-        string file = Printer::current_database;
-        if (file == nil)
-            file = "";
-        term contents = `HBox (`HSpacing (5), `VBox (
-            `HBox (
-		// text entry
-                `TextEntry (`id (`name), _("&File name:"), file),
-                `VBox (
-                    `Label (" "),
-		    // push button
-                    `PushButton (`id (`browse), _("&Browse"))
-                )
-            )
-        ), `HSpacing (5));
-
-	// dialog caption
-        Wizard::SetContentsButtons (_("Select printer database"), contents, getDbChangeHelp (), BackButtonLabel (), NextButtonLabel ());
-
-        symbol ret = nil;
-        while (true)
-        {
-            ret = UI::UserInput ();
-            if (`next == ret)
-            {
-                file =  UI::QueryWidget (`id (`name), `Value);
-                if (!is (file, string))
-                    file = "";
-                if (file == "")//default database
-                {
-                    Printer::changeDb (nil);
-                    break;
-                }
-                if (!Printer::isFile (file))
-                {
-		    // popup
-                    UI::MessagePopup (_("Enter a valid file name."));
-                    continue;
-                }
-                if (!Printer::changeDb (file))
-                {
-		    // popup
-                    UI::MessagePopup (_("Invalid database selected."));
-                    continue;
-                }
-                break;
-            }
-            else if (`browse == ret)
-            {
-                list mask = ["*.prdb"];
-                string new_name = UI::QueryWidget (`id (`name), `Value);
-                new_name = substring (new_name, 0, findlastof(new_name, "/")) + "/";
-                if (new_name == "")
-                    new_name = "/";
-                new_name = PopupFileWithMask(new_name, mask);
-                if (new_name != "")
-                    UI::ChangeWidget (`id (`name), `Value, new_name);
-            }
-            else if (`back == ret)
-                break;
-            else if (`abort == ret)
-                break;
-        }
-        return ret;
-    }
-    /**
       * Disk file specification
       * @param type string "file" or "pipe"
       * @return symbol `next or `back
@@ -287,7 +218,7 @@ that your parallel port is not properly configured.
 	    if (!auto_mode)
 	    {
 		details = add (details,
-		    `HBox (`HStretch (), `PushButton (`id ("parallel" == type ? `ppdetails : `spdetails),
+		    `HBox (`HStretch (), `PushButton (`id ("parallel" == type ? `ppdetails : `spdetails), `opt (`key_F2),
 			// PushButton
 			"parallel" == type ? _("&Parallel port details...")
 			// PushButton
@@ -317,7 +248,7 @@ that your parallel port is not properly configured.
 			  `HSpacing (5)),
 		   `VStretch (),
 		    // pushbutton
-		   `PushButton (`id (`test), _("&Test printer connection")),
+		   `PushButton (`id (`test), `opt (`key_F6), _("&Test printer connection")),
 		   `VStretch ()
 		);
 	Wizard::SetContentsButtons (getAskDeviceLabel (type), contents, getAskDeviceHelp (type), BackButtonLabel (), NextButtonLabel ());
@@ -405,7 +336,7 @@ that your parallel port is not properly configured.
 	remote_printer = lookup (Printer::printer, "remote_printer", "");
 
 	// push button label
-	term test_button = Printer::isNetAvailable () ? `PushButton (`id (`test), _("&Test printer connection")) : `VSpacing (1);
+	term test_button = Printer::isNetAvailable () ? `PushButton (`id (`test), `opt (`key_F6), _("&Test printer connection")) : `VSpacing (1);
 	term queue_button = `HSpacing (0);
 	term queue_entry = `TextEntry (`id (`queueent),
 					  // text entry label
@@ -611,7 +542,7 @@ that your parallel port is not properly configured.
 	}
 
 	// push button label
-	term test_button = Printer::isNetAvailable () ? `PushButton (`id (`test), _("&Test remote LPD access")) : `VSpacing (1);
+	term test_button = Printer::isNetAvailable () ? `PushButton (`id (`test), `opt (`key_F6), _("&Test remote LPD access")) : `VSpacing (1);
 	term queue_button = `HSpacing (0);
 	term queue_entry = `TextEntry (`id (`queueent),
 					  // text entry label
@@ -629,12 +560,12 @@ that your parallel port is not properly configured.
 		// menu button
 		lookup_hosts = `PushButton (`id (`get_hosts), _("&Lookup"));
 		// pushbutton
-		test_button = Printer::isNetAvailable () ? `PushButton (`id (`test), _("&Test remote Novell access")) : `VSpacing (1);
+		test_button = Printer::isNetAvailable () ? `PushButton (`id (`test), `opt (`key_F6), _("&Test remote Novell access")) : `VSpacing (1);
 	    }
 	if (type == "samba")
 	    {
 		// pushbutton
-		test_button = Printer::isNetAvailable () ? `PushButton (`id (`test), _("&Test remote SMB access")) : `VSpacing (1);
+		test_button = Printer::isNetAvailable () ? `PushButton (`id (`test), `opt (`key_F6), _("&Test remote SMB access")) : `VSpacing (1);
 		queue_entry = `ComboBox (`id (`queueent), `opt (`editable, `hstretch),
 					    // text entry label
 					    _("Name of the remote &queue:"));
@@ -651,7 +582,7 @@ that your parallel port is not properly configured.
 	if (type == "ipp")
 	{
 	    // pushbutton
-	    test_button = Printer::isNetAvailable () ? `PushButton (`id (`test), _("&Test remote IPP access")) : `VSpacing (1);
+	    test_button = Printer::isNetAvailable () ? `PushButton (`id (`test), `opt (`key_F6), _("&Test remote IPP access")) : `VSpacing (1);
 	    queue_entry = `ComboBox (`id (`queueent), `opt (`editable, `hstretch),
                                             // text entry label
                                             _("Name of the remote &queue:"));
@@ -671,7 +602,7 @@ that your parallel port is not properly configured.
 	    if (port == 0)
 		port = 9100;
 	    // push button
-	    test_button = Printer::isNetAvailable () ? `PushButton (`id (`test), _("&Test remote socket access")) : `VSpacing (1);
+	    test_button = Printer::isNetAvailable () ? `PushButton (`id (`test), `opt (`key_F6), _("&Test remote socket access")) : `VSpacing (1);
 	    // text entry label
 	    queue_entry = `VBox (`VStretch (), `TextEntry (`id (`port), _("&TCP port number"), sformat("%1", port)));
 	    // menu button
@@ -979,7 +910,7 @@ that your parallel port is not properly configured.
 			  `PushButton (`id (`useppd), _("Use non-YaST2 &ppd file")),
 			  `HStretch (),
 		   // Button which provides information about selected manufacturer/model
-			`PushButton (`id (`infobut), _("&Info")),
+			`PushButton (`id (`infobut), `opt (`key_F2), _("&Info")),
 			`HStretch ()
 		));
 	// dialog box label
@@ -1051,16 +982,40 @@ with SuSE database of printers only</B></P>") + info_text;
 		    manuf = select (temp, 0, "");
 		    manuf_ieee = select (temp, 1, "");
 		}
+		map modnames = $[];
+		if (Printer::db == `foomatic)
+		{
+		    map models = filter (`k, `v,
+			Printer::foomatic[manuf_db]:$[],
+			``(is (k, string)));
+		    foreach (`k, `v, models, ``{
+			string l = v[`label]:k;
+			boolean add_blank = true;
+			while (haskey (modnames, l))
+			{
+			    y2warning ("Printer label %1:%2 doubled", manuf_db,
+				v[`label]:"");
+			    if (add_blank)
+				l = l + " ";
+			    l = l + "I";
+			    add_blank = false;
+			}
+			modnames[l] = k;
+		    });
+
+		}
+
 		modelsel = `SelectionBox (`id (`modelsel), `opt (`notify),
 					  // selection box caption
 					  _("Select &model:"),
 		    Printer::db == `foomatic
 
-			?
-			    maplist (`kk, `vv, filter (
-				`k, `v, Printer::foomatic[manuf_db]:$[],
-				``(is (k, string))),
-				``(`item (`id (kk), vv[`label]:kk)))
+			? maplist (`k, `v, modnames, ``(`item (`id (v), k)))
+
+//			    maplist (`kk, `vv, filter (
+//				`k, `v, Printer::foomatic[manuf_db]:$[],
+//				``(is (k, string))),
+//				``(`item (`id (kk), vv[`label]:kk)))
 
 			: SCR::Read (add (.printerdb.models, manuf),
 			    [ model, model_ieee ]));
@@ -1133,10 +1088,6 @@ with SuSE database of printers only</B></P>") + info_text;
 		    cont = UI::YesNoPopup (getPpdWarning ());
 		ret = cont ? `useppd : `cont;
             }
-	    if (`dbchange == ret)
-	    {
-		break;
-	    }
 	}
 
 	if (ret == `next)
@@ -1369,9 +1320,9 @@ with SuSE database of printers only</B></P>") + info_text;
 		    ppd_only ? `VSpacing (0) : `HBox (
 			`HStretch (),
 			// pushbutton
-			`HWeight (1, `PushButton (`id (`test), _("&Test printing"))),
+			`HWeight (1, `PushButton (`id (`test), `opt (`key_F6), _("&Test printing"))),
 			// pushbutton
-			-1 == Printer::index ? `HWeight (1, `PushButton (`id (`advanced), _("Ad&vanced settings"))) : `HSpacing (0),
+			-1 == Printer::index ? `HWeight (1, `PushButton (`id (`advanced), `opt (`key_F7), _("Ad&vanced settings"))) : `HSpacing (0),
 			`HStretch ()
 		    ),
 		    `VSpacing (ppd_only ? 0 : 1)
@@ -1817,8 +1768,8 @@ y2error ("Setting raw to %1", raw);
                         // selection box label
                         `SelectionBox ( `id (`printers), _("Choose &printer:"), maplist (`i, printers, ``{return `item (`id(i),i);})),
                         `HBox (
-                            `PushButton (`id (`ok), OKButtonLabel ()),
-                            `PushButton (`id (`cancel), CancelButtonLabel ())
+                            `PushButton (`id (`ok), `opt (`key_F10), OKButtonLabel ()),
+                            `PushButton (`id (`cancel), `opt (`key_F9), CancelButtonLabel ())
                             ),
                         `VSpacing (0.3)
                         ),
@@ -1864,8 +1815,8 @@ y2error ("Setting raw to %1", raw);
                         )
                     ),
                 `HBox(
-                    `PushButton(`id(`add),AddButtonLabel ()),
-                    `PushButton(`id(`delete),DeleteButtonLabel ())
+                    `PushButton(`id(`add), `opt (`key_F3), AddButtonLabel ()),
+                    `PushButton(`id(`delete), `opt (`key_F5), DeleteButtonLabel ())
                     )
                 );
         // dialog label
@@ -1994,7 +1945,7 @@ y2error ("Setting raw to %1", raw);
 
     term test_button = (!Printer::isNetAvailable () && Printer::isNetwork ())
 	// pushbutton
-    ? `VSpacing (1) : `HWeight (1, `PushButton (`id (`test), _("&Test")));
+    ? `VSpacing (1) : `HWeight (1, `PushButton (`id (`test), `opt (`key_F6), _("&Test")));
 
 	// dialog caption
 	Wizard::SetContentsButtons (_("Configuration options"), `VBox (
@@ -2199,7 +2150,6 @@ y2error ("Setting raw to %1", raw);
                     `HSpacing (5)),
                 `VSpacing (2));
 
-        //label of the dialog
 	symbol helptype = `all;
 	if (Printer::spooler == "cups")
 	    helptype = `cups;
@@ -2208,6 +2158,8 @@ y2error ("Setting raw to %1", raw);
         boolean new_queue = false;
         if (size (getConfiguredPrinters ()) != 0 && confmode == `adm && Arch::s390)
             new_queue = true;
+
+	//label of the dialog
         Wizard::SetContentsButtons (_("Connection for printer:"), contents, getAdvancedConnectionHelp (helptype, new_queue), BackButtonLabel (), NextButtonLabel ());
         symbol ret = nil;
         symbol type = nil;
@@ -2362,10 +2314,10 @@ y2error ("Setting raw to %1", raw);
 			 _("Current values")), items),
 		    `HBox (
 			// push button
-			`PushButton (`id (`edit), EditButtonLabel ()),
+			`PushButton (`id (`edit), `opt (`key_F4), EditButtonLabel ()),
 			`HStretch (),
 			// push button
-			"class" == uri_type ? `HSpacing (0.1) : `PushButton (`id (`test), _("&Test"))
+			"class" == uri_type ? `HSpacing (0.1) : `PushButton (`id (`test), `opt (`key_F6), _("&Test"))
 		    )
 		),
 		`HSpacing (1)
@@ -2962,8 +2914,8 @@ the current configuration.
 			    _("&Enter device:"),
 			    pre_filled),
 		`HBox (
-		    `PushButton (`id (`ok), OKButtonLabel ()),
-		    `PushButton (`id (`cancel), CancelButtonLabel ())
+		    `PushButton (`id (`ok), `opt (`key_F10), OKButtonLabel ()),
+		    `PushButton (`id (`cancel), `opt (`key_F9), CancelButtonLabel ())
 		    )
 		)
 	    );
@@ -3125,13 +3077,13 @@ the current configuration.
 				),
 			    `VSpacing (0.5),
 			    `HBox (
-				`PushButton (`id (`add), AddButtonLabel ()),
-				`PushButton (`id (`edit), EditButtonLabel ()),
-				`PushButton (`id (`delete),
+				`PushButton (`id (`add), `opt (`key_F3), AddButtonLabel ()),
+				`PushButton (`id (`edit), `opt (`key_F4), EditButtonLabel ()),
+				`PushButton (`id (`delete), `opt (`key_F5),
 				    DeleteButtonLabel ()),
 				`HStretch (),
 				// pushbutton
-				`PushButton (`id (`test), _("T&est printing"))
+				`PushButton (`id (`test), `opt (`key_F6), _("T&est printing"))
 			    ),
 			    `VSpacing (0.5)
 			    ),
@@ -3457,7 +3409,7 @@ system will be saved.
 		// push button
 		`PushButton (`id (`setdefault), _("&Set as default")),
 		// push button
-		`PushButton (`id (`advanced), _("Ad&vanced")),
+		`PushButton (`id (`advanced), `opt (`key_F7), _("Ad&vanced")),
 
 		    `HStretch ()
 		),
@@ -3642,7 +3594,6 @@ All your changes will be lost.
 	    "model" :		``(runManufModelDialog ()),
 	    "inst_printer" :	``(runInstalledPrinterDialog ()),
 	    "useppd" :		``(runSelectPpdFile ()),
-	    "dbchange" :	``(ChangeDatabase ()),
 	    "config" :		``(runConfigDialog (false)),
 	    "ppdselect" :	``(runConfigDialog (true)),
 	    "name" :		``(runNameDialog (false)),
@@ -3901,7 +3852,7 @@ All your changes will be lost.
 	    "inst_printer" : $[ `next : "add_queue_wz", `abort : `abort, ],
 	    "add_queue_wz" : $[ `next : "storeprinter", `abort : `abort, ],
 
-	    "model" : $[ `abort : `abort, `next : "queue_conf", `useppd : "useppd", `dbchange : "dbchange", ],
+	    "model" : $[ `abort : `abort, `next : "queue_conf", `useppd : "useppd", ],
 	    "useppd" : $[ `abort : `abort, `advanced : "cups_wz", `db : "model", `next: "queue_conf" ],
 	    "queue_conf" : $[ `abort : `abort, `all : "single_printer_wz", `single : "add_queue_wz" ],
 	    "single_printer_wz" : $[ `abort : `abort, `next : `next ],
@@ -3909,7 +3860,6 @@ All your changes will be lost.
 	// REQUIRED BECAUSE OF CLASSES
 //	    "name" : $[ `abort : `abort, `next : "add_queue_wz", `raw : "storeprinter", `class : "members", ],
 
-//	    "dbchange" : $[ `abort : `abort, `next : "model", ],
 
 //	    "namerem" : $[ `abort : `abort, `next : "storeprinter", ],
 //	    "members" : $[ `abort : `abort, `advanced : "cups_wz", `next : "storeprinter", ],
@@ -3940,8 +3890,6 @@ All your changes will be lost.
 	    "ws_start" : "namedet",
 	    "namedet" : $[ `abort : `abort, `next : "config",
 		`raw: "storeprinter", `model: "model"],
-	    "model" : $[ `abort : `abort, `next : "config", `useppd : "useppd", `dbchange : "dbchange", ],
-            "dbchange" : $[ `abort : `abort, `next : "model", ],
 	    "config" : $[ `abort : `abort, `advanced : "filter", `next: "storeprinter", ],
 	    "filter" : $[ `abort : `abort, `next_cups : "cups_wz", `next : "features", ],
 	    "useppd" : $[ `abort : `abort, `advanced : "cups_wz", `db : "model", `next: "storeprinter" ],
@@ -4015,8 +3963,7 @@ All your changes will be lost.
 	    "filtering" : $[ `abort: `abort, `next: "edit", ],
 	    "file" : $[ `abort : `abort, `next : "edit", ],
 	    "pipe" : $[ `abort : `abort, `next : "edit", ],
-	    "model" : $[ `abort : `abort, `next : "config", `useppd : "useppd", `dbchange : "dbchange", ],
-            "dbchange" : $[ `abort : `abort, `next : "model", ],
+	    "model" : $[ `abort : `abort, `next : "config", `useppd: "useppd",],
 	    "config" : $[ `abort : `abort, `advanced : "filter", `next: "edit", ],
 //	    "name" : $[ `abort : `abort, `next : "edit", `raw : "edit",],
 	    "name" : $[ `abort : `abort, `next : "edit", `raw : "edit", `class : "edit" ],

@@ -85,6 +85,27 @@
 	// we must wake Epson first
 	wakeUpEpson (device);
 	// now we can run escputil
+
+        if (SCR::Read (.target.size, "/usr/lib/cups/backend/usb") > 0)
+        {
+	    integer pos = find (device, "lp");
+	    string dev_num = substring (device, pos + 2);
+            if (dev_num != "")
+            {
+		integer num = tointeger (dev_num) + 1;
+		map out = SCR::Execute (.target.bash_output, sformat (
+"/usr/lib/cups/backend/usb |head -n %1 |tail -n 1 |cut -d\\\" -f2", num));
+                string model = out["stdout"]:"";
+		if (substring (toupper (model), 0, 6) == "EPSON ")
+		    model = substring (model, 6);
+		if (findfirstof (model, "\n") != nil)
+		    model = substring (model, 0, findfirstof (model, "\n"));
+		return model;
+            }
+	    return "";
+        }
+
+
 	map esc = SCR::Execute (.target.bash_output, sformat ("/usr/bin/escputil -q -u -r %1 -d & export PID=$! ; sleep 10s ; kill $PID 2>/dev/null || exit 0 && exit 1", device));
 	if (0 != lookup (esc, "exit", ""))
 	    {
@@ -150,7 +171,8 @@
      */
     global define list Detect (boolean cups) ``{
 	// load hotplug if it is not (there is no way to find out whether hotplug is runing so just start it)
-	SCR::Execute (.target.bash, "/etc/init.d/hotplug start");
+	if (0 != SCR::Execute (.target.bash, "/etc/init.d/hotplug status"))
+	    SCR::Execute (.target.bash, "/etc/init.d/hotplug start");
 	list aprobe = SCR::Read (.probe.printer);
 /*		aprobe = [
 		    $[ "bus" : "Parallel",      // recognized, found in db
@@ -203,13 +225,13 @@
 	    else if  ("USB" == bus)
 	    {
 		if ("epson" == tolower (lookup (pr, "sub_vendor", "")))
-		    {
+		{
 			string sub_dev = getEpsonUsbModel (lookup (pr, "dev_name", ""));
 			if (sub_dev == "")
 			    sub_dev = lookup (pr, "sub_device", "");
 			pr = add (pr, "sub_device", sub_dev);
 //			pr = add (pr, "sub_device", lookup (pr, "dev_name", "")));
-		    }
+		}
 		record = $[
 		    "vendor" : lookup (pr, "sub_vendor", ""),
 		    "device" : lookup (pr, "sub_device", ""),

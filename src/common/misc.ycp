@@ -91,15 +91,21 @@
 	string vendor = printer["vendor"]:"";
 	string device = printer["device"]:"";
 	string ukey = printer["unique_key"]:"";
+	string uri = printer["uri"]:"";
+	if (uri == "")
+	    uri = printer["bus"]:"parallel" + ":" + printer["dev_name"]:"";
 	boolean exists = false;
 
 	foreach (`p, Printer::printcap, ``{
 	    if (p["unique_key"]:"..." == ukey
-		|| (p["vendor"]:".." == vendor && p["device"]:".." == device)
-		|| (p["vendor_db"]:".." == vendor
-		    && p["device_db"]:".." == device)
-		|| (p["vendor_ieee"]:".." == vendor
-		    && p["device_ieee"]:".." == device))
+		|| (p["uri"]:"" == uri && uri != ""
+		    && ((p["vendor"]:".." == vendor
+			    && p["device"]:".." == device)
+			|| (p["vendor_db"]:".." == vendor
+			    && p["device_db"]:".." == device)
+			|| (p["vendor_ieee"]:".." == vendor
+			    && p["device_ieee"]:".." == device))
+		   ))
 	    {
 		exists = true;
 	    }
@@ -170,7 +176,8 @@
                     ];
                     new_queues = add (new_queues, $[
                         "config" : config,
-                        "name" : tolower (v),
+                        "name" : mergestring (splitstring
+			    (tolower (v), "."), "_"),
                         "comment" : composite["values", v]:v,
                         "database" : "foomatic",
                         "options" : new_options,
@@ -559,7 +566,7 @@ This usually takes one or two minutes")),
       * @return boolean true if supports
       */
     global define boolean testSupportedQueueBySpooler (string queue, string spooler) ``{
-	map supported = $[ "cups" : [ "parallel", "usb", "serial", "filtering", "ipp", "samba", "socket", "irda", "file", "class", ],
+	map supported = $[ "cups" : [ "parallel", "usb", "serial", "filtering", "ipp", "samba", "socket", "irda", "file", "class", "novell", "pipe", ],
 			   "lprng" : [ "parallel", "usb", "serial", "lpd", "prefilter", "samba", "novell", "irda", "filtering", "socket", "pipe", "file", ]];
 	list l = lookup (supported, spooler, []);
 	if (l == [])
@@ -789,9 +796,9 @@ press 'OK'.
 		    `VSpacing (1),
 		    `HBox (
 			// pushbutton
-			`PushButton (`id (`ok), OKButtonLabel ()),
+			`PushButton (`id (`ok), `opt (`key_F10), OKButtonLabel ()),
 			// pushbutton
-			`PushButton (`id (`cancel), CancelButtonLabel ())
+			`PushButton (`id (`cancel), `opt (`key_F9), CancelButtonLabel ())
 		    )
 		)
 	    );
@@ -1147,9 +1154,13 @@ All changes will be lost!"),
 		    // radiobutton
 		    `RadioButton (`id (`samba), `opt (`hstretch),    _("SMB Printing (Samba/&Windows printer)"), type == "samba"),
 		    // radiobutton
+                    `RadioButton (`id (`novell), `opt (`hstretch),   _("IPX printing (Nove&ll printer)"), type == "novell"),
+		    // radiobutton
 		    `RadioButton (`id (`socket), `opt (`hstretch),    _("Direct TCP port printin&g (network printer)"), type == "socket"),
 		    // label
 		    `Label (`opt (`hstretch), _("Other:")),
+		    // radiobutton
+		    `RadioButton (`id (`pipe), `opt (`hstretch),     _("&Pipe printing"), type == "pipe"),
 		    // radiobutton
 		    `RadioButton (`id (`other), `opt (`hstretch),  _("&Other Printer (set URI)"), "" == knowConnection (type) && type != "class"),
 		    // radiobutton
@@ -1159,11 +1170,11 @@ All changes will be lost!"),
 		    // radiobutton
                     `RadioButton (`id (`remote), `opt (`hstretch, `disabled),     _("LPD &forwarding queue"), type == "lpd"),
 		    // radiobutton
-                    `RadioButton (`id (`prefilter),`opt (`hstretch, `disabled), _("Prefilter queue for a LPD forwarding &queue"), type == "prefilter"),
+                    `RadioButton (`id (`prefilter),`opt (`hstretch, `disabled), _("Prefilter queue for a LPD forwarding &queue"), type == "prefilter")//,
 		    // radiobutton
-                    `RadioButton (`id (`novell), `opt (`hstretch, `disabled),   _("IPX printing (Nove&ll printer)"), type == "novell"),
+//                    `RadioButton (`id (`novell), `opt (`hstretch, `disabled),   _("IPX printing (Nove&ll printer)"), type == "novell"),
 		    // radiobutton
-		    `RadioButton (`id (`pipe), `opt (`hstretch, `disabled),     _("&Pipe printing"), type == "pipe")
+//		    `RadioButton (`id (`pipe), `opt (`hstretch, `disabled),     _("&Pipe printing"), type == "pipe")
 		    )
 		: Printer::spooler == "lprng" ?
                 `VBox (
@@ -1686,8 +1697,10 @@ for any file in directory /etc/lpdfilter"));
                             `VBox (
                                 `VSpacing (1),
 				// radiobutton
-                                `RadioButton (`id (`cups_server), `opt (`hstretch, `notify), _("CUPS with &SuSE printer database"), spooler == "cups" && db != `foomatic),
 				`RadioButton (`id (`foomatic), `opt (`hstretch, `notify), _("CUPS with &Foomatic database"), spooler == "cups" && db == `foomatic),
+				`VSpacing (0.5),
+				// radiobutton
+                                `RadioButton (`id (`cups_server), `opt (`hstretch, `notify), _("CUPS with &SuSE printer database"), spooler == "cups" && db != `foomatic),
                                 `VSpacing (0.5),
 				// radiobutton
                                 `RadioButton (`id (`cups_client), `opt (`hstretch, `notify), _("CUPS &client-only installation"), spooler == "cups-client"),
@@ -1718,8 +1731,8 @@ for any file in directory /etc/lpdfilter"));
 		`Label (msg),
 		getSpoolerItems ("current", true, Printer::db),
 		`HBox (
-		    `HWeight (1, `PushButton (`id (`ok), OKButtonLabel ())),
-		    `HWeight (1, `PushButton (`id (`cancel), abort_msg))))
+		    `HWeight (1, `PushButton (`id (`ok), `opt (`key_F10), OKButtonLabel ())),
+		    `HWeight (1, `PushButton (`id (`cancel), `opt (`key_F9), abort_msg))))
 	);
 	while (true)
 	{
