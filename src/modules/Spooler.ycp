@@ -197,24 +197,17 @@ This usually takes one or two minutes")),
      *  256 is added if the instalation doesn't seem to be complete
      */
     global define integer getSpoolSystem () ``{
-	Require::EnsureTargetInit ();
-
 	// first try if some of the systems exists.
-	boolean cups_exists = Pkg::IsProvided ("cups-client");
+	boolean cups_exists = Require::AreAllPackagesInstalled(["cups-client"]);
 	// for lpd we need to check the file because
 	boolean lpd_exists = (SCR::Read(.target.size, "/etc/init.d/lpd")!=-1);
 	y2milestone ("CUPS exists: %1, LPD exists: %2",
 	    cups_exists, lpd_exists);
-	boolean cups_complete = Pkg::IsProvided ("cups-drivers")
-	    && Pkg::IsProvided ("cups-libs")
-	    && Pkg::IsProvided ("cups")
-	    && Pkg::IsProvided ("cups-client")
-	    && Pkg::IsProvided ("filters")
-	    && Pkg::IsProvided ("foomatic-filters");
-	boolean lpd_complete = Pkg::IsProvided ("lpdfilter")
-            && Pkg::IsProvided ("filters")
-	    && Pkg::IsProvided ("cups-drivers")
-	    && Pkg::IsProvided ("foomatic-filters");
+	boolean cups_complete = Require::AreAllPackagesInstalled (
+	    ["cups-drivers", "cups-libs", "cups", "cups-client", "filters",
+	    "foomatic-filters"]);
+	boolean lpd_complete = Require::AreAllPackagesInstalled (
+	    ["lpdfilter", "filters", "cups-drivers", "foomatic-filters"]);
 
 	if (cups_exists && !lpd_exists)
 	    {
@@ -222,7 +215,9 @@ This usually takes one or two minutes")),
 		    return 2;
 		else
 		{
-		    boolean cups_client = Pkg::IsProvided ("cups-libs") && ! Pkg::IsProvided ("cups");
+		    boolean cups_client =
+			Require::AreAllPackagesInstalled (["cups-libs"])
+			&& ! Require::AreAllPackagesInstalled (["cups"]);
 		    if (cups_client)
 			return 512 + 2;
 		    else
