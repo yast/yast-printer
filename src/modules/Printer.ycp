@@ -1794,9 +1794,16 @@ the selected spooler does not support it."), name));
 		if (ppd_file != nil && configure)
 		{
 		    boolean ok = true;
-		    printer["name"] = generateQueueName (nil, printer["uri"]:"",
-			printer["vendor"]:"", printer["device"]:"",
-			getForbiddenNames ());
+		    if (printer["name"]:"" == "")
+		    {
+			printer["name"] = generateQueueName (
+			    nil,
+			    printer["uri"]:"",
+			    printer["det", "vendor_db"]:"",
+			    printer["det", "device_db"]:"",
+			    getForbiddenNames ()
+			);
+		    }
 		    printer["ppd_options"] = printer["ppd_options"]:$[];
 		    foreach (string paperentry, ["ImageableArea",
 			"PageRegion", "PageSize", "PaperDimension"],
