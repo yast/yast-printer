@@ -33,7 +33,7 @@
     /**
       * List of detected CUPS servers
       */
-    global list(string) cups_servers = [];
+    global list<string> cups_servers = [];
 
     /**
       * Use CUPS-like USB devices names
@@ -70,6 +70,22 @@
 // global functions
 
     /**
+     * Read client.conf host name to server_hostname
+     */
+    global define void loadClientHostName () ``{
+        // grep /etc/cups/client.conf for ServerName
+        server_hostname = "";
+        map e = (map)SCR::Execute (.target.bash_output, "/usr/bin/awk '/^ServerName/ { print $2 }' /etc/cups/client.conf");
+        if (0 == lookup (e, "exit", 1))
+        {
+            server_hostname = select (splitstring (lookup (e, "stdout", ""), "\n"), 0, "");
+            if (nil == server_hostname || "" == server_hostname || "nil" == server_hostname ||
+                "localhost" == server_hostname || "127.0.0.1" == server_hostname)
+                server_hostname = "";
+        }
+    }
+
+    /**
       * If only client is installed or remote server to use is set,
       * returns 1, if this is real server installation, returns 0
       * Also sets server_hostname and cups_installation
@@ -89,22 +105,6 @@
         loadClientHostName ();
         cups_installation = (("" != server_hostname) ? `client : `server);
         return cups_installation;
-    }
-
-    /**
-     * Read client.conf host name to server_hostname
-     */
-    global define void loadClientHostName () ``{
-        // grep /etc/cups/client.conf for ServerName
-        server_hostname = "";
-        map e = SCR::Execute (.target.bash_output, "/usr/bin/awk '/^ServerName/ { print $2 }' /etc/cups/client.conf");
-        if (0 == lookup (e, "exit", 1))
-        {
-            server_hostname = select (splitstring (lookup (e, "stdout", ""), "\n"), 0, "");
-            if (nil == server_hostname || "" == server_hostname || "nil" == server_hostname ||
-                "localhost" == server_hostname || "127.0.0.1" == server_hostname)
-                server_hostname = "";
-        }
     }
 
     /**
@@ -152,7 +152,7 @@ END { if (!used) print \"ServerName %1\" }
       * start CUPS server and don't wait until initialization finishes
       */
     global define void StartDaemon () ``{
-        integer status = SCR::Execute (.target.bash, "/etc/init.d/cups status");
+        integer status = (integer)SCR::Execute (.target.bash, "/etc/init.d/cups status");
         if (0 != status)
         {
             SCR::Execute (.target.bash_background, "/etc/init.d/cups start");
@@ -163,7 +163,7 @@ END { if (!used) print \"ServerName %1\" }
       * Reads CUPS server settings from /etc/cups/cupsd.conf file
       */
     global define void readCupsSettings () ``{
-	map out = SCR::Execute (.target.bash_output, "
+	map out = (map)SCR::Execute (.target.bash_output, "
 /bin/cp /etc/cups/cupsd.conf /etc/cups/cupsd.conf.y2
 echo \"<Location /printers>
 </Location>
@@ -186,17 +186,17 @@ BEGIN {location = \"\";}
 // {next;}
 ' </etc/cups/cupsd.conf.y2");
         string set = lookup (out, "stdout", "");
-        list lines = splitstring (set, "\n");
+        list<string> lines = splitstring (set, "\n");
         map settings = $[];
-        foreach (`l, lines, ``{
-            list parts = splitstring (l, " ");
+        foreach (string l, lines, ``{
+            list<string> parts = splitstring (l, " ");
             string key = select (parts, 0, "");
             string val = select (parts, 1, "");
             string prefix = "";
             map work = settings;
             if (issubstring (key, ">"))
             {
-                list tmp = splitstring (key, ">");
+                list<string> tmp = splitstring (key, ">");
                 prefix = select (tmp, 0, "");
                 key = select (tmp, 1, "");
             }
@@ -353,7 +353,7 @@ END {
 
 }\n";
 	run = sformat("/bin/awk '%1' </etc/cups/cupsd.conf.y2 >/etc/cups/cupsd.conf", run);
-	map out = SCR::Execute (.target.bash_output, run);
+	map out = (map)SCR::Execute (.target.bash_output, run);
     }
 
     /**
@@ -363,7 +363,7 @@ END {
 	string pid = nil;
 	if (SCR::Read (.target.size, "/var/run/listen_remote_ipp.pid") > 0)
 	{
-	    pid = SCR::Read (.target.string, "/var/run/listen_remote_ipp.pid");
+	    pid = (string)SCR::Read (.target.string, "/var/run/listen_remote_ipp.pid");
 	}
 	boolean aborted = false;
 	if (pid != nil)
@@ -414,7 +414,7 @@ END {
 	    if (! aborted)
 	    {
 	        y2milestone ("File with CUPS servers found");
-		string tmp = SCR::Read (.target.string,
+		string tmp = (string)SCR::Read (.target.string,
 		    "/var/lib/YaST2/cups_network_server_name");
 		cups_servers = splitstring (tmp, "\n");
 		cups_servers = toset (cups_servers);
@@ -433,7 +433,7 @@ END {
       * @return list Sorted list of hosts
       */
     global define list listenCupsServers () ``{
-	integer status = SCR::Execute (.target.bash, "/etc/init.d/cups status");
+	integer status = (integer)SCR::Execute (.target.bash, "/etc/init.d/cups status");
 	if (0 == status)
 	    SCR::Execute (.target.bash, "/etc/init.d/cups stop");
 
@@ -480,7 +480,7 @@ END {
 	string hostname = "localhost";
 	if (CUPS::InstallationType () == `client && CUPS::server_hostname != "")
 		hostname = CUPS::server_hostname;
-	ret = SCR::Read (.cups.remote, hostname);
+	ret = (list<string>)SCR::Read (.cups.remote, hostname);
 	ret = toset (ret);
 	y2milestone ("Available queues for CUPS: %1", ret);
 	return ret;

@@ -35,12 +35,12 @@
       */
     global define list<string> GetAvailableQueues () ``{
 	list<string> ret = [];
-	list pc = SCR::Read (.etc.printcap);
-	foreach (`e, pc, ``{
+	list pc = (list)SCR::Read (.etc.printcap);
+	foreach (map e, pc, ``{
 	    ret = add (ret, e["name"]:"");
 	    string printcap_part = e["saved", "printcap_part"]:"";
 	    list l = splitstring (printcap_part, "\n");
-	    l = maplist (`i, l, ``{
+	    l = maplist (string i, l, ``{
 		integer hash = findfirstof (i, "#");
 		if (hash != nil)
 		    i = substring (i, 0, hash);
@@ -52,7 +52,7 @@
 	    l = splitstring (printcap_part, ":");
 	    string names = l[0]:"";
 	    l = splitstring (names, "|");
-	    l = filter (`n, l, ``(n != "" && ! issubstring (n, " ")));
+	    l = filter (string n, l, ``(n != "" && ! issubstring (n, " ")));
 	    foreach (`n, l, ``{
 		ret = add (ret, n);
 	    });
