@@ -1140,7 +1140,6 @@ Detect your printers?"));
 	if (!skip_io)
 	{
 	    ret = Printer::oldWrite ();
-	    SCR::Execute (.target.bash, "/sbin/SuSEconfig -quick --nonewpackage --module profiles");
 	    Runlevel::RunInitScript ("lpd", "restart");
 	    Popup::Message (
 	        // popup
@@ -1204,30 +1203,6 @@ Detect your printers?"));
 		    default = "";
 		}
 		SCR::Write (.cups.default_dest, default, "local");
-		boolean delete = false;
-		if (! Mode::autoinst)
-		{
-		    // popup
-		    delete = Pkg::IsProvided ("cups") && Popup::YesNo (_("Some packages installed are not needed
-for CUPS client-only installation. 
-Remove them?
-"));
-		}
-		if (delete)
-		{
-		    import "PackageCallbacks";
-		    list del = ["cups", "cups-drivers", "cups-drivers-stp", "cups-drivers-de", "cups-drivers-cs", "foomatic-filters"];
-		    del = filter (`e, del, ``(Pkg::IsProvided(e) == true));
-/*		    map script = $["userInput" : false, "install" : "", "delete" : del];
-		    string fn = SCR::Read (.target.tmpdir);
-		    fn = fn + "/script.sw_single";
-		    SCR::Write (.target.ycp, fn, script);
-		    CallFunction (`sw_single (fn));*/
-		    foreach (`d, del, ``{Pkg::PkgDelete (d);});
-		    Pkg::PkgSolve ();
-		    Pkg::PkgCommit (0);
-		    WFM::CallModule("inst_suseconfig", []);
-		}
 		saveTheConfiguration ();
 		return true;
 	    }
