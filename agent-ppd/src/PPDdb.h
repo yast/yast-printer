@@ -133,6 +133,7 @@ class PPD {
         bool changed(int *count);
 	string getVendorId (string vendor);
 	string getModelId (string vendor, string model);
+	string removeVendorFromModel (string vendor, string model);
 	bool fileinfo(const char *file, PPDInfo *info);
 	bool setCheckMethod (YCPSymbol method);
 	YCPList sortItems (const YCPMap& items);
