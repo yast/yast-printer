@@ -450,13 +450,14 @@ bool setDefaultDestLocal(const char*d)
  */
 bool setDefaultDest(const char*d)
 {
+// make sure no queue is marked as default (and /etc/cups/printers.conf is used)
   cups_dest_t *dests;
   cupsSetServer (NULL);
   int num_dests = cupsGetDests(&dests);
   for(int i = 0;i<num_dests;i++)
-    if (! strcmp (dests[i].name, d))
-      dests[i].is_default = 1;
-    else if(dests[i].is_default)
+//    if (! strcmp (dests[i].name, d))
+//      dests[i].is_default = 1;
+//    else if(dests[i].is_default)
       dests[i].is_default = 0;
   cupsSetDests(num_dests,dests);
 
