@@ -37,6 +37,17 @@ CupsAgent::~CupsAgent() {
  */
 YCPValue CupsAgent::Dir(const YCPPath& path) 
 {
+    if (path->length() == 2)
+    {
+        if (path->component_str (0) == "printers")
+	{
+	    return getPrinters (path->component_str (1));
+	}
+	if (path->component_str (0) == "classes")
+	{
+            return getClasses (path->component_str (1));
+	}
+    }
     return YCPError (string ("Wrong path '") + path->toString() + string ("' in Dir()."));
 }
 
