@@ -67,6 +67,7 @@ class PPD {
 		string checksum;
 		off_t size;
 		string filter;
+		string language;
 	    DriverInfo () {
 		nickname = "";
 		pnp_vendor = "";
@@ -74,6 +75,7 @@ class PPD {
 		checksum = "";
 		size = 0;
 		filter = "";
+		language = "";
 	    }
         };
 

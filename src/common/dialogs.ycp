@@ -413,16 +413,18 @@ user name, and password."));
      * @return symbol for wizard sequencer
      */
     define symbol runPpdSelectDialog (boolean all_ppds) ``{
-	y2milestone ("Running config dialog for %1", Printer::printer);
+	y2milestone ("Running PPD file select dialog for %1", Printer::printer);
 	Printerdb::InstallDrivers ();
 	map ppd_info = Printer::printer["ppd_info"]:$[];
 	string manuf_db = ppd_info["manufacturer_db"]:"";
 	string model_db = ppd_info["model_db"]:"";
 	string nick = ppd_info["nick"]:"";
+	string lang = ppd_info["language"]:"";
 	string file = Printerdb::getFileFromNickName (
 	    manuf_db,
 	    model_db,
-	    nick);
+	    nick,
+	    lang);
 	string orig_file = file;
 
 	map info = $[];
@@ -445,13 +447,13 @@ Select the model first."));
 	    all_ppds_list = listmap (map<string,string> m, ppds, {
 		string filename = m["filename"]:"";
 		string id = filename;
-		string label = m["nickname"]:"";
-		if (filename != "")
-		{
-		    if (substring (filename, 0, 22) == "/usr/share/cups/model/")
-			filename = substring (filename, 22);
-		    label = label + sformat (" (%1)", filename);
-		}
+		string label = GetPpdFileDescription (
+		    Printerdb::foomatic[manuf_db, model_db,
+			filename, "nickname"]:"",
+		    Printerdb::foomatic[manuf_db, model_db,
+			filename, "language"]:"",
+		    filename
+		);
 		string tllabel = tolower (label);
 		return $[tllabel : $["id" : id, "label" : label ]];
 	    });
@@ -470,14 +472,13 @@ Select the model first."));
 	    y2debug ("V: %1, M: %2, K: %3", manuf_db, model_db, k);
 
 	    string filename = k;
-	    string label = Printerdb::foomatic[manuf_db, model_db,
-		filename, "nickname"]:"";
-	    if (filename != "")
-	    {
-		if (substring (filename, 0, 22) == "/usr/share/cups/model/")
-		    filename = substring (filename, 22);
-		label = label + sformat (" (%1)", filename);
-	    }
+	    string label = GetPpdFileDescription (
+		Printerdb::foomatic[manuf_db, model_db,
+		    filename, "nickname"]:"",
+		Printerdb::foomatic[manuf_db, model_db,
+		    filename, "language"]:"",
+		filename
+	    );
 	    cfgs = add (cfgs, `item (`id (k), label));
 	  });
 	}
@@ -529,6 +530,7 @@ Select the model first."));
 	string caption = _("PPD Files");
 	Wizard::SetContentsButtons (caption, contents, getPpdSelectHelp (all_ppds), Label::BackButton (), all_ppds ? Label::NextButton () : Label::OKButton ());
 
+y2error ("File: %1", file);
 	if (file != "" && file != nil)
 	{
 	    UI::ChangeWidget (`id (`selection), `CurrentItem, file);
@@ -1312,7 +1314,8 @@ and test the queue after the printer model is selected."));
 	map ppd_info = Printer::printer["ppd_info"]:$[];
 	string manuf_db = ppd_info["manufacturer_db"]:"";
 	string model_db = ppd_info["model_db"]:"";
-	string config = ppd_info["nick"]:"";
+	string nick = ppd_info["nick"]:"";
+	string lang = ppd_info["language"]:"";
 	string help_text = "";
 	// determine printer type ...
 	//
@@ -1328,18 +1331,15 @@ and test the queue after the printer model is selected."));
 	//
 	string model_text = sformat ("%1 %2", ppd_info["manufacturer"]:"",
 	    ppd_info["model"]:"");
-	string config_text = ppd_info["nick"]:"";
-
-	string filename = Printerdb::getFileFromNickName (
-	    manuf_db,
-	    model_db,
-	    config);
-	if (filename != "")
-	{
-	    if (substring (filename, 0, 22) == "/usr/share/cups/model/")
-		filename = substring (filename, 22);
-	    config_text = config_text + sformat (" (%1)", filename);
-	}
+	string config_text = GetPpdFileDescription (
+	    nick,
+	    lang,
+	    Printerdb::getFileFromNickName (
+		manuf_db,
+		model_db,
+		nick,
+		lang)
+	);
 	if (config_text == "")
 	    config_text = _("unknown");
 

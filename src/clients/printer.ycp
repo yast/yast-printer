@@ -96,6 +96,7 @@
 	string manufacturer = "";
 	string model = "";
 	string nick = "";
+	string lang = "";
 
 // URI handling
 	if (options["uri"]:"" != "" && options["detected_index"]:nil != nil)
@@ -219,6 +220,7 @@
 	{
 	    Printerdb::loadFoomaticIfNeeded ();
 	    nick = options["nick"]:"";
+	    lang = options["language"]:"English";
 	    if (! haskey (Printerdb::foomatic[manufacturer, model]:$[], nick))
 	    {
 	        // command line error report, %1 is PPD file nick name
@@ -230,7 +232,12 @@
 	}
 	else
 	{
-	    nick = Printerdb::getAutoPpdFile (manufacturer, model);
+	    string ppd_filename
+		= Printerdb::getAutoPpdFile (manufacturer, model);
+	    nick = Printerdb::foomatic[manufacturer, model,
+		ppd_filename, "nickname"]:"";
+	    lang = Printerdb::foomatic[manufacturer, model, 
+		ppd_filename, "language"]:"";
 	}
 // create new PPD file if relevant information changed
 	if (recreate_ppd)
@@ -238,7 +245,8 @@
 	    string filename = Printerdb::getFileFromNickName (
 		manufacturer,
 		model,
-		nick);
+		nick,
+		lang);
 	    string ppd_file = (string)SCR::Read (.ppd.file.open,
 		[filename, SCR::Read (.target.tmpdir)]);
 
