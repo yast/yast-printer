@@ -597,7 +597,7 @@ void PPD::addAdditionalInfo () {
 		mi.label = mlabel;
 		updating_model = false;
             }
-	    if (modellabels[vendor].find(mlabel) != modellabels[vendor].end()
+	    if (modellabels[vendor].find(mlabel) == modellabels[vendor].end()
 		|| updating_model)
 	    {
 		mi.support = support;
