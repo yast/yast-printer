@@ -867,13 +867,13 @@ actually selected.
         {
             queue = Printerlib::getUriRemoteQueue (uri);
             hostname = Printerlib::getUriHost (uri);
-            workgroup = Printerlib::getUriWorkgroup (uri);
         }
         if (has_user_password)
         {
-            list l = Printerlib::getUriUsernamePass (uri);
+            list l = Printerlib::getUriUsernamePassWorkgroup (uri);
             user = l[0]:"";
             password = l[1]:"";
+	    workgroup = l[2]:"";
             uspas = `VSquash (`VBox (
                 // text entry label
                 `TextEntry (`id (`userent), _("&User"), user),
@@ -1133,13 +1133,13 @@ actually selected.
 		    || (checkUserName (user) && checkPassword (password))));
         uri = type + "://";
 
+	if (user != "" && workgroup != "")
+	    uri = uri + workgroup + "/";
 	if (password != "")
 	    uri = uri + (has_user_password ? user + ":" + password + "@" : "");
 	else if (user != "")
 	    uri = uri + (has_user_password ? user + "@" : "");
 
-        if (workgroup != "")
-            uri = uri + workgroup + "/";
         uri = uri + hostname;
         if (type == "ipp"
 	    && "printers/" != substring (queue, 0, 9)

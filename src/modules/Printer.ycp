@@ -42,6 +42,8 @@
     import "Summary";
     import "Stage";
     import "SuSEFirewall";
+    import "URL";
+
 
 
 
@@ -783,9 +785,26 @@ Install it now?"));
 		    e["uri"] = uri;
 		if (regexpmatch (e["uri"]:"", "^smb:\/\/.*"))
 		{
-		    e["uri"] = regexpsub (e["uri"]:"",
+		    uri = e["uri"]:"";
+		    y2milestone ("Read samba URI: %1", uri);
+		    map tokens = URL::Parse (uri);
+		    list<string> pth = splitstring (tokens["path"]:"", "/");
+		    pth = filter (string c, pth, {return c != "" && ! issubstring (c, "@");});
+y2internal ("P: %1", pth);
+		    if (size (pth) > 1)
+		    {
+			tokens["user"] = sformat ("%1/%2",
+			    tokens["host"]:"", tokens["user"]:"");
+			tokens["host"] = pth[0]:"";
+			pth[0] = "";
+			tokens["path"] = mergestring (pth, "/");
+		    }
+		    uri = URL::Build (tokens);
+		    uri = regexpsub (uri,
 			"^smb(:\/\/.*)$",
 			"samba\\1");
+		    y2milestone ("Updated samba URI: %1", uri);
+		    e["uri"] = uri;
 		}
 		e["changed"] = false;
 		e["valid"] = true;

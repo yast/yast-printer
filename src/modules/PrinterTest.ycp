@@ -462,8 +462,19 @@ press 'OK'.")),
 	    {
 		// TRANSLATORS: keep this short! Only translations in languages
 		// with encodings ISO-8859-[1|2|15] will be used.
+		// keep uppercase. Is used to replace the reall password
+		// on the testpage (security reasons)
+		string pass = _("PASSWORD");
+		// TRANSLATORS: keep this short! Only translations in languages
+		// with encodings ISO-8859-[1|2|15] will be used.
 		os = os + sformat ("----X-SECT3-L: (%1)\n", _("Printer URI:"));
 		config = printer["uri"]:"";
+		if (regexpmatch (uri, "^.+:.+@.+$"))
+		{
+		    config = regexpsub (config,
+			"^(.+):.+@(.+)$",
+			sformat ("\\1:%1@\\2", pass));
+		}
 	    }
 	    os = os + sformat ("----X-SECT3: (%1)\n", config);
 
