@@ -29,5 +29,38 @@
 
 // global functions
 
+    /**
+      * List all available queues (local and remote)
+      * @return a list of strings all available queues
+      */
+    global define list<string> GetAvailableQueues () ``{
+	list<string> ret = [];
+	list pc = SCR::Read (.etc.printcap);
+	foreach (`e, pc, ``{
+	    ret = add (ret, e["name"]:"");
+	    string printcap_part = e["saved", "printcap_part"]:"";
+	    list l = splitstring (printcap_part, "\n");
+	    l = maplist (`i, l, ``{
+		integer hash = findfirstof (i, "#");
+		if (hash != nil)
+		    i = substring (i, 0, hash);
+		if (substring (i, size (i)) == "\\")
+		    i = substring (i, 0, size (i) - 1);
+		return i;
+	    });
+	    printcap_part = mergestring (l, "");
+	    l = splitstring (printcap_part, ":");
+	    string names = l[0]:"";
+	    l = splitstring (names, "|");
+	    l = filter (`n, l, ``(n != "" && ! issubstring (n, " ")));
+	    foreach (`n, l, ``{
+		ret = add (ret, n);
+	    });
+	});
+	ret = toset (filter (string r, ret, ``(r != "")));
+	y2milestone ("Available queues for CUPS: %1", ret);
+	return ret;
+    }
+
 
 }

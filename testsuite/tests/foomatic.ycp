@@ -66,7 +66,6 @@
     ];
     TESTSUITE_INIT ([I_READ, I_WRITE, I_EXEC], 0);
     import "Pkg";
-    import "Printer";
     include "printer/misc.ycp";
     import "Mode";
     TESTSUITE_CLEAN ();
@@ -88,40 +87,40 @@
 
     DUMP ("========================================");
 
-    TEST (``(getFoomaticDefaultQueue ([$["name" : "queue1"], $["name" : "queue2"]])), [], 0);
-    TEST (``(getFoomaticDefaultQueue ([$["name" : "queue1"], $["name" : "normal"]])), [], 0);
-    TEST (``(getFoomaticDefaultQueue ([$["name" : "queue1"], $["name" : "normal3"]])), [], 0);
-    TEST (``(getFoomaticDefaultQueue ([$["name" : "queue1"], $["name" : "normal_gray"]])), [], 0);
-    TEST (``(getFoomaticDefaultQueue ([$["name" : "normal"], $["name" : "normal2"]])), [], 0);
-    TEST (``(getFoomaticDefaultQueue ([$["name" : "normal1"], $["name" : "normal"]])), [], 0);
+    TEST (``(Printerdb::getFoomaticDefaultQueue ([$["name" : "queue1"], $["name" : "queue2"]])), [], 0);
+    TEST (``(Printerdb::getFoomaticDefaultQueue ([$["name" : "queue1"], $["name" : "normal"]])), [], 0);
+    TEST (``(Printerdb::getFoomaticDefaultQueue ([$["name" : "queue1"], $["name" : "normal3"]])), [], 0);
+    TEST (``(Printerdb::getFoomaticDefaultQueue ([$["name" : "queue1"], $["name" : "normal_gray"]])), [], 0);
+    TEST (``(Printerdb::getFoomaticDefaultQueue ([$["name" : "normal"], $["name" : "normal2"]])), [], 0);
+    TEST (``(Printerdb::getFoomaticDefaultQueue ([$["name" : "normal1"], $["name" : "normal"]])), [], 0);
 
     DUMP ("========================================");
 
-    TEST (``(sortPpds ("EPSON", "Stylus Photo 810", ["P1 (recommended)", "P2"])), [READ, $[], $[]], 0);
-    TEST (``(sortPpds ("EPSON", "Stylus Photo 810", ["P1", "P2"])), [READ, $[], $[]], 0);
-    TEST (``(sortPpds ("EPSON", "Stylus Photo 810", ["P1", "P2 (recommended)"])), [READ, $[], $[]], 0);
+    TEST (``(Printerdb::sortPpds ("EPSON", "Stylus Photo 810", ["P1 (recommended)", "P2"])), [READ, $[], $[]], 0);
+    TEST (``(Printerdb::sortPpds ("EPSON", "Stylus Photo 810", ["P1", "P2"])), [READ, $[], $[]], 0);
+    TEST (``(Printerdb::sortPpds ("EPSON", "Stylus Photo 810", ["P1", "P2 (recommended)"])), [READ, $[], $[]], 0);
 
     DUMP ("========================================");
 
-    TEST (``(sortPpds ("EPSON", "Stylus Photo 810", ["XXgimpXX", "YYhpijsYY", "ZZpcl3ZZ", "QQcdj3QQ"])), [READ, $[], $[]], 0);
-    TEST (``(sortPpds ("EPSON", "Stylus Photo 810", ["XXgimpXX", "YYhpijsYY", "ZZpcl3ZZ (recommended)", "QQcdj3QQ"])), [READ, $[], $[]], 0);
-    TEST (``(sortPpds ("EPSON", "Stylus Photo 810", ["XXgimpXX", "YYhpijsYY (recommended)", "ZZpcl3ZZ", "QQcdj3QQ  (recommended)"])), [READ, $[], $[]], 0);
-    TEST (``(sortPpds ("EPSON", "Stylus Photo 810", ["XXgimpXX (recommended)", "YYhpijsYY (recommended)", "ZZpcl3ZZ (recommended)", "QQcdj3QQ (recommended)"])), [READ, $[], $[]], 0);
+    TEST (``(Printerdb::sortPpds ("EPSON", "Stylus Photo 810", ["XXgimpXX", "YYhpijsYY", "ZZpcl3ZZ", "QQcdj3QQ"])), [READ, $[], $[]], 0);
+    TEST (``(Printerdb::sortPpds ("EPSON", "Stylus Photo 810", ["XXgimpXX", "YYhpijsYY", "ZZpcl3ZZ (recommended)", "QQcdj3QQ"])), [READ, $[], $[]], 0);
+    TEST (``(Printerdb::sortPpds ("EPSON", "Stylus Photo 810", ["XXgimpXX", "YYhpijsYY (recommended)", "ZZpcl3ZZ", "QQcdj3QQ  (recommended)"])), [READ, $[], $[]], 0);
+    TEST (``(Printerdb::sortPpds ("EPSON", "Stylus Photo 810", ["XXgimpXX (recommended)", "YYhpijsYY (recommended)", "ZZpcl3ZZ (recommended)", "QQcdj3QQ (recommended)"])), [READ, $[], $[]], 0);
 
     DUMP ("========================================");
 
-    Printer::spooler = "cups";
+    Spooler::Set ("cups");
 
-    TEST (``(getAutoPpdFile ("EPSON", "Stylus Photo 810", ["P1 (recommended)", "P2"])), [READ, $[], $[]], 0);
-    TEST (``(getAutoPpdFile ("EPSON", "Stylus Photo 810", ["P1", "P2"])), [READ, $[], $[]], 0);
-    TEST (``(getAutoPpdFile ("EPSON", "Stylus Photo 810", ["P1", "P2 (recommended)"])), [READ, $[], $[]], 0);
+    TEST (``(Printerdb::getAutoPpdFile ("EPSON", "Stylus Photo 810", ["P1 (recommended)", "P2"])), [READ, $[], $[]], 0);
+    TEST (``(Printerdb::getAutoPpdFile ("EPSON", "Stylus Photo 810", ["P1", "P2"])), [READ, $[], $[]], 0);
+    TEST (``(Printerdb::getAutoPpdFile ("EPSON", "Stylus Photo 810", ["P1", "P2 (recommended)"])), [READ, $[], $[]], 0);
 
     DUMP ("========================================");
 
-    TEST (``(getAutoPpdFile ("EPSON", "Stylus Photo 810", ["XXgimpXX", "YYhpijsYY", "ZZpcl3ZZ", "QQcdj3QQ"])), [READ, $[], $[]], 0);
-    TEST (``(getAutoPpdFile ("EPSON", "Stylus Photo 810", ["XXgimpXX", "YYhpijsYY", "ZZpcl3ZZ (recommended)", "QQcdj3QQ"])), [READ, $[], $[]], 0);
-    TEST (``(getAutoPpdFile ("EPSON", "Stylus Photo 810", ["XXgimpXX", "YYhpijsYY (recommended)", "ZZpcl3ZZ", "QQcdj3QQ  (recommended)"])), [READ, $[], $[]], 0);
-    TEST (``(getAutoPpdFile ("EPSON", "Stylus Photo 810", ["XXgimpXX (recommended)", "YYhpijsYY (recommended)", "ZZpcl3ZZ (recommended)", "QQcdj3QQ (recommended)"])), [READ, $[], $[]], 0);
+    TEST (``(Printerdb::getAutoPpdFile ("EPSON", "Stylus Photo 810", ["XXgimpXX", "YYhpijsYY", "ZZpcl3ZZ", "QQcdj3QQ"])), [READ, $[], $[]], 0);
+    TEST (``(Printerdb::getAutoPpdFile ("EPSON", "Stylus Photo 810", ["XXgimpXX", "YYhpijsYY", "ZZpcl3ZZ (recommended)", "QQcdj3QQ"])), [READ, $[], $[]], 0);
+    TEST (``(Printerdb::getAutoPpdFile ("EPSON", "Stylus Photo 810", ["XXgimpXX", "YYhpijsYY (recommended)", "ZZpcl3ZZ", "QQcdj3QQ  (recommended)"])), [READ, $[], $[]], 0);
+    TEST (``(Printerdb::getAutoPpdFile ("EPSON", "Stylus Photo 810", ["XXgimpXX (recommended)", "YYhpijsYY (recommended)", "ZZpcl3ZZ (recommended)", "QQcdj3QQ (recommended)"])), [READ, $[], $[]], 0);
 
     DUMP ("========================================");
 

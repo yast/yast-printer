@@ -17,19 +17,19 @@
  */
 
 {
-    module "PrinterTest.ycp";
+    module "PrinterTest";
 
     textdomain "printer";
-    import "Printerdb";
-    import "Printer";
-    import "Printerlib";
-    import "Console";
-    import "Mode";
+
+    import "CUPS";
     import "Label";
+    import "Mode";
     import "Popup";
+    import "Printer";
+    import "Printerdb";
+    import "Printerlib";
     import "Report";
     import "Spooler";
-    import "CUPS";
 
 
 // local functions
@@ -202,6 +202,27 @@
     }
 
     /**
+     * Shows dialog box that allows user to stop printing.
+     * @param pr_command Command that was used to start printing.
+     * Showed in text field.
+     * @return boolean true if printing has to be stopped
+     */
+    define boolean OkOrStopPrinting (string pr_command) ``{
+	// message box with [OK] [Stop]
+	string text = sformat (_("The test page was sent to the printer using
+the command '%1'.
+Printing should start in a few seconds.
+
+If the printer is not producing the appropriate
+output, use the 'Stop!' button.
+
+When the whole page is printed, press
+'Printout finished'."), pr_command);
+	// push button
+	return Popup::AnyQuestion (Popup::NoHeadline (), text, _("Printout &finished"), Label::StopButton (), `focus_yes);
+    }
+
+    /**
       * Saves printer under some new name and tests it.
       * @param printer map of printer to test
       * @param testpage_type type of page.
@@ -217,7 +238,7 @@
 
 	printer = Printer::assignStates (printer, true);
 
-	loadFoomaticIfNeeded ();
+	Printerdb::loadFoomaticIfNeeded ();
 
 	if (Printer::getPrinterState(printer, Spooler::Get ()) == "void")
 	{

@@ -21,12 +21,19 @@
 
     textdomain "printer";
 
+    import "Label";
+
 // local variables
 
 
 
 
 // global variables
+
+    /**
+      * List of detected CUPS servers
+      */
+    global list(string) cups_servers = [];
 
     /**
       * Use CUPS-like USB devices names
@@ -134,6 +141,344 @@ END { if (!used) print \"ServerName %1\" }
 	}
 	SCR::Write (.cups.default_dest, default, "local");
 	return true;
+    }
+
+    /**
+      * start CUPS server and don't wait until initialization finishes
+      */
+    global define void StartDaemon () ``{
+        integer status = SCR::Execute (.target.bash, "/etc/init.d/cups status");
+        if (0 != status)
+        {
+            SCR::Execute (.target.bash_background, "/etc/init.d/cups start");
+        }
+    }
+
+    /**
+      * Reads CUPS server settings from /etc/cups/cupsd.conf file
+      */
+    global define void readCupsSettings () ``{
+	map out = SCR::Execute (.target.bash_output, "
+/bin/cp /etc/cups/cupsd.conf /etc/cups/cupsd.conf.y2
+echo \"<Location /printers>
+</Location>
+<Location /classes>
+</Location>
+<Location /admin>
+</Location>
+<Location />
+</Location>\" >>/etc/cups/cupsd.conf.y2
+
+/bin/awk '
+BEGIN {location = \"\";}
+/^Browsing/ {printf (\"Browsing %s\\n\", $2); next;}
+/^BrowseAddress/ {printf (\"BrowseAddress %s\\n\", $2); next;}
+/^Order/ {printf (\"%sOrder %s\\n\", location, $2); next;}
+/^<Location/ {location = $2; next;}
+/^<\\/Location/ {location = \"\"; next;}
+/^Allow From/ {printf (\"%sAllowFrom %s\\n\", location, $3); next;}
+/^Deny From/ {printf (\"%sDenyFrom %s\\n\", location, $3); next;}
+// {next;}
+' </etc/cups/cupsd.conf.y2");
+        string set = lookup (out, "stdout", "");
+        list lines = splitstring (set, "\n");
+        map settings = $[];
+        foreach (`l, lines, ``{
+            list parts = splitstring (l, " ");
+            string key = select (parts, 0, "");
+            string val = select (parts, 1, "");
+            string prefix = "";
+            map work = settings;
+            if (issubstring (key, ">"))
+            {
+                list tmp = splitstring (key, ">");
+                prefix = select (tmp, 0, "");
+                key = select (tmp, 1, "");
+            }
+            if (prefix != "")
+                work = lookup (settings, prefix, $[]);
+            if (key == "Browsing" || key == "Order")
+                work = add (work, key, val);
+            else if (key == "BrowseAddress" || key == "AllowFrom" || key == "DenyFrom")
+            {
+                list current = lookup (work, key, []);
+                current = add (current, val);
+                work = add (work, key, current);
+            }
+            if (prefix != "")
+                settings = add (settings, prefix, work);
+            else
+                settings = work;
+        });
+	y2milestone ("CUPS settings read: %1", settings);
+	CUPS::cups_server_settings = settings;
+    }
+
+    /**
+      * Writes CUPS server settings to /etc/cups/cupsd.conf file
+      */
+    global define void writeCupsSettings () ``{
+	if (CUPS::cups_server_settings == $[])
+	    readCupsSettings ();
+	map settings = CUPS::cups_server_settings;
+        string run = "function write_browsing(x){\n";
+        if (lookup (settings, "Browsing", "") != "")
+            run = run + sformat ("printf \"Browsing %1\\n\";\n", lookup (settings, "Browsing", ""));
+        run = run + "}\n\n";
+
+        run = run + "function write_browse_addr(x){\n";
+        foreach (`e, lookup (settings, "BrowseAddress", []), ``{
+            run = run + sformat ("printf \"BrowseAddress %1\\n\";\n", e);
+        });
+        run = run + "}\n\n";
+
+        run = run + "function write_deny(x){\n";
+        foreach (`e, ["/", "/admin", "/printers", "/classes"], ``{
+            map set2 = lookup (settings, e, $[]);
+            list set = lookup (set2, "DenyFrom", []);
+            if (size (set) > 0)
+            {
+                run = run + sformat ("if (x == \"%1>\") {\n", e);
+                foreach (`s, set, ``{
+                    run = run + sformat ("printf \"Deny From %1\\n\"\n", s);
+                });
+                run = run + "}\n";
+            }
+        });
+        run = run + "}\n\n";
+
+        run = run + "function write_allow(x){\n";
+        foreach (`e, ["/", "/admin", "/printers", "/classes"], ``{
+            map set2 = lookup (settings, e, $[]);
+            list set = lookup (set2, "AllowFrom", []);
+            if (size (set) > 0)
+            {
+                run = run + sformat ("if (x == \"%1>\") {\n", e);
+                foreach (`s, set, ``{
+                    run = run + sformat ("printf \"Allow From %1\\n\"\n", s);
+                });
+                run = run + "}\n";
+            }
+        });
+        run = run + "}\n\n";
+
+        run = run + "function write_order(x){\n";
+        foreach (`e, ["/", "/admin", "/printers", "/classes"], ``{
+            map set2 = lookup (settings, e, $[]);
+            string  s = lookup (set2, "Order", "");
+            if (s != "")
+            {
+                run = run + sformat ("if (x == \"%1>\") {\n", e);
+                run = run + sformat ("printf \"Order %1\\n\"\n", s);
+                run = run + "}\n";
+            }
+        });
+        run = run + "}\n\n";
+
+
+        run = run + "BEGIN {
+    label = \"\"; browsing = 0; browseaddress = 0; order = false; allowfrom = false; denyfrom = false; 
+open = 0;
+done[\"\"] = 1;\n";
+
+	foreach (`e, ["/", "/admin", "/printers", "/classes"], ``{
+	    if (lookup (settings, e, $[]) == $[])
+		run = run + sformat ("done[\"%1>\"] = 1;\n", e);
+	});
+
+	run = run + "}\n";
+
+	run = run + "/^Browsing/ {
+    if (browsing == 0) {write_browsing(label); browsing = 1;} next;
+}\n";
+
+        run = run + "/^BrowseAddress/ {
+    if (browseaddress == 0) {write_browse_addr(label); browseaddress = 1;} next;
+}\n";
+
+        run = run + "/^<Location/ {
+    label = $2;
+    if (! done[$2] != 1) {next;}
+    open = 1;
+    if (browsing == 0) {write_browsing(\"\");} 
+    if (browseaddress == 0) {write_browse_addr(\"\");}
+    browsing = 1;
+    browseaddress = 1;
+    print $0
+    deny = 0;
+    allow = 0;
+    order = 0;
+    next;
+}\n";
+
+        run = run + "/^<\\/Location/ {
+    if (! done[label] != 1) {next;}
+    done[label] = 1;
+    if (open == 0) {next;}
+    if (deny == 0) {write_deny(label);}
+    if (allow == 0) {write_allow(label);}
+    if (order == 0) {write_order(label);}
+    print $0;
+    label = \"\";
+    next;
+}\n";
+
+        run = run + "/^Order/ {
+    if (order == 0 ) {write_order(label);}
+    order = 1;
+    next;
+}\n";
+
+        run = run + "/^Allow From/ {
+    if (allow == 0) {write_allow(label);}
+    allow = 1;
+    next;
+}\n";
+
+        run = run + "/^Deny From/ {
+    if (deny == 0) {write_deny(label);}
+    deny = 1;
+    next;
+}\n";
+
+        run = run + "// {print $0; next;}
+#// {next;}
+
+END {
+
+}\n";
+	run = sformat("/bin/awk '%1' </etc/cups/cupsd.conf.y2 >/etc/cups/cupsd.conf", run);
+	map out = SCR::Execute (.target.bash_output, run);
+    }
+
+    /**
+      * Wait until listening to CUPS IPP broadcasts finishes
+      */
+    global define void WaitForCupsListeiningFinish () ``{
+	string pid = nil;
+	if (SCR::Read (.target.size, "/var/run/listen_remote_ipp.pid") > 0)
+	{
+	    pid = SCR::Read (.target.string, "/var/run/listen_remote_ipp.pid");
+	}
+	boolean aborted = false;
+	if (pid != nil)
+	{
+	    y2milestone ("Scanning for CUPS server in progress");
+	    SCR::Execute (.target.bash, sformat ("kill -1 %1", pid));
+	    boolean runs = true;
+	    boolean displayed = false;
+	    integer counter = 0;
+	    while (runs)
+	    {
+		if (counter == 10)
+		{
+		    displayed = true;
+		    UI::OpenDialog (`VBox (`Label (
+			// label
+			_("Detecting CUPS network server...")),
+			`PushButton (`id (`abort), `opt (`key_F9),
+			    Label::AbortButton ())));
+		}
+		sleep (100);
+		runs = SCR::Read (.target.size,
+		    "/var/run/listen_remote_ipp.pid") > 0;
+		counter = counter + 1;
+		if (displayed)
+		{
+		    any ui = UI::PollInput ();
+		    if (ui == `abort)
+		    {
+			SCR::Execute (.target.bash,
+			    sformat ("kill -15 %1", pid));
+			runs = false;
+			aborted = true;
+		    }
+		}
+	    }
+	    if (displayed)
+		UI::CloseDialog ();
+	}
+	else // use results of previous detection
+	{
+	    return;
+	}
+	cups_servers = [];
+	if (SCR::Read (.target.size,
+	    "/var/lib/YaST2/cups_network_server_name") != -1)
+	{
+	    if (! aborted)
+	    {
+	        y2milestone ("File with CUPS servers found");
+		string tmp = SCR::Read (.target.string,
+		    "/var/lib/YaST2/cups_network_server_name");
+		cups_servers = splitstring (tmp, "\n");
+		cups_servers = toset (cups_servers);
+		cups_servers = filter (`s, cups_servers, ``(
+		    s != "" && s != nil));
+	     }
+	}
+	// cleanup after testing of remote CUPS server existence
+	SCR::Execute (.target.bash, "test -f /var/lib/YaST2/cups_network_server_name && /bin/rm /var/lib/YaST2/cups_network_server_name");
+	SCR::Execute (.target.bash, "test -f /var/run/listen_remote_ipp.pid && /bin/rm /var/run/listen_remote_ipp.pid");
+
+    }
+
+    /**
+      * Get hosts available on local network via listening to IPP broadcasts
+      * @return list Sorted list of hosts
+      */
+    global define list listenCupsServers () ``{
+	integer status = SCR::Execute (.target.bash, "/etc/init.d/cups status");
+	if (0 == status)
+	    SCR::Execute (.target.bash, "/etc/init.d/cups stop");
+
+	SCR::Execute(.target.bash_background,
+	    "/usr/lib/YaST2/bin/listen_remote_ipp 30");
+	sleep (1000);
+	boolean abort_server = WaitForCupsListeiningFinish ();
+
+	parseFoundCupsServers ();
+	if (0 == status)
+	    SCR::Execute (.target.bash_background, "/etc/init.d/cups start");
+	return cups_servers;
+    }
+
+    /**
+      * Propose Client only with a CUPS server
+      * listen_remote_ipp must have neen started befor this function is called
+      */
+    global define void ProposeClientOnly () ``{
+	// no local printer found
+	y2milestone ("No local printer found, trying IPP servers");
+	WaitForCupsListeiningFinish ();
+	if (size (cups_servers) > 0)
+	{
+	    y2milestone ("Found servers: %1", cups_servers);
+	    string server = cups_servers[0]:"";
+	    cups_installation = `client;
+	    server_hostname = server;
+	}
+	else
+	{
+	    cups_installation = `server;
+	}
+    }
+
+
+
+    /**
+      * List all available queues (local and remote)
+      * @return a list of strings all available queues
+      */
+    global define list<string> GetAvailableQueues () ``{
+	list<string> ret = [];
+	string hostname = "localhost";
+	if (CUPS::InstallationType () == `client && CUPS::server_hostname != "")
+		hostname = CUPS::server_hostname;
+	ret = SCR::Read (.cups.remote, hostname);
+	ret = toset (ret);
+	y2milestone ("Available queues for CUPS: %1", ret);
+	return ret;
     }
 
 
