@@ -353,13 +353,14 @@ ECHO_PID=$!
     };
     /**
       * Test remote queue accessibility if username and password needed
+      * @param wg string workgroup for samba test
       * @param hname string hostname of remote host
       * @param rname string name of remote queue
       * @param user string username to access remote queue
       * @param pass string password to access remote queue
       * @param type string "samba" or "novell"
       */
-    global define void testRemoteUP (string hname, string rname, string user, string pass, string type) ``{
+    global define void testRemoteUP (string wg, string hname, string rname, string user, string pass, string type) ``{
 	if (Mode::config)
 	{
 	    DisplayUnavailableAIPopup ();
@@ -368,7 +369,7 @@ ECHO_PID=$!
 	UI::OpenDialog (`opt (`decorated), `Label (sformat (textTestRemotePrinter (false), hname)));
 	map test_return = $[];
 	if ("samba" == type)
-	    test_return = SCR::Execute (.target.bash_output, sformat ("/usr/lib/YaST2/bin/test_remote_smb \"%1\" \"%2\" \"%3\" \"%4\" 5", hname, rname, user, pass));
+	    test_return = SCR::Execute (.target.bash_output, sformat ("/usr/lib/YaST2/bin/test_remote_smb \"%1\" \"%2\" \"%3\" \"%4\" \"%5\" 5", wg, hname, rname, user, pass));
 	else if ("novell" == type)
 	    test_return = SCR::Execute (.target.bash_output, sformat ("/usr/lib/YaST2/bin/test_remote_novell \"%1\" \"%2\" \"%3\" \"%4\" 5", hname, rname, user, pass));
 	integer tst = lookup (test_return, "exit", 0);
@@ -556,10 +557,10 @@ Install them now?"));
     global define string getUriType (string uri) ``{
 	if ("" == uri || nil == uri)
 	    return "";
-	string s = select (splitstring (uri, ":"), 0, "");
-	if ("http" == s)
-	    s = "ipp";
-	return s;
+	string ss = select (splitstring (uri, ":"), 0, "");
+	if ("http" == ss)
+	    ss = "ipp";
+	return ss;
     }
     /**
      * Get printer device from its uri.
@@ -603,7 +604,13 @@ Install them now?"));
         i = findfirstof (s, "/");
         if (nil == i)
             return s;
-        return substring (s, i + 1);
+	s = substring (s, i + 1);
+	i = findfirstof (s, "/");
+	if (getUriType (uri) == "samba" && i != nil)
+	{
+	    s = substring (s, i + 1);
+	}
+        return s;
     }
     /**
       * Get port number from URI.
@@ -683,6 +690,12 @@ Install them now?"));
 	integer i = findfirstof (dev, "@");
 	if (nil != i)
 	    dev = substring (dev, i + 1);
+	if (getUriType (uri) == "samba")
+	{
+	    list uri_list = splitstring (dev, "/");
+	    if (size (uri_list) >= 3)
+		return uri_list[1]:"";
+	}
 	i = findfirstof (dev, "/");
 	if (nil != i)
 	    dev = substring (dev, 0, i);
@@ -692,6 +705,29 @@ Install them now?"));
 
 	return dev;
     }
+
+    global define string getUriWorkgroup (string uri) ``{
+	if (getUriType (uri) != "samba")
+	    return "";
+        string dev = getUriDevice (uri);
+        if ("" == dev)
+            return "";
+        dev = substring (dev, 1);
+        // is there a user@pass?
+        integer i = findfirstof (dev, "@");
+        if (nil != i)
+            dev = substring (dev, i + 1);
+        if (getUriType (uri) == "samba")
+	{
+	    list uri_list = splitstring (dev, "/");
+            if (size (uri_list) >= 3)
+                return uri_list[0]:"";
+
+	}
+	return "";
+
+    }
+
     /**
      * Get uri user name and password. Applies to samba, novell.
      * @param uri printer uri
