@@ -900,7 +900,7 @@ y2error ("CSS: %1", CUPS::cups_server_settings);
 	symbol ret = nil;
 	while (true)
 	{
-	    ret = UI::UserInput ();
+	    ret = (symbol)UI::UserInput ();
             if (ret == `cancel)
                 ret = `abort;
 	    if (`abort == ret)
@@ -912,7 +912,7 @@ y2error ("CSS: %1", CUPS::cups_server_settings);
 		break;
 	    else if (`change == ret)
 	    {
-		ret = UI::QueryWidget (`id (`loc), `CurrentButton);
+		ret = (symbol)UI::QueryWidget (`id (`loc), `CurrentButton);
 		break;
 	    }
 	    else if (`add == ret)
@@ -921,8 +921,8 @@ y2error ("CSS: %1", CUPS::cups_server_settings);
 		UI::OpenDialog (ipAddrPopup (false, _("Enter &IP address"), "", nil));
 		symbol r = nil;
 		while (nil == r)
-		    r = UI::UserInput ();
-		string ad = UI::QueryWidget (`id (`ad), `Value);
+		    r = (symbol)UI::UserInput ();
+		string ad = (string)UI::QueryWidget (`id (`ad), `Value);
 		UI::CloseDialog ();
 		if (r != `ok)
 		    continue;
@@ -942,11 +942,12 @@ y2error ("CSS: %1", CUPS::cups_server_settings);
 		if (UI::QueryWidget (`id (`addr), `CurrentItem) == nil)
 		    continue;
 		// popup request
-		UI::OpenDialog (ipAddrPopup (false, _("Enter &IP address"), UI::QueryWidget (`id (`addr), `CurrentItem), nil));
+		UI::OpenDialog (ipAddrPopup (false, _("Enter &IP address"),
+		    (string)UI::QueryWidget (`id (`addr), `CurrentItem), nil));
                 symbol r = nil;
                 while (nil == r)
-                    r = UI::UserInput ();
-                string ad = UI::QueryWidget (`id (`ad), `Value);
+                    r = (symbol)UI::UserInput ();
+                string ad = (string)UI::QueryWidget (`id (`ad), `Value);
                 UI::CloseDialog ();
                 if (r != `ok)
                     continue;
@@ -965,8 +966,11 @@ y2error ("CSS: %1", CUPS::cups_server_settings);
 	    }
 	}
 	if (ret == `next)
-	    CUPS::cups_server_settings = add(Printer::cups_server_settings, "Browsing", UI::QueryWidget (`id (`browsing), `CurrentButton) == `on ? "On" : "Off");
-	    CUPS::cups_server_settings = add(Printer::cups_server_settings, "BrowseAddress", addresses);
+	    CUPS::cups_server_settings["Browsing"]
+		= UI::QueryWidget (`id (`browsing), `CurrentButton) == `on
+		    ? "On"
+		    : "Off";
+	    CUPS::cups_server_settings["BrowseAddress"] = addresses;
 	return ret;
     }
 }

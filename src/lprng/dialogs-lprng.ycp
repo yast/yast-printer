@@ -18,6 +18,7 @@
     import "Popup";
     import "Printer";
     import "Wizard";
+    import "PrinterTest";
 
     include "printer/helps.ycp";
     include "printer/misc.ycp";
@@ -118,16 +119,20 @@
                 ret = `abort;
 	    if (`test == ret || `next == ret)
 	    {
-		print_header = UI::QueryWidget (`id (`printheader_cb), `Value) ? "" : "n";
-		pages = UI::QueryWidget (`id (`numberpages_rb), `CurrentButton);
+		print_header
+		    = (boolean)UI::QueryWidget (`id (`printheader_cb), `Value)
+			? ""
+			: "n";
+		pages = (string)
+		    UI::QueryWidget (`id (`numberpages_rb), `CurrentButton);
 		feature = pages + print_header;
 		conf = union (conf, $[ "encoding" : UI::QueryWidget (`id (`encoding_cbox), `Value), //FIXME: validate encoding
 			"feature" : feature, ]);
-		ascii = UI::QueryWidget (`id (`ascii), `Value);
+		ascii = (boolean)UI::QueryWidget (`id (`ascii), `Value);
 		if (`test == ret)
 		{
 		    Printer::printer = add (add (Printer::printer, "conf", conf), "ascii", ascii);
-		    testPrinter (Printer::printer, `ask);
+		    PrinterTest::testPrinter (Printer::printer, `ask);
 		}
 	    }
 	    if (`abort == ret || `cancel == ret)
@@ -140,7 +145,7 @@
 	{
 	    Printer::printer = add (add (Printer::printer, "conf", conf), "ascii", ascii);
 	}
-	return ret;
+	return (symbol)ret;
     }
 
 }

@@ -26,6 +26,14 @@
     include "printer/dialogs.ycp";
     include "wizard/sequencer.ycp";
 
+// pre-declare sequences
+
+// FIXME uncomment for new interpreter
+#    global define symbol MainSequence();
+#    global define symbol AddPrinterSubSequence ();
+#    global define symbol EditPrinterSequence ();
+#    global define symbol AddPrinterSequence ();
+
     /**
       * Get map of aliases for wizard sequencer.
       * @return aliases
@@ -101,7 +109,6 @@
 	    "users" :		``(runUsersDialog ()),
 	    "state" :		``(runStateDialog ()),
 	    "edit" :		``(runEditDialog ()),
-	    "single" :		``(runSinglePrinterDialog ()),
 	    "redetect" :	[ ``(runProbeDialog ()), true ],
 	    "storeprinter" :	[ ``(storePrinter ()) , true ],
 
@@ -484,7 +491,7 @@
       */
     global define symbol PrinterAutoSequence() ``{
 	Wizard::CreateDialog();
-        Wizard::SetContentsButtons(caption, `VBox (), "",
+        Wizard::SetContentsButtons("", `VBox (), "",
             Label::BackButton(), Label::NextButton());
 	symbol ret = DetectedSequence();
 	UI::CloseDialog();
@@ -529,7 +536,7 @@
 	];
 
 	Wizard::CreateDialog();
-	any ret = WizardSequencer(aliases, sequence);
+	symbol ret = WizardSequencer(aliases, sequence);
 
 	UI::CloseDialog();
 	return ret;
