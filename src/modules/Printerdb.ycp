@@ -240,8 +240,9 @@ of printers.
             preferred = order["__default__"]:[];
         y2debug ("Order preferred list: %1", preferred);
 
-        map recom = $[];
-        map other = $[];
+        map<string,list<string> > recom = $[];
+        map<string,list<string> > other = $[];
+	map<string,list<string> > vend = $[];
 	map<string,list<string> > downrec = $[];
 	map<string,list<string> > downoth = $[];
 	loadFoomaticIfNeeded ();
@@ -273,6 +274,11 @@ of printers.
                         downoth[i] = add (downoth[i]:[], k);
                     }
 		  }
+		  else if (issubstring (v["filename"]:"",
+		    "/usr/share/cups/model/manufacturer-PPDs"))
+		  {
+			vend[i] = add (vend[i]:[], k);
+		  }
 		  else
 		  {
                     if (issubstring (k, "(recommended)"))
@@ -302,6 +308,11 @@ of printers.
                     downoth["other"] = add (downoth["other"]:[], k);
                 }
 	      }
+	      else if (issubstring (v["filename"]:"",
+		"/usr/share/cups/model/manufacturer-PPDs"))
+	      {
+		    vend["other"] = add (vend["other"]:[], k);
+	      }
 	      else
 	      {
                 if (issubstring (k, "(recommended)"))
@@ -320,6 +331,7 @@ of printers.
 
         y2debug ("Recom: %1, other: %2", recom, other);
 	y2debug ("Downloaded: Recom: %1, other: %2", downrec, downoth);
+	y2debug ("Provided by vendor: %1", vend);
 
         foreach (string i, preferred, ``{
             result = (list<string>)merge (result, downrec[i]:[]);
@@ -331,6 +343,10 @@ of printers.
         });
         result = (list<string>)merge (result, downoth["other"]:[]);
 
+        foreach (string i, preferred, ``{
+            result = (list<string>)merge (result, vend[i]:[]);
+        });
+        result = (list<string>)merge (result, vend["other"]:[]);
 
         foreach (string i, preferred, ``{
             result = (list<string>)merge (result, recom[i]:[]);
