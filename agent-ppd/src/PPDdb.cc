@@ -999,8 +999,6 @@ bool PPD::process_file(const char *filename, PPDInfo *newinfo) {
             else if((start=strstr(pnp_id,"MFG:"))) start+=4;
             else if((start=strstr(pnp_id,"MAKE:"))) start+=5;
 
-y2error ("S1: %s", start);
-
             if(start) {
 		end = strchr(start,';');
                 size = end == NULL
@@ -1015,9 +1013,6 @@ y2error ("S1: %s", start);
             else if((start=strstr(pnp_id,"MDL:"))) start+=4;
             else if((start=strstr(pnp_id,"Model:"))) start+=6;
 
-
-y2error ("S2: %s", start);
-
             if(start) {
 	 	end=strchr(start,';');
                 size = end == NULL
@@ -1026,7 +1021,6 @@ y2error ("S2: %s", start);
                 strncpy(device_id,start,size);
                 y2debug("device_id: _%s_", device_id);
             }
-y2error ("ID: %s:%s", vendor_id, device_id);
 
 	    pair<string,string> id = pair<string,string>(vendor_id, device_id);
 	    device_ids.insert (id);
@@ -1036,7 +1030,7 @@ y2error ("ID: %s:%s", vendor_id, device_id);
         }
 
         /* Got all information */
-// test removed because of multiple *Product entries
+// test removed because of multiple *Product or *1284DeviceId entries
 //        if(ready>7) break;
     }
 
@@ -1715,7 +1709,7 @@ bool PPD::cleanupLists () {
 		if (it4 == ppdfiles.end())
 		{ // no more existing file
 		    y2debug ("Erasing file %s", driver_name.c_str());
-		    (*it2).second.drivers.erase (driver_name);
+		    (*it2).second.drivers.erase (filename);
 		}
 		else if (it4->second.dir_newer || it4->second.file_newer)
 		{ // parent dir changed or file changed,
