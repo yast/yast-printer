@@ -9,7 +9,7 @@ INCLUDES = -I$(includedir)
 noinst_PROGRAMS = dbbuild
 dbbuild_SOURCES = dbbuild.cc
 
-dbbuild_LDADD = -lscr -ly2 -lycp
+dbbuild_LDADD = -lscr -ly2 -lycp -lz -lcups
 dbbuild_LDFLAGS = -L$(libdir)	\
 	-Xlinker --whole-archive	\
 	$(plugindir)/libpy2stdio.la	\
