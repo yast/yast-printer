@@ -33,6 +33,18 @@
      */
     integer paper_size = -1;
     /**
+      * true id Pkg::target_init was already called
+      */
+    boolean taregt_inited = false;
+
+    global define void initTarget () ``{
+	if (! taregt_inited)
+	{
+	    Pkg::TargetInit ("/", false);
+	    taregt_inited = true;
+	}
+    };
+    /**
      * Returns haxadecimal value of input number
      * @param i number to be converted
      * @return string number
@@ -433,7 +445,7 @@
      *  256 is added if the instalation doesn't seem to be complete
      */
     global define integer getSpoolSystem () ``{
-	Pkg::TargetInit ("/", false);
+	initTarget ();
 	// first try if some of the systems exists.
 	boolean cups_exists = Pkg::IsProvided ("cups-client");
 	// for lpd we need to check the file because

@@ -1,7 +1,12 @@
+Log	Pkg::`IsProvided (plp): false
+Log	Pkg::`IsProvided (lprold): false
+Log	Pkg::`IsProvided (lprng): false
+Log	Pkg::`IsProvided (cups): false
 Read	.init.scripts.exists "lpd" true
 Read	.init.scripts.exists "lpd" true
 Read	.init.scripts.runlevel "lpd" $[]
 Read	.init.scripts.comment "lpd" $[]
+Log	Pkg::`IsProvided (cups-client): false
 Execute	.target.bash_output "/usr/bin/awk '/^ServerName/ { print $2 }' /etc/cups/client.conf" $["exit":0, "srderr":"", "stdout":""]
 Execute	.target.bash_output "\n/bin/cp /etc/cups/cupsd.conf /etc/cups/cupsd.conf.y2\necho \"<Location /printers>\n</Location>\n<Location /classes>\n</Location>\n<Location /admin>\n</Location>\n<Location />\n</Location>\" >>/etc/cups/cupsd.conf.y2\n\n/bin/awk '\nBEGIN {location = \"\";}\n/^Browsing/ {printf (\"Browsing %s\\n\", $2); next;}\n/^BrowseAddress/ {printf (\"BrowseAddress %s\\n\", $2); next;}\n/^Order/ {printf (\"%sOrder %s\\n\", location, $2); next;}\n/^<Location/ {location = $2; next;}\n/^<\\/Location/ {location = \"\"; next;}\n/^Allow From/ {printf (\"%sAllowFrom %s\\n\", location, $3); next;}\n/^Deny From/ {printf (\"%sDenyFrom %s\\n\", location, $3); next;}\n// {next;}\n' </etc/cups/cupsd.conf.y2" $["exit":0, "srderr":"", "stdout":""]
 Execute	.target.bash_output "/bin/awk 'function write_browsing(x){\n}\n\nfunction write_browse_addr(x){\n}\n\nfunction write_deny(x){\n}\n\nfunction write_allow(x){\n}\n\nfunction write_order(x){\n}\n\nBEGIN {\n    label = \"\"; browsing = 0; browseaddress = 0; order = false; allowfrom = false; denyfrom = false; \nopen = 0;\ndone[\"\"] = 1;\ndone[\"/>\"] = 1;\ndone[\"/admin>\"] = 1;\ndone[\"/printers>\"] = 1;\ndone[\"/classes>\"] = 1;\n}\n/^Browsing/ {\n    if (browsing == 0) {write_browsing(label); browsing = 1;} next;\n}\n/^BrowseAddress/ {\n    if (browseaddress == 0) {write_browse_addr(label); browseaddress = 1;} next;\n}\n/^<Location/ {\n    label = $2;\n    if (! done[$2] != 1) {next;}\n    open = 1;\n    if (browsing == 0) {write_browsing(\"\");} \n    if (browseaddress == 0) {write_browse_addr(\"\");}\n    browsing = 1;\n    browseaddress = 1;\n    print $0\n    deny = 0;\n    allow = 0;\n    order = 0;\n    next;\n}\n/^<\\/Location/ {\n    if (! done[label] != 1) {next;}\n    done[label] = 1;\n    if (open == 0) {next;}\n    if (deny == 0) {write_deny(label);}\n    if (allow == 0) {write_allow(label);}\n    if (order == 0) {write_order(label);}\n    print $0;\n    label = \"\";\n    next;\n}\n/^Order/ {\n    if (order == 0 ) {write_order(label);}\n    order = 1;\n    next;\n}\n/^Allow From/ {\n    if (allow == 0) {write_allow(label);}\n    allow = 1;\n    next;\n}\n/^Deny From/ {\n    if (deny == 0) {write_deny(label);}\n    deny = 1;\n    next;\n}\n// {print $0; next;}\n#// {next;}\n\nEND {\n\n}\n' </etc/cups/cupsd.conf.y2 >/etc/cups/cupsd.conf" $["exit":0, "srderr":"", "stdout":""]
@@ -16,12 +21,20 @@ Execute	.target.bash "/usr/sbin/rccups reload" 0
 Write	.sysconfig.printer.DEFAULT_PRINTER "none" true
 Write	.sysconfig.printer nil true
 Write	.cups.default_dest "" true
+Log	Pkg::`IsProvided (plp): false
+Log	Pkg::`IsProvided (lprold): false
+Log	Pkg::`IsProvided (lprng): false
+Log	Pkg::`IsProvided (cups): false
 Read	.init.scripts.exists "cups" true
 Read	.init.scripts.exists "cups" true
 Read	.init.scripts.runlevel "cups" $[]
 Read	.init.scripts.comment "cups" $[]
 Return	true
 Dump	====================================================
+Log	Pkg::`IsProvided (plp): false
+Log	Pkg::`IsProvided (lprold): false
+Log	Pkg::`IsProvided (lprng): false
+Log	Pkg::`IsProvided (cups): false
 Read	.init.scripts.exists "lpd" true
 Read	.init.scripts.exists "lpd" true
 Read	.init.scripts.runlevel "lpd" $[]
