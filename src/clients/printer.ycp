@@ -429,6 +429,90 @@
 	return false;
     }
 
+    /**
+     * Print manufacturers in the database
+     * @param options a list of parameters passed as args
+     * @return boolean true if saving is to be performed
+     */
+    global define boolean PrinterManufacturersHandler (map options) ``{
+	Printerdb::loadFoomaticIfNeeded ();
+	CommandLine::Print (_("Known manfacturers:"));
+	foreach (string k, map v, Printerdb::foomatic, ``{
+	    CommandLine::Print (v[`label]:k);
+	});
+	return false;
+    }
+
+    /**
+     * Print models in the database of the specified manufacturer
+     * @param options a list of parameters passed as args
+     * @return boolean true if saving is to be performed
+     */
+    global define boolean PrinterModelsHandler (map options) ``{
+	Printerdb::loadFoomaticIfNeeded ();
+	if (! haskey (options, "manufacturer"))
+	{
+	    CommandLine::Print (_("Manufacturer not specified."));
+	    return false;
+	}
+	string manufacturer = (string)SCR::Read (.ppd.db.vendorname,
+	    options["manufacturer"]:"");
+	CommandLine::Print (_("Known models"));
+	foreach (string k, map v,
+	    filter (any k, any v, Printerdb::foomatic[manufacturer]:$[],
+	    ``(
+		is (k, string)
+	    )),
+	``{
+	    CommandLine::Print (v[`label]:k);
+	});
+	return false;
+    }
+
+    /**
+     * Print nicknames in the database of specified manuf/model
+     * @param options a list of parameters passed as args
+     * @return boolean true if saving is to be performed
+     */
+    global define boolean PrinterNicknamesHandler (map options) ``{
+	Printerdb::loadFoomaticIfNeeded ();
+	if (! haskey (options, "manufacturer"))
+	{
+	    CommandLine::Print (_("Manufacturer not specified."));
+	    return false;
+	}
+	string manufacturer = (string)SCR::Read (.ppd.db.vendorname,
+	    options["manufacturer"]:"");
+	if (!haskey (options, "model"))
+	{
+	    CommandLine::Print (_("Model not specified."));
+	    return false;
+	}
+	string model = (string)SCR::Read (.ppd.db.modelname,
+	    [manufacturer, options["model"]:""]);
+	CommandLine::Print (_("Known nick names"));
+	foreach (string k, map v,
+	    filter (any k, any v,
+		Printerdb::foomatic[manufacturer, model]:$[],
+	    ``(
+		is (k, string)
+	    )),
+	``{
+	    CommandLine::Print (v[`label]:k);
+	});
+	return false;
+    }
+
+    /**
+     * Print PPD options of the specified queue
+     * @param options a list of parameters passed as args
+     * @return boolean true if saving is to be performed
+     */
+    global define boolean PrinterListPpdOptionsHandler (map options) ``{
+	// TODO implement
+	return false;
+    }
+
     /* the command line description map */
     map cmdline = $[
 	"id"		: "printer",
@@ -482,6 +566,26 @@
 		"handler"	: ``(PrinterTestHandler ()),
 		// command line help text for the test action
 		"help"		: _("Print test page"),
+	    ],
+	    "list_manufacturers": $[
+		"handler"	: ``(PrinterManufacturersHandler ()),
+		// command line help text for the test action
+		"help"		: _("List known manufacturers"),
+	    ],
+	    "list_models"	: $[
+		"handler"	: ``(PrinterModelsHandler ()),
+		// command line help text for the test action
+		"help"		: _("List known models of specified manufacturer"),
+	    ],
+	    "list_nicknames": $[
+		"handler"	: ``(PrinterNicknamesHandler ()),
+		// command line help text for the test action
+		"help"		: _("List known nicknames for specified model of specified manufacturers"),
+	    ],
+	    "list_ppdoptions": $[
+		"handler"	: ``(PrinterListPpdOptionsHandler ()),
+		// command line help text for the test action
+		"help"		: _("List options of PPD file of specified queue"),
 	    ],
 	],
 	"options"	: $[
@@ -617,6 +721,10 @@
 					"server", "default_queue"
 				  ],
 	    "test"		: [ "queue", "testpage_type" ],
+	    "list_manufacturers": [],
+	    "list_models"	: [ "manufacturer" ],
+	    "list_nicknames"	: [ "manufacturer", "model" ],
+	    "list_ppdoptions"   : [ "queue" ],
 	]
     ];
 
