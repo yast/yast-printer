@@ -41,6 +41,7 @@
 
     boolean are_drivers_installed = nil;
 
+    global map<string,boolean> available_packages = $[];
 
     /**
      * Printer's name mustn't be the same as a name of one of the files
@@ -98,6 +99,16 @@ This usually takes one or two minutes")),
       * @return term RadioButtonGroup widget
       */
     global define term getSpoolerItems (string spooler, boolean none) ``{
+	boolean lprng_available = true;
+	if (haskey (available_packages,"lprng"))
+	{
+	    lprng_available = available_packages["lprng"]:false;
+	}
+	else
+	{
+	    lprng_available = Package::Available ("lprng");
+	    available_packages["lprng"] = lprng_available;
+	}
 	return `RadioButtonGroup (
 	    `id (`spooler),
 	    `HBox (`HSpacing (1), `VBox (
@@ -113,12 +124,14 @@ This usually takes one or two minutes")),
 		    // radiobutton
 		    _("CUPS &client-only installation"),
 		    spooler == "cups-client"),
-		`VSpacing (0.5),
-		`RadioButton (`id (`lprng),
-		    `opt (`hstretch, `notify),
-		    // radiobutton
-		    _("&LPRng"),
-		    spooler == "lprng"),
+		lprng_available ? `VSpacing (0.5) : `VSpacing (0),
+		lprng_available
+		    ? `RadioButton (`id (`lprng),
+			`opt (`hstretch, `notify),
+			// radiobutton
+			_("&LPRng"),
+			spooler == "lprng")
+		    :`VSpacing (0),
 		none ? `VSpacing (0.5) : `VSpacing (0),
 		none ? `RadioButton (`id (`none),
 		    `opt (`hstretch, `notify),
@@ -359,6 +372,9 @@ Install them now?"));
 	    packages = ["lpdfilter", "filters", "cups-drivers",
 		"foomatic-filters"];
 	}
+	packages = filter (string p, packages, ``(
+	    available_packages[p]:true
+	));
 	y2milestone ("Packages to check for installing: %1", packages);
 	if (Package::InstalledAll (packages))
 	{
@@ -366,9 +382,11 @@ Install them now?"));
 	}
 	else
 	{
-	    packages = filter (string p, packages, ``(
-		Package::Available (p)
-	    ));
+	    packages = filter (string p, packages, ``{
+		boolean available = Package::Available (p);
+		available_packages[p] = available;
+		return available;
+	    });
 	    if (Package::InstalledAll (packages))
 		are_drivers_installed = true;
 	    else
@@ -394,12 +412,17 @@ Install them now?"));
 	    packages = ["lpdfilter", "filters", "cups-drivers",
 		"foomatic-filters"];
 	}
+	packages = filter (string p, packages, ``(
+	    available_packages[p]:true
+	));
 	y2milestone ("Packages to check for installing: %1", packages);
 	if (! Package::InstalledAll (packages))
 	{
-	    packages = filter (string p, packages, ``(
-		Package::Available (p)
-	    ));
+	    packages = filter (string p, packages, ``{
+		boolean available = Package::Available (p);
+		available_packages[p] = available;
+		return available;
+	    });
 	    y2milestone ("Available packages: %1", packages);
 	    i_result = Require::RequireAndConflictTarget (packages, [],
 		// question popup, %1 is list of package names
