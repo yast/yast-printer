@@ -29,6 +29,7 @@
 
 #include <map>
 #include <string>
+#include <vector>
 
 bool verbose = false;
 
@@ -486,11 +487,9 @@ start_from_scratch:
     creation_status = 90;
 
     // process list of SuSE database printers
-
-    if (! updated)
-    { 
-	addAdditionalInfo ();
-    }
+    // do it always, as during database update information about printers
+    // with no PPD file was removed
+    addAdditionalInfo ();
 
     creation_status = 98;
     y2debug ("Flushing");
@@ -1813,8 +1812,32 @@ bool PPD::processNewFiles () {
 }
 
 bool PPD::cleanupEmptyEntries () {
-
-
+    vector<string> vendors_to_delete = vector<string> ();
+    PPD::Vendors::iterator it1 = db.begin ();
+    for(; it1 != db.end(); it1++) {
+	vector<string> models_to_delete = vector<string> ();
+        PPD::Models::iterator it2 = (*it1).second.models.begin();
+        for(; it2 != (*it1).second.models.end(); it2++) {
+	    if ((*it2).second.drivers.begin() == (*it2).second.drivers.end())
+	    {
+		models_to_delete.push_back ((*it2).first);
+	    }
+        }
+	vector<string>::iterator dit = models_to_delete.begin ();
+	for (; dit != models_to_delete.end (); dit++)
+	{
+	    (*it1).second.models.erase (*dit);
+	}
+	if ((*it1).second.models.begin() == (*it1).second.models.end())
+	{
+	    vendors_to_delete.push_back ((*it1).first);
+	}
+    }
+    vector<string>::iterator dit = vendors_to_delete.begin ();
+    for (; dit != vendors_to_delete.end (); dit++)
+    {
+	db.erase (*dit);
+    }
     return true;
 }
 
