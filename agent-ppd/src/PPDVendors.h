@@ -144,16 +144,14 @@ struct { char *key, *val; } array_map[] = {
     { "PHASER", "TEKTRONIX" },
     { "MAJESTIK", "SUPERMAC" },
     { "DYMO", "DYMO-COSTAR" },
+    { "CANON INC. (KOSUGI OFFIC", "CANON" },
+    { "LEXMARK 2030", "LEXMARK" },
+    { "LEXMARK INTERNATIONAL", "LEXMARK" },
+    { "OKI DATA CORP", "OKI" },
+    { "OKIDATA", "OKI" },
     { "GHOSTSCRIPT", "Ghostscript devices" },
     { "GENERIC", "Generic printers" },
     { NULL, NULL }
 };
-
-struct { char *manuf, *key, *val; } array_model_map[] = {
-    { "HP", "DESKJET", "LASERJET" },
-// TODO
-    { NULL, NULL, NULL }
-};
-
 
 /* EOF */

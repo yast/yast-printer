@@ -31,6 +31,13 @@
 
 
     /**
+      * Current mode of configuration
+      * `det for configuring from detected printers dialog
+      * `adm for configuring from printer administration dialog
+      */
+    global symbol confmode = nil;
+
+    /**
       * Casts value type to integer if you know what I am talking about.
       * @param a value
       * @return integer representation of a
@@ -420,7 +427,7 @@ that your parallel port is not properly configured.
 			    `HBox (`HSpacing (0.7), `VSquash (
 				    `VBox (`VBox (`Left (`RadioButton (`id (`old_forwarding), `opt (`notify),
 									    // radio button label
-									    _("Use already configured TCP/IP forwarding queue:"),
+									    _("U&se already configured TCP/IP forwarding queue:"),
 									    !create_queue)),
 						       `HBox (`HSpacing (3.5),
 									// selectionbox
@@ -428,7 +435,7 @@ that your parallel port is not properly configured.
 						       `VSpacing (0.5),
 						       `Left (`RadioButton (`id (`new_forwarding), `opt (`notify),
 							// radio button label
-							_("Create a new one:"), create_queue))),
+							_("&Create a new one:"), create_queue))),
 						`HBox (`HSpacing (3.5),
 						       `VBox (
 							   `HBox (
@@ -963,12 +970,15 @@ that your parallel port is not properly configured.
 	term contents =
 	    `VBox (`HBox (`HWeight (1, manufsel),
 			  `HWeight (1, `ReplacePoint (`id (`modelsel_rep), `HSpacing ()))),
+		   `HBox (
+			`HStretch (),
 		   // pushbutton
-		   `HBox (`PushButton (`id (`dbchange), _("&Change database")), `HSpacing(),
-		   // pushbutton
-			  `PushButton (`id (`useppd), _("Use non-YaST2 &ppd file"))),
+			  `PushButton (`id (`useppd), _("Use non-YaST2 &ppd file")),
+			  `HStretch (),
 		   // Button which provides information about selected manufacturer/model
-		   `PushButton (`id (`infobut), _("&Info")));
+			`PushButton (`id (`infobut), _("&Info")),
+			`HStretch ()
+		));
 	// dialog box label
 	Wizard::SetContentsButtons (_("Manufacturer and model of the printer"),
 	    contents, getManufModelHelp (), BackButtonLabel (),
@@ -1059,7 +1069,7 @@ that your parallel port is not properly configured.
 	    if (`modelsel == ret)
 	    {
 		if (Printer::db == `foomatic)
-		    model = UI::QueryWidget (`id (`modelsel), `CurrentItem);
+		    model_db = UI::QueryWidget (`id (`modelsel), `CurrentItem);
 		else
 		{
 		    list temp = UI::QueryWidget (`id (`modelsel), `CurrentItem);
@@ -1120,11 +1130,82 @@ that your parallel port is not properly configured.
 	}
 	return ret;
     }
+
+    /**
+     * Run dialog
+     * @return symbol `back, `next, `abort
+     */
+    global define symbol runInstalledPrinterDialog () ``{
+	y2milestone ("running installed printers dialog");
+	list(map) printers = getConfiguredPrinters ();
+	list items = [];
+
+	integer counter = -1;
+	list sel_items= maplist (`p, printers, ``{
+	    counter = counter + 1;
+	    if (p["ownppd"]:"" != "")
+	    {
+		string filename = lookup (p, "ownppd", "");
+		if (filename != "" && Printer::isPpd (filename))
+		{
+		    map ppd = Printer::ppdInfo (filename);
+		    filename = lookup (ppd, "manufacturer", "") + " : " + lookup (ppd, "model", "");
+		}
+		y2error ("Has own ppd, %1, printer is %2", filename, p);
+		return `item (`id (counter), sformat (_("%1, %2"),
+		    filename,
+		    Printerlib::getUriNiceName (lookup (p, "uri", ""))));
+	    }
+		// eg. Epson Stylus Photo 810, Parallel printer on /dev/lp0
+	    return `item (`id (counter), sformat (_("%1 %2, %3"),
+		lookup (p, "vendor", ""), lookup (p, "device", ""),
+		Printerlib::getUriNiceName (lookup (p, "uri", ""))));
+	});
+
+	term contents = `HBox (`HSpacing (2), `VBox (
+	    `VSpacing (2),
+	    `SelectionBox (`id (`printers), `opt (`hstretch), _("&Select printer:"), sel_items),
+	    `VSpacing (2)
+	), `HSpacing (2));
+
+	// dialog box label
+        Wizard::SetContentsButtons (_("Printers"), contents, getPrintersHelp (), BackButtonLabel (), NextButtonLabel ());
+	UI::ChangeWidget (`id (`printers), `CurrentItem, 0);
+	symbol ret = UI::UserInput ();
+
+	while (true)
+	{
+            if (`abort == ret || `cancel == ret)
+            {
+                ret = reallyAbort () ? `abort : `cont;
+                if (ret == `abort) break;
+            }
+	    else if (`back == ret)
+	    {
+		break;
+	    }
+	    else if (`next == ret)
+	    {
+		integer ind = UI::QueryWidget (`id (`printers), `CurrentItem);
+		Printer::printer = eval (printers[ind]:$[]);
+		y2milestone ("Selected printer %1", Printer::printer);
+		Printer::index = -1;
+		Printer::printer["name"] = "";
+		Printer::printer["options"] = $[];
+		Printer::printer["config"] = "";
+		break;
+	    }
+	    ret = UI::UserInput ();
+	}
+	return ret;
+    }
+
     /**
      * Dialog for choosing configuration.
      * @return symbol for wizard sequencer
      */
-    global define symbol runConfigDialog () ``{
+    global define symbol runConfigDialog (boolean ppd_only) ``{
+	y2milestone ("Running config dialog, ppd_only: %1", ppd_only);
 	string manuf_db = lookup (Printer::printer, "vendor_db", "");
 	string model_db = lookup (Printer::printer, "device_db", "");
 	string manuf = lookup (Printer::printer, "vendor", "");
@@ -1132,12 +1213,114 @@ that your parallel port is not properly configured.
 	string config = lookup (Printer::printer, "config", "");
 	map info = $[];
 	list cfgs = [];
+	map cfgsmap = $[];
 	boolean foomatic = Printer::printer["database"]:"" == "foomatic";
+	y2milestone ("Configuring queue %1", Printer::printer);
 	if (foomatic)
 //	if (Printer::db == `foomatic)
 	{
 	    loadFoomaticIfNeeded ();
-	    cfgs = maplist (`k, `v, filter (`kk, `vv, Printer::foomatic[manuf_db, model_db]:$[], ``(kk != `label)), ``(k));
+
+	    map opts = Printer::printer["options"]:$[];
+	    if (! ppd_only
+		&& config != "" && Printer::printer["composite"]:"" != ""
+		&& opts[Printer::printer["composite"]:""]:"" != "")
+	    {
+		config = sformat ("%1__\n__%2__\n__%3",
+		    config,
+		    Printer::printer["composite"]:"",
+		    opts[Printer::printer["composite"]:""]:"");
+
+	    }
+
+	    list ppds = maplist (`k, `v, filter (`kk, `vv, Printer::foomatic[manuf_db, model_db]:$[], ``(kk != `label)), ``(k));
+
+	    if (Printer::printer["ownppd"]:"" != "" && ! ppd_only)
+	    {
+		y2milestone ("proposing from custom PPD file");
+		ppds = [`ownppd];
+	    }
+
+	y2error ("Have PPDs: %1", ppds);
+
+	    cfgs = [];
+	    foreach (`k, ppds, ``{
+		string ppdfile_orig = Printer::foomatic[manuf_db, model_db,
+		    k, 0]:"";
+		if (k == `ownppd && Printer::printer["ownppd"]:"" != "")
+		    ppdfile_orig = Printer::printer["ownppd"]:"";
+
+y2error ("Orig PPD file: %1", ppdfile_orig);
+
+		if (ppd_only)
+		{
+		    cfgs = add (cfgs, `item (`id (k), k));
+		    cfgsmap[k] = k;
+		    return;
+		}
+		if (ppdfile_orig == "")
+		{
+y2debug ("No PPD file for %1", k);
+		    cfgs = add (cfgs, `item (`id (k), k));
+		    cfgsmap[k] = k;
+		    return;
+		}
+		string ppdfile = SCR::Read (.ppd.file.open,
+		    [ppdfile_orig, "/tmp"]);
+		map options = SCR::Read (.ppd.file.options, [ppdfile, ""]);
+		list opts = options["data"]:$[];
+// FIXME multiple composite options checking ????
+		integer ind = -1;
+		boolean found = true;
+		find (`i, opts, ``{
+		    ind = ind + 1;
+		    found = i["name"]:"" == "PrintoutMode";
+		    return found;
+		});
+		map composite = $[];
+		if (found)
+		    composite = opts[ind]:$[];
+		if (composite == $[])
+		{
+		    if (k != `ownppd)
+		    {
+			cfgs = add (cfgs, `item (`id (k), k));
+			cfgsmap[k] = k;
+		    }
+		    else
+		    {
+			cfgs = add (cfgs, `item (`id (""),
+			    // selection box item
+			    _("Default configuration")));
+			cfgsmap[""] = _("Default configuration");
+		    }
+y2debug ("No composite option found for %1", k);
+		    return;
+		}
+
+		string ppd_label_part = "";
+		if (k != `ownppd)
+		    ppd_label_part = k;
+		else
+		{
+		    // selection box item
+		    ppd_label_part = _("Custom PPD file");
+		}
+		if (regexpmatch (k, ".*, .*"))
+		{
+		    ppd_label_part = select (regexptokenize (k, ".*, (.*)"), 0, k);
+		}
+                foreach (`v, composite["valorder"]:[], ``{
+                    string optname = composite["name"]:"";
+		    string complabel = composite["values", v]:v;
+		    cfgs = add (cfgs, `item (
+			`id (sformat ("%1__\n__%2__\n__%3", k, optname, v)),
+			sformat ("%1 (%2)", complabel, ppd_label_part)));
+		    cfgsmap[sformat ("%1__\n__%2__\n__%3", k, optname, v)]
+			= sformat ("%1 (%2)", complabel, ppd_label_part);
+                });
+
+	    });
 	}
 	else
 	    cfgs = SCR::Read (add (.printerdb.configsrt,model), Printer::spooler);
@@ -1149,7 +1332,7 @@ that your parallel port is not properly configured.
 		    // selection box label
 		    `SelectionBox (`id (`selection), `opt (`hstretch), _("&Select configuration:"), foomatic ? cfgs : select (cfgs, 1, [])),
 		    `VSpacing (1),
-		    `HBox (
+		    ppd_only ? `VSpacing (0) : `HBox (
 			`HStretch (),
 			// pushbutton
 			`HWeight (1, `PushButton (`id (`test), _("&Test printing"))),
@@ -1157,16 +1340,22 @@ that your parallel port is not properly configured.
 			-1 == Printer::index ? `HWeight (1, `PushButton (`id (`advanced), _("Ad&vanced settings"))) : `HSpacing (0),
 			`HStretch ()
 		    ),
-		    `VSpacing (1)
+		    `VSpacing (ppd_only ? 0 : 1)
 		),
 	    `HSpacing (1)
 	);
 	// dialog box label
-	Wizard::SetContentsButtons (_("Configurations"), contents, getConfigHelp (), BackButtonLabel (), NextButtonLabel ());
-	if (config != "")
-	    UI::ChangeWidget (`id (`selection), `CurrentItem, config);
+	string caption = ppd_only ? _("PPD files")
+		// dialog box label
+	    : _("Configurations");
+	Wizard::SetContentsButtons (caption, contents, getConfigHelp (), BackButtonLabel (), OKButtonLabel ());
 
-	if (foomatic)
+	if (config != "" && config != nil)
+	{
+	    UI::ChangeWidget (`id (`selection), `CurrentItem, config);
+	}
+
+	if (! foomatic)
 	{
 	boolean found = false;
 	if (config == "")
@@ -1225,13 +1414,16 @@ that your parallel port is not properly configured.
 	if (foomatic && (config == "" || config == nil))
 	{
             {
-                foreach (`k, `v, Printer::foomatic[manuf_db, model_db]:$[], ``{
-                    if (is (k, string) && (config == "" || config == nil))
-                        config = k;
-                });
+		term item = cfgs[0]:nil;
+		if (nil != item)
+		{
+		    config = select (select (item, 0, nil), 0, "");
+		}
             }
 	    if (config != "" && config != nil)
+	    {
 		UI::ChangeWidget (`id (`selection), `CurrentItem, config);
+	    }
 	}
 
 	any ret = `config;
@@ -1267,9 +1459,25 @@ that your parallel port is not properly configured.
         // before saving:
 		if (lookup (tmpPrinter, "config", "") != config)
 		    tmpPrinter = add (tmpPrinter, "options", $[]);
+		if (foomatic && regexpmatch (config, ".*__\n__.*__\n__.*"))
+		{
+	            list tokenized
+	                = regexptokenize (config, "(.*)__\n__(.*)__\n__(.*)");
+	            config = tokenized[0]:"";
+	            string key = tokenized[1]:"";
+	            string val = tokenized[2]:"";
+		    tmpPrinter["composite"] = key;
+	            map opts = Printer::printer["options"]:$[];
+	            opts[key] = val;
+	            tmpPrinter["options"] = opts;
+		}
+		else
+		{
+		    tmpPrinter["composite"] = "";
+		}
 		tmpPrinter = add (tmpPrinter, "config", config);
 
-		    testPrinter (tmpPrinter, -1);
+		testPrinter (tmpPrinter, -1);
 	    }
 	    ret = UI::UserInput ();
 	}
@@ -1278,6 +1486,23 @@ that your parallel port is not properly configured.
 	    config = UI::QueryWidget (`id (`selection), `CurrentItem);
 	    if (lookup (Printer::printer, "config", "") != config)
 		Printer::printer = add (Printer::printer, "options", $[]);
+            if (foomatic && regexpmatch (config, ".*__\n__.*__\n__.*"))
+            {
+		list tokenized
+		    = regexptokenize (config, "(.*)__\n__(.*)__\n__(.*)");
+		config = tokenized[0]:"";
+		string key = tokenized[1]:"";
+		Printer::printer["composite"] = key;
+		string val = tokenized[2]:"";
+		map opts = Printer::printer["options"]:$[];
+		opts[key] = val;
+		Printer::printer["options"] = opts;
+            }
+	    else
+	    {
+		Printer::printer["composite"] = "";
+	    }
+
 	    Printer::printer = add (Printer::printer, "config", config);
 	    return ret;
 	}
@@ -1285,9 +1510,36 @@ that your parallel port is not properly configured.
 	{
 	    if (`next == ret)
 		config = UI::QueryWidget (`id (`selection), `CurrentItem);
-//	    info = SCR::Read (.printerdb.configinfo, config);
 	    if (lookup (Printer::printer, "config", "") != config)
 		Printer::printer = add (Printer::printer, "options", $[]);
+	    string config_id = config;
+            if (foomatic && regexpmatch (config, ".*__\n__.*__\n__.*"))
+            {
+	        list tokenized
+		    = regexptokenize (config, "(.*)__\n__(.*)__\n__(.*)");
+	        config = tokenized[0]:"";
+	        string key = tokenized[1]:"";
+		Printer::printer["composite"] = key;
+	        string val = tokenized[2]:"";
+	        map opts = Printer::printer["options"]:$[];
+	        opts[key] = val;
+	        Printer::printer["options"] = opts;
+            }
+            else
+            {
+                Printer::printer["composite"] = "";
+            }
+	    // add comment
+	    foreach (`i, foomatic ? cfgs : select (cfgs, 1, []), ``{
+		if (select (select (i, 0, []), 0, nil) == config_id
+		    && select (i, 1, nil) != nil)
+		{
+		    Printer::printer["comment"] = select (i, 1, nil);
+		}
+
+	    });
+
+
 	    Printer::printer = add (Printer::printer, "config", config);
 	    // FIXME: check if it is not necessary to clean options.
 	    ret = `next;
@@ -1299,7 +1551,8 @@ that your parallel port is not properly configured.
      * Configuration of printer names.
      * @return symbol for wizard seq.
      */
-    global define symbol runNameDialog () ``{
+    global define symbol runNameDialog (boolean detected) ``{
+	y2milestone ("Running name dialog for %1", Printer::printer);
 	list forbidden_names = Printer::getForbiddenNames ();
 	string name = lookup (Printer::printer, "name", "");
 	string old_name = name;
@@ -1348,10 +1601,23 @@ that your parallel port is not properly configured.
 	    "lpd" == Printer::getUriType ()  || "cups" == Printer::spooler ? `VSpacing (0) :
 		// check box
 		`CheckBox (`id (`raw), `opt (`hstretch), _("Ra&w queue"), lookup (Printer::printer, "raw", raw));
+
 	term insert2 =
 	     "cups" == Printer::spooler ? `VSpacing (0) :
 		// check box
 		`CheckBox (`id (`ff), `opt (`hstretch), _("Print &formfeed between jobs"), lookup (Printer::printer, "ff", ff));
+
+	term insert3 = detected && ! Printer::printer["modelset_required"]:false
+	    ? `VBox (
+		    `HBox (
+			`HStretch (),
+			// pushbutton
+			`PushButton (`id (`model), _("&Specify model manually"))
+		    ),
+		    `VSpacing (2)
+		)
+	    : `VSpacing (0);
+
 	term contents = `VBox (
 		// text entry
 		`TextEntry (`id (`name), `opt (`hstretch), _("Name for &printing:"), name),
@@ -1381,7 +1647,11 @@ that your parallel port is not properly configured.
 	}
 	contents = `HBox (`HSpacing (4),
 		// frame
-		`VBox (`Frame (_("Queue name and spooler settings"), contents), `VSpacing (2)),
+		`VBox (
+		    `Frame (_("Queue name and spooler settings"), contents),
+		    `VSpacing (2),
+		    insert3
+		),
 		`HSpacing (4));
 
 	// dialog box label
@@ -1411,7 +1681,7 @@ that your parallel port is not properly configured.
 	    {
 		if (Printer::spooler != "cups")
 		{
-		    raw = ("lpd" == Printer::getUriType () ? "false" : UI::QueryWidget (`id (`raw), `Value));
+		    raw = ("lpd" == Printer::getUriType () ? true : UI::QueryWidget (`id (`raw), `Value));
 		    ff = UI::QueryWidget (`id (`ff), `Value);
 		}
 		else
@@ -1419,6 +1689,7 @@ that your parallel port is not properly configured.
 		    raw = false;
 		    ff = false;
 		}
+y2error ("Setting raw to %1", raw);
 		name = tolower (UI::QueryWidget (`id (`name), `Value));
 		if (Printer::spooler != "lprng")
 		{
@@ -1443,9 +1714,9 @@ that your parallel port is not properly configured.
 	    {
 		ret = reallyAbort () ? `abort : nil;
 	    }
-	} until (`abort == ret || ret == `back || ret == `next);
+	} until (`abort == ret || ret == `back || ret == `next || `model == ret);
 
-	if (ret == `next)
+	if (ret == `next || ret == `model)
 	{
 	    if (raw == nil)
 		raw = false;
@@ -1476,7 +1747,11 @@ that your parallel port is not properly configured.
 //		Printer::deleted = add (Printer::deleted, $["name": old_name, "type": is_class ? "class" : "printer",
 //			"states" : $["cups-state" : "changed", "lprng-state" : "changed"] ]);
 	    }
+
+//	    if (ret == `next && Printer::printer["modelset_required"]:false)
+//		ret = `model;
 	}
+	y2milestone ("Returning %1", ret);
 	return ret;
     }
     /**
@@ -1650,7 +1925,10 @@ that your parallel port is not properly configured.
      * @return symbol for ws
      */
     global define symbol runOptionsDialog () ``{
-	string filename = SCR::Read (.ppd.file.open, [Printer::foomatic[Printer::printer["vendor_db"]:"", Printer::printer["device_db"]:"", Printer::printer["config"]:"", 0]:"", "/tmp"]);
+	string orig_name = Printer::foomatic[Printer::printer["vendor_db"]:"", Printer::printer["device_db"]:"", Printer::printer["config"]:"", 0]:"";
+	if (Printer::printer["ownppd"]:"" != "")
+	    orig_name = Printer::printer["ownppd"]:"";
+	string filename = SCR::Read (.ppd.file.open, [orig_name, "/tmp"]);
 
 	Printer::printer = add (Printer::printer, "newer_gs_upp", false);
 	map saved = lookup (Printer::printer, "saved", $[]);
@@ -1660,7 +1938,7 @@ that your parallel port is not properly configured.
 	string config = lookup (Printer::printer, "config", "");
 	any vals = nil;
 	boolean foomatic = Printer::printer["database"]:"" == "foomatic";
-y2error ("Foomatic: %1", foomatic);
+	//y2error ("Foomatic: %1", foomatic);
 	if (foomatic)
 	    loadFoomaticIfNeeded ();
 
@@ -1682,6 +1960,10 @@ y2error ("Foomatic: %1", foomatic);
         {
             map options = SCR::Read (.ppd.file.options, [filename, ""]);
             list tmp = options["data"]:[];
+	    tmp = filter (`o, tmp, ``(
+		o["name"]:"" != "PageRegion"
+		&& o["name"]:"" != "ImageableArea"
+		&& o["mame"]:"" != "PaperDimension"));
             opts = maplist (`i, tmp, ``(
                 `item (`id (i["name"]:""), i["gui"]:"")
             ));
@@ -1775,6 +2057,13 @@ y2error ("Foomatic: %1", foomatic);
 	}
 	if (`next == ret)
 	{
+	    string ps = selected["PageSize"]:nil;
+	    if (ps != nil)
+	    {
+		selected["PageRegion"] = ps;
+		selected["ImageableArea"] = ps;
+		selected["PaperDimension"] = ps;
+	    }
 	    map saved = lookup (Printer::printer, "saved", $[]);
 	    saved = add (saved, "upp_fname", "");
 	    saved = add (saved, "upp", "");
@@ -1791,6 +2080,7 @@ y2error ("Foomatic: %1", foomatic);
      * @return symbol for ws
      */
     global define symbol runConnectionDialog () ``{
+	y2milestone ("Connection dialog, confmode: %1", confmode);
 	boolean show_all = -1 == Printer::index || lookup (Printer::printer, "type", "yast2") != "yast2";
 	string uritype = Printer::getUriType ();
 	if ("" == uritype)
@@ -1803,7 +2093,7 @@ y2error ("Foomatic: %1", foomatic);
 			// label of the frame
 			_("Select the printer type:"),
 			`VBox (
-			    `RadioButtonGroup (`id (`connections), connectionsRadioButtons (uritype, show_all)),
+			    `RadioButtonGroup (`id (`connections), connectionsRadioButtons (uritype, show_all, confmode == `adm)),
 			    `VSpacing (1))
 			),
 		    `HSpacing (5)),
@@ -1850,7 +2140,7 @@ y2error ("Foomatic: %1", foomatic);
                         // label of the frame
                         _("Select the printer type:"),
                         `VBox (
-                            `RadioButtonGroup (`id (`connections), advancedConnectionsRadioButtons (uritype)),
+                            `RadioButtonGroup (`id (`connections), advancedConnectionsRadioButtons (uritype, Arch::s390 && confmode == `adm)),
                             `VSpacing (1))
                         ),
                     `HSpacing (5)),
@@ -1958,14 +2248,14 @@ y2error ("Foomatic: %1", foomatic);
 	{
 	    if (uri_type != "lpd" && ! lookup (Printer::printer, "raw", false))
 	    {
-		if (lookup (Printer::printer, "ownppd", "") != "")
+/*		if (lookup (Printer::printer, "ownppd", "") != "")
 		{
 		}
 		else
-		{
+		{*/
 	// table entry
 		    items = add (items, `item (`id (`settings), _("Printing filter settings"), ""));
-		}
+//		}
 		if (Printer::spooler != "cups")
 		{
 	// table entry
@@ -2008,7 +2298,7 @@ y2error ("Foomatic: %1", foomatic);
 
 	// dialog caption
 	Wizard::SetContentsButtons (_("Edit configuration"), contents, getEditHelp (uri_type, raw, lookup (Printer::printer, "ownppd", "") != ""),
-	    BackButtonLabel (), NextButtonLabel ());
+	    BackButtonLabel (), OKButtonLabel ());
 	Wizard::RestoreBackButton ();
     }
 
@@ -2275,6 +2565,7 @@ the current configuration.
 	    }
 	    else if (`lprng == spooler)
 	    {
+		Printer::db = `suse;
 		new_spooler = "lprng";
 	    }
 	    else
@@ -2297,6 +2588,16 @@ the current configuration.
      * @return symbol for ws
      */
     global define symbol runProbedPrinterDialog () ``{
+	if (confmode == `adm)
+	{
+	    return `connection;
+	}
+	// state variables
+	boolean already_configured = false;
+	boolean modelsel_needed = false;
+	boolean configsel_needed = false;
+	boolean devsel_needed = false;
+
 	/* The end of the definitions */
 	string uri = lookup (Printer::printer, "uri", "");
 	string device = Printerlib::getUriDevice (uri);
@@ -2306,11 +2607,23 @@ the current configuration.
 	{
 	    detected = SCR::Read (.printerdb.detect, [ lookup (Printer::printer, "vendor_ieee", ""), lookup (Printer::printer, "device_ieee", "") ]);
 	}
-	boolean already_configured = false;
-	foreach (`i, Printer::printcap, ``{
+
+	if (isPrinterConfigured (Printer::printer))
+	    already_configured = true;
+
+	if ((Printer::printer["bus"]:"" == ""
+	    || Printer::printer["dev_name"]:"" == "")
+	    && (Printer::printer["uri"]:"" == ""
+	    || Printer::printer["uri"]:"" == "parallel:"))
+	{
+	    devsel_needed = true;
+	}
+
+
+/*	foreach (`i, Printer::printcap, ``{
 	    if ("" != lookup (i, "unique_key", "") && lookup (Printer::printer,"unique_key", "") == lookup (i, "unique_key", ""))
 		already_configured = true;
-	});
+	});*/
 
 	if (Printer::db == `foomatic)
 	{
@@ -2335,7 +2648,7 @@ the current configuration.
 		    ]);
 	}
 
-	term contents =
+/*	term contents =
 	    `VBox (
 		`VSpacing (1),
 		// in-dialog label 1/2
@@ -2376,15 +2689,21 @@ the current configuration.
 	Wizard::RestoreBackButton ();
 	if (`none != runProbedPrinterDlg__current)
 	{
+// no need to change behaviour, just to use the previous
 	    UI::ChangeWidget (`id (`action), `CurrentButton, runProbedPrinterDlg__current);
 	}
-
+*/
 	if (Printer::db != `foomatic)
 	{
 	if (2 == lookup (info, "type", 2) || 1 == lookup (info, "type", 2))
 	{
 	    if (2 == lookup (info, "type", 2))
+	    {
 		UI::ChangeWidget (`id (`auto), `Enabled, false);
+		modelsel_needed = true;
+	    }
+	    // problematic support
+	    configsel_needed = true;
 	    UI::ChangeWidget (`id (`quick), `Enabled, false);
 
 	    string comment = lookup (info, "printer", lookup (info, "config", ""));
@@ -2398,6 +2717,7 @@ the current configuration.
 	//if no spooler installed, disable quick
 	if (Printer::spooler != "cups" && Printer::spooler != "lprng")
 	{
+// FIXME: Using differnet database - don't know what to do!!!!!
 	    UI::ChangeWidget (`id (`quick), `Enabled, false);
 	    UI::ChangeWidget (`id (`action), `CurrentButton, `auto);
 	}
@@ -2410,10 +2730,11 @@ the current configuration.
 	    PPDs = filter (`k, `v, PPDs, ``(is (k, string)));
 	    if (size (PPDs) < 1)
 	    {
+		// No PPD file available
 		UI::ChangeWidget (`id (`quick), `Enabled, false);
 		UI::ChangeWidget (`id (`auto), `Enabled, false);
 		UI::ChangeWidget (`id (`action), `CurrentButton, `manual);
-
+		modelsel_needed = true;
 	    }
 	}
 	else
@@ -2448,10 +2769,12 @@ the current configuration.
 		all_lprng = false;
 	    }
 	  });
+// FIXME: Remove CUPS-related items
 	  if (! (all_cups && all_lprng))
 	  {
 	    UI::ChangeWidget (`id (`quick), `Enabled, false);
 	    UI::ChangeWidget (`id (`action), `CurrentButton, `auto);
+	    configsel_needed = true;
 	  }
 	  if (Printer::spooler == "cups")
 	  {
@@ -2459,6 +2782,7 @@ the current configuration.
 	    {
 		UI::ChangeWidget (`id (`auto), `Enabled, false);
 		UI::ChangeWidget (`id (`action), `CurrentButton, `manual);
+		manufsel_needed = true;
 	    }
 	  }
 	  else if (Printer::spooler == "lprng")
@@ -2467,10 +2791,11 @@ the current configuration.
 	    {
 		UI::ChangeWidget (`id (`auto), `Enabled, false);
 		UI::ChangeWidget (`id (`action), `CurrentButton, `manual);
+		modelsel_needed = true;
 	    }
 	  }
 	}
-	symbol ret = nil;
+/*	symbol ret = nil;
 	while (true)
 	{
 	    ret = UI::UserInput ();
@@ -2489,12 +2814,37 @@ the current configuration.
 	    }
 	}
 	if (`next == ret)
-	{
-	    runProbedPrinterDlg__current = UI::QueryWidget (`id (`action), `CurrentButton);
-	    ret = runProbedPrinterDlg__current;
-	}
+	{*/
+/*	y2error ("Exists: %1, CfgNeed: %2, ModelNeed: %3, DeviceNeed: %4",
+	        already_configured,
+	        modelsel_needed,
+	        configsel_needed,
+		devsel_needed);
+*/
+	    if (devsel_needed)
+	    {
+		ret = `connection;
+	    }
+	    else if (modelsel_needed)
+	    {
+		Printer::printer["modelset_required"] = true;
+		ret = `model;
+	    }
+	    else if (configsel_needed)
+	    {
+		ret = `manual;
+	    }
+	    else
+	    {
+		ret = `quick;
+	    }
+
+//	    runProbedPrinterDlg__current = UI::QueryWidget (`id (`action), `CurrentButton);
+//	    ret = runProbedPrinterDlg__current;
+//	}
 	return ret;
     }
+
     /**
      * Popup wanting device name.
      * @param pre_filled TextEntry is pre-set by this value.
@@ -2525,55 +2875,139 @@ the current configuration.
 	return pre_filled;
     }
 
+
+
+    /**
+      * Backup list of print queues. See description of map printer
+      */
+    global list printcap_backup = [];
+    /**
+      * Backup detected printer map
+      */
+    global map printer_backup = $[];
+    /**
+      * Backup of printer URI
+      */
+    global string uri_backup = nil;
+    /**
+      * The dialog is running again for repropose
+      */
+    global boolean running_again = false;
+
     /**
      * Show printer details in one window
      * @return symbol `back `next `abort
      */
-    global define symbol runQuickDialog () ``{
+    global define symbol runSinglePrinterDialog () ``{
 	list forbidden_names = Printer::getForbiddenNames ();
 	list new_queues = [];
+	list queues = [];
 	string first_queue = nil;
 	string default_queue = nil;
+	string uri = Printer::printer["uri"]:"";
+	string vendor = Printer::printer["vendor"]:"";
+	string device = Printer::printer["device"]:"";
+
+
+	list mb_items = [
+	    `item (`id (`clear), _("&Remove everything")),
+	    `item (`id (`again), _("Re&propose")),
+	];
+	if (Printer::db == `foomatic)
+	{
+	    mb_items = add (mb_items, `item (`id (`choose_ppd),
+		_("&Choose PPD file")));
+	}
+
+        if (uri_backup != nil)
+        {
+            uri = uri_backup;
+            uri_backup = nil;
+        }
+
+	list tmp_printcap = [];
+	if (running_again)
+	{
+	    tmp_printcap = Printer::printcap;
+	    Printer::printcap = [];
+	}
+	else
+	{
+	    Printer::additional_forbidden_names = [];
+	}
+
 	if (Printer::db == `foomatic)
 	{
 	    string vendor = Printer::printer["vendor_db"]:"";
 	    string model = Printer::printer["device_db"]:"";
-	    new_queues = getFoomaticAutoQueues (vendor, model);
-	    default_queue = new_queues[0, "name"]:nil;
-	    foreach (`q, new_queues, ``{
-		if (regexpmatch (q["name"]:"", "normal[0-9]")
-		    || q["name"]:"" == "normal")
-		{
-		    default_queue = q["name"]:"";
-		}
-	    });
+	    string config = Printer::printer["config"]:nil;
+	    y2milestone ("Gettinq queues for %1", Printer::printer);
+	    if (Printer::printer["ownppd"]:"" != "")
+	    {
+		model = Printer::printer["ownppd"]:"";
+		vendor = "__ownppd__";
+	    }
+	    new_queues = getFoomaticAutoQueues (vendor, model, config);
+	    default_queue = getFoomaticDefaultQueue (new_queues);
 	}
 	else
 	{
-	    new_queues = SCR::Read (.printerdb.auto, lookup (Printer::printer, "device", ""));
-	    string suffix = Printer::getQueueSuffix (new_queues);
-	    new_queues = maplist (`v, new_queues, ``{
-		if (nil == first_queue)
-		{
-		    first_queue = lookup (v, "comment", "");
-		}
-		map paper = Printer::getQuickPaperSize (lookup (v, "config", ""));
-		if (nil != paper)
-		{
-		    v = add (v, "options", paper);
-		}
-		v = add (v, "name", Printer::adjustQueueName (lookup (v, "name", "lp") + suffix, forbidden_names));
-		forbidden_names = add (forbidden_names, lookup (v, "name", ""));
-		return union (Printer::printer, v);
-	    });
+	    string device = lookup (Printer::printer, "device", "");
+	    new_queues = getSuSEdbAutoQueues (device);
 	}
+
+	if (running_again)
+	{
+	    Printer::printcap = tmp_printcap;
+	}
+
+	Printer::additional_forbidden_names = [];
+
+	if (size (printcap_backup) == 0)
+	{
+	    queues = getQueuesOfPrinter (uri, vendor, device);
+	    new_queues = maplist (`q, new_queues, ``{
+		q["new"] = true;
+		return q;
+	    });
+	    if (size (queues) == 0 || nil == queues || running_again)
+	    {
+		queues = new_queues;
+	    }
+	}
+	else
+	{
+	    queues = Printer::printcap;
+	    Printer::printcap = printcap_backup;
+	    printcap_backup = [];
+	}
+
+	if (size (printer_backup) > 0)
+	{
+	    Printer::printer = printer_backup;
+	    printer_backup = $[];
+	}
+
+	first_queue = nil;
+	foreach (`q, queues, ``{
+	    if (first_queue == nil)
+	    {
+		first_queue = q["name"]:nil;
+	    }
+	});
+
+	running_again = false;
+
 	// in-dialog text: To print, use: lpr QueueName filename
 	term contents = `VBox (
 	    `VSpacing (0.7),
 	    `HBox (
 		`HSpacing (2),
 		// frame label
-		`Frame (_("The following print queues have been configured:"),
+		`VBox (
+		    `Heading (
+			_("The following print queues have been configured:")
+		    ),
 		    `HBox (
 			`HSpacing (1),
 			`VBox (
@@ -2582,23 +3016,39 @@ the current configuration.
 				// table header
 				`id (`table), `header (_("Queue name"),
 				// table header
-				 _("Comment")),
-				maplist (`v, new_queues, ``(`item (`id (lookup (v, "name", "")), lookup (v, "name", ""), lookup (v, "comment", ""))))
+				 _("Comment"),
+				// table header
+				_("New")),
+				maplist (`v, queues, ``(`item (`id (v["name"]:""), v["name"]:"", v["comment"]:"", v["new"]:false ? _("Yes") : _("No"))))
 				),
 			    `VSpacing (0.5),
-			    // pushbutton
-			    `PushButton (`id (`test), _("&Test printing")),
+			    `HBox (
+				`PushButton (`id (`add), AddButtonLabel ()),
+				`PushButton (`id (`edit), EditButtonLabel ()),
+				`PushButton (`id (`delete),
+				    DeleteButtonLabel ()),
+				`HStretch (),
+				// pushbutton
+				`PushButton (`id (`test), _("T&est printing"))
+			    ),
 			    `VSpacing (0.5)
 			    ),
 			`HSpacing (1)
 			)
 		    ),
-		`HSpacing (2)
-		),
-	    `VSpacing (2)
+		    `HSpacing (2)
+	        ),
+	        `VSpacing (1),
+                `HBox (
+                    `HStretch (),
+                    // menubutton
+		    `MenuButton (_("E&xpert settings"), mb_items),
+		    `HStretch ()
+                ),
+	        `VSpacing (1)
 	    );
 	// label of the dialog
-	Wizard::SetContentsButtons (_("Printer overview"), contents, getShowPrinterHelp (), UI::BackButtonLabel (), UI::NextButtonLabel ());
+	Wizard::SetContentsButtons (_("Printer overview"), contents, getShowPrinterHelp (), UI::BackButtonLabel (), UI::OKButtonLabel ());
 
 	UI::ChangeWidget (`id (`table), `CurrentItem, first_queue);
 
@@ -2617,10 +3067,62 @@ the current configuration.
 	    else if (`test == ret)
 	    {
 		string i = UI::QueryWidget (`id (`table), `CurrentItem);
-		foreach (`e, new_queues, ``{
+		foreach (`e, queues, ``{
 		    if (lookup (e, "name", "") == i)
 			testPrinter (e, -1);
 		});
+	    }
+	    else if (ret == `clear || ret == `again || ret == `choose_ppd)
+	    {
+		string warning = _("Warning!
+
+All listed queues will be removed.");
+		if (ret == `again)
+		    warning = warning + _("\nDefault PPD file will be used
+for proposing new queues.");
+		if (! UI::YesNoPopup (warning))
+		{
+		    ret = nil;
+		    continue;
+		}
+		if (ret == `clear)
+		{
+		    queues = [];
+		    UI::ChangeWidget (`id (`table), `Items, []);
+		}
+		else
+		{
+		    break;
+		}
+//maplist (`v, queues, ``(`item (`id (v["name"]:""), v["name"]:"", v["comment"]:"", v["new"]:false ? _("Yes") : _("No")))));
+	    }
+	    else if (ret == `choose_ppd)
+	    {
+
+	    }
+	    else if (ret == `edit)
+	    {
+		string i = UI::QueryWidget (`id (`table), `CurrentItem);
+                if (i == nil)
+                    continue;
+		else
+		    break;
+	    }
+	    else if (ret == `delete)
+	    {
+                string i = UI::QueryWidget (`id (`table), `CurrentItem);
+		if (i == nil)
+		    continue;
+		if (UI::YesNoPopup (sformat (
+		    // yes-no popup, %1 is replaced by printer name
+		    _("Really delete the \"%1\" printer?"), i)))
+		{
+		    queues = filter (`q, queues, ``(
+			q["name"]:"" != i
+		    ));
+		    UI::ChangeWidget (`id (`table), `Items, maplist (`v, queues, ``(`item (`id (v["name"]:""), v["name"]:"", v["comment"]:"", v["new"]:false ? _("Yes") : _("No")))));
+// TODO		    UI::ChangeWidget (`id (`table), `CurrentItem, 
+		}
 	    }
 	    else
 	    {
@@ -2629,11 +3131,19 @@ the current configuration.
 	}
 	if (`next == ret)
 	{
+	    list(string) queue_names = maplist (`q, queues, ``(q["name"]:""));
+	    list(string) orig_names = maplist (`q,
+		getQueuesOfPrinter (uri, vendor, device),
+		``(q["name"]:""));
+	    Printer::printcap = filter (`p, Printer::printcap, ``(
+		contains (queue_names, p["name"]:"")
+		|| ! contains (orig_names, p["name"]:"")
+	    ));
 	    boolean set_default = Printer::default == ""
 		|| Printer::default == nil;
 	    // add queues...
-	    foreach (`v, new_queues, ``{
-		    Printer::index = -1;
+	    foreach (`v, queues, ``{
+		    Printer::selectPrinterByName (v["name"]:"");
 		    Printer::printer = v;
 		    Printer::storePrinter ();
 		});
@@ -2642,6 +3152,43 @@ the current configuration.
 	    {
 		Printer::default = default_queue;
 	    }
+	}
+	else if (ret == `add || ret == `edit)
+	{
+	    Printer::additional_forbidden_names = Printer::getForbiddenNames ();
+	    printer_backup = Printer::printer;
+	    printcap_backup = Printer::printcap;
+	    Printer::printcap = queues;
+	    uri_backup = uri;
+	    if (ret == `add)
+	    {
+		Printer::index = -1;
+		Printer::printer["new"] = true;
+		return `add;
+	    }
+	    else // edit
+	    {
+		string i = UI::QueryWidget (`id (`table), `CurrentItem);
+		Printer::selectPrinterByName (i);
+		return `edit;
+	    }
+
+	}
+	else if (ret == `choose_ppd || ret == `again)
+	{
+	    list tmp_printcap = Printer::printcap;
+	    list deleted_queues = maplist (`q, queues, ``(q["name"]:""));
+	    Printer::printcap = filter (`p, Printer::printcap, ``(
+		! contains (deleted_queues, p["name"]:"")));
+	    Printer::additional_forbidden_names = Printer::getForbiddenNames ();
+	    Printer::additional_forbidden_names = filter (`n,
+		Printer::additional_forbidden_names,
+		``( ! contains (Printer::sys_forbidden_names, n)
+	    ));
+	    Printer::printcap = tmp_printcap;
+	    if (ret == `again && haskey (Printer::printer, "config"))
+		Printer::printer = remove (Printer::printer, "config");
+	    running_again = true;
 	}
 	return ret;
     }
@@ -2661,8 +3208,11 @@ the current configuration.
 		selected = true;
 	    }
 	    return `item (`id (current),
+		isPrinterConfigured (i)
+			? sformat (_("Queue for %1 %2 on %3"), lookup (i, "vendor", ""), lookup (i, "device", ""),
+				Printerlib::getDeviceNiceName (lookup (i, "dev_name", "")))
 			  // Translators: "... on ...": will be st. like: Canon BJC-6100 on first parallel port.
-			  sformat (_("%1 %2 on %3"), lookup (i, "vendor", ""), lookup (i, "device", ""),
+			: sformat (_("%1 %2 on %3"), lookup (i, "vendor", ""), lookup (i, "device", ""),
 			      Printerlib::getDeviceNiceName (lookup (i, "dev_name", ""))),
 			  current == current_sel);
 	});
@@ -2683,6 +3233,7 @@ the current configuration.
      * @return symbol for ws
      */
     global define symbol runDetectedDialog () ``{
+	confmode = `det;
 	term contents = Wizard_hw::DetectedContent (
 	    // Selectionbox caption
 	    _("Printers to configure"),
@@ -2736,15 +3287,16 @@ system will be saved.
 	    {
 		runAutoprobedListDialog__current = UI::QueryWidget (`id (`detected_selbox), `CurrentItem);
 		runProbedPrinterDlg__current = `none;
-		if (-1 != runAutoprobedListDialog__current)
-		{
+// comments added to go with other printer through the same sequence
+//		if (-1 != runAutoprobedListDialog__current)
+//		{
 		    Printer::editDetected (select (Printer::autodetected, runAutoprobedListDialog__current, $[]));
-		}
-		else
-		{
-		    Printer::selectPrinter (-1);
-		    ret = `add;
-		}
+//		}
+//		else
+//		{
+//		    Printer::selectPrinter (-1);
+//		    ret = `add;
+//		}
 	    }
 	    break;
 	}
@@ -2755,6 +3307,7 @@ system will be saved.
      * @return symbol for ws
      */
     global define symbol runComplexDialog () ``{
+	confmode = `adm;
 	string spoolerlabel = "";
 	if (Printer::spooler == "cups")
 	{
@@ -2935,6 +3488,13 @@ All your changes will be lost.
 	    return `class;
 	return `db;
     }
+
+    global define symbol queueConfType () ``{
+	y2milestone ("Confmode is %1, utirype %2", confmode, Printer::getUriType ());
+	if ("prefilter" == Printer::getUriType ())
+	    return `single;
+	return confmode == `adm ? `all : `single;
+    }
     /**
      * Get map of aliases for wizard sequencer.
      * @return aliases
@@ -2969,11 +3529,14 @@ All your changes will be lost.
 	    "socket" :		``(runRemoteDialog ("socket")),
 	    "other" :		``(runUriDialog()),
 	    "model" :		``(runManufModelDialog ()),
+	    "inst_printer" :	``(runInstalledPrinterDialog ()),
 	    "useppd" :		``(runSelectPpdFile ()),
 	    "dbchange" :	``(ChangeDatabase ()),
-	    "config" :		``(runConfigDialog ()),
-	    "name" :		``(runNameDialog ()),
-	    "namerem" :		``(runNameDialog ()),
+	    "config" :		``(runConfigDialog (false)),
+	    "ppdselect" :	``(runConfigDialog (true)),
+	    "name" :		``(runNameDialog (false)),
+	    "namerem" :		``(runNameDialog (false)),
+	    "namedet" :		``(runNameDialog (true)),
 	    "members" :		``(runMembersDialog ()),
 	    "filter" :		``(runOptionsDialog ()),
 	    "features" :	``(runFeaturesDialog ()),
@@ -2981,20 +3544,21 @@ All your changes will be lost.
 	    "state" :		``(runStateDialog ()),
 	    "edit" :		``(runEditDialog ()),
 	    "detected" :	``(runDetectedDialog ()),
-	    "configdetected" :	``(runProbedPrinterDialog ()),
-	    "quick" :		``(runQuickDialog ()),
+	    "conftype" :	[ ``(runProbedPrinterDialog ()), true],
+	    "single" :		``(runSinglePrinterDialog ()),
 	    "redetect" :	[ ``(runProbeDialog ()), true ],
 	    "storeprinter" :	[ ``(storePrinter ()) , true ],
 	    "ppdetails" :	[ ``(Printerlib::editParallelPort ()), true ],
 	    "spdetails" :	[ ``(Printerlib::editSerialPort ()), true ],
 	    "revertdb" :	[ ``(revertDbPopup ()), true ],
+	    "queue_conf" :	[ ``(queueConfType ()), true ],
 	    "main_wz" :		``(WizardSequencer (getAliases (), main_sequence)),
 	    "add_printer_wz" :	``(WizardSequencer (getAliases (), add_printer_sequence)),
 	    "edit_printer_wz" :	``(WizardSequencer (getAliases (), edit_printer_sequence)),
-	    "auto_wz" :		``(WizardSequencer (getAliases (), auto_sequence)),
-	    "manual_wz" :	``(WizardSequencer (getAliases (), manual_sequence)),
 	    "cups_wz" :		``(WizardSequencer (getAliases (), cups_sequence)),
 //	    "detected_wz" :	``(WizardSequencer (getAliases (), detected_sequence)),
+	    "add_queue_wz":	``(WizardSequencer (getAliases (), add_queue_sequence)),
+	    "single_printer_wz":``(WizardSequencer (getAliases (), single_printer_sequence)),
 	    ];
     }
     /**
@@ -3045,40 +3609,58 @@ All your changes will be lost.
 	    "detected" : $[
 		`next : `next,
 		`abort : `abort,
-		`configure_button : "configdetected",
+		`configure_button : "add_printer_wz",
 		`restart_button : "redetect",
 		`edit_button : "main_wz",
-		`add : "add_printer_wz",
+//		`add : "add_printer_wz",
 		],
-	    "configdetected" : $[
+	    "add_printer_wz" : $[
+		`abort : `abort,
+		`next : "detected",
+		],
+/*	    "configdetected" : $[
 		`abort : `abort,
 		`quick : "quick",
 		`auto : "auto_wz",
 		`manual : "manual_wz",
-		],
-	    "quick" : $[
+//		`devsel : "de"					
+		],*/
+/*	    "quick" : $[
+//		`abort : `abort,
+//		`next : "detected",
+//		`edit : "edit_printer_wz",
+//		`add : "manual_wz",
+		`manual : "manual_wz",
+//		`again : "quick",
+		`choose_ppd : "ppdselect",
+		],*/
+/*	    "ppdselect" : $[
 		`abort : `abort,
-		`next : "detected",
-		],
-	    "manual_wz" : $[
+		`next : "quick",
+		],*/
+/*	    "manual_wz" : $[
 		`abort : `abort,
-		`next : "detected",
+		`next : "quick",
+		],*/
+/*	    "edit_printer_wz" : $[
+		`abort : `abort,
+		`next : "quick",
 		],
 	    "auto_wz" : $[
 		`abort : `abort,
 		`next : "detected",
-		],
+		],*/
 	    "main_wz" : $[
 		`next : `next,
 		`abort : `abort,
 		`switch : `switch,
 		`reinstall : `reinstall,
 		],
-	    "add_printer_wz" : $[
+/*	    "add_printer_wz" : $[
 		`next : "detected",
 		`abort : `abort,
-		],
-	    "storeprinter" : $[`next : "detected", ],
+		],*/
+//	    "storeprinter" : $[`next : "detected", ],
 	    ];
 	map main_sequence = $[
 	    "ws_start" : "type",
@@ -3141,9 +3723,30 @@ All your changes will be lost.
 		`switch : `switch,
 		],
 	    ];
+	// FIXME custom PPD file
+	map single_printer_sequence = $[
+	    "ws_start" : "single",
+	    "single" : $[
+		`abort : `abort,
+		`next : `next,
+		`edit : "edit_printer_wz",
+		`add : "add_queue_wz",
+		`again : "single",
+		`choose_ppd : "ppdselect",
+	    ],
+	    "edit_printer_wz" : $[ `abort : `abort, `next : "single"],
+	    "add_queue_wz" : $[ `abort : `abort, `next : "single"],
+	    "ppdselect" : $[ `abort : `abort, `next : "single", ],
+	];
 	map add_printer_sequence = $[
 	    "ws_start"   : "revertdb",
-	    "revertdb"	 : $[ `next : "connection", `next_net : "advconnection" ],
+	    "revertdb"   : $[ `next : "conftype", `next_net : "conftype" ],
+	    "conftype" : $[
+                `abort : `abort,
+                `quick : "single_printer_wz",
+                `model : "model",
+		`connection : "connection",
+	    ],
 	    "connection" : $[
 		`parallel : "parallel",
 		`serial: "serial",
@@ -3151,6 +3754,7 @@ All your changes will be lost.
 		`irda: "irda",
 		`file: "file",
 		`more: "advconnection",
+		`existing : "inst_printer",
 		`abort : `abort,
 		],
 	    "advconnection" : $[
@@ -3163,41 +3767,67 @@ All your changes will be lost.
 		`socket: "socket",
 		`pipe: "pipe",
 		`other: "other",
-		`class : "name",
+		`class : "add_queue_wz",
+		`existing : "inst_printer",
 		`abort : `abort,
 	    ],
-	    "parallel" : $[ `next : "name", `abort : `abort, `ppdetails : "ppdetails", ],
-	    "file" : $[ `next : "name", `abort : `abort, ],
-	    "pipe" : $[ `next : "name", `abort : `abort, ],
-	    "serial" : $[ `next : "name", `abort : `abort,  `spdetails : "spdetails", ],
-	    "usb" : $[ `next : "name", `abort : `abort, ],
-	    "irda" : $[ `next : "name", `abort : `abort, ],
-	    "samba" : $[ `next : "name", `abort : `abort, ],
-	    "novell" : $[ `next : "name", `abort : `abort, ],
-	    "prefilter" : $[ `next : "name", `abort : `abort, ],
-	    "remote" : $[ `next : "namerem", `abort : `abort, ],
-	    "filtering" : $[ `next : "name", `abort : `abort, ],
-	    "ipp" : $[ `next : "name", `abort : `abort, ],
-	    "socket" : $[ `next : "name", `abort : `abort, ],
-	    "other" : $[ `next : "name", `abort : `abort, ],
-	    "namerem" : $[ `abort : `abort, `next : "storeprinter", ],
-	    "name" : $[ `abort : `abort, `next : "model", `raw : "storeprinter", `class : "members", ],
-	    "members" : $[ `abort : `abort, `advanced : "cups_wz", `next : "storeprinter", ],
-	    "model" : $[ `abort : `abort, `next : "config", `useppd : "useppd", `dbchange : "dbchange", ],
-	    "dbchange" : $[ `abort : `abort, `next : "model", ],
-	    "config" : $[ `abort : `abort, `advanced : "filter", `next: "storeprinter", ],
-	    "filter" : $[ `abort : `abort, `next_cups : "cups_wz", `next : "features", ],
-	    "useppd" : $[ `abort : `abort, `advanced : "cups_wz", `db : "model", `next: "storeprinter" ],
-	    "features" : $[ `abort : `abort, `next_cups : "cups_wz", `next : "config", ],
-	    "cups_wz" : $[ `abort : `abort, `next : "c_type", ],
-	    "c_type" : $[ `db : "config", `class : "members", `ppd : "useppd", ],
+	    "parallel" : $[ `next : "model", `abort : `abort, `ppdetails : "ppdetails", ],
+	    "file" : $[ `next : "model", `abort : `abort, ],
+	    "pipe" : $[ `next : "model", `abort : `abort, ],
+	    "serial" : $[ `next : "model", `abort : `abort,  `spdetails : "spdetails", ],
+	    "usb" : $[ `next : "model", `abort : `abort, ],
+	    "irda" : $[ `next : "model", `abort : `abort, ],
+	    "samba" : $[ `next : "model", `abort : `abort, ],
+	    "novell" : $[ `next : "model", `abort : `abort, ],
+	    "prefilter" : $[ `next : "model", `abort : `abort, ],
+	    "remote" : $[ `next : "add_queue_wz", `abort : `abort, ],
+	    "filtering" : $[ `next : "model", `abort : `abort, ],
+	    "ipp" : $[ `next : "model", `abort : `abort, ],
+	    "socket" : $[ `next : "model", `abort : `abort, ],
+	    "other" : $[ `next : "model", `abort : `abort, ],
+
+	    "inst_printer" : $[ `next : "add_queue_wz", `abort : `abort, ],
+	    "add_queue_wz" : $[ `next : "storeprinter", `abort : `abort, ],
+
+	    "model" : $[ `abort : `abort, `next : "queue_conf", `useppd : "useppd", `dbchange : "dbchange", ],
+	    "useppd" : $[ `abort : `abort, `advanced : "cups_wz", `db : "model", `next: "queue_conf" ],
+	    "queue_conf" : $[ `abort : `abort, `all : "single_printer_wz", `single : "add_queue_wz" ],
+	    "single_printer_wz" : $[ `abort : `abort, `next : `next ],
+
+	// REQUIRED BECAUSE OF CLASSES
+//	    "name" : $[ `abort : `abort, `next : "add_queue_wz", `raw : "storeprinter", `class : "members", ],
+
+//	    "dbchange" : $[ `abort : `abort, `next : "model", ],
+
+//	    "namerem" : $[ `abort : `abort, `next : "storeprinter", ],
+//	    "members" : $[ `abort : `abort, `advanced : "cups_wz", `next : "storeprinter", ],
+//	    "config" : $[ `abort : `abort, `advanced : "filter", `next: "storeprinter", ],
+//	    "filter" : $[ `abort : `abort, `next_cups : "cups_wz", `next : "features", ],
+//	    "features" : $[ `abort : `abort, `next_cups : "cups_wz", `next : "config", ],
+//	    "cups_wz" : $[ `abort : `abort, `next : "c_type", ],
+//	    "c_type" : $[ `db : "config", `class : "members", `ppd : "useppd", ],
 	    "ppdetails" : $[ `abort : `abort, `next : "parallel", ],
 	    "spdetails" : $[ `abort : `abort, `next : "serial", ],
 	    "storeprinter" : $[`next : `next, ],
 	    ];
-	map manual_sequence = $[
+
+
+	map add_queue_sequence = $[
 	    "ws_start" : "name",
-	    "name" : $[ `abort : `abort, `next : "model", `raw: "storeprinter", ],
+            "name" : $[ `abort : `abort, `next : "config", `raw : `next, `class : "members", ],
+            "config" : $[ `abort : `abort, `advanced : "filter", `next: `next, ],
+            "filter" : $[ `abort : `abort, `next_cups : "cups_wz", `next : "features", ],
+            "features" : $[ `abort : `abort, `next_cups : "cups_wz", `next : "config", ],
+            "cups_wz" : $[ `abort : `abort, `next : "c_type", ],
+            "c_type" : $[ `db : "config", `class : "members", `ppd : "useppd", ],//FIXME, composite option might help
+	    "members" : $[ `abort : `abort, `advanced : "cups_wz", `next : `next, ],
+	];
+
+
+	map manual_sequence = $[
+	    "ws_start" : "namedet",
+	    "namedet" : $[ `abort : `abort, `next : "config",
+		`raw: "storeprinter", `model: "model"],
 	    "model" : $[ `abort : `abort, `next : "config", `useppd : "useppd", `dbchange : "dbchange", ],
             "dbchange" : $[ `abort : `abort, `next : "model", ],
 	    "config" : $[ `abort : `abort, `advanced : "filter", `next: "storeprinter", ],

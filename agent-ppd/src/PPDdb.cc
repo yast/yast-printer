@@ -20,6 +20,11 @@
 #include <cups/ppd.h>
 #include <zlib.h>
 #include <ctype.h>
+#include <regex.h>
+#include <stdio.h>
+#include <fcntl.h>
+
+
 
 #include <map>
 #include <string>
@@ -75,14 +80,59 @@ PPD::PPD(const char *ppddir, const char *ppddb) {
     for(i=0;(v=array_map[i].key);i++)
         vendors_map[string(v)]=string(array_map[i].val);
 
-    for (i=0;(v=array_model_map[i].key);i++)
+    char buf[256];
+    FILE* f = fopen ("/usr/share/YaST2/data/printerdb/models.equiv", "r");
+    if (f)
     {
-	map <string, string> vend;
-	if(models_map.find(v)!=models_map.end())
-	    vend = models_map[v];
-	vend[string(array_model_map[i].key)] = string(array_model_map[i].val);
-	models_map[string(v)]=vend;
+	while (fgets (buf, 255, f))
+	{
+	    unsigned int i = 0;
+	    string vendor;
+	    string pattern;
+	    string res;
+	    for (; i < strlen (buf) ; i++)
+	    {
+		if (buf[i] == '/')
+		{
+		    i++;
+		    break;
+		}
+		vendor = vendor + buf[i];
+	    }
+            for (; i < strlen (buf) ; i++)
+            {
+                if (buf[i] == '/')
+		{
+		    i++;
+                    break;
+		}
+                pattern = pattern + buf[i];
+            }
+            for (; i < strlen (buf) ; i++)
+            {
+                if (buf[i] == '/')
+		{
+		    i++;
+                    break;
+		}
+                res = res + buf[i];
+            }
+
+	    if (vendor != "" && pattern != "" && res != "")
+	    {
+		pattern = "^" + pattern + "$";
+
+		vector <pair <string, string> > vend;
+		if(models_map.find(vendor) != models_map.end())
+		    vend = models_map[vendor];
+		vend.push_back (pair<string, string> (pattern, res));
+		models_map[string(vendor)]=vend;
+	    }
+	}
+	fclose (f);
     }
+    else
+	y2error ("Error while opening models equivalence list");
 
     /*
     VendorsMap::const_iterator it = vendors_all.begin();
@@ -133,7 +183,7 @@ string PPD::getVendorId (string vendor) {
     }
     else
     {
-	vendor = filterchars (vendor, "ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890");
+	vendor = filternotchars (vendor, "/. -");
     }
     return vendor;
 }
@@ -142,9 +192,26 @@ string PPD::getVendorId (string vendor) {
  * Transform model name from PPD file/detection to key in database
  */
 string PPD::getModelId (string vendor, string model) {
+    string modres = "";
     model = strupper (model);
-    model = filterchars (model, "ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890");
-    return model;
+    if (models_map.find (vendor) != models_map.end ())
+    {
+	y2error ("Vendor found");
+	vector <pair<string, string> > vend = models_map[vendor];
+	vector <pair<string, string> >::iterator it = vend.begin ();
+	while (it != vend.end ())
+	{
+	    y2error ("Iterating model %s", (it->first).c_str ());
+	    modres = regexpsub (model, it->first, it->second);
+	    y2error ("Result: %s", modres.c_str ());
+	    if (modres != "")
+		break;
+	    it++;
+	}
+    }
+    if (modres == "")
+	modres = filternotchars (model, "/. -");
+    return modres;
 }
 
 /**
@@ -394,16 +461,75 @@ string PPD::killchars(const string s, const string chr) {
 /**
  * Filter characters, leavo only listed ones
  */
-string PPD::filterchars(const string s, const string chr) {
+string PPD::filternotchars(const string s, const string chr) {
     string tmp = s;
-    signed ind = tmp.find_first_not_of(chr);
+    signed ind = tmp.find_first_of(chr);
     while (ind >= 0)
     {
 	tmp.erase (ind, 1);
-	ind = tmp.find_first_not_of(chr);
+	ind = tmp.find_first_of(chr);
     }
     return tmp;
 }
+
+#define ERR_MAX 80              // for regexp
+#define SUB_MAX 10              // for regexp
+
+
+/**
+ * the same as YCP regexpsub builtin
+ */
+string PPD::regexpsub (const string input, const string pattern,
+	const string result)
+{
+    int status;
+    char error[ERR_MAX+1];
+
+    regex_t compiled;
+    regmatch_t matchptr[SUB_MAX+1];
+
+    status = regcomp (&compiled, pattern.c_str (), REG_EXTENDED);
+    if(status) {
+	return "";
+    }
+
+    if(compiled.re_nsub > SUB_MAX) {
+        snprintf(error, ERR_MAX, "too much subexpresions: %zd", compiled.re_nsub);
+        regfree(&compiled);
+	return "";
+    }
+
+    status = regexec(&compiled, input.c_str(), compiled.re_nsub+1, matchptr, 0);
+
+    if(status) {
+        regfree(&compiled);
+	return "";
+    }
+
+    static const char *index[] = {
+        "\\0", "\\1", "\\2", "\\3", "\\4",
+        "\\5", "\\6", "\\7", "\\8", "\\9"
+    };
+
+    string input_str(input);
+    string result_str(result);
+    string match_str[SUB_MAX];
+
+    for(unsigned int i=1; i<=compiled.re_nsub && i<SUB_MAX; i++) {
+        match_str[i] = matchptr[i].rm_so >= 0 ? input_str.substr(matchptr[i].rm_so, matchptr[i].rm_eo - matchptr[i].rm_so) : "";
+
+        string::size_type col = result_str.find(index[i]);
+        while( col != string::npos ) {
+            result_str.replace( col, 2, match_str[i]  );
+            col = result_str.find(index[i], col + 1 );
+        }
+    }
+
+    regfree (&compiled);
+    return result_str;
+}
+
+
 
 /**
  * Kill braces (and other bad characters) from the start and end of the string

@@ -36,6 +36,10 @@
     ////////// Module data
     //////////
     /**
+      * Don't run SuSEconfig, don't restart services if true and possible
+      */
+    global boolean write_only = false;
+    /**
      * Type of cups installation.
      * -1: unknown
      * 0:  server
@@ -68,6 +72,11 @@
      * for members structure.
      */
     global list printcap = [];
+    /**
+      *Backup list of print queues. See description of map printer
+      * for members structure.
+      */
+    global list printcap_backup = [];
     /**
      * Default printer
      */
@@ -141,7 +150,12 @@
      * getSystemForbiddenNames for accessing this list.
      */
      // this wasn't global before, but variable is used directly in printer.ycp
-     global list sys_forbidden_names = nil;
+    global list sys_forbidden_names = [];//nil;
+
+    /**
+      * List of temporarily forbidden names, which are not in current printcap
+      */
+    global list additional_forbidden_names = [];
 
     /**
      * List of unique keys of the printers read at the beginning.
@@ -224,6 +238,25 @@
 	index = i;
 	printer = select (printcap, index, $[]);
     }
+    /**
+     * Select printer to edit or something.
+     * @param name printer to select. Pass nil if you do not want to select
+     *          printer, e.g. if printer is going to be added.
+     */
+    global define void selectPrinterByName (string name) ``{
+        index = -1;
+        printer = $[];
+	integer ind = -1;
+	foreach (`p, printcap, ``{
+	    ind = ind + 1;
+	    if (p["name"]:"" == name)
+	    {
+		index = ind;
+		printer = p;
+	    }
+	});
+    }
+
     /**
      * Let print queue named name be currently edited.
      * If printer is not found, then queue will be $[] and index -1
@@ -349,7 +382,9 @@
      */
     global define list getForbiddenNames() ``{
 	list l = toset (add (flatten (maplist (`entry, printcap, ``(add (lookup (entry, "names", []), lookup (entry, "name", ""))))), "all"));
-	return maplist (`i, l, ``(tolower (i)));
+	list names = maplist (`i, l, ``(tolower (i)));
+	names = toset (merge (names, additional_forbidden_names));
+	return names;
     }
     /**
       * Assign states to a printer
@@ -425,7 +460,12 @@
      */
     global define void storePrinter () ``{
 	printer = assignStates (printer, true);
+
 	y2milestone ("Storing printer %1", printer);
+
+// FIXME remove only if exists
+//	printer = remove (printer,"modelset_required");
+
 	if (-1 == index)
 	{
 	    if (lookup (printer, "create_remote_queue", false))
@@ -500,6 +540,9 @@
 	    "printcap" : printcap,
 	    "default"  : default,
             "database" : db,
+	    "spooler" : spooler,
+	    "cups_installation" : cups_installation,
+	    "server_hostname" : server_hostname,
 	];
     }
     /**
@@ -508,6 +551,9 @@
      */
     global define void Import (map settings) ``{
 	dirty = true;
+	spooler = "spooler";
+	cups_installation = lookup (settings, "cups_installation", -1);
+	server_hostname = lookup (settings, "server_hostname", "");
 	default = lookup (settings, "default", "");
 	printcap = lookup (settings, "printcap", []);
         db = settings["database"]:nil;
@@ -1198,7 +1244,7 @@ the selected spooler does not support it.
 	list summary = [];
 	list used = [];
 	// autodetected printer
-	y2milestone ("Listing autodetected");
+//	y2milestone ("Listing autodetected");
 	foreach (`i, Printer::autodetected, ``{
 	    string found = "";
 	    string vendor = lookup (i, "vendor", "");
@@ -1263,7 +1309,7 @@ the selected spooler does not support it.
 	    else
 		summary = add (summary, Summary::Device (dev, contains (style, `short) ? sformat (format, found) : sformat (format + "<br>", found)));
 	});
-	y2milestone ("Listing others");
+//	y2milestone ("Listing others");
 	// other than autodetected printers
 	map other_printers = $[];
 	foreach (`i, printcap, ``{
@@ -1503,7 +1549,7 @@ the selected spooler does not support it.
 			if (Printer::db == `foomatic)
 			{
 			    new_queues = getFoomaticAutoQueues
-				(i["vendor_db"]:"", i["device_db"]:"");
+				(i["vendor_db"]:"", i["device_db"]:"", nil);
 			}
 			else
 			{

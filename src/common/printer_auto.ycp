@@ -28,101 +28,55 @@
     include "printer/helps.ycp";
     include "ui/common_popups.ycp";
 
-    // global variables
-    boolean do_abort_now = false;	// abort now
-    boolean auto_mode = true;		// preparing data for autoinstallation?
-    map settings = $[];
-    Printer::spooler = "unknown";//checkSpoolSystemNoDialog ();
-    if (Printer::spooler == "switched")
-    {
-        return CallFunction ("printer_auto", Args());
+    string func = WFM::Args(0);
+    map param = WFM::Args(1);
+
+    /**
+      * Create a summary
+      * return string
+      */
+    if(func == "Summary") {
+	Printer::Import( param);
+	return (Printer::Summary ());
+    }
+    /**
+      * Reset configuration
+      * return map or list
+      */
+    else if (func == "Reset") {
+	Printer::Import($[]);
+	return ($[]);
+    }
+    /**
+      * Change configuration
+      * return symbol (i.e. `finish || `accept || `next || `cancel || `abort)
+      */
+    else if (func == "Change") {
+	Printer::Import(param);
+	any res = AutoSequence();
+	return res;
+    }
+    /**
+      * Return configuration data
+      * return map or list
+      */
+    else if (func == "Result") {
+	return(Printer::Export());
+    }
+    /**
+      * Write configuration data
+      * return boolean
+      */
+    else if (func == "Write") {
+	Printer::write_only = true;
+	Printer::save_all = true;
+	return(Printer::Write());
     }
 
-    Mode::config = true;
-    /**
-     * Test for abort.
-     * @return true if abort was pressed
-     */
-    define boolean testAbort () ``{
-	if (`abort == UI::PollInput ())
-	{
-	    UI::CloseDialog ();
-	    return true;
-	}
+    /* unknown function */
+    else {
+	y2error("unknown function: %1", func);
 	return false;
     }
-    // ===== arguments ================================================
-
-    boolean test_mode = false;
-
-    // static variables
-    symbol runProbedPrinterDlg__current = `none;
-    integer runAutoprobedListDialog__current = 0;
-
-    Printer::warn_finish = false;
-
-
-    {
-	integer i = 0;
-	while (i < size (Args()))
-	{
-	    if (is (Args (i), map) && nil != Args (i))	settings = Args (i);
-	    if (.test == Args (i))             test_mode = true;
-	    i = i + 1;
-	}
-    }
-	Printer::Import(settings);
-    /**
-      * Set contents of main dialog for printer autoinstallation
-      */
-    define void set_contents() ``{
-        term contents =
-	    `VBox(
-		  `VSpacing(1),
-		  `RichText( `id(`summary), Printer::Summary([])),
-		  `VSpacing(),
-		  `HBox(
-			// pushbutton
-			`PushButton(`id(`configure), _("&Configure Printer")),
-			`HStretch(),
-			// pushbutton
-			`PushButton(`id(`reset), _("&Reset Configuration"))
-			)
-		  );
-	// dialog caption
-	Wizard::SetContents(_("Printer Configuration"),
-			    contents, "", true, true);
-    }
-
-    // Create Summary and buttons for launching
-    // in auto mode
-
-    set_contents();
-    any result = nil;
-    any ret = nil;
-    repeat {
-	ret = UI::UserInput();
-	if (ret == `configure)
-	{
-	        Wizard::CreateDialog ();
-		result = runWizard (true);
-		UI::CloseDialog ();
-		if (result == `next || result == `finish)
-		{
-		     settings = Printer::Export ();
-		}
-		Printer::Import(settings);
-		set_contents();
-	}
-	else if ( ret == `reset)
-	{
-	    settings= $[];
-	    Printer::Import(settings);
-	    set_contents();
-	}
-    } until (ret == `back || ret == `next || ret ==`key || ret ==`abort);
-
-    return [ret, settings];
 
 }
-

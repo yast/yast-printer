@@ -18,6 +18,7 @@
 #include <string>
 #include <list>
 #include <map>
+#include <vector>
 
 using namespace std;
 
@@ -77,7 +78,7 @@ class PPD {
 
         typedef map<string,string> VendorsMap;
         VendorsMap vendors_map;
-	typedef map<string, map<string, string> > ModelsMap;
+	typedef map<string, vector<pair <string, string> > > ModelsMap;
 	ModelsMap models_map;
 
         bool mtimes(const char *dirname, time_t mtime, int *count);
@@ -99,7 +100,9 @@ class PPD {
         string addbrace(const string s);
         string first(const string s, const string sep = " -/");
         string clean(const char *s);
-	string filterchars(const string s, const string chr);
+	string filternotchars(const string s, const string chr);
+	string regexpsub (const string input, const string pattern,
+		const string result);
 };
 
 #endif /* _PPDdb_h */
