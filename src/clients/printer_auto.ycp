@@ -25,6 +25,7 @@
     import "Printerdb";
     import "Spooler";
     import "Wizard";
+    import "Progress";
 
     include "printer/wizards.ycp";
 
@@ -287,14 +288,19 @@
     else if (func == "Export") {
 	ret = Export2AI (Printer::Export());
     }
+    else if (func == "Packages") {
+	ret = $[];
+    }
     /**
       * Write configuration data
       * return boolean
       */
     else if (func == "Write") {
+        Progress::off();
 	Printer::write_only = true;
 	Printer::save_all = true;
 	ret = Printer::Write();
+        Progress::on();
     }
     else if (func == "Read") {
 	ret = Printer::Read();
