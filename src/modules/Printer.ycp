@@ -1174,6 +1174,22 @@ Detect your printers?"));
 	return true;
     }
 
+    global boolean SaveQueue (map<string,any> queue) {
+	y2debug ("Saving printer %1", queue);
+	Printerdb::loadFoomaticIfNeeded ();
+	queue = Printerdb::getUpdatedPpdFile (queue);
+	boolean successfully = false;
+	if (Spooler::Get () == "cups")
+	{
+	    successfully = CUPS::WriteQueue (queue);
+	}
+	if (successfully)
+	{
+	    y2debug ("Success");
+	}
+	return successfully;
+    }
+
     /**
      * Save all queues
      * @return boolean true on success
@@ -1220,20 +1236,7 @@ the selected spooler does not support it."), name));
 	    else if (entry["type"]:"yast2" == "yast2"
 		&& (entry["changed"]:false || save_all))
 	    {
-		y2debug ("Saving printer %1", entry);
-		Printerdb::loadFoomaticIfNeeded ();
-		entry = Printerdb::getUpdatedPpdFile (entry);
-		boolean successfully = false;
-		if (Spooler::Get () == "cups")
-		{
-		    successfully = CUPS::WriteQueue (entry);
-		}
-		if (successfully)
-		{
-		    y2debug ("Success");
-		    entry["changed"] = false;
-		}
-
+		SaveQueue (entry);
 	    }
 	    Progress::NextStep ();
 	});
