@@ -4,6 +4,9 @@
 
 SUBDIRS = autodocs
 
+CATALOG="./catalog.xml"
+BUILD="build/"
+
 htmldir = @docdir@
 
 html_DATA = 			\
@@ -18,29 +21,45 @@ html_DATA = 			\
 	write.html		\
 	errors.html
 
-EXTRA_DIST = $(html_DATA)
+xml_files = $(wildcard *.xml)
 
-SOURCES = $(wildcard *.xml)
+EXTRA_DIST = $(html_DATA) $(xml_files) $(wildcard *.xsl) $(wildcard *.css)
+
+CLEANFILES = *.dvi *.aux *.tex *.log *.bak *.out *.ent *.sum *.pdf *.ps \
+  db2html.*
 
 ps: printer.ps
 
 pdf: printer.pdf
 
-html: printer.html
+chunks:
+	XML_CATALOG_FILES=$(CATALOG) \
+	xsltproc -stringparam base.dir $(BUILD) \
+	--xinclude \
+	chunks.xsl \
+	printer.xml
+
+html: chunks
+
+#html: printer.html
 
 dvi: printer.dvi
 
-printer.dvi: $(SOURCES)
+printer.dvi: $(xml_files)
 	db2dvi printer.xml
 
-printer.ps: $(SOURCES)
+printer.ps: $(xml_files)
 	db2ps printer.xml
 
-printer.pdf: $(SOURCES)
+printer.pdf: $(xml_files)
 	db2pdf printer.xml
 
-printer.html: $(SOURCES)
+printer.html: $(xml_files)
 	db2html printer.xml
 	chmod -R og+rX printer
 
+all: html
 
+install-data-local:
+	install -d -m 755 $(DESTDIR)/@docdir@/html
+	cp -a build/* $(DESTDIR)/@docdir@/html
