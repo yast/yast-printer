@@ -1207,6 +1207,12 @@ YCPValue PrinterdbAgent::Write (const YCPPath &path, const YCPValue& value, cons
 	    for (int i = 0; i< len; i++)
 		enc[i] = toupper (enc[i]);
 	    if (enc != "ISO-8859-2" && enc != "ASCII" && enc != "ISO-8859-15" && enc != "ISO-8859-1")
+	    {
+		enc = __("!!!  YOUR  ENCODING  !!!");
+		for (int i = 0 ; i < enc.length (); i++)
+		    enc[i] = toupper (enc[i]);
+	    }
+	    if (enc != "ISO-8859-2" && enc != "ASCII" && enc != "ISO-8859-15" && enc != "ISO-8859-1")
 		enc = "X";
 	}
 	Config**c = (Config**)findinset (configset, configsize, (char*)cfg.c_str());
