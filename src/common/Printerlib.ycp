@@ -655,6 +655,11 @@ Install them now?"));
 	Runlevel::ServiceAdjust ("cups", "disable");
 	del = filter (`e, del, ``(Pkg::IsProvided (e) == true));
 	inst = filter (`i, inst, ``(! Pkg::IsProvided (i)));
+	if (! (Pkg::IsProvided ("ghostscript-x11")
+	    || Pkg::IsProvided ("ghostscript-serv")))
+	{
+	    inst = add (inst, "ghostscript-x11");
+	}
 	import "PackageCallbacks";
 	y2milestone("-------- deleting = %1", del);
 	foreach (`e, del, ``{Pkg::PkgDelete (e);});
@@ -662,7 +667,9 @@ Install them now?"));
 	foreach (`e, inst, ``{Pkg::PkgInstall (e);});
 	Pkg::PkgSolve ();
 	Pkg::PkgCommit (0);
+	Wizard::CreateDialog ();
 	WFM::CallModule("inst_suseconfig", []);
+	Wizard::CloseDialog ();
 	reinitTarget ();
 	if (to == "cups" || to == "cups_client")
 	{
