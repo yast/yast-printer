@@ -28,6 +28,7 @@
     import "CUPS";
     import "HTML";
     import "Label";
+    import "Message";
     import "Mode";
     import "Package";
     import "Popup";
@@ -326,8 +327,7 @@ Install it now?"));
 		    }
 		    if (! req_ret && ! Package::LastOperationCanceled ())
 		    {
-			// error report
-			Report::Error (_("Failed to install required package."));
+			Report::Error (Message::FailedToInstallPackages ());
 			ptal_failed = true;
 		    }
 		    restart_cups = true;
@@ -1008,8 +1008,7 @@ Detect your printers?"));
 	assignDefault ();
 	if (! ret)
 	{
-	    // message box
-	    Report::Error (_("Unable to read the current configuration."));
+	    Report::Error (Message::CannotReadCurrentSettings ());
 	}
 	y2milestone ("Queues reading finished");
         return ret;
@@ -1289,8 +1288,8 @@ the selected spooler does not support it."), name));
 	];
 	if (! SCR::Write (.target.ycp, "/var/lib/YaST2/printers", save))
 	{
-	    // error report. %1 is filename
-	    Report::Error (sformat (_("Cannot write %1."), "/var/lib/YaST2/printers"));
+	    Report::Error (Message::CannotWriteSettingsTo (
+		"/var/lib/YaST2/printers"));
 	    return false;
 	}
 	// It can contain Samba/Novell passwords...
@@ -1532,7 +1531,7 @@ the selected spooler does not support it."), name));
 		    {
 			if (entry["valid"]:true)
 			{
-			    cache = sformat ("%1 [<a href=\"%1\">%1</a>]",
+			    cache = sformat ("%1 [<a href=\"%1\">%2</a>]",
 				cache, test_link);
 			}
 		    }
@@ -1623,7 +1622,7 @@ the selected spooler does not support it."), name));
 		    {
 			if (i["valid"]:true)
 			{
-			    cache = sformat ("%1 [<a href=\"%1\">%1</a>]",
+			    cache = sformat ("%1 [<a href=\"%1\">%2</a>]",
 				cache, test_link);
 			}
 		    }
