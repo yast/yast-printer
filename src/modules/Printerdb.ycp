@@ -1,12 +1,12 @@
 /**
  * File:
- *  ppd.ycp
+ *   modules/Printerdb.ycp
  *
- * Module:
- *  Printer configurator
+ * Package:
+ *   printer configuration tool
  *
  * Summary:
- *  Misc. defines for handling foomatic PPD files.
+ *   Defines for handling PPD files and database of PPD files
  *
  * Authors:
  *  Jiri Srain <jsrain@suse.cz>   2002
@@ -16,12 +16,22 @@
  */
 
 {
+    module "Printerdb";
     textdomain "printer";
-    import "Printer";
     import "Printerlib";
     import "Report";
     import "Mode";
     import "Label";
+    import "Spooler";
+
+// local variables
+
+    /**
+      * map of foomatic printers database
+      */
+    global map foomatic = nil;
+
+// global functions
 
     /**
       * Get proposed default queue when using foomatic db
@@ -91,7 +101,7 @@
 	map ppds = $[];
 
 	if (ppd_nicks == nil)
-	    ppds = filter (`k, `v, Printer::foomatic[vendor_db, device_db]:$[],
+	    ppds = filter (`k, `v, foomatic[vendor_db, device_db]:$[],
 		``(is (k, string)));
 	else
 	    ppds = listmap (string k, ppd_nicks, ``([k, $[]]));
@@ -200,11 +210,11 @@
 	list ppd_nicks)
     ``{
 	list ppds = sortPpds (vendor_db, device_db, ppd_nicks);
-	if (Printer::spooler == "cups")
+	if (Spooler::Get () == "cups")
 	    return ppds[0]:nil;
 	// for LPRng find first with foomatic-rip as filter
 	return find (string s, ppds, ``(
-	    Printer::foomatic[vendor_db, device_db, s, "filter"]:""
+	    foomatic[vendor_db, device_db, s, "filter"]:""
 		== "foomatic-rip"));
     }
 
@@ -235,7 +245,7 @@
             ppdfile = entry["ownppd"]:"";
         else if (! raw)
         {
-            ppdfile = Printer::foomatic[entry["vendor_db"]:"",
+            ppdfile = foomatic[entry["vendor_db"]:"",
                 entry["device_db"]:"",
                 entry["config"]:"",
                 "filename"]:"";
@@ -269,98 +279,11 @@ printer model again.
 
 
     /**
-      * Get auto queues for printer when using foomatic database
-      * @param vendor string vendor db key
-      * @param model string model db key
-      * @param config string choosen ppd file, nil = auto
-      * @return list of PPD files
-      */
-    global define list getFoomaticAutoQueues (string vendor, string model,
-        string config)
-    ``{
-        list forbidden_names = Printer::getForbiddenNames ();
-        y2debug ("Getting auto queues for >>%1<< >>%2<<", vendor, model);
-        loadFoomaticIfNeeded ();
-        list new_queues = [];
-        map ppds = getPpdFiles (vendor, model);
-        string ppdfile_orig = "";
-        if (vendor == "__ownppd__")
-            ppdfile_orig = model;
-        else if (config == nil || config == "")
-            ppdfile_orig = getAutoPpdFile (ppds, vendor, model);
-        else
-            ppdfile_orig = Printer::foomatic[vendor, model, config, "filename"]:"";
-        y2debug ("Choosen PPD file: %1", ppdfile_orig);
-        string config = ppds[ppdfile_orig]:"";
-        string ppdfile = SCR::Read (.ppd.file.open,
-            [ppdfile_orig, SCR::Read (.target.tmpdir)]);
-        map options = SCR::Read (.ppd.file.options, [ppdfile, ""]);
-        list opts = options["data"]:[];
-            integer ind = -1;
-            boolean found = true;
-            find (`i, opts, ``{
-                ind = ind + 1;
-                found = i["name"]:"" == "PrintoutMode";
-                return found;
-            });
-            map composite = $[];
-            if (found)
-                composite = opts[ind]:$[];
-            if (composite != $[])
-            {
-                foreach (`v, composite["valorder"]:[], ``{
-                    string optname = composite["name"]:"";
-                    string pagesize = Printerlib::getDefaultPaperSize () == `a4 ? "A4" : "Letter";
-                    map new_options = $[
-                        optname : v,
-                        "PageSize" : pagesize,
-                        "PageRegion" : pagesize,
-                        "ImageableArea" : pagesize,
-                        "PaperDimension" : pagesize,
-                    ];
-                    new_queues = add (new_queues, $[
-                        "config" : config,
-                        "name" : mergestring (splitstring
-                            (tolower (v), "."), "_"),
-                        "info" : composite["values", v]:v,
-                        "options" : new_options,
-                        "composite" : composite["name"]:"",
-                    ]);
-
-                });
-            }
-            else
-            {
-                new_queues = [ $[
-                    "config" : config,
-                    "name" : "lp",
-                        // table cell
-                    "info" : _("default configuration"),
-// TODO FIXME: page size
-                ]];
-            }
-
-            string suffix = Printer::getQueueSuffix (new_queues);
-            new_queues = maplist (`v, new_queues, ``{
-                v = add (v, "name", Printer::adjustQueueName (lookup (v, "name", "lp") + suffix, forbidden_names));
-                if (nil == first_queue)
-                {
-                    first_queue = lookup (v, "name", "");
-                }
-                forbidden_names = add (forbidden_names, lookup (v, "name", ""));
-                return union (Printer::printer, v);
-        });
-        y2debug ("Proposing queues %1", maplist (`q, new_queues, ``(q["name"]:"")));
-        y2debug ("Proposed queues: %1", new_queues);
-        return new_queues;
-    }
-
-    /**
       * Check whether foomatic database has been loaded, and if not, then
       * load it
       */
     global define void loadFoomaticIfNeeded () ``{
-        if (Printer::foomatic != nil)
+        if (foomatic != nil)
             return;
 	boolean contains_flag = 0 == SCR::Execute (.target.bash, "/bin/grep '#this database was generated during package building' /var/lib/YaST2/ppd_db.ycp");
         y2milestone ("Checking foomatic database");
@@ -404,7 +327,7 @@ of printers.
                 SCR::Write (.ppd.db.check_method, `checksum);
             }
         }
-        Printer::foomatic= SCR::Read (.target.ycp, "/var/lib/YaST2/ppd_db.ycp");
+        foomatic= SCR::Read (.target.ycp, "/var/lib/YaST2/ppd_db.ycp");
     }
 
     /**
@@ -415,7 +338,7 @@ of printers.
       */
     global define map getPpdFiles (string vendor_db, string device_db) ``{
 	loadFoomaticIfNeeded ();
-	map ppd_db = Printer::foomatic[vendor_db, device_db]:$[];
+	map ppd_db = foomatic[vendor_db, device_db]:$[];
 	ppd_db = filter (`k, `v, ppd_db, ``(is (k, string)));
 	map ret = mapmap (string k, map v, ppd_db, ``( [v["filename"]:"", k]));
 	ret = filter (`k, `v, ret, ``(k != "" && v != ""));
@@ -457,7 +380,7 @@ of printers.
 	Report::Message (sformat (_("%1 file was added to the database",
 	    "%1 files were added to the database", count),
 	    count));
-	Printer::foomatic = nil;
+	foomatic = nil;
 	loadFoomaticIfNeeded ();
 	return true;
     }

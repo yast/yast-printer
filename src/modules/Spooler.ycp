@@ -1,0 +1,548 @@
+/**
+ * File:
+ *   modules/Spooler.ycp
+ *
+ * Package:
+ *   Printing spooler library.
+ *
+ * Summary:
+ *   Some utility functions for spooler settings
+ *
+ * Authors:
+ *   Jiri Srain <jsrain@suse.cz>
+ *
+ * $Id$
+ *
+ * Printer library exported functions. What else?!?
+ */
+
+{
+    module "Spooler";
+
+    textdomain "printer";
+
+    import "Mode";
+    import "Require";
+    import "Runlevel";
+    import "CUPS";
+    import "Popup";
+
+// local variables
+
+    /**
+      * Currently used spooler, cups or lprng
+      */
+    string spooler = "unknown";
+
+    /**
+     * Printer's name mustn't be the same as a name of one of the files
+     * in the /etc/lpdfilter directory. These are the files. If it is nil,
+     * the list hasn't been initialized yet. Use function
+     * getSystemForbiddenNames for accessing this list.
+     */
+    list sys_forbidden_names = nil;
+
+// global variables
+
+    /**
+      * Has to be saved all?
+      * FIXME should it really be here?
+      */
+    global boolean save_all = false;
+    /**
+      * Shall be settings read at the beginning?
+      * FIXME should it really be here?
+      */
+    global boolean reread = true;
+
+// local functions
+
+    /**
+      * display CUPS initialization popup
+      */
+    define void showCupsInitPopup () ``{
+        // popup
+        UI::OpenDialog(`opt(`decorated ),`VBox (
+                // label
+            `Label(_("Initializing CUPS server...
+This usually takes one or two minutes")),
+            `ProgressBar (`id (`cups_prog), "", 60 * 10)));
+    }
+
+
+
+
+// global functions
+
+    /**
+      * Get the currently used spooler
+      * @return currently used spooler
+      */
+    global define string Get() ``{
+	return spooler;
+    }
+
+    /**
+      * Set the spooler that is used
+      * FIXME high-level functions should be used instead of this one, this
+      *       should get local
+      * @param spoolr_type string spooler that is used
+      */
+    global define void Set (string spooler_type) ``{
+	spooler = spooler_type;
+    }
+
+    /**
+     * Get list of names that are forbidden because they are used as
+     * filenames in /etc/lpdfilter
+     * @return list of strings -- these strings are not allowed as queue
+     * names.
+     */
+    global define list getSystemForbiddenNames () ``{
+	if (nil == sys_forbidden_names)
+	{
+	    if (0 != SCR::Execute (.target.bash, "test -d /etc/lpdfilter"))
+		sys_forbidden_names = [];
+	    else
+		sys_forbidden_names = SCR::Read (.etc.printcap.sysnames);
+	    if (nil == sys_forbidden_names)
+		sys_forbidden_names = [];
+	}
+	sys_forbidden_names
+	    = maplist (`n, sys_forbidden_names, ``(tolower (n)));
+	return sys_forbidden_names;
+    }
+
+    /**
+      * stop currently running printer spooler service
+      */
+    global define void StopServices () ``{
+	if (Mode::config)
+	    return;
+	SCR::Execute (.target.bash, "test -f /etc/init.d/lpd && /etc/init.d/lpd stop");
+	SCR::Execute (.target.bash, "test -f /etc/init.d/cups && /etc/init.d/cups stop");
+    }
+
+    /**
+     * Test which spooling system is most probably used.
+     * @return integer with some bits set:<br>
+     *    1 if lpd is installed<br>
+     *    2 if cups is installed<br>
+     *      (therefore 0 if none is installed)<br>
+     *      (therefore 3 if both are installed)<br>
+     *  256 is added if the instalation doesn't seem to be complete
+     */
+    global define integer getSpoolSystem () ``{
+	Require::EnsureTargetInit ();
+
+	// first try if some of the systems exists.
+	boolean cups_exists = Pkg::IsProvided ("cups-client");
+	// for lpd we need to check the file because
+	boolean lpd_exists = (SCR::Read(.target.size, "/etc/init.d/lpd")!=-1);
+	y2milestone ("CUPS exists: %1, LPD exists: %2",
+	    cups_exists, lpd_exists);
+	boolean cups_complete = Pkg::IsProvided ("cups-drivers")
+	    && Pkg::IsProvided ("cups-libs")
+	    && Pkg::IsProvided ("cups")
+	    && Pkg::IsProvided ("cups-client")
+	    && Pkg::IsProvided ("filters")
+	    && Pkg::IsProvided ("foomatic-filters");
+	boolean lpd_complete = Pkg::IsProvided ("lpdfilter")
+            && Pkg::IsProvided ("filters")
+	    && Pkg::IsProvided ("cups-drivers")
+	    && Pkg::IsProvided ("foomatic-filters");
+
+	if (cups_exists && !lpd_exists)
+	    {
+		if (cups_complete)
+		    return 2;
+		else
+		{
+		    boolean cups_client = Pkg::IsProvided ("cups-libs") && ! Pkg::IsProvided ("cups");
+		    if (cups_client)
+			return 512 + 2;
+		    else
+			return 256 + 2;
+		}
+	    }
+	if (!cups_exists && lpd_exists)
+	    {
+		if (lpd_complete)
+		    return 1;
+		else
+		    return 256 + 1;
+	    }
+	if (cups_exists && lpd_exists)
+	    {
+		return 3;
+	    }
+	return 0;
+    }
+
+    /**
+     * Uninstalls print spoolers and installs selected one.
+     * Stops all spoolers before installation.
+     * @param to Spooler to install. Should be one of "cups" "lprng"
+     */
+    global define void switchTo (string to) ``{
+	y2milestone ("Switching spooler to %1", to);
+	Require::EnsureTargetInit ();
+	list del = ["plp", "lprold", "lprng", "cups", "cups-client",
+            "cups-drivers", "cups-drivers-cs", "cups-drivers-de",
+            "cups-drivers-stp", "lpdfilter", "filters", "foomatic-filters"];
+	list inst = [];
+
+	list inst_cups = [ "cups", "cups-drivers", "cups-client",
+	    "cups-drivers-stp", "filters", "foomatic-filters"];
+	list inst_cups_client = [ "cups-client"];
+	list inst_other = [ to, "filters", "lpdfilter", "foomatic-filters",
+	    "cups-drivers"];
+
+	if ("cups" == to)
+        {
+            inst = inst_cups;
+        }
+        else if ("cups_client" == to)
+        {
+            inst = inst_cups_client;
+	    del = filter (string d, del, ``(! contains (inst_cups, d)));
+        }
+        else
+        {
+	    // after switch from CUPS to LPRng printcap with imported queues
+	    // can be left. remove it (#29440)
+	    y2milestone ("Removing /etc/printcap");
+	    SCR::Execute (.target.bash,
+		"test -f /etc/printcap && /bin/rm /etc/printcap");
+	    inst = inst_other;
+        }
+	del = filter (`e, del, ``(! contains (inst, e)));
+
+
+	if (Mode::config)
+	{
+	    Spooler::Set (to);
+	    Require::RequireAndConflictTarget (inst, del, "");
+	    if (Spooler::Get () == "cups")
+		// question popup
+		Require::RequireAndConflict (inst, del, _("For the selected function, the additional packages
+%1
+must be installed.
+
+Install them now?"));
+	    return;
+	}
+	StopServices ();
+	Runlevel::ServiceAdjust ("lpd", "disable");
+	Runlevel::ServiceAdjust ("cups", "disable");
+	del = filter (`e, del, ``(Pkg::IsProvided (e) == true));
+	inst = filter (`i, inst, ``(! Pkg::IsProvided (i)));
+	if (! (Pkg::IsProvided ("ghostscript-x11")
+	    || Pkg::IsProvided ("ghostscript-serv")))
+	{
+	    inst = add (inst, "ghostscript-x11");
+	}
+	import "PackageCallbacks";
+	y2milestone("-------- deleting = %1", del);
+	foreach (`e, del, ``{Pkg::PkgDelete (e);});
+	y2milestone("-------- installing = %1", inst);
+	foreach (`e, inst, ``{Pkg::PkgInstall (e);});
+	Pkg::PkgSolve ();
+	Pkg::PkgCommit (0);
+	Require::RunSuSEconfig ();
+	if (to == "cups" || to == "cups_client")
+	{
+	    // after switch from CUPS to LPRng printcap with imported queues
+	    // can be left. remove it (#29440)
+	    // deleting when switching to CUPS doesn't break anything
+	    y2milestone ("Removing /etc/printcap");
+	    SCR::Execute (.target.bash,
+		"test -f /etc/printcap && /bin/rm /etc/printcap");
+	}
+	if ("cups" == to)
+        {
+	    // create symlink /etc/printcap -> /etc/cups/printcap (#29671)
+	    y2milestone ("Creating /etc/printcap symlink");
+	    SCR::Execute (.target.bash,
+		"/bin/ln -sf /etc/cups/printcap /etc/printcap");
+	}
+
+//	Require::DoInstallAndRemove (inst, del);
+
+	sys_forbidden_names = nil;
+	reread = true;
+	save_all = true;
+    }
+
+    /**
+      * check whether spooler (if needed to be running) runns, if not start it
+      * @param showPopup boolean true if shall show a popup if needed
+      */
+    global define void RestartIfNeeded (boolean showPopup) ``{
+	if (Mode::config)
+	    return;
+        if (Spooler::Get () == "cups")
+        {
+            if (`server == CUPS::InstallationType ())
+            {
+		boolean close_dialog = false;
+		integer status = SCR::Execute (.target.bash, "/usr/bin/lpq 2>/dev/null");
+                if (status == 0)
+                    return;
+		if (SCR::Read (.target.size, "/etc/cups/ppds.dat") <= 0)
+		{
+		    close_dialog = true;
+		    showCupsInitPopup ();
+		}
+                status = SCR::Execute (.target.bash, "/etc/init.d/cups status");
+                if (0 != status)
+		{
+                    SCR::Execute (.target.bash_background, "/etc/init.d/cups start");
+		    sleep (1000);
+		}
+                status = 1;
+		integer attempts = 0;
+                while (true)
+                {
+                    status = SCR::Execute (.target.bash, "/usr/bin/lpq 2>/dev/null");
+                    if (status == 0)
+                        break;
+		    attempts = attempts + 1;
+		    if (attempts > 5 && ! close_dialog)
+		    {
+			close_dialog = true;
+			showCupsInitPopup ();
+		    }
+		    if (attempts>60*10)
+		    {
+			break;
+		    }
+                    if (close_dialog)
+                        UI::ChangeWidget (`id (`cups_prog), `Value, attempts);
+                    sleep (1000);
+                    status = SCR::Execute (.target.bash, "/etc/init.d/cups status");
+                    if (0 != status)
+                    {
+                        Popup::Error (
+                            // error popup
+                            _("CUPS daemon died during initialization"));
+			break;
+                    }
+                }
+		if (close_dialog)
+		{
+		    UI::CloseDialog ();
+		}
+            }
+        }
+    }
+
+    /**
+      * Adjust services for runlevel, set them to state needed for writing
+      * @return boolean true on success
+      */
+    global define boolean AdjustServices () ``{
+	// FIXME error checking
+	StopServices();
+
+	if (Spooler::Get () == "cups")
+	{
+	    if (SCR::Read (.init.scripts.exists, "lpd"))
+		Runlevel::ServiceAdjust ("lpd", "disable");
+            if (`client == CUPS::InstallationType ())
+	    {
+		if (SCR::Read (.init.scripts.exists, "cups"))
+		    Runlevel::ServiceAdjust ("cups", "disable");
+	    }
+	    else
+	    {
+// always adjust CUPS to be run (bugzilla 29413)
+/*		if (SCR::Read (.init.scripts.exists, "cups")
+		    && (size (printcap) > 0
+			|| CUPS::cups_server_settings["Browsing"]:"On" == "On"))
+		{*/
+		    Runlevel::ServiceAdjust ("cups", "enable");
+//		}
+	    }
+	}
+	else
+	{
+	    if (SCR::Read (.init.scripts.exists, "cups"))
+		Runlevel::ServiceAdjust ("cups", "disable");
+	    if (SCR::Read (.init.scripts.exists, "lpd") && size (printcap) > 0)
+		Runlevel::ServiceAdjust ("lpd", "enable");
+	}
+	Spooler::RestartIfNeeded (true);
+	return true;
+    }
+
+    /**
+     * Check what spool system is installed. Don't ask user.
+     * @return string spooler
+     */
+    global define string checkSpoolSystemNoDialog () ``{
+	integer spool_sys = Spooler::getSpoolSystem ();
+	spool_sys = spool_sys & 0xFF;
+	if (1 == spool_sys) //lpd is installed
+	{
+	    return "lprng";
+	}
+	else if (2 == spool_sys) //cups is installed
+	{
+	    return "cups";
+	}
+	return "unknown";
+    }
+
+    /**
+     * Check what spool system is installed. Ask user if needed and install spooler if wanted.
+     * @return string spooler
+     */
+    global define string checkSpoolSystem () ``{
+	integer spool_sys = Spooler::getSpoolSystem ();
+	if (1 == spool_sys) //lpd is installed
+	{
+	    return "lprng";
+	}
+	else if (2 == spool_sys) //cups is installed
+	{
+	    return "cups";
+	}
+	else if (0 == spool_sys || 3 == spool_sys || 256 + 1 == spool_sys
+	    || 256 + 2 == spool_sys)
+	{
+	    string message = "";
+	    if (0 == spool_sys) //none installed
+	    {
+		// popup message
+		message = _("No printing system installed. 
+Select the spooler to 
+install and configure.
+");
+	    }
+	    else if (3 == spool_sys) //both spoolers are installed
+	    {
+		// popup message
+		message = _("Both LPRng and CUPS are installed.
+Select the spooler  
+to leave installed and configure.");
+	    }
+	    else if (256 + 1 == spool_sys) // lpd is installed, but seems
+					   // to be not complete
+	    {
+		// popup message
+		message = _("An LPD-compatible spooler, probably LPRng,
+is installed, but the installation does not seem 
+complete. Choose to reinstall 
+LPRng, install CUPS, or leave the current status.
+To repair the current configuration, select LPRng.
+If you leave the current status, your spooler may not
+run properly.
+");
+	    }
+	    else if (256 + 2 == spool_sys) // cups is installed, but seems
+					   // to be not complete
+	    {
+		// popup message
+		message =_("The CUPS spooler is installed, but the installation 
+does not seem complete. Choose to reinstall
+CUPS, install LPRng, or leave the current status. 
+To repair the current configuration, select the 
+CUPS full server installation.
+If you leave the current status, your spooler 
+may not run properly.");
+	    }
+	    symbol result = chooseSpooler (message,
+		// pushbutton
+		_("Abo&rt setup"));
+	    if (`cups_server == result)
+	    {
+		Spooler::switchTo ("cups");
+		// FIXME
+//		Printer::assignAllQueuesChanged ();
+		return "cups";
+	    }
+	    else if (`cups_client == result)
+            {
+                Spooler::switchTo ("cups_client");
+		// FIXME
+//		Printer::assignAllQueuesChanged ();
+                return "cups";
+            }
+	    else if (`lprng == result)
+	    {
+		Spooler::switchTo ("lprng");
+		// FIXME
+//		Printer::assignAllQueuesChanged ();
+		return "lprng";
+	    }
+            else if (`cancel == result)
+                return "exit";
+	    else
+		return "unknown";
+	}
+	else if (512 + 2 == spool_sys) // only client installation of cups
+				       // is installed
+	{
+	    return "cups";
+	}
+	return ""; //should be never reached
+    }
+
+    /**
+      * Test whether spooler supports queue type
+      * @param queue string queue type (eg. parallel)
+      * @param spooler string "cups" or "lprng"
+      * @return boolean true if supports
+      */
+    global define boolean testSupportedQueueBySpooler
+	(string queue, string spooler)
+    ``{
+	map supported = $[ "cups" : [ "parallel", "usb", "serial", "lpd", "ipp", "samba", "socket", "irda", "class", "novell", "pipe", ],
+			   "lprng" : [ "parallel", "usb", "serial", "lpd", "samba", "novell", "irda", "socket", "pipe", ]];
+	list l = lookup (supported, spooler, []);
+	if (l == [])
+	    return true;
+	if (contains (l, queue))
+	    return true;
+	if (spooler == "cups")
+	{
+	    list(string) backends
+		= SCR::Read (.target.dir, "/usr/lib/cups/backend");
+	    if (backends != nil)
+		return contains (backends, queue);
+	}
+	return false;
+    }
+    /**
+      * Test whether currently used spooler supports queue type
+      * @param queue string queue type (eg. parallel)
+      * @return boolean true if supports
+      */
+    global define boolean testSupportedQueue (string queue) ``{
+	return testSupportedQueueBySpooler (queue, Spooler::Get ());
+    }
+
+    /**
+      * Restart printer daemon
+      * @return boolean true on success
+      */
+    global define boolean restartServices () ``{
+	Spooler::StopServices ();
+	if (! write_only)
+	{
+// always adjust CUPS to be run (bugzilla 29413)
+	    if (size (printcap) > 0 || (Spooler::Get () == "cups"/* &&
+		CUPS::cups_server_settings["Browsing"]:"On" == "On"*/))
+	    {
+		if (Spooler::Get () == "cups")
+		    SCR::Execute (.target.bash, "test -f /etc/init.d/cups && /etc/init.d/cups start");
+		else
+		    SCR::Execute (.target.bash, "test -f /etc/init.d/lpd && /etc/init.d/lpd start");
+	    }
+	}
+	return true;
+    }
+
+
+}

@@ -22,6 +22,7 @@
     import "Arch";
     import "Mode";
     import "Report";
+    import "Spooler";
 
     include "printer/misc.ycp";
     include "printer/helps-connection.ycp";
@@ -75,7 +76,7 @@
       * @return the same as selected radio button if proceed, nil otherwise
       */
     global define symbol checkConnectionType (symbol selected) ``{
-        if (selected == `cups && Printer::spooler != "cups")
+        if (selected == `cups && Spooler::Get () != "cups")
         {
 	    // message popup
             Popup::Message (_("Printing via a CUPS network server
@@ -128,7 +129,7 @@ Continue?
       * @return the same as selected radio button if proceed, nil otherwise
       */
     global define symbol checkConnectionDirect (symbol selected) ``{
-	if (selected == `ipp && Printer::spooler != "cups")
+	if (selected == `ipp && Spooler::Get () != "cups")
 	{
 	    // message popup
 	    Popup::Message (_("Remote IPP queues are not possible
@@ -146,7 +147,7 @@ if not using a CUPS spooler
       * @return the same as selected radio button if proceed, nil otherwise
       */
     global define symbol checkConnectionOther (symbol selected) ``{
-	if (selected == `class && Printer::spooler != "cups")
+	if (selected == `class && Spooler::Get () != "cups")
 	{
 	    // message popup
 	    Popup::Message (_("CUPS classes are not possible
@@ -154,7 +155,7 @@ if not using a CUPS spooler
 "));
 	    return nil;
 	}
-	if (selected == `uri && Printer::spooler != "cups")
+	if (selected == `uri && Spooler::Get () != "cups")
 	{
 	    // message popup
 	    Popup::Message (_("Other printers set by URI can be configured
@@ -518,7 +519,7 @@ only if a CUPS spooler is used
         else
             devices = [];
 
-        if (type == "usb" && Printer::spooler == "cups")
+        if (type == "usb" && Spooler::Get () == "cups")
         {
             Printerlib::setCupsUsbDevicesInfo ();
             devices = Printerlib::getCupsUsbDevices ();
@@ -760,7 +761,6 @@ actually selected.
 		    // error report
 		    Report::Error (_("Failed to install required packages."));
 		};
-		Printerlib::reinitTarget ();
 	    }
         }
 

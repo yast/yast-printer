@@ -27,7 +27,9 @@
     import "Popup";
     import "Label";
     import "Report";
+    import "Spooler";
     import "Wizard";
+    import "CUPS";
 
     string func  = Args(0);
     map    param = Args(1);
@@ -36,12 +38,12 @@
     // static variables
     integer runAutoprobedListDialog__current = 0;
 
-    integer spool_sys = Printerlib::getSpoolSystem ();
+    integer spool_sys = Spooler::getSpoolSystem ();
 
     if (spool_sys == 1)
-	Printer::spooler = "lprng";
+	Spooler::Set ("lprng");
     else if (spool_sys == 2)
-	Printer::spooler = "cups";
+	Spooler::Set ("cups");
     if (func == "MakeProposal")
     {
 	startCupsServer ();
@@ -57,7 +59,7 @@
 		Printer::Reset ();
 		if (Mode::update)
 		{
-		    restartSpoolerIfNeeded (true);
+		    Spooler::RestartIfNeeded (true);
 		    Printer::queuesRead ();
 		}
 		else
@@ -91,9 +93,9 @@ Detect your printers?
 		    Printer::Detect ();
 		if (size (Printer::printcap) == 0
 		    && size (Printer::autodetected) == 0
-		    && Printer::spooler == "cups")
+		    && Spooler::Get () == "cups")
 		{
-		    Printerlib::stopServices ();
+		    Spooler::StopServices ();
 		    // no local printer found
 		    y2milestone ("No local printer found, trying IPP servers");
 		    string pid = nil;
@@ -164,8 +166,8 @@ Detect your printers?
 		    {
 			y2milestone ("Found servers: %1",Printer::cups_servers);
 			string server = Printer::cups_servers[0]:"";
-			Printer::cups_installation = `client;
-			Printer::server_hostname = server;
+			CUPS::cups_installation = `client;
+			CUPS::server_hostname = server;
 		    }
 		}
 		// cleanup after testing of remote CUPS server existence
@@ -229,18 +231,18 @@ Detect your printers?
 	 * with nothing configured, we may just check if the list
 	 * of printers is empty (there is nothing to save).
 	 */
-//	restartSpoolerIfNeeded (true);
+//	Spooler::RestartIfNeeded (true);
 	boolean success = true;
 	if (1 == spool_sys || 2 == spool_sys)
 	{
-	    if (0 != size (Printer::printcap) || Printer::cupsInstallationType () == `client)
+	    if (0 != size (Printer::printcap) || CUPS::InstallationType () == `client)
 	    success = Printer::Write ();
 	}
 	else if (512 + 2 == spool_sys) // CUPS client-only
 	{
 	    success = Printer::Write ();
 	}
-	Printerlib::stopServices ();
+	Spooler::StopServices ();
         ret = $[ "success" : success ];
     }
     return ret;

@@ -19,13 +19,10 @@
 
 {
     textdomain "printer";
-    import "Printer";
     import "Printerlib";
+    import "Printerdb";
     import "Report";
     import "Popup";
-
-    include "printer/testpage.ycp";
-    include "printer/ppds.ycp";
 
     /**
      * Write the .upp file and the configuration.
@@ -34,7 +31,7 @@
      */
     global define boolean createUppFile (map entry) ``{
 	// save modified PPD file
-        entry = getUpdatedPpdFile (entry);
+        entry = Printerdb::getUpdatedPpdFile (entry);
         if (entry == nil)
             return false;
 
@@ -198,7 +195,7 @@ is not completed properly."));
      * @return boolean success?
      */
     global define boolean writeLpdPrinter (map entry) ``{
-        loadFoomaticIfNeeded ();
+        Printerdb::loadFoomaticIfNeeded ();
         map conf = entry["conf"]:$[];
         string uri = entry["uri"]:"";
         string name = entry["name"]:"";

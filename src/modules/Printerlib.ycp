@@ -19,15 +19,17 @@
 {
     module "Printerlib";
     textdomain "printer";
-    import "Printer";
     include "printer/texts.ycp";
     import "Label";
     import "Popup";
-    import "Runlevel";
     import "Require";
-    include "printer/misc.ycp";
     import "Mode";
     import "Report";
+    import "Spooler";
+    import "CUPS";
+
+
+// local variables
 
     /**
      * set to true after function Read had been called.
@@ -39,32 +41,29 @@
      * for accessing this function.
      */
     symbol paper_size = nil;
-    /**
-      * true id Pkg::target_init was already called
-      */
-    boolean target_inited = false;
+
+// global variables
 
     /**
       * Base directory of printconf's data files
       */
     global string baseDataDir = "/usr/share/YaST2/data/printer";
 
-    /**
-      * Initialize package manager target
-      */
-    global define void initTarget () ``{
-	if (! target_inited)
-	{
-	    Pkg::TargetInit ("/", false);
-	    target_inited = true;
-	}
-    };
+// local functions
 
-    global define void reinitTarget () ``{
-	boolean finished = Pkg::TargetFinish ();
-	y2milestone ("Target finished retval: %1", finished);
-	target_inited = false;
-	initTarget ();
+
+
+// global functions
+
+    /**
+      * Inform user that function isn't available during preparatino of AI
+      * via a popup
+      */
+    global define void DisplayUnavailableAIPopup () ``{
+	// popup message
+	Popup::Message (_("This function is not available during
+preparation for autoinstallation.
+"));
     }
 
     /**
@@ -105,8 +104,8 @@ ECHO_PID=$!
 	    string model = regexpsub (l, "[^\"]*\"([^\"]*)\".*", "\\1");
 	    string c_dev = regexpsub (l, "direct usb:([^ ]*) .*", "\\1");
 	    string u_dev = sformat ("/dev/usb/lp%1", counter);
-	    if (Printer::cups_usb_dev_names == `never
-		|| (Printer::cups_usb_dev_names == `serial
+	    if (CUPS::usb_dev_names == `never
+		|| (CUPS::usb_dev_names == `serial
 		    && ! issubstring (c_dev, "serial")))
 		c_dev = u_dev;
 	    cups_usb_devices = add (cups_usb_devices,
@@ -237,6 +236,7 @@ ECHO_PID=$!
      *           "bus"          : "...", // "usb", "parallel"
      *       ], ...
      *   ]
+     * FIXME this function must be merged with Printer::Detect
      */
     global define list Detect (boolean cups) ``{
 	boolean have_usb = false;
@@ -311,7 +311,7 @@ ECHO_PID=$!
 		string class_dev = lookup (pr, "dev_name", "");
 		string dev_name = class_dev;
 
-		if (Printer::spooler == "cups")
+		if (Spooler::Get () == "cups")
 		{
 
 		    dev_name = select (getCupsUsbDeviceInfo (class_dev), 0, "");
@@ -329,7 +329,7 @@ ECHO_PID=$!
 		    "device_id": lookup (pr, "device_id",0),
 		    "dev_name": dev_name,
 		];
-		if (Printer::spooler == "cups")
+		if (Spooler::Get () == "cups")
 		{
 		    if (contains (pr["requires"]:[], "hp-officeJet"))
 		    {
@@ -347,7 +347,6 @@ package %1 must be installed.
 
 Install it now?
 "));
-			    reinitTarget ();
 			}
 			if (! req_ret && ! Require::LastOperationCanceled ())
 			{
@@ -370,7 +369,7 @@ Install it now?
 	// if yes, hp-officeJet package should be installed
 	// as it isn't in default installation, skipping this part of
 	// detection and hoping hwinfo will make its job
-/*	if (Printer::spooler == "cups")
+/*	if (Spooler::Get () == "cups")
 	{
 	    list uris = maplist (`r, ret, ``{
 		return r["uri"]:nil;
@@ -536,170 +535,7 @@ Install it now?
 	Popup::Message (message);
     }
 
-    /**
-     * Test which spooling system is most probably used.
-     * @return integer with some bits set:<br>
-     *    1 if lpd is installed<br>
-     *    2 if cups is installed<br>
-     *      (therefore 0 if none is installed)<br>
-     *      (therefore 3 if both are installed)<br>
-     *  256 is added if the instalation doesn't seem to be complete
-     */
-    global define integer getSpoolSystem () ``{
-	initTarget ();
 
-	// first try if some of the systems exists.
-	boolean cups_exists = Pkg::IsProvided ("cups-client");
-	// for lpd we need to check the file because
-	boolean lpd_exists = (SCR::Read(.target.size, "/etc/init.d/lpd")!=-1);
-	y2milestone ("CUPS exists: %1, LPD exists: %2",
-	    cups_exists, lpd_exists);
-	boolean cups_complete = Pkg::IsProvided ("cups-drivers")
-	    && Pkg::IsProvided ("cups-libs")
-	    && Pkg::IsProvided ("cups")
-	    && Pkg::IsProvided ("cups-client")
-	    && Pkg::IsProvided ("filters")
-	    && Pkg::IsProvided ("foomatic-filters");
-	boolean lpd_complete = Pkg::IsProvided ("lpdfilter")
-            && Pkg::IsProvided ("filters")
-	    && Pkg::IsProvided ("cups-drivers")
-	    && Pkg::IsProvided ("foomatic-filters");
-
-
-	if (cups_exists && !lpd_exists)
-	    {
-		if (cups_complete)
-		    return 2;
-		else
-		{
-		    boolean cups_client = Pkg::IsProvided ("cups-libs") && ! Pkg::IsProvided ("cups");
-		    if (cups_client)
-			return 512 + 2;
-		    else
-			return 256 + 2;
-		}
-	    }
-	if (!cups_exists && lpd_exists)
-	    {
-		if (lpd_complete)
-		    return 1;
-		else
-		    return 256 + 1;
-	    }
-	if (cups_exists && lpd_exists)
-	    {
-		return 3;
-	    }
-	return 0;
-    }
-    /**
-      * stop currently running printer spooler service
-      */
-    global define void stopServices () ``{
-	if (Mode::config)
-	    return;
-	SCR::Execute (.target.bash, "test -f /etc/init.d/lpd && /etc/init.d/lpd stop");
-	SCR::Execute (.target.bash, "test -f /etc/init.d/cups && /etc/init.d/cups stop");
-    }
-
-    /**
-     * Uninstalls print spoolers and installs selected one.
-     * Stops all spoolers before installation.
-     * @param to Spooler to install. Should be one of "cups" "lprold" "plrng "plp"
-     */
-    global define void switchTo (string to) ``{
-	y2milestone ("Switching spooler to %1", to);
-	Printer::foomatic = nil;
-	initTarget ();
-	list del = ["plp", "lprold", "lprng", "cups", "cups-client",
-            "cups-drivers", "cups-drivers-cs", "cups-drivers-de",
-            "cups-drivers-stp", "lpdfilter", "filters", "foomatic-filters"];
-	list inst = [];
-
-	list inst_cups = [ "cups", "cups-drivers", "cups-client",
-	    "cups-drivers-stp", "filters", "foomatic-filters"];
-	list inst_cups_client = [ "cups-client"];
-	list inst_other = [ to, "filters", "lpdfilter", "foomatic-filters",
-	    "cups-drivers"];
-
-	if ("cups" == to)
-        {
-            inst = inst_cups;
-        }
-        else if ("cups_client" == to)
-        {
-            inst = inst_cups_client;
-	    del = filter (string d, del, ``(! contains (inst_cups, d)));
-        }
-        else
-        {
-	    // after switch from CUPS to LPRng printcap with imported queues
-	    // can be left. remove it (#29440)
-	    y2milestone ("Removing /etc/printcap");
-	    SCR::Execute (.target.bash,
-		"test -f /etc/printcap && /bin/rm /etc/printcap");
-	    inst = inst_other;
-        }
-	del = filter (`e, del, ``(! contains (inst, e)));
-
-	if (Mode::config)
-	{
-	    Printer::spooler = to;
-	    Require::RequireAndConflictTarget (inst, del, "");
-	    if (Printer::spooler == "cups")
-		// question popup
-		Require::RequireAndConflict (inst, del, _("For the selected function, the additional packages
-%1
-must be installed.
-
-Install them now?"));
-	    reinitTarget ();
-	    return;
-	}
-	stopServices ();
-	Runlevel::ServiceAdjust ("lpd", "disable");
-	Runlevel::ServiceAdjust ("cups", "disable");
-	del = filter (`e, del, ``(Pkg::IsProvided (e) == true));
-	inst = filter (`i, inst, ``(! Pkg::IsProvided (i)));
-	if (! (Pkg::IsProvided ("ghostscript-x11")
-	    || Pkg::IsProvided ("ghostscript-serv")))
-	{
-	    inst = add (inst, "ghostscript-x11");
-	}
-	import "PackageCallbacks";
-	y2milestone("-------- deleting = %1", del);
-	foreach (`e, del, ``{Pkg::PkgDelete (e);});
-	y2milestone("-------- installing = %1", inst);
-	foreach (`e, inst, ``{Pkg::PkgInstall (e);});
-	Pkg::PkgSolve ();
-	Pkg::PkgCommit (0);
-	Wizard::CreateDialog ();
-	WFM::CallModule("inst_suseconfig", []);
-	Wizard::CloseDialog ();
-	reinitTarget ();
-	if (to == "cups" || to == "cups_client")
-	{
-	    // after switch from CUPS to LPRng printcap with imported queues
-	    // can be left. remove it (#29440)
-	    // deleting when switching to CUPS doesn't break anything
-	    y2milestone ("Removing /etc/printcap");
-	    SCR::Execute (.target.bash,
-		"test -f /etc/printcap && /bin/rm /etc/printcap");
-	}
-	if ("cups" == to)
-        {
-	    // create symlink /etc/printcap -> /etc/cups/printcap (#29671)
-	    y2milestone ("Creating /etc/printcap symlink");
-	    SCR::Execute (.target.bash,
-		"/bin/ln -sf /etc/cups/printcap /etc/printcap");
-        }
-
-//	Require::DoInstallAndRemove (inst, del);
-	Printer::save_all = true;
-	Printer::reread = true;
-	Printer::sys_forbidden_names = nil;
-
-    }
     /**
      * Printer uri = type://device
      * where type is one of parallel, serial, usb, file, lpd, novell,
@@ -1077,4 +913,6 @@ Install them now?"));
 	    paper_size = `letter;
 	return paper_size;
     }
+
+
 }
