@@ -992,17 +992,9 @@ actually selected.
                 }
                 else if ("ipp" == type)
                 {
-                    queues = maplist (`i, SCR::Read (.cups.remote, hostname),
-		      ``{
-                        if ("ipp://" == substring (i, 0, 6))
-                            i = substring (i, 6);
-                        else if ("http://" == substring (i, 0, 7))
-                            i = substring (i, 7);
-                        while ("/" != substring (i, 0, 1) && size (i) > 0)
-                            i = substring (i, 1);
-                        while ("/" == substring (i, 0, 1) && size (i) > 0)
-                            i = substring (i, 1);
-                        return i;
+		    queues = SCR::Read (.cups.remote, hostname);
+                    queues = maplist (`i, queues, ``{
+                        return "printers/" + i;
                     });
                 }
                 queue_entry = `ComboBox (`id (`queueent),
