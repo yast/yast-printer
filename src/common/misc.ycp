@@ -51,7 +51,10 @@ This usually takes one or two minutes")));
 		}
                 status = SCR::Execute (.target.bash, "/etc/init.d/cups status");
                 if (0 != status)
-                    SCR::Execute (.target.bash, "/etc/init.d/cups start");
+		{
+                    SCR::Execute (.target.bash_background, "/etc/init.d/cups start");
+		    sleep (1000);
+		}
                 status = 1;
 		integer attempts = 0;
                 while (true)
@@ -102,13 +105,14 @@ This usually takes one or two minutes")));
 	    "ghostscript-fonts-kanji", "ghostscript-serv", "ghostscript-fonts-rus", "ghostscript-library", "a2ps"];
 	to_delete = filter (`e, to_delete, ``(Pkg::IsProvided (e) == true));
 	list to_install = ["ghostscript-library", "ghostscript-x11", "ghostscript-fonts-std", "ghostscript-fonts-other", "a2ps"];
-	map script = $["userInput" : false];
+/*	map script = $["userInput" : false];
 	script = add (script, "delete", to_delete);
 	script = add (script, "install", to_install);
 	string fn = SCR::Read (.target.tmpdir);
 	fn = fn + "/script.sw_single";
-	SCR::Write (.target.ycp, fn, script);
+	SCR::Write (.target.ycp, fn, script);*/
 
+	Pkg::DoRemove (to_delete);
 	SCR::Execute (.target.bash, "/bin/rm -rf /etc/cups/");
 	SCR::Execute (.target.bash, "/bin/rm -rf /etc/lpdfilter/");
 	SCR::Execute (.target.bash, "/bin/rm -rf /etc/printcap");
@@ -118,8 +122,9 @@ This usually takes one or two minutes")));
 	SCR::Execute (.target.bash, "/bin/rm -rf /var/spool/lpd/");
 	SCR::Execute (.target.bash, "/bin/rm -rf /var/spool/cups/");
 	SCR::Execute (.target.bash, "/bin/rm -rf /var/lib/YaST2/printers");
+	Pkg::DoProvide (to_install);
 
-	CallFunction (`sw_single (fn));
+//	CallFunction (`sw_single (fn));
 
 	return true;
 

@@ -570,7 +570,6 @@ END { if (!used) print \"ServerName %1\" }
         if (0 == cupsInstallationType ())
         {
             list ret = SCR::Read (.cups.printers);
-y2error ("Cups read: %1", ret);
 	    ret = filter (`e, ret, ``(lookup (e, "uri", "") != ""));
             list classes = SCR::Read (.cups.classes);
 	    if (nil == ret) ret = [];
@@ -818,11 +817,13 @@ Remove them?
 		{
 		    list del = ["cups", "cups-drivers", "cups-drivers-stp", "cups-drivers-de", "cups-drivrers-cs"];
 		    del = filter (`e, del, ``(Pkg::IsProvided(e) == true));
-		    map script = $["userInput" : false, "install" : "", "delete" : del];
+/*		    map script = $["userInput" : false, "install" : "", "delete" : del];
 		    string fn = SCR::Read (.target.tmpdir);
 		    fn = fn + "/script.sw_single";
 		    SCR::Write (.target.ycp, fn, script);
-		    CallFunction (`sw_single (fn));
+		    CallFunction (`sw_single (fn));*/
+		    Pkg::Doremove (del);
+		    WFM::CallModule("inst_suseconfig", []);
 		}
 		return true;
 	    }
