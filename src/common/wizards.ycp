@@ -241,13 +241,8 @@
 	return WizardSequencer(aliases, sequence);
     }
 
-    /**
-      * Workflow for adding a single queue
-      * @return sequence result
-      */
-    define symbol AddPrinterSubSequence () ``{
-	map aliases = getAliases ();
-	map sequence = $[
+    define map getAddPrinterSubSequence () ``{
+	return $[
 	    "ws_start"   : "detectconftype",
 	    "detectconftype" : $[
                 `abort : `abort,
@@ -347,6 +342,15 @@
 
 	    "storeprinter" : $[`next : `next, ],
 	];
+    }
+
+    /**
+      * Workflow for adding a single queue
+      * @return sequence result
+      */
+    define symbol AddPrinterSubSequence () ``{
+	map aliases = getAliases ();
+	map sequence = getAddPrinterSubSequence ();
 	aliases = filter (string k, any v, aliases, ``(haskey (sequence, k)));
 	return WizardSequencer(aliases, sequence);
     }
@@ -358,7 +362,7 @@
     define symbol AddPrinterSequence () ``{
 	map aliases = getAliases ();
 	map sequence = $[
-	    "ws_start"   : "add_printer_sub_wz",
+/*	    "ws_start"   : "add_printer_sub_wz",
 	    "add_printer_sub_wz" : $[
                 `abort : `abort,
 		`next : `next,
@@ -367,10 +371,22 @@
 //                `name : "name_auto",
 //		`installed_printer : "inst_printer",
 //		`connection : "connection_type",
-	    ],
-
+	    ],*/
 	    "edit_printer_wz" : $[ `abort : `abort, `next : `next ],
 	];
+	map add_seq =  getAddPrinterSubSequence ();
+	add_seq = mapmap (string k, any v, add_seq, ``{
+	    if (is (v, map))
+	    {
+		v = mapmap (symbol event, any vv, (map<symbol,any>)v, ``{
+		    if (vv == `edit)
+			vv = "edit_printer_wz";
+		    return $[ event : vv ];
+		});
+	    }
+	    return $[ k : v ];
+	});
+	sequence = union (sequence, add_seq);
 	aliases = filter (string k, any v, aliases, ``(haskey (sequence, k)));
 	return WizardSequencer(aliases, sequence);
     }

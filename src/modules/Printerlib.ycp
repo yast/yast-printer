@@ -251,35 +251,6 @@ ECHO_PID=$!
 	SCR::Execute (.target.bash,
 	    "test -f /etc/init.d/hotplug && (test -d /proc/bus/usb/001 || /etc/init.d/hotplug start)");
 	list aprobe = (list)SCR::Read (.probe.printer);
-/*		aprobe = [
-		    $[ "bus" : "Parallel",      // recognized, found in db
-		     "dev_name" : "/dev/lp0",
-		     "vendor" : "Hewlett-Packard",
-		     "device" : "HP LaSerJeT 4050",
-		     "unique_key"   : "lp0_hp" ],
-		    $[ "bus" : "USB",      // not found in db
-		     "dev_name" : "/dev/usblp1",
-		     "sub_vendor" : "Epson",
-		     "sub_device" : "BJC-6100x",
-		     "unique_key"   : "usb_canon" ],
-		    $["bus" : "Parallel",	// in db, GDI, but supported
-		    "dev_name" : "/dev/lp1",
-		    "vendor" : "HEWLETT-PACKARD",
-		    "device" : "DeskJet 820C",
-		    "unique_key" : "lp1_hp_gdi",
-		    ],
-		    $[ "bus" : "Parallel",      // found in db but GDI, so not configurable
-		     "dev_name" : "/dev/lp2",
-		     "vendor" : "Lexmark",
-		     "device" : "Lexmark Z12",
-		     "unique_key" : "lp2_canon" ],
-		    ];*/
-/*		aprobe = [
-		    $[ "bus" : "Parallel",
-		    "dev_name" : "/dev/lp0",
-		    "vendor" : "Hewlett-Packard",
-		    "device" : "DeS-kJeT-990C",]
-		];*/
 	if (0 == size (aprobe))
 	    {
 		return [];
@@ -301,7 +272,7 @@ ECHO_PID=$!
 	    else if  ("USB" == bus)
 	    {
 		have_usb = true;
-		if (0 !=  SCR::Execute (.target.bash, "grep '^printer ' /proc/modules"))
+		if (0 !=  SCR::Execute (.target.bash, "grep '^usblp ' /proc/modules"))
 		    return $[];
 		if ("epson" == tolower (lookup (pr, "sub_vendor", "")))
 		{
@@ -366,17 +337,17 @@ Install it now?
 	});
 	if (have_usb)
 	{
-	    if (0 !=  SCR::Execute (.target.bash, "grep '^printer ' /proc/modules"))
+	    if (0 !=  SCR::Execute (.target.bash, "grep '^usblp ' /proc/modules"))
 	    {
 		y2error ("USB printer found and printer module not loaded, loading it");
-		boolean probe_success = (boolean)SCR::Execute(.target.modprobe, "printer", "");
+		boolean probe_success = (boolean)SCR::Execute(.target.modprobe, "usblp", "");
 		string hotplug
 		    = (string)SCR::Read (.sysconfig.hotplug.HOTPLUG_USB_STATIC_MODULES);
 		y2debug ("Current hotplug: %1", hotplug);
 		list<string> hplist = splitstring (hotplug, " ");
-		if (! contains (hplist, "printer"))
+		if (! contains (hplist, "usblp"))
 		{
-		    hplist = add (hplist, "printer");
+		    hplist = add (hplist, "usblp");
 		    hotplug = mergestring (hplist, " ");
 		    y2debug ("Final hotplug: %1", hotplug);
 		    SCR::Write (.sysconfig.hotplug.HOTPLUG_USB_STATIC_MODULES,
@@ -386,7 +357,7 @@ Install it now?
 		sleep (100);
 		if (probe_success)
 		{
-		    probe_success = 0 == SCR::Execute (.target.bash, "grep '^printer ' /proc/modules");
+		    probe_success = 0 == SCR::Execute (.target.bash, "grep '^usblp ' /proc/modules");
 		}
 		if (probe_success)
 		{
@@ -396,7 +367,7 @@ Install it now?
 		}
 		else
 		{
-		    y2error ("Error occured while loading printer.o module");
+		    y2error ("Error occured while loading usblp.ko module");
 		}
 	    }
 	}
