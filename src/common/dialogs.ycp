@@ -286,7 +286,12 @@ additional PostScript module)."),
 		string pass = (string)UI::QueryWidget (`id (`pass), `Value);
 		list url_parts = splitstring (url, "/");
 		string file = url_parts[size (url_parts) - 1]:"ppd.ppd";
-		string dir = (string)SCR::Read (.target.tmpdir);
+		string dir = (string)SCR::Read (.target.tmpdir) + "/ppd_files";
+		y2milestone ("Working dir: %1", dir);
+		SCR::Execute (.target.bash, sformat (
+		    "test -d %1 || mkdir -p %1", dir));
+		SCR::Execute (.target.bash, sformat (
+		    "/bin/rm %1/*", dir));
 		file = dir + "/" + file;
 		if (user != "" && pass != "")
 		{
