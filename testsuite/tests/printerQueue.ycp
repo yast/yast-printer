@@ -1,0 +1,80 @@
+/**
+ * File:
+ *  misc.ycp
+ *
+ * Module:
+ *  Printer configurator
+ *
+ * Summary:
+ *  Miscelaneous tests.
+ *
+ * Authors:
+ *  Jiri Srain <jsrain@suse.cz>
+ *
+ * $Id$
+ *
+ * Test of printer <=> queue relations
+ */
+
+// FIXME: printcapTable testing disabled until UI gets clear
+
+{
+    import "Pkg";
+    include "testsuite.ycp";
+
+    import "Printer";
+    include "printer/misc.ycp";
+
+    Printer::printcap = [$["config":"Epson Stylus Photo 810, Foomatic + gimp-print", "device":"Stylus Photo 810", "device_db":"STYLUSPHOTO810", "device_id":0, "device_ieee":"Stylus Photo 810", "uri":"parallel:/dev/lp0", "vendor":"EPSON", "vendor_db":"EPSON", "vendor_id":0, "vendor_ieee":"EPSON", "name":"draft",  "unique_key":"ffnC.s5K9xZzhQb4"],
+
+$[
+"config":"Epson Stylus Photo 810, Foomatic + gimp-print", "device":"Stylus Photo 810", "device_db":"STYLUSPHOTO810", "device_id":0, "device_ieee":"Stylus Photo 810", "name":"draft_gray", "unique_key":"ffnC.s5K9xZzhQb4", "uri":"parallel:/dev/lp0", "vendor":"EPSON", "vendor_db":"EPSON", "vendor_id":0, "vendor_ieee":"EPSON"],
+
+
+$["config":"Epson Stylus Photo 810, Foomatic + gimp-print", "device":"Stylus Photo 810", "device_db":"STYLUSPHOTO810", "device_id":0, "device_ieee":"Stylus Photo 810", "uri":"parallel:/dev/lp0", "vendor":"EPSON", "vendor_db":"EPSON", "vendor_id":0, "vendor_ieee":"EPSON", "name":"draft",  "unique_key":"1ffnC.s5K9xZzhQb4"],
+
+$[
+"config":"Epson Stylus Photo 810, Foomatic + gimp-print", "device":"Stylus Photo 810", "device_db":"STYLUSPHOTO810", "device_id":0, "device_ieee":"Stylus Photo 810", "name":"draft_gray", "unique_key":"1ffnC.s5K9xZzhQb4", "uri":"parallel:/dev/lp0", "vendor":"EPSON", "vendor_db":"EPSON", "vendor_id":0, "vendor_ieee":"EPSON"],
+
+];
+
+    TEST (``(getConfiguredPrinters ()), [], nil);
+    DUMP ("=============");
+    TEST (``(getQueuesOfPrinter ("parallel:/dev/lp0", "EPSON", "Stylus Photo 810")), [], nil);
+    DUMP ("===");
+    TEST (``(getQueuesOfPrinter ("parallel:/dev/lp0", "EPSON", "STYLUSPHOTO810")), [], nil);
+    DUMP ("===");
+    TEST (``(getQueuesOfPrinter ("parallel:/dev/lp0", "EPSON", "STYLUSPHOTO820")), [], nil);
+    DUMP ("=============");
+    TEST (``(isPrinterConfigured ($["vendor" : "EPSON", "device" : "Stylus Photo 810", "uri" : "parallel:/dev/lp0"])), [], nil);
+    DUMP ("===");
+    TEST (``(isPrinterConfigured ($["vendor" : "EPSON", "device" : "STYLUSPHOTO810", "uri" : "parallel:/dev/lp0"])), [], nil);
+    DUMP ("===");
+    TEST (``(isPrinterConfigured ($["vendor" : "EPSON", "device" : "Stylus Photo 810", "uri" : "parallel:/dev/lp1"])), [], nil);
+    DUMP ("==========================================");
+
+    Printer::printcap = add (Printer::printcap,
+
+$[
+
+"config":"Epson Stylus Photo 820, Foomatic + gimp-print", "device":"Stylus Photo 820", "device_db":"STYLUSPHOTO820", "device_id":0, "device_ieee":"Stylus Photo 820", "uri":"parallel:/dev/lp0", "vendor":"EPSON", "vendor_db":"EPSON", "vendor_id":0, "vendor_ieee":"EPSON", "name":"draft",
+
+]);
+
+    TEST (``(getConfiguredPrinters ()), [], nil);
+    DUMP ("=============");
+    TEST (``(getQueuesOfPrinter ("parallel:/dev/lp0", "EPSON", "Stylus Photo 810")), [], nil);
+    DUMP ("===");
+    TEST (``(getQueuesOfPrinter ("parallel:/dev/lp0", "EPSON", "STYLUSPHOTO810")), [], nil);
+    DUMP ("===");
+    TEST (``(getQueuesOfPrinter ("parallel:/dev/lp0", "EPSON", "STYLUSPHOTO820")), [], nil);
+    DUMP ("=============");
+    TEST (``(isPrinterConfigured ($["vendor" : "EPSON", "device" : "Stylus Photo 810", "uri" : "parallel:/dev/lp0"])), [], nil);
+    DUMP ("===");
+    TEST (``(isPrinterConfigured ($["vendor" : "EPSON", "device" : "STYLUSPHOTO810", "uri" : "parallel:/dev/lp0"])), [], nil);
+    DUMP ("===");
+    TEST (``(isPrinterConfigured ($["vendor" : "EPSON", "device" : "Stylus Photo 810", "uri" : "parallel:/dev/lp1"])), [], nil);
+    DUMP ("==========================================");
+
+
+}

@@ -21,7 +21,6 @@
     textdomain "printer";
     import "Printer";
     import "Printerlib";
-    import "PackageCallbacks";
 
 
     /**
@@ -75,8 +74,11 @@
 	string device)
     ``{
 	list(map) queues = filter (`p, Printer::printcap, ``(
-	    p["uri"]:"" == uri && p["vendor"]:"" == vendor
-		&& p["device"]:"" == device));
+	    p["uri"]:"" == uri &&
+		((p["vendor"]:"" == vendor && p["device"]:"" == device)
+		||(p["vendor_db"]:"" == vendor && p["device_db"]:"" == device)
+		||(p["vendor_ieee"]:"" == vendor && p["device_ieee"]:"" == device))
+	    ));
 	return queues;
     }
 
@@ -269,11 +271,9 @@ of printers"));
 	vendor = SCR::Read (.ppd.db.vendorname, vendor);
 	SCR::Execute (.target.bash, sformat ("/usr/bin/touch %1/ppd_preference_list", Printerlib::baseDataDir));
 	map order = SCR::Read (.target.ycp, sformat ("%1/ppd_preference_list", Printerlib::baseDataDir));
-//	map order = $[
-//	    "__default__": [".*hpijs.*", ".*gimp.*", ".*escp.*", ".*upp.*", ".*stcolor.*", ".*cdj[0-9].*", ".*pcl3.*", ".*cdj.*"],
-//	];
 	if (order == nil)
 	    order = $[];
+	boolean have_recom = false;
 
 	list(string) preferred = [];
 	foreach (`k, `v, order, ``{
@@ -295,7 +295,7 @@ of printers"));
 	});
 	if (preferred == [])
 	    preferred = order["__default__"]:[];
-	y2milestone ("Autoinst preferred list: %1", preferred);
+//	y2milestone ("Autoinst preferred list: %1", preferred);
 	boolean found = false;
 	string choosen = "";
 	string fallback = "";
@@ -311,12 +311,18 @@ of printers"));
 		    {
 			choosen = k;
 		    }
+		    else if ((! have_recom)&&(issubstring (v, "(recommended)")))
+		    {
+			found = true;
+			have_recom = true;
+			choosen = k;
+		    }
 		});
 	    }
 	});
 	if (choosen == "")
 	    choosen = fallback;
-	y2milestone ("Chose file %1, %2", choosen, ppds[choosen]:"");
+//	y2milestone ("Chose file %1, %2", choosen, ppds[choosen]:"");
 	return choosen;
     }
 
@@ -362,6 +368,7 @@ of printers"));
 	    });
 	  }
 	});
+	y2debug ("Possible PPDs: %1", ppds);
 	return ppds;
     }
 
@@ -473,6 +480,7 @@ This usually takes one or two minutes")),
      * @return boolean true if success
      */
     global define boolean reinstallAll () ``{
+	import "PackageCallbacks";
 	Printer::printcap = [];
 	Printer::default = "";
 	Printer::save_all = false;

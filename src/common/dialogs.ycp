@@ -18,7 +18,6 @@
     import "Printerlib";
     import "Printer";
     import "Arch";
-    import "PackageCallbacks";
 
     include "printer/misc.ycp";
     include "printer/helps.ycp";
@@ -28,6 +27,22 @@
 
     include "printer/dialogs-cups.ycp";
     include "printer/dialogs-lprng.ycp";
+
+
+    /**
+      * Ask user to install requested packages
+      * @param list of package names
+      * @return boolean true if wants to install
+      */
+    global define boolean AskInstallPackages (list packages) ``{
+	// yes-no popup, %1 is list of package names
+	string popup = sformat (_("For selected function additional packages
+%1
+are needed to be installed.
+
+Install them now?"), mergestring (packages, ", "));
+	return UI::YesNoPopup (popup);
+    }
 
 
     /**
@@ -491,8 +506,10 @@ that your parallel port is not properly configured.
 	// check necessary packages
 	if (type == "samba")
 	{
-	    if (! Pkg::IsProvided ("samba-client"))
+	    if (! Pkg::IsProvided ("samba-client")
+		&& AskInstallPackages (["samba-client"]))
 	    {
+		import "PackageCallbacks";
         // DoProvide has a list as an argument, not string
 		Pkg::DoProvide (["samba-client"]);
 		Pkg::PkgSolve ();
@@ -502,8 +519,10 @@ that your parallel port is not properly configured.
 	}
 	else if (type == "novell")
 	{
-	    if (! Pkg::IsProvided ("ncpfs"))
+	    if (! Pkg::IsProvided ("ncpfs")
+		&& AskInstallPackages (["ncpfs"]))
 	    {
+		import "PackageCallbacks";
 		Pkg::DoProvide (["ncpfs"]);
 		Pkg::PkgSolve ();
 		Pkg::PkgCommit (0);
@@ -874,6 +893,48 @@ that your parallel port is not properly configured.
 	}
 	return ret;
     }
+
+    /**
+      * Display printer information popup
+      */
+    global define void DisplayPrinterPopup (map info, string vdb, string mdb)``{
+
+                    // richtext
+                    string manuf_info = lookup (info, "vendor",
+                        _("<P>No information available.</P>"));
+                    // richtext
+                    string model_info = lookup (info, "printer",
+                        lookup (info, "config",
+                        _("<P>No information available.</P>")));
+                    // Manufacturer: ...info... Model: ...info...  1/2
+                    string info_text = _("<P><B>Manufacturer:</B></P>")
+                       + manuf_info +
+                        // Manufacturer: ...info... Model: ...info...  2/2
+                        _("<P><B>Model:</B></P>") + model_info;
+                    integer type = 0;
+		    if (Printer::db == `foomatic)
+			Printer::foomatic[vdb, mdb, `support]:1;
+
+                    if (type != 2 && Printer::db == `foomatic
+                        && size (filter (`k, `v,
+                            Printer::foomatic[vdb, mdb]:$[],
+                            ``(is (k, string)))) == 0)
+                    {
+                        // part of richtext
+                        info_text = _("<p><B>This printer can be configured
+with SuSE database of printers only</B></P>") + info_text;
+                    }
+                    else if (type == 2)
+                        // part of richtext
+                        info_text = _("<p><B>This printer isn't supported by SuSE Linux</B></P>") + info_text;
+
+                    // message box caption
+                    UI::LongTextPopup (_("Printer information"),
+                        `RichText (info_text), 50, 18);
+
+
+    }
+
     /**
      * Ask about the manufacuturer and the model of the printer.
      * Uses global printer
@@ -887,6 +948,7 @@ that your parallel port is not properly configured.
 	string manuf_ieee = lookup (Printer::printer, "vendor_ieee", "");
 	string model_ieee = lookup (Printer::printer, "device_ieee", "");
 	map info = $[];
+	boolean info_instead_next = false;
 
 	if (Printer::db == `foomatic)
 	    loadFoomaticIfNeeded ();
@@ -933,39 +995,54 @@ that your parallel port is not properly configured.
 	symbol ret = `manufsel;
 	while (`abort != ret && `back != ret && ret != `next && ret != `useppd)
 	{
-	    if (ret == `infobut)
+	    if (ret == `infobut || ret == `infonext)
 	    {
-		// richtext
-		string manuf_info = lookup (info, "vendor",
-		    _("<P>No information available.</P>"));
-		// richtext
-		string model_info = lookup (info, "printer",
-		    lookup (info, "config",
-		    _("<P>No information available.</P>")));
-		// Manufacturer: ...info... Model: ...info...  1/2
-		string info_text = _("<P><B>Manufacturer:</B></P>")
-		    + manuf_info +
+		if (
+                (Printer::db == `foomatic &&(model_db == "" || model_db == nil))
+                || (Printer::db != `foomatic && (model == "" || model == nil))
+                )
+//		if (model == "" || model == nil)
+	        {
+	            // popup
+	            UI::MessagePopup (_("You must select a printer model."));
+	        }
+		else
+		{
+		    DisplayPrinterPopup (info, manuf_db, model_db);
+/*		    // richtext
+		    string manuf_info = lookup (info, "vendor",
+		        _("<P>No information available.</P>"));
+		    // richtext
+		    string model_info = lookup (info, "printer",
+		        lookup (info, "config",
+		        _("<P>No information available.</P>")));
+		    // Manufacturer: ...info... Model: ...info...  1/2
+		    string info_text = _("<P><B>Manufacturer:</B></P>")
+		       + manuf_info +
 			// Manufacturer: ...info... Model: ...info...  2/2
 			_("<P><B>Model:</B></P>") + model_info;
-		integer type = Printer::foomatic[manuf_db,model_db, `support]:1;
-		if (type != 2 && Printer::db == `foomatic
+		    integer type = Printer::foomatic[manuf_db,model_db, `support]:1;
+		    if (type != 2 && Printer::db == `foomatic
                         && size (filter (`k, `v,
                             Printer::foomatic[manuf_db, model_db]:$[],
                             ``(is (k, string)))) == 0)
-		{
+		    {
 			// part of richtext
-		    info_text = _("<p><B>This printer can be configured
+		        info_text = _("<p><B>This printer can be configured
 with SuSE database of printers only</B></P>") + info_text;
-		}
-		else if (type == 2)
-		    info_text = _("<p><B>This printer isn't supported by SuSE Linux</B></P>") + info_text;
+		    }
+		    else if (type == 2)
+			// part of richtext
+		        info_text = _("<p><B>This printer isn't supported by SuSE Linux</B></P>") + info_text;
 
-		// message box caption
-		UI::LongTextPopup (_("Printer information"),
-		    `RichText (info_text), 50, 18);
+		    // message box caption
+		    UI::LongTextPopup (_("Printer information"),
+		        `RichText (info_text), 50, 18);*/
+		}
 	    }
 	    if (ret == `manufsel)
 	    {
+		y2milestone ("manufsel changed");
 		if (Printer::db == `foomatic)
 		{
 		    if (manuf_db
@@ -1022,23 +1099,31 @@ with SuSE database of printers only</B></P>") + info_text;
 		UI::ReplaceWidget (`id (`modelsel_rep), modelsel);
 		if (Printer::db == `foomatic)
 		{
-		    if (model_db == "" || model_db == nil)
+//		    model_db = "";
+/*		    if (model_db == "" || model_db == nil)
 		    {
 			foreach (`k, `v, Printer::foomatic[manuf_db]:$[], ``{
 			    if (model_db == "" || model_db == nil)
 				model_db = k;
 			});
-		    }
-		    UI::ChangeWidget (`id (`modelsel), `CurrentItem, model_db);
+		    }*/
+		    if (model_db != "")
+			UI::ChangeWidget (`id (`modelsel), `CurrentItem, model_db);
 		}
-
-		ret = `modelsel;
+		else
+		{
+//		    model = "";
+//		    model_ieee = "";
+		}
+		ret = nil;//`modelsel;
 	    }
 	    if (`modelsel == ret)
 	    {
 		if (Printer::db == `foomatic)
 		{
+		    y2milestone ("modelsel changed");
 		    model_db = UI::QueryWidget (`id (`modelsel), `CurrentItem);
+		    y2milestone ("To %1", model_db);
 		    info = $[];
 		    string vc
 			 = Printer::foomatic[manuf_db,model_db, `vcomment]:"";
@@ -1051,11 +1136,12 @@ with SuSE database of printers only</B></P>") + info_text;
 		    if (mc != "")
 			info["printer"] = mc;
 		    if (0 != type && info["printer"]:"" != "")
-		    {
+			DisplayPrinterPopup (info, manuf_db, model_db);
+/*		    {
 			UI::LongTextPopup (_("Printer information"), `RichText (
 			    info["printer"]:""), 50, 10);
-		    }
-		    UI::ChangeWidget (`id (`next), `Enabled, 2 != type
+		    }*/
+		    info_instead_next = ! (2 != type
 			&& size (filter (`k, `v,
 			    Printer::foomatic[manuf_db, model_db]:$[],
 			    ``(is (k, string)))) > 0
@@ -1072,7 +1158,7 @@ with SuSE database of printers only</B></P>") + info_text;
 		        // message box label
 		        UI::LongTextPopup (_("Printer information"), `RichText (lookup (info, "printer", lookup (info, "config", ""))), 50, 10);
 		    }
-		    UI::ChangeWidget (`id (`next), `Enabled, 2 != lookup (info, "type", 0));
+		    info_instead_next = ! ( 2 != lookup (info, "type", 0));
 		}
 	    }
 	    ret = UI::UserInput ();
@@ -1081,6 +1167,18 @@ with SuSE database of printers only</B></P>") + info_text;
                 ret = reallyAbort () ? `abort : `cont;
                 if (ret == `abort) break;
             }
+		y2error ("PDB: %1, MDB: %2", Printer::db, model_db);
+	    if (ret == `next && (
+		(Printer::db == `foomatic &&(model_db == "" || model_db == nil))
+		|| (Printer::db != `foomatic && (model == "" || model == nil))
+		))
+	    {
+		// popup
+		UI::MessagePopup (_("You must select a printer model."));
+		ret = nil;
+	    }
+	    if (ret == `next && info_instead_next)
+		ret = `infonext;
 	    if (`useppd == ret)
             {
 		boolean cont = true;
@@ -1236,16 +1334,30 @@ with SuSE database of printers only</B></P>") + info_text;
 		if (k == `ownppd && Printer::printer["ownppd"]:"" != "")
 		    ppdfile_orig = Printer::printer["ownppd"]:"";
 
+		if (k == `ownppd)
+		{
+		    cfgs = add (cfgs, `item (`id (""),
+                            // selection box item
+                            _("Default configuration")));
+		    cfgsmap[""] = _("Default configuration");
+		}
+		else if (is (k, symbol))
+		{
+		    continue;
+		}
+		else
+		{			// done inside agent
+		    string label = k;//sformat ("%1 (%2)", k, ppdfile_orig);
+		    cfgs = add (cfgs, `item (`id (k), label));
+		    cfgsmap[k] = label;
+		}
+
 		if (ppd_only)
 		{
-		    cfgs = add (cfgs, `item (`id (k), k));
-		    cfgsmap[k] = k;
 		    return;
 		}
 		if (ppdfile_orig == "")
 		{
-		    cfgs = add (cfgs, `item (`id (k), k));
-		    cfgsmap[k] = k;
 		    return;
 		}
 		string ppdfile = SCR::Read (.ppd.file.open,
@@ -1265,18 +1377,6 @@ with SuSE database of printers only</B></P>") + info_text;
 		    composite = opts[ind]:$[];
 		if (composite == $[])
 		{
-		    if (k != `ownppd)
-		    {
-			cfgs = add (cfgs, `item (`id (k), k));
-			cfgsmap[k] = k;
-		    }
-		    else
-		    {
-			cfgs = add (cfgs, `item (`id (""),
-			    // selection box item
-			    _("Default configuration")));
-			cfgsmap[""] = _("Default configuration");
-		    }
 		    return;
 		}
 
