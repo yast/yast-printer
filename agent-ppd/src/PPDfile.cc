@@ -294,6 +294,25 @@ YCPMap PPDfile::ppdInfo (const char *filename)
     m->add (YCPString ("model"), YCPString (info.printer));
     m->add (YCPString ("nick"), YCPString (info.nick));
     m->add (YCPString ("filter"), YCPString (info.filter));
+
+    // and grab some info via CUPS libraries
+    ppd_file_t *ppd; 
+
+    if ((ppd = ppdOpenFile(filename)) == NULL)
+    {
+        y2error ("Unable to open PPD file %s !", filename);
+        return m;
+    }
+    if (ppd->lang_encoding)
+    {
+	m->add (YCPString ("lang_encoding"), YCPString (ppd->lang_encoding));
+    }
+    if (ppd->lang_version)
+    {
+	m->add (YCPString ("lang_version"), YCPString (ppd->lang_version));
+    }
+    m->add (YCPString ("language_level"), YCPInteger (ppd->language_level));
+    ppdClose (ppd);
     return m;
 }
 
