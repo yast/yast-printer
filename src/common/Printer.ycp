@@ -624,9 +624,9 @@
     global define list printcapRead () ``{
 	SCR::Execute (.target.bash, "test -d /etc/lpdfilter || /bin/mkdir /etc/lpdfilter");
 	list ret = SCR::Read (.etc.printcap);
-	default = SCR::Read (.sysconfig.printer.DEFAULT_PRINTER);
 	if (nil == ret)
 	    return [];
+	default = ret[0, "name"]:nil;
 	return ret;
     }
     /**
@@ -669,9 +669,6 @@ END { if (!used) print \"ServerName %1\" }
 	}
 	if (server_hostname == "")
 	    server_hostname = nil;
-	SCR::Write (.sysconfig.printer.CUPS_SERVER, nil);
-	SCR::Write (.sysconfig.printer, nil);
-	SCR::Execute (.target.bash, "/sbin/SuSEconfig --module profiles");
     }
     /**
      * If only client is installed or remote server to use is set,
@@ -1201,8 +1198,6 @@ Detect your printers?"));
 		if (SCR::Read (.init.scripts.exists, "cups"))
 		    Runlevel::ServiceAdjust ("cups", "disable");
 		saveClientHostName ();
-		SCR::Write (.sysconfig.printer.DEFAULT_PRINTER, nil);
-		SCR::Write (.sysconfig.printer, nil);
 
 		if (server_default)
 		{
@@ -1361,12 +1356,6 @@ the selected spooler does not support it."), name));
 	});
 	if (spooler == "cups")
 	{
-	    SCR::Write (.sysconfig.printer.DEFAULT_PRINTER, nil);
-// remove the variable, this allows to change default queue without re-logging
-// in. See #27259
-//	    SCR::Write (.sysconfig.printer.DEFAULT_PRINTER, default_printer_found ? default : "none");
-	    SCR::Write (.sysconfig.printer.CUPS_SERVER, nil);
-	    SCR::Write (.sysconfig.printer, nil);
 	    SCR::Write (.cups.default_dest,
 		default_printer_found
 		    ? default
@@ -1383,12 +1372,7 @@ the selected spooler does not support it."), name));
 	}
 	else
 	{
-	    SCR::Write (.sysconfig.printer.CUPS_SERVER, nil);
-	    SCR::Write (.sysconfig.printer.DEFAULT_PRINTER, nil);
-// see above
-//	    SCR::Write (.sysconfig.printer.DEFAULT_PRINTER, default_printer_found ? default : "none");
 	    SCR::Execute (.target.bash, sformat ("/usr/lib/YaST2/bin/assign_printcap_default %1", default_printer_found ? default : "\"\""));
-	    SCR::Write (.sysconfig.printer, nil);
 	    if (size (printcap) > 0)
 		Runlevel::ServiceAdjust ("lpd", "enable");
 	    else
