@@ -202,6 +202,16 @@
     global symbol confmode = nil;
 
     /**
+      * Selected item from main connection type dialog
+      */
+    global symbol connection_type_selected = `local;
+
+    /**
+      * Old URI due to backing it up during edit sequence
+      */
+    global string old_uri = "";
+
+    /**
       * Configuring printer, which is result of detection?
       */
     global boolean conf_detected = false;
@@ -459,11 +469,12 @@
 	    }
 	}
 	boolean is_class = q_type == "class";
-	if (is_class)
+	if (is_class || p["raw"]:false)
 	    supported = true;
 	foreach (`s, spoolers, ``{
 	    boolean filt_sup = ((s == "cups" || ! is_class)
-		&& (s == "cups" || q_filter == "foomatic-rip"));
+		    && (s == "cups" || q_filter == "foomatic-rip"))
+		|| p["raw"]:false;
 	    boolean spool_sup = testSupportedQueueBySpooler (q_type, s);
 	    string key = s + "-state";
 	    boolean sup = supported && filt_sup && spool_sup;
@@ -506,10 +517,7 @@
     global define void storePrinter () ``{
 	printer = assignStates (printer, true);
 
-	y2debug ("Storing printer %1", printer);
-
-	if (haskey (printer, "modelset_required"))
-	    printer = remove (printer,"modelset_required");
+	y2milestone ("Storing printer %1, index %2", printer, index);
 
 	if (-1 == index)
 	{
@@ -522,20 +530,10 @@
 	    // impossible in this situation
 	    integer c = -1;
 	    printcap = maplist (`i, printcap, ``{
-		    c = c + 1;
-		    if (c == index)
-		    {
-			if (lookup (printer, "uri", "") != lookup (i, "uri", "") ||
-			    lookup (printer, "name","") != lookup (i, "name","") ||
-			    lookup (printer, "ff", false) != lookup (i, "ff", false) ||
-			    lookup (printer, "ascii", false) != lookup (i, "ascii", false))
-			{
-//			    printer = add (printer, "recreate", true);
-// FIXME LPRng saving
-			}
-			return printer;
-		    }
-		    return i;
+		c = c + 1;
+		if (c == index)
+		    return printer;
+		return i;
 	    });
 	}
 	// fix default printer
@@ -554,6 +552,7 @@
 		default = lookup (printer, "name", "");
 	}
 	dirty = true;
+	y2debug ("Final printcap: %1", printcap);
     }
     /**
      * Export module settings to map.
@@ -1132,7 +1131,7 @@ the selected spooler does not support it.
 
     define boolean saveTheConfiguration () ``{
 	list l = filter (`e, printcap, ``(lookup (e, "type", "yast2") == "yast2"));
-	list forbidden_keys = ["changed", "ppd", "auto_propose"];
+	list forbidden_keys = ["changed", "ppd", "auto_propose", "modelset_required"];
 	l = maplist (`e, l, ``(filter (`k, `v, e,
 	    ``(! contains (forbidden_keys, k)))));
 	cleanDeletedPrinters ();
