@@ -41,10 +41,6 @@
 
     Crash::Run ("printer.ycp");
 
-    // global variables
-    boolean do_abort_now = false;	// abort now
-    boolean auto_mode = false;		// preparing data for autoinstallation?
-
     /**
      * Test for abort.
      * @return true if abort was pressed
@@ -58,12 +54,14 @@
 	return false;
     }
 
+    symbol ret = nil;
+
     // ===== arguments ================================================
 
     boolean test_mode = false;
-    boolean skip_check = false;
     boolean skip_autodetection = false;
-    boolean skip_io = false;			// FIXME: use Printer::?????_mode variable or other mode handling
+    boolean skip_io = false;	// FIXME: use Printer::?????_mode variable
+				// or other mode handling
 
     // static variables
     integer runAutoprobedListDialog__current = 0;
@@ -73,22 +71,8 @@
 	while (i < size (Args()))
 	{
 	    if (.test == Args (i))	{	test_mode = true;	skip_io = true;		skip_autodetection = true;	}
-	    else if (.nocheck == Args (i))	skip_check = true;
 	    else if (.nodetection == Args (i) || ".nodetection" == Args (i))	skip_autodetection = true;
 	    else if (.noio == Args (i))	{	skip_io = true;		Printer::warn_finish = false;			}
-	    else if (is (Args (i), term) && `db == symbolof (Args (i)))
-	    {
-		string s = nil;
-		s = select (Args (i), 0, nil);
-		if (nil != s)
-		{
-		    if (changeDatabase (s))
-		    {
-			database = s;
-			current_database = s;
-		    }
-		}
-	    }
 	    i = i + 1;
 	}
     }
@@ -102,8 +86,7 @@
 	    // popup
 	    _("You must be root to run the printer configuration tool. 
  If you continue, you will not be able to save your settings. 
- Continue?
-"),
+ Continue?"),
 	    YesButtonLabel (), NoButtonLabel (), `focus_no))
 	{
             CloseDialog ();
@@ -111,30 +94,31 @@
 	}
     }
 
-    Printer::spooler = checkSpoolSystem();
-    if (Printer::spooler == "switched")
+    while (true)
     {
-	Printer::save_all = true;
-	Printer::reread = true;
-	Printer::sys_forbidden_names = nil;
-	symbol ret = CallFunction ("printer", Args());
-	CloseDialog ();
-        return ret;
-    }
-    if (Printer::spooler == "exit")
-	return `back;
+	Printer::spooler = checkSpoolSystem();
+	if (Printer::spooler == "switched")
+	{
+	    Printer::save_all = true;
+	    Printer::reread = true;
+	    Printer::sys_forbidden_names = nil;
+	    continue;
+	}
+	if (Printer::spooler == "exit")
+	    return `back;
 
-    if (Printer::spooler == "cups" && Printer::cupsInstallationType () != 0)
-	skip_autodetection = true;
-    // S390/S390x do not have local printers,
-    // so no warning and no probing is necessary (#19186)
-    if (Arch::s390)
-    {
-	skip_autodetection = true;
-    }
+	if (Printer::spooler == "cups"
+	    && Printer::cupsInstallationType () == `client)
+	{
+	    skip_autodetection = true;
+	}
+	// S390/S390x do not have local printers,
+	// so no warning and no probing is necessary (#19186)
+	if (Arch::s390)
+	{
+	    skip_autodetection = true;
+	}
 
-    // progress label
-    {
 	list stages = [
 	    // progress stage, text in dialog (short) (infinitive)
 	   _("Check environment"),
@@ -159,206 +143,166 @@
 	    titles = add (titles, _("Autodetecting printers..."));
 	}
 	// progress bar caption
-	Progress::New (_("Initializing printer configuration tool..."), " ", skip_autodetection ? 10 : 14, stages, titles, getInitProgressHelp ());
-    }
+	Progress::New (_("Initializing printer configuration tool..."), " ", skip_autodetection ? 12 : 16, stages, titles, getInitProgressHelp ());
 
-    Progress::NextStageStep (0);	if (testAbort ())			return `back;
+	// step 0
+	Progress::NextStageStep (0); if (testAbort ()) return `back;
 
-    // It must happen when writing
-    if (!test_mode)
-    {
-	//TODO create needed dir if not existing
-	if (Printer::spooler == "cups")
+	if (!test_mode)
 	{
-	    if (0 == Printer::cupsInstallationType ())
+	    if (Printer::spooler == "cups")
 	    {
-		integer status = SCR::Execute (.target.bash, "/usr/bin/lpq 2>/dev/null");
-                if (status == 0)
+		if (`server == Printer::cupsInstallationType ())
 		{
-		    Progress::NextStep (); if (testAbort ()) return `back;
-	            Progress::NextStep (); if (testAbort ()) return `back;
+		    integer status = SCR::Execute (.target.bash, "/usr/bin/lpq 2>/dev/null");
+		    if (status == 0)
+		    {
+			// step 1,2
+			Progress::NextStep (); if (testAbort ()) return `back;
+			Progress::NextStep (); if (testAbort ()) return `back;
+		    }
+		    else
+		    {
+			restartSpoolerIfNeeded (true);
+			// step 1,2
+			Progress::NextStep (); if (testAbort ()) return `back;
+			Progress::NextStep (); if (testAbort ()) return `back;
+		    }
 		}
 		else
 		{
-		    restartSpoolerIfNeeded (true);
-/*		    boolean close_dialog = false;
-		    status = SCR::Execute (.target.bash, "/etc/init.d/cups status");
-		    if (0 != status)
-		    {
-		        SCR::Execute (.target.bash_background, "/etc/init.d/cups start");
-			sleep (1000);
-		    }
-		    if (SCR::Read (.target.size, "/etc/cups/ppds.dat") <= 0)
-		    {
-			close_dialog = true;
-			showCupsInitPopup ();
-		    }*/
-		    Progress::NextStep (); if (testAbort ())                       {if (close_dialog) UI::CloseDialog (); return `back;}
-/*		    status = 1;
-		    integer attempts = 0;
-		    while (true)
-		    {
-		        status = SCR::Execute (.target.bash, "/usr/bin/lpq 2>/dev/null");
-		        if (status == 0)
-			    break;
-			attempts = attempts + 1;
-			if (attempts > 5 && ! close_dialog)
-			{
-                            close_dialog = true;
-			    showCupsInitPopup ();
-			}
-			if (attempts>60*10)
-			    break;
-		        sleep (1000);
-		        if (testAbort ())                       {if (close_dialog) UI::CloseDialog (); return `back;}
-		        status = SCR::Execute (.target.bash, "/etc/init.d/cups status");
-		        if (0 != status)
-		        {
-			    if (!UI::AnyQuestionPopup (
-			        UI::ErrorMsg (),
-			        // error popup
-			        _("CUPS daemon died during initialization"),
-			        UI::ContinueButtonLabel (), UI::AbortButtonLabel (), `focus_no))
-			    {
-			        if (close_dialog)
-				    UI::CloseDialog ();
-                                UI::CloseDialog ();
-                                return `back;
-			    }
-			    else
-			        break;
-		        }
-	            }
-		    if (close_dialog)
-			UI::CloseDialog ();*/
+		    // step 1,2
 		    Progress::NextStep (); if (testAbort ()) return `back;
+		    Progress::NextStep (); if (testAbort ()) return `back;
+		}
+	    }
+	    else if (Printer::spooler == "lprng")
+	    {
+		SCR::Execute (.target.bash, "/usr/bin/touch /etc/printcap; /bin/chmod u=rw,g=r,o=r /etc/printcap; /etc/init.d/lpd stop");
+		// step 1
+		Progress::NextStep (); if (testAbort ()) return `back;
+		integer lpdaemon = SCR::Execute (.target.bash,
+		    "/etc/init.d/lpd start");
+		// step 2
+		Progress::NextStep (); if (testAbort ()) return `back;
+		if (lpdaemon != 0)
+		{
+		    // message box
+		    if (!UI::AnyQuestionPopup (
+			UI::ErrorMsg (),
+			// error popup
+			_("Unable to restart the lpd daemon."),
+			UI::ContinueButtonLabel (), UI::AbortButtonLabel (), `focus_no))
+		    {
+			UI::CloseDialog ();
+			return `back;
+		    }
 		}
 	    }
 	    else
 	    {
-		Progress::NextStep ();              if (testAbort ())                       return `back;
-		Progress::NextStep ();              if (testAbort ())                       return `back;
+		// step 1,2
+		Progress::NextStep();
+		Progress::NextStep();
 	    }
 	}
-	else if (Printer::spooler == "lprng")
-	{
-	    SCR::Execute (.target.bash, "/usr/bin/touch /etc/printcap; /bin/chmod u=rw,g=r,o=r /etc/printcap; /etc/init.d/lpd stop");
-	    Progress::NextStep ();		if (testAbort ())			return `back;
-	    integer lpdaemon = SCR::Execute (.target.bash, "/etc/init.d/lpd start");
-	    Progress::NextStep ();		if (testAbort ())			return `back;
-	    if (lpdaemon != 0)
-	    {
-		// message box
-		if (!UI::AnyQuestionPopup (
-		    UI::ErrorMsg (),
-			    // error popup
-		    _("Unable to restart the lpd daemon."),
-		    UI::ContinueButtonLabel (), UI::AbortButtonLabel (), `focus_no))
-		{
-		    UI::CloseDialog ();
-		    return `back;
-		}
-	    }
-	}
-	else
-	{
-	    Progress::NextStep();
-	    Progress::NextStep();
-	}
-    }
-    Progress::NextStep ();		if (testAbort ())			return `back;
+	// step 3
+	Progress::NextStep (); if (testAbort ()) return `back;
 
-    if (SCR::Execute (.target.bash, "/usr/bin/which gs") != 0)
-    {
-	// message box
-	UI::MessagePopup (_("It seems that you do not have GhostScript
-installed on your computer. It is needed
-to print."));
-    }
-    Progress::NextStageStep (4);	if (testAbort ())			return `back;
-
-    if (!skip_io && (Printer::spooler != "cups" || Printer::cupsInstallationType () == 0))
-    {
-	if (!Printer::Read ())
+	if (SCR::Execute (.target.bash, "/usr/bin/which gs") != 0)
 	{
 	    // message box
-	    UI::MessagePopup (_("ERROR: Unable to read
-the current configuration.
-"));
-	    return `back;
+	    UI::MessagePopup (_("It seems that you do not have GhostScript
+installed on your computer. It is needed
+to print."));
 	}
-    }
+	// step 4
+	Progress::NextStageStep (4); if (testAbort ()) return `back;
 
-    Progress::NextStageStep (8);	if (testAbort ())			return `back;
+	if (!skip_io && (Printer::spooler != "cups"
+		|| Printer::cupsInstallationType () == `server))
+	{
+	    if (!Printer::Read ())
+	    {
+		// message box
+		UI::MessagePopup (_("ERROR: Unable to read
+the current configuration."));
+		return `back;
+	    }
+	}
 
-    if ((Printer::spooler != "cups" || Printer::cupsInstallationType () == 0) && Printer::db == `foomatic)
-    {
-	loadFoomaticIfNeeded ();
-    }
+	// step 8
+	Progress::NextStageStep (8); if (testAbort ()) return `back;
 
-    Progress::NextStageStep (10);        if (testAbort ())                       return `back;
+	if (Printer::spooler != "cups"
+	    || Printer::cupsInstallationType () == `server)
+	{
+	    loadFoomaticIfNeeded ();
+	}
 
-
-    /* Autodetection */
-    if (!skip_autodetection)
-    {
-	if (Printer::detect != false)
-	    Printer::detect = Crash::AskRun ("printer_detection",
-		// popup
-		_("During the following step, YaST2 will try to detect local printers only.
+	/* Autodetection */
+	if (!skip_autodetection)
+	{
+	    // step 12
+	    Progress::NextStageStep (12); if (testAbort ()) return `back;
+	    if (Printer::detect != false)
+		Printer::detect = Crash::AskRun ("printer_detection",
+		    // popup
+		    _("During the following step, YaST2 will try to detect local printers only.
 
 Printer detection can now start. In some cases, detection can cause a
 system freeze. If a freeze happens, select Skip Detection
 when next running the printer configuration.
 
-Detect your printers?
-"));
+Detect your printers?"));
 
-	if (Printer::detect)
-	{
-	    Crash::Run ("printer_detection");
-	    runProbeDialog ();
-	    Crash::Finish ("printer_detection");
+	    if (Printer::detect)
+	    {
+		Crash::Run ("printer_detection");
+		runProbeDialog ();
+		Crash::Finish ("printer_detection");
+	    }
 	}
-    }
-    Progress::Finish ();		if (testAbort ())			return `back;
-    if (test_mode)
-    {
-	testDialogs ();
-	return `back;
-    }
-    symbol ret = runWizard (skip_autodetection);
-    if (`next == ret)
-    {
-	Wizard::RestoreHelp (getWriteProgressHelp ());
-	if (!skip_io)
+	// Progress finish
+	Progress::Finish (); if (testAbort ()) return `back;
+	if (test_mode)
 	{
-	    Printer::Write ();
-	    SCR::Execute (.target.bash, "/sbin/SuSEconfig -quick --nonewpackage --module profiles");
-	    Runlevel::RunInitScript ("lpd", "restart");
-	    // popup
-	    UI::MessagePopup (_("The new configuration \nwas stored successfully."));
+	    testDialogs ();
+	    return `back;
 	}
-    }
-    if (`switch == ret || `reinstall == ret)
-    {
-//	UI::CloseDialog ();
-	if (`switch == ret)
+	ret = runWizard (skip_autodetection);
+	if (`next == ret)
 	{
-	    Printer::save_all = true;
-	    Printer::reread = false;
+	    Wizard::RestoreHelp (getWriteProgressHelp ());
+	    if (!skip_io)
+	    {
+		Printer::Write ();
+		SCR::Execute (.target.bash, "/sbin/SuSEconfig -quick --nonewpackage --module profiles");
+		Runlevel::RunInitScript ("lpd", "restart");
+		// popup
+		UI::MessagePopup (
+		    _("The new configuration \nwas stored successfully."));
+	   }
 	}
-	else
+	if (`switch == ret || `reinstall == ret)
 	{
-	    Printer::save_all = false;
-	    Printer::reread = true;
+	    if (`switch == ret)
+	    {
+		Printer::save_all = true;
+		Printer::reread = false;
+	    }
+	    else
+	    {
+		Printer::save_all = false;
+		Printer::reread = true;
+	    }
+	    Printer::cups_installation = nil;
+	    Printer::sys_forbidden_names = nil;
+	    continue;
 	}
-	Printer::sys_forbidden_names = nil;
-	ret = CallFunction ("printer", add (Args(), .nodetection));
-	UI::CloseDialog ();
-	return ret;
+	SCR::Execute (.target.bash, "test -d /var/spool/cups/tmp && /bin/rm -f /var/spool/cups/tmp/*");
+	break;
     }
-    SCR::Execute (.target.bash, "test -d /var/spool/cups/tmp && /bin/rm -f /var/spool/cups/tmp/*");
 
     if (Mode::cont)
     {
@@ -370,12 +314,21 @@ Detect your printers?
     else if (size (Printer::printcap) > 0)
     {
 	if (Printer::spooler == "cups")
-	    if (Printer::cupsInstallationType () != 1)
-		SCR::Execute (.target.bash_background, "/etc/init.d/cups restart");
+	{
+	    if (Printer::cupsInstallationType () == `server)
+	    {
+		SCR::Execute (.target.bash_background,
+		    "/etc/init.d/cups restart");
+	    }
 	    else
+	    {
 		SCR::Execute (.target.bash, "/etc/init.d/cups stop");
+	    }
+	}
 	else if (Printer::spooler == "lprng")
+	{
 	    SCR::Execute (.target.bash, "/etc/init.d/lpd restart");
+	}
     }
     UI::CloseDialog ();
     Crash::Finish ("printer.ycp");

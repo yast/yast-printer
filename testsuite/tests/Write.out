@@ -9,7 +9,7 @@ Read	.init.scripts.runlevel "cups" $[]
 Read	.init.scripts.comment "cups" $[]
 Write	.target.ycp "/var/lib/YaST2/printers" $["cups_usb_devices":`always, "default":"", "deleted":[], "printers":[]] true
 Execute	.target.bash "/bin/chmod 600 /var/lib/YaST2/printers" 0
-Read	.target.size "/etc/printcap" 0
+Read	.target.size "/etc/printcap" 555
 Execute	.target.bash "/bin/chmod 0644 /etc/printcap" 0
 Write	.sysconfig.printer.DEFAULT_PRINTER "none" true
 Write	.sysconfig.printer nil true
@@ -34,20 +34,26 @@ Read	.init.scripts.exists "cups" true
 Read	.init.scripts.runlevel "cups" $[]
 Read	.init.scripts.comment "cups" $[]
 Execute	.target.bash "/usr/lib/lpdfilter/bin/lprsetup -lprng -delete lpx" 0
-Read	.target.size "/etc/printcap" 0
+Read	.target.size "/etc/printcap" 555
 Execute	.target.bash "/bin/rm -r /etc/lpdfilter/lpx /var/spool/lpd/lpx; \n" 0
+Read	.ppd.db.changed false
+Read	.target.ycp "/var/lib/YaST2/ppd_db.ycp" $["":$["":$["":$["filename":"filename"]]]]
 Execute	.target.mkdir "/etc/lpdfilter/lp" true
 Execute	.target.bash "/usr/lib/lpdfilter/bin/lprsetup -lprng -overwrite lp -device /dev/lp0  -driver upp -own -color -sf" 0
-Read	.target.size "/etc/printcap" 0
-Write	.printerdb.upp."" $[] "-supModel=\" \"\n"
+Read	.target.size "/etc/printcap" 555
 Execute	.target.mkdir "/etc/lpdfilter/lp" true
-Write	.target.string "/etc/lpdfilter/lp/upp" "-supModel=\" \"\n" true
+Write	.target.string "/etc/lpdfilter/lp/upp" "-sDEVICE=pswrite\n-sPAPERSIZE=a4\n" true
 Execute	.target.bash "/bin/chmod 644 /etc/lpdfilter/lp/upp" 0
+Write	.target.string "/etc/lpdfilter/lp/post" "foomatic-rip --ppd /etc/lpdfilter/lp/ppd" true
+Execute	.target.bash "/bin/chmod 755 /etc/lpdfilter/lp/post" 0
+Read	.target.tmpdir "/tmp"
+Write	.ppd.file.modify ["filename", "/tmp/ppdfile", $[]] true
+Execute	.target.bash "/bin/cp /tmp/ppdfile /etc/lpdfilter/lp/ppd" 0
 Write	.target.string "/etc/lpdfilter/lp/conf" "#\n# for documentation see /usr/lib/lpdfilter/global/optional.options\n#\n\n" true
 Execute	.target.bash "/bin/chmod 660 /etc/lpdfilter/lp/conf ; /bin/chown lp:lp /etc/lpdfilter/lp/conf" 0
-Write	.target.ycp "/var/lib/YaST2/printers" $["cups_usb_devices":`always, "default":"lp", "deleted":[$["name":"lpx", "states":$["cups-state":"changed", "lprng-state":"commited"], "type":"printer"]], "printers":[$["accepting":true, "bannerend":"none", "bannerstart":"none", "lprng-state":"commited", "name":"lp", "state":"idle", "uri":"parallel://dev/lp0"]]] true
+Write	.target.ycp "/var/lib/YaST2/printers" $["cups_usb_devices":`always, "default":"lp", "deleted":[$["name":"lpx", "states":$["cups-state":"changed", "lprng-state":"commited"], "type":"printer"]], "printers":[$["accepting":true, "bannerend":"none", "bannerstart":"none", "database":"foomatic", "lprng-state":"commited", "name":"lp", "state":"idle", "uri":"parallel://dev/lp0"]]] true
 Execute	.target.bash "/bin/chmod 600 /var/lib/YaST2/printers" 0
-Read	.target.size "/etc/printcap" 0
+Read	.target.size "/etc/printcap" 555
 Execute	.target.bash "/bin/chmod 0644 /etc/printcap" 0
 Write	.sysconfig.printer.DEFAULT_PRINTER "lp" true
 Write	.sysconfig.printer nil true

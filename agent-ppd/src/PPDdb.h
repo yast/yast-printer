@@ -59,12 +59,14 @@ class PPD {
                 string pnp_printer;
 		string checksum;
 		off_t size;
+		string filter;
 	    DriverInfo () {
 		filename = "";
 		pnp_vendor = "";
 		pnp_printer = "";
 		checksum = "";
 		size = 0;
+		filter = "";
 	    }
         };
 

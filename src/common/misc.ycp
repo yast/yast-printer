@@ -49,7 +49,7 @@
 	map options = p["options"]:$[];
 	if (haskey (options, "PageSize"))
 	    return p;
-	string pagesize = Printerlib::getDefaultPaperSize () == 0 ? "A4" : "Letter";
+	string pagesize = Printerlib::getDefaultPaperSize () == `a4 ? "A4" : "Letter";
 	options["PageSize"] = pagesize;
 	options["PageRegion"] = pagesize;
 	options["ImageableArea"] = pagesize;
@@ -316,7 +316,7 @@ preparation for autoinstallation.
 	else if (config == nil || config == "")
             ppdfile_orig = getAutoPpdFile (ppds, vendor, model);
 	else
-	    ppdfile_orig = Printer::foomatic[vendor, model, config, 0]:"";
+	    ppdfile_orig = Printer::foomatic[vendor, model, config, "filename"]:"";
 	y2debug ("Choosen PPD file: %1", ppdfile_orig);
         string config = ppds[ppdfile_orig]:"";
         string ppdfile = SCR::Read (.ppd.file.open,
@@ -337,7 +337,7 @@ preparation for autoinstallation.
             {
                 foreach (`v, composite["valorder"]:[], ``{
                     string optname = composite["name"]:"";
-		    string pagesize = Printerlib::getDefaultPaperSize () == 0 ? "A4" : "Letter";
+		    string pagesize = Printerlib::getDefaultPaperSize () == `a4 ? "A4" : "Letter";
                     map new_options = $[
                         optname : v,
 			"PageSize" : pagesize,
@@ -396,7 +396,7 @@ preparation for autoinstallation.
         {
             y2milestone ("Database changed");
 	    boolean fast_update = false;
-	    if (SCR::Read (.target.size, "/var/lib/YaST2/ppd_db_list") != -1)
+	    if (Mode::cont)
 	    {
 		fast_update = true;
 		SCR::Write (.ppd.db.check_method, `size);
@@ -432,7 +432,6 @@ of printers.
 		SCR::Write (.ppd.db.check_method, `checksum);
 	    }
         }
-	SCR::Execute (.target.bash, "test -f /var/lib/YaST2/ppd_db_list && rm -f /var/lib/YaST2/ppd_db_list");
 	Printer::foomatic= SCR::Read (.target.ycp, "/var/lib/YaST2/ppd_db.ycp");
     }
 
@@ -482,15 +481,15 @@ of printers.
 	    foreach (`k2, `v2, v1, ``{
 		if (is (k2, string) && size (v2) > 2)
 		{
-		    if (filterchars (tolower (select (v2, 2, "")),
+		    if (filterchars (tolower (lookup (v2, "pnp_printer", "")),
 			"abcdefghijklmnopqrstuvwxyz0123456789") == cache) // compare ieee1248 id
 		    {
-			ppds = add (ppds, select (v2, 0, ""), k2);
+			ppds = add (ppds, v2["filename"]:"", k2);
 		    }
 		    else if (filterchars (tolower (k1),
 			"abcdefghijklmnopqrstuvwxyz0123456789") == cache)
 		    {   // if it does not match, try printer name
-			ppds = add (ppds, select (v2, 0, ""), k2);
+			ppds = add (ppds, v2["filename"]:"", k2);
 		    }
 		}
 	    });
@@ -530,7 +529,7 @@ This usually takes one or two minutes")),
 	    return;
         if (Printer::spooler == "cups")
         {
-            if (0 == Printer::cupsInstallationType ())
+            if (`server == Printer::cupsInstallationType ())
             {
 		boolean close_dialog = false;
 		integer status = SCR::Execute (.target.bash, "/usr/bin/lpq 2>/dev/null");
@@ -650,7 +649,7 @@ This usually takes one or two minutes")),
 		return size (queues) > 0;
 	    });
 	}
-        else if ("lpd" == type || "filtering" == type || "prefilter" == type)
+        else if ("lpd" == type || "filtering" == type)
             hosts = SCR::Read (.net.hostnames, 515);
         else if ("socket" == type)
             hosts = SCR::Read (.net.hostnames, 9100);
@@ -693,7 +692,7 @@ This usually takes one or two minutes")),
       */
     global define boolean testSupportedQueueBySpooler (string queue, string spooler) ``{
 	map supported = $[ "cups" : [ "parallel", "usb", "serial", "filtering", "ipp", "samba", "socket", "irda", "file", "class", "novell", "pipe", ],
-			   "lprng" : [ "parallel", "usb", "serial", "lpd", "prefilter", "samba", "novell", "irda", "filtering", "socket", "pipe", "file", ]];
+			   "lprng" : [ "parallel", "usb", "serial", "lpd", "samba", "novell", "irda", "filtering", "socket", "pipe", "file", ]];
 	list l = lookup (supported, spooler, []);
 	if (l == [])
 	    return true;
@@ -846,327 +845,7 @@ queue you want to use."));
 	}
 	return name;
     }
-    /**
-     * Saves printer under some new name and tests it.
-     * It can also create NEW prefilter queue for it.
-     * @param printer map of printer to test
-     * @param testpage_type type of page. Now supports only (0==ps, 1==ascii)
-     * @return boolean true if success
-     */
-    global define boolean testPrinter (map printer, integer testpage_type) ``{
-	if (Mode::config)
-	{
-	    DisplayUnavailableAIPopup ();
-	    return true;
-	}
 
-	boolean do_not_test = false;
-	boolean foomatic = printer["database"]:"" == "foomatic";
-
-	if (foomatic)
-	    loadFoomaticIfNeeded ();
-
-	if (Printer::getPrinterState(printer, Printer::spooler) == "void")
-	    do_not_test = true;
-
-	if (do_not_test) {
-	    // message popup
-	    UI::MessagePopup (_("Unable to print a test page. You are using different spooler."));
-	    return false;
-	}
-
-	restartSpoolerIfNeeded (true);
-	if (Printer::spooler != "lprng" && Printer::spooler != "cups")
-	{
-	    // message box
-	    UI::MessagePopup (_("Unable to print a test page. 
-Install a spooler 
-before printing test pages.
-"));
-	    return true;
-	}
-	if (testpage_type != -1)
-	{
-	    // message box
-	    if (!UI::AnyQuestionPopup ("", _("Ready to print a sample page.
-
-Make sure the printer is turned
-on and ONLINE then press the 'OK' button.
-"),
-		    OKButtonLabel (), CancelButtonLabel (), `focus_yes))
-	    {
-		return ;
-	    }
-	}
-	else
-	{
-	    UI::OpenDialog (
-		`VBox (
-		    // label
-		    `Label (_("Ready to print a sample page.
-
-Select the test page type, make sure 
-the printer is turned on and ONLINE, then 
-press 'OK'.
-")),
-		    `VSpacing (1),
-		    `RadioButtonGroup (`id (`type), `VBox (
-			// radiobutton
-			`Left (`RadioButton (`id (`graphic), _("Test &graphical printing"))),
-			// radiobutton
-			`Left (`RadioButton (`id (`ascii), _("Test &text printing")))
-		    )),
-		    `VSpacing (1),
-		    `HBox (
-			// pushbutton
-			`PushButton (`id (`ok), `opt (`key_F10, `default), OKButtonLabel ()),
-			// pushbutton
-			`PushButton (`id (`cancel), `opt (`key_F9), CancelButtonLabel ())
-		    )
-		)
-	    );
-	    UI::ChangeWidget (`id (`type), `CurrentButton, `graphic);
-	    symbol ret = nil;
-	    while (nil == ret)
-	    {
-		ret = UI::UserInput ();
-		if (ret == `cancel)
-		{
-		    UI::CloseDialog ();
-		    return;
-		}
-		if (ret == `ok)
-		{
-		    if (UI::QueryWidget (`id (`type), `CurrentButton) == `ascii)
-			testpage_type = 1;
-		    else
-			testpage_type = 0;
-		    break;
-		}
-		ret = nil;
-	    }
-	    UI::CloseDialog ();
-	}
-
-	// create new name for the printer
-	list forbidden_names = union (Printer::getForbiddenNames (), Printer::DeletedNames ());
-	string virtual_name = lookup (printer, "name", "");
-	string name = Printer::adjustQueueName ("y2test", forbidden_names);
-	string uri = lookup (printer, "uri", "");
-	string printer_type = uri == "class" ? "class" : "printer";
-	printer = add (printer, "name", name);
-	printer = add (printer, "recreate", true);
-	// is it pre-filter queue?
-	map prefilter = $[];
-	string prefilter_name = "";
-
-	if ("prefilter" == Printerlib::getUriType (uri) && "cups" != Printer::spooler)
-	{
-	    prefilter_name = Printer::adjustQueueName ("y2test", add (forbidden_names, name));
-	    if (lookup (printer, "create_remote_queue", false))
-	    {
-		prefilter = $[
-		    "name" : prefilter_name,
-		    "uri" : "lpd://" + lookup (printer, "remote_host", "") + "/" + lookup (printer, "remote_printer", ""),
-		    ];
-	    }
-	    else
-	    {
-		string use_prefilter = Printerlib::getUriRemoteQueue (uri);
-		foreach (`i, Printer::printcap, ``{
-			if (use_prefilter == lookup (i, "name", ""))
-			{
-			    prefilter = i;
-			}
-		    });
-		prefilter = add (prefilter, "name", prefilter_name);
-	    }
-	    prefilter = add (prefilter, "recreate", true);
-	    printer = add (printer, "uri", "prefilter://" + prefilter_name);
-	}
-
-	printer = Printer::fixPrinter (printer);
-	y2debug ("Printer for testpage: %1", printer);
-	if (Printer::spooler == "cups")
-	{
-	    Printer::writeCupsPrinter (printer);
-	}
-	else
-	{
-	    //
-	    // backup printcap
-	    //
-	    SCR::Execute (.target.bash, "/bin/cp /etc/printcap /etc/printcap.y2bak");
-
-	    //
-	    // write printer and possibly prefilter
-	    //
-	    if (!Printer::writeLpdPrinter (printer))
-		return false;
-	    if ($[] != prefilter)
-	    {
-		if (!Printer::writeLpdPrinter (prefilter))
-		    return false;
-	    }
-
-	    //
-	    // restart lpd
-	    //
-	    SCR::Execute (.target.bash, "/etc/init.d/lpd restart");
-	}
-	//
-	// print test page
-	// to queue: name
-	// but tell user it is queue: virtual_name
-	string switch = " -P" + name;
-	string test_page = "";
-	if (0 == testpage_type)
-	{
-	    map consolefonts = SCR::Read (.target.yast2, "consolefonts.ycp");
-	    string ce = select (lokup (consolefonts, UI::GetLanguage (false), []), 4, "X");
-	    string opts = SCR::Read (.target.tmpdir) + "/testpg.options";
-	    string os = "";
-	    // encoding first
-	    ce = toupper (ce);
-	    if (ce != "ISO-8859-2" && ce != "ASCII" && ce != "ISO-8859-15"
-		&& ce != "ISO-8859-1")
-	    {
-		ce = toupper (_("!!!  YOUR  ENCODING  !!!"));
-	    }
-	    if (ce != "ISO-8859-2" && ce != "ASCII" && ce != "ISO-8859-15"
-		&& ce != "ISO-8859-1")
-	    {
-		ce = "ASCII";
-	    }
-
-	    string enc = "ISO-8859-2" == ce ? "h02" : "h01";
-	    os = os + sformat ("----X-ENCODING: %1\n", enc);
-
-	    os = os + sformat ("----X-VENDOR: (%1 %2)\n",
-		printer["vendor"]:"",
-		printer["device"]:"");
-	    os = os + sformat ("----X-CONFIG: (%1)\n",
-		printer["config"]:"");
-	    // TRANSLATORS: keep this short! Only translations in languages
-	    // with encodings ISO-8859-[1|2|15] will be used.
-	    os = os + sformat ("----X-QUEUE-L: (%1)\n", _("Print queue:"));
-            // TRANSLATORS: keep this short! Only translations in languages
-            // with encodings ISO-8859-[1|2|15] will be used.
-	    os = os + sformat ("----X-PRINTER-L: (%1)\n", _("Printer:"));
-	    os = os + sformat ("----X-CONFIG-L: (%1)\n",
-		// TRANSLATORS: keep this short! Only
-		// translations in languages
-		// with encodings ISO-8859-[1|2|15] will be used.
-		_("Configuration:"));
-            // TRANSLATORS: keep this short! Only translations in languages
-            // with encodings ISO-8859-[1|2|15] will be used.
-	    os = os + sformat ("----X-OPTION-L: (%1)\n", _("Options:"));
-            // TRANSLATORS: keep this short! Only translations in languages
-            // with encodings ISO-8859-[1|2|15] will be used.
-	    os = os + sformat ("----X-HEAD: (%1)\n", _("YaST2 test page"));
-
-	    // options
-	    string filename = SCR::Read (.ppd.file.open,
-		[Printer::foomatic[
-		    printer["vendor_db"]:"",
-		    printer["device_db"]:"",
-		    printer["config"]:"", 0]:"",
-		SCR::Read (.target.tmpdir)]);
-	    map options = SCR::Read (.ppd.file.options, [filename, ""]);
-	    list optlist = options["data"]:[];
-	    optlist = maplist (`i, optlist, ``{
-		    string name = i["name"]:"";
-		    string label = i["gui"]:"";
-		    string value = printer["options", name]:"";
-		    if (value == "")
-			value = i["current"]:"";
-		    string valuelabel = i["values", value]:"";
-		    if (label == "")
-			label = name;
-		    if (valuelabel == "")
-			valuelabel = value;
-		    if (label != "" && valuelabel != "")
-			return sformat ("(%1: %2) mm", label, valuelabel);
-		    else
-			return "";
-	    });
-	    optlist = filter (`o, optlist, ``(o != "" && o != nil));
-	    os = os + mergestring (optlist, "\n");
-
-	    if (ce != "X")
-	    {
-		    os = UI::Recode ("UTF-8", ce, os);
-	    }
-	    SCR::Write (.target.string, opts, os);
-	    test_page = Printerlib::preparePsTestPage
-		(virtual_name, opts, true);
-	}
-	else
-	{
-	    test_page = Printerlib::prepareAsciiTestPage ();
-	}
-	string lpr_command = sformat ("/usr/bin/lpr -P%1 %2", name, test_page);
-	map out = SCR::Execute (.target.bash_output, lpr_command);
-	if (lookup (out, "exit", 0) != 0)
-	{
-	    UI::MessagePopup (
-		// message box
-		sformat (_("Unable to print the test page.
-
-Output from lpr:
-"), test_page) +
-		lookup (out, "stderr", ""));
-	    Printer::deletePrinters ([$["name": name, "type": printer_type ], $["name" : prefilter_name, "type": printer_type]]);
-	    return false;
-	}
-
-	if (false == OkOrStopPrinting (sformat ("lpr -P%1 %2", virtual_name, test_page)))
-	{ // Problems, stop the printing!
-	    if (Printer::spooler != "cups")
-		SCR::Execute (.target.bash, "/etc/init.d/lpd stop");
-
-	    string contype = Printerlib::getUriType (uri);
-	    if (contype == "parallel" || contype == "serial" || contype == "usb")
-	    {
-		string device = Printerlib::getUriDevice (uri);
-		if (device != "")
-		{
-		    SCR::Execute (.target.bash, sformat ("/bin/fuser -k %1", device));  // kill currently printing processes
-		}
-		if (contype == "parallel" && "/dev/lp" == substring (device, 0, 7))
-		{
-		    //
-		    // do printer_reset only if we are sure that the device is /dev/lp, because
-		    // now user may add anything as parallel device and we should send this ioctl
-		    // only to parallel port
-		    //
-		    SCR::Execute (.target.control.printer_reset, device);
-		}
-	    }
-
-	    SCR::Execute (.target.bash, "/bin/rm `/usr/bin/find /var/spool/lpd -name \"[cd]f*\" -type f`"); // remove all jobs
-	    if (Printer::spooler != "cups")
-		SCR::Execute (.target.bash, "/etc/init.d/lpd start"); // restart lpd
-
-	    // message box
-	    UI::MessagePopup (_("Printing was stopped.
-
-If the printer is still printing, push the reset button
-on the printer or remove all the paper from its tray.
-After it stops printing, switch off the printer power,
-wait 10 seconds and switch it on again.
-
-Again, check the manufacturer and printer model entries
-you made previously."));
-	}
-	else
-	{ // don't show notice regarding testing in proposal more
-	    Printer::tested = true;
-	}
-	Printer::deletePrinters ([$["name": name, "type": printer_type], $["name" : prefilter_name, "type": printer_type]]);
-//	SCR::Execute (.target.bash, sformat ("/bin/rm /var/lib/YaST2/printers/y2test; \n"));
-	return true;
-    }
     /**
      * We need this wrapper because of wizard sequencer.
      * @return `next for wizard sequencer
@@ -1250,7 +929,7 @@ All changes will be lost.
      */
     global define boolean knowConnection (string con) ``{
         return (
-            (contains (["file", "parallel", "usb", "serial", "ipp", "lpd", "samba", "socket", "filtering", "irda", "prefilter", "novell", "pipe" ], con)) ?
+            (contains (["file", "parallel", "usb", "serial", "ipp", "lpd", "samba", "socket", "filtering", "irda", "novell", "pipe" ], con)) ?
             con : ""
             );
     }
@@ -1293,13 +972,8 @@ All changes will be lost.
 		    // label
 		    `Label (`opt (`hstretch), _("Unsupported printing in CUPS:")),
 		    // radiobutton
-                    `RadioButton (`id (`remote), `opt (`hstretch, `disabled),     _("LPD &forwarding queue"), type == "lpd"),
+                    `RadioButton (`id (`remote), `opt (`hstretch, `disabled),     _("LPD &forwarding queue"), type == "lpd")
 		    // radiobutton
-                    `RadioButton (`id (`prefilter),`opt (`hstretch, `disabled), _("Prefilter queue for a LPD forwarding &queue"), type == "prefilter")//,
-		    // radiobutton
-//                    `RadioButton (`id (`novell), `opt (`hstretch, `disabled),   _("IPX printing (Nove&ll printer)"), type == "novell"),
-		    // radiobutton
-//		    `RadioButton (`id (`pipe), `opt (`hstretch, `disabled),     _("&Pipe Printing"), type == "pipe")
 		    )
 		: Printer::spooler == "lprng" ?
                 `VBox (
@@ -1309,8 +983,6 @@ All changes will be lost.
                     `Label (`opt (`hstretch), _("LPD and IPP network printers:")),
 		    // radiobutton
                     `RadioButton (`id (`remote), `opt (`hstretch),      _("LPD &forwarding queue"), type == "lpd"),
-		    // radiobutton
-                    `RadioButton (`id (`prefilter),`opt (`hstretch), _("Prefilter queue for a LPD forwarding &queue"), type == "prefilter"),
 		    // radiobutton
                     `RadioButton (`id (`filtering),`opt (`hstretch), _("LPD fil&tering forwarding queue"), type == "filtering"),
 		    // label
@@ -1342,8 +1014,6 @@ All changes will be lost.
                     `Label (`opt (`hstretch), _("LPD and IPP network printing:")),
 		    // radiobutton
                     `RadioButton (`id (`remote), `opt (`hstretch),      _("LPD &forwarding queue"), type == "lpd"),
-		    // radiobutton
-                    `RadioButton (`id (`prefilter),`opt (`hstretch), _("Prefilter& queue for a LPD forwarding queue"), type == "prefilter"),
 		    // radiobutton
                     `RadioButton (`id (`filtering),`opt (`hstretch), _("LPD fil&tering and forwarding queue"), type == "filtering"),
 		    // radiobutton
@@ -1390,8 +1060,6 @@ All changes will be lost.
 		`RadioButton (`id (`serial), `opt (`hstretch),   _("&Serial printer"), type == "serial"),
 		    // radiobutton
 		`RadioButton (`id (`irda), `opt (`hstretch),     _("IrD&A printer"), type == "irda"),
-		    // radiobutton
-//		`RadioButton (`id (`file), `opt (`hstretch),     _("&Disk file"), type == "file"),
 		    // label 1/3
 		`Label (`opt (`hstretch), _("Expert printer setup, such as LPD, IPP, Samba/Windows")),
 		    // label 2/3
@@ -1413,8 +1081,6 @@ All changes will be lost.
 		`RadioButton (`id (`serial), `opt (`hstretch),   _("&Serial printer"), type == "serial"),
 		    // radiobutton
 		`RadioButton (`id (`irda), `opt (`hstretch),     _("IrD&A printer"), type == "irda")//,
-		    // radiobutton
-//		`RadioButton (`id (`file), `opt (`hstretch),     _("&Disk file"), type == "file")
 	    );
     }
 
@@ -1784,30 +1450,6 @@ for any file in directory /etc/lpdfilter"));
 		found = true;
 	});
 	return found;
-    }
-    /**
-     * Tries to find paper size between selected options. If there is any,
-     * doesn't touch anything. Otherwise finds the first paper-size option
-     * in opts and sets it to 0(a4) or 1(letter) according to local
-     * settings.
-     * @param selected currently selected options
-     * @param opts option list
-     * @return modified settings
-     */
-    global define map solvePaperSize (map selected, list opts) ``{
-	integer len = size (opts);
-	integer i = 0;
-	while (i < len)
-	{
-	    string s = select (select (select (select (opts, i, `i ()), 0, `id ([])), 0, []), 1, "");
-	    if (substring (s, 0, 10) == "papersize-")
-	    {
-		selected = add (selected, s, Printerlib::getDefaultPaperSize ());
-		break;
-	    }
-	    i = i + 1;
-	}
-	return selected;
     }
     /**
       * get RadioButtonGroup for spooler selection

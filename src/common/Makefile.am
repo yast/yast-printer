@@ -12,7 +12,9 @@ ynclude_DATA =			\
 	misc.ycp		\
 	dialogs.ycp		\
 	helps.ycp		\
-	texts.ycp
+	texts.ycp		\
+	testpage.ycp
+
 
 client_DATA =                           \
 	printer_auto.ycp              \

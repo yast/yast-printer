@@ -21,14 +21,21 @@
     textdomain "printer";
     import "Printer";
     import "Printerlib";
+    import "Report";
+
+    include "printer/misc-cups.ycp";
+    include "printer/testpage.ycp";
 
     /**
      * Write the .upp file and the configuration.
      * @param entry Entry for printer to save.
      * @return boolean true if successful
      */
-    define boolean createUppFile (map entry) ``{
-        string upp_file = SCR::Write (add (.printerdb.upp, lookup (entry, "config", "")), lookup (entry, "options", $[]));
+    global define boolean createUppFile (map entry) ``{
+	// FIXME
+	string pagesize = "a4";
+        string upp_file = sformat (
+	    "-sDEVICE=pswrite\n-sPAPERSIZE=%1\n", pagesize);
         string name = lookup (entry, "name", "");
 
         // Save the .upp file
@@ -40,8 +47,37 @@
             Report::Error (sformat (_("Cannot write %1."), fname));
             return false;
         }
+	SCR::Execute (.target.bash, sformat ("/bin/chmod 644 %1", fname));
+	fname = sformat ("/etc/lpdfilter/%1/post", name);
+	string post_file = sformat (
+	    "foomatic-rip --ppd /etc/lpdfilter/%1/ppd", name);
+        if (!SCR::Write (.target.string, fname, post_file))
+        {
+            // message box %1 is filename
+            Report::Error (sformat (_("Cannot write %1."), fname));
+            return false;
+        }
+	SCR::Execute (.target.bash, sformat ("/bin/chmod 755 %1", fname));
 
-        SCR::Execute (.target.bash, sformat ("/bin/chmod 644 %1", fname));
+	string ppd = lookup (entry, "ppd", "");
+        if (ppd != "" && -1 == SCR::Read (.target.size, ppd))
+        {
+            y2error ("Unexsistent PPD file: %1", ppd);
+                // error popup
+            Report::Error (sformat (_("An error occurred while saving queue %1.
+
+The specified PPD file does not exist.
+"), name));
+            return false;
+        }
+
+	entry = getUpdatedPpdFile (entry);
+	if (entry == nil)
+	    return false;
+
+	string from = entry["ppd"]:"";
+	string to = sformat ("/etc/lpdfilter/%1/ppd", name);
+	SCR::Execute (.target.bash, sformat ("/bin/cp %1 %2", from, to));
         return true;
     }
 
@@ -119,12 +155,6 @@ is not completed properly.
             }
             if (callLprsetup (sformat ("/usr/lib/lpdfilter/bin/lprsetup -lprng -overwrite %1 -device %2 %3", name, device, baudrate_str) + tail)
 )
-                return true;
-        }
-        else if (con_type == "prefilter")
-        {
-            if (callLprsetup (sformat ("/usr/lib/lpdfilter/bin/lprsetup -lprng -overwrite %1 -device /dev/null -redirect %2", name, Printerlib::
-getUriRemoteQueue (uri)) + tail))
                 return true;
         }
         else if (con_type == "samba" || con_type == "novell")
@@ -207,6 +237,15 @@ is not completed properly.
      * @return boolean success?
      */
     global define boolean writeLpdPrinter (map entry) ``{
+        if (entry["database"]:"" == "foomatic")
+        {
+            loadFoomaticIfNeeded ();
+        }
+        else
+        {
+            Report::Error (sformat (_("Only foomatic queues are supported: %1"),
+                entry["name"]:""));
+        }
         map saved = lookup (entry, "saved", $[]);
         string printcap_part =     lookup (saved, "printcap_part", "");
         map conf = lookup (entry, "conf", $[]);

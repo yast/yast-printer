@@ -374,7 +374,6 @@ void* PPD::createdbThread(const char* filename) {
     bool f2 = false;
     bool f3 = false;
     char str[3] = "x\n";
-//    bool ret = true;
     void* ret = (void*)1;
     bool updated = false;
     bool update_failed = false;
@@ -655,12 +654,13 @@ start_from_scratch:
             for(f3 = true; it3 != (*it2).second.drivers.end(); it3++) {
                 F(f3) fprintf(file,str);
                 fprintf(file,"      \"%s\"", (*it3).first.c_str());
-                fprintf(file," : [\n");
-                fprintf(file,"        \"%s\",\n", (*it3).second.filename.c_str());
-                fprintf(file,"        \"%s\",\n", (*it3).second.pnp_vendor.c_str());
-                fprintf(file,"        \"%s\",\n", (*it3).second.pnp_printer.c_str());
-		fprintf(file,"        \"%s\",\n", (*it3).second.checksum.c_str());
-		fprintf(file,"        %d,\n", (*it3).second.size);
+                fprintf(file," : $[\n");
+                fprintf(file,"        \"filename\" : \"%s\",\n", (*it3).second.filename.c_str());
+                fprintf(file,"        \"pnp_vendor\" : \"%s\",\n", (*it3).second.pnp_vendor.c_str());
+                fprintf(file,"        \"pnp_printer\" : \"%s\",\n", (*it3).second.pnp_printer.c_str());
+		fprintf(file,"        \"checksum\" : \"%s\",\n", (*it3).second.checksum.c_str());
+		fprintf(file,"        \"size\" : %d,\n", (*it3).second.size);
+		fprintf(file,"        \"filter\" : \"%s\",\n", (*it3).second.filter.c_str());
                 fprintf(file,"      ]");
             }
             fprintf(file,"\n    ]");
@@ -1416,7 +1416,7 @@ bool PPD::loadPrebuiltDatabase () {
 
     if ((! val.isNull ()) && val->isMap ())
     {
-	y2milestone ("Database file parsed correctly");
+	y2milestone ("Database file parsed correctly by YCP parser");
 	YCPMap m = val->asMap ();
 	for (YCPMapIterator it1 = m->begin (); it1 != m->end (); it1++)
 	{
@@ -1453,39 +1453,85 @@ bool PPD::loadPrebuiltDatabase () {
 			if ((! it2.key().isNull()) && it3.key()->isString ())
 			{
 			    string config = it3.key()->asString()->value_cstr();
-	                    if (it3.value().isNull() || ! it3.value()->isList())
+	                    if (it3.value().isNull() || ! it3.value()->isMap())
 	                    {
 	                        y2error ("Incorrect database format");
 	                        goto error_exit;
 	                    }
 
-			    YCPList info = it3.value()->asList();
+			    YCPMap info = it3.value()->asMap();
 			    DriverInfo di;
-			    for (int i = 0; i < 4; i++)
+			    for (YCPMapIterator it4 = info->begin ();
+				it4 != info->end (); it4++)
 			    {
-				if (info->value(i).isNull()
-				    || ! info->value(i)->isString())
+				if (it4.key().isNull()
+				    || ! it4.key()->isString()
+				    || it4.value().isNull ())
 				{
 				    y2error ("Incorrect database format");
 				    goto error_exit;
 				}
+				string ak = it4.key()->asString()->value_cstr();
+				if (ak == "filename")
+				{
+				    if (! it4.value()->isString ())
+				    {
+					y2error ("Incorrect database format");
+					goto error_exit;
+				    }
+				    di.filename = it4.value()->asString()
+					->value_cstr();
+				}
+                                else if (ak == "pnp_vendor")
+                                {
+                                    if (! it4.value()->isString ())
+                                    {
+                                        y2error ("Incorrect database format");
+                                        goto error_exit;
+                                    }
+                                    di.pnp_vendor = it4.value()->asString()
+                                        ->value_cstr();
+                                }
+                                if (ak == "pnp_printer")
+                                {
+                                    if (! it4.value()->isString ())
+                                    {
+                                        y2error ("Incorrect database format");
+                                        goto error_exit;
+                                    }
+                                    di.pnp_printer = it4.value()->asString()
+                                        ->value_cstr();
+                                }
+                                if (ak == "checksum")
+                                {
+                                    if (! it4.value()->isString ())
+                                    {
+                                        y2error ("Incorrect database format");
+                                        goto error_exit;
+                                    }
+                                    di.checksum = it4.value()->asString()
+                                        ->value_cstr();
+                                }
+                                if (ak == "size")
+                                {
+                                    if (! it4.value()->isInteger ())
+                                    {
+                                        y2error ("Incorrect database format");
+                                        goto error_exit;
+                                    }
+                                    di.size = it4.value()->asInteger()->value();
+                                }
+                                if (ak == "filter")
+                                {
+                                    if (! it4.value()->isString ())
+                                    {
+                                        y2error ("Incorrect database format");
+                                        goto error_exit;
+                                    }
+                                    di.filter = it4.value()->asString()
+                                        ->value_cstr();
+                                }
 			    }
-			    if (info->value(4).isNull()
-                                || ! info->value(4)->isInteger())
-                            {
-                                y2error ("Incorrect database format");
-                                goto error_exit;
-                            }
-			    di.filename
-				= info->value(0)->asString()->value_cstr();
-			    di.pnp_vendor
-				= info->value(1)->asString()->value_cstr();
-                            di.pnp_printer
-                                = info->value(2)->asString()->value_cstr();
-			    di.checksum
-				= info->value(3)->asString()->value_cstr();
-			    di.size
-				= info->value(4)->asInteger()->value();
 			    mi.drivers[config] = di;
 			}
 			else
@@ -1588,9 +1634,10 @@ bool PPD::loadPrebuiltDatabase () {
     else
     {	
 	y2error ("Incorrect database file structure");
-	ret = false;
+	goto error_exit;
     }
 
+    y2milestone ("Database contents is OK");
     fclose (infile);
     delete parser;
     return ret;

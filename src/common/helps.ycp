@@ -85,25 +85,24 @@ printer.</P>
     global define string getAskDeviceHelp (string type) ``{
 	string help_text = "";
 	if (type == "parallel")
-	    {
-		// Help, parallel printer part
-		help_text = _("<P><B><BIG>Parallel port:</BIG></B><BR>
+	{
+	    // Help, parallel printer part
+	    help_text = _("<P><B><BIG>Parallel port:</BIG></B><BR>
 If you have multiple parallel ports, choose the parallel port to
- which your printer is connected.</P>
-");
-	    }
+ which your printer is connected.</P>");
+	}
 	if (type == "usb")
-	    {
+	{
 		// Help, USB printer part
 		help_text = _("<P><B><BIG>USB port:</BIG></B><BR>Select the device for your USB printer.</P>");
-	    }
+	}
 	if (type == "serial")
-	    {
+	{
 		// Help, serial printer part
 		help_text = _("<P><B><BIG>Serial port:</BIG></B><BR>
 Select the device for your serial printer.
  You can also set the baud rate.</P>");
-	    }
+	}
 	// Help, common part 1/2
 	help_text = help_text + _("<P><B><BIG>Other:</BIG></B><BR>
 To enter another device, press <b>Other</b>.</P>");
@@ -286,11 +285,10 @@ and you will not need to select vendor, model, and connection again.</P>
 
     /**
      * Help text.
-     * @param more_names there are more names to show/edit
      * @param raw include help text for raw printer
      * @return help text
      */
-    global define string getSpoolInfoHelp (boolean more_names, boolean raw) ``{
+    global define string getSpoolInfoHelp (boolean raw) ``{
 	string t =
 	    // Help, 1 of 6
 	    _("<P><B><BIG>Name for printing:</BIG></B><BR>To print with this configuration, use this name as the queue name.</P>");
@@ -314,21 +312,9 @@ and you will not need to select vendor, model, and connection again.</P>
 
 	if (Printer::spooler != "cups")
 	{
-/*	    if (raw)
-		// help text 4/6
-		t = t + _("<p><b><big>Raw queue:</big></b><br>With this option set, no filtering is done.
- It means that data will be sent to the printer as is.
- This option cannot be changed when editing the printer.</p>
-");*/
-	// help text 5/6
+	// help text 5/6, 6/6 dropped
 	    t = t + _("<p><b><big>Print form feed between jobs:</big></b><br>Some printers need this
  option to eject the last paper of the print job.</p>");
-	}
-	if (more_names)
-	{
-	    // help text 6/6
-	    t = t + _("<P><B><BIG>Name for TCP/IP forwarding queue:</BIG></B><BR>
-Name of the queue created for this prefilter queue.</P>");
 	}
 	return t;
     }
@@ -350,16 +336,6 @@ If you select options in the upper box, a list of values appears in the lower bo
 	+ _("<P>Some of the settings may not work together properly.
  To try printing with the current configuration,
  click <B>Test</B>.</P>
-");
-    }
-    /**
-     * Help text.
-     * @return help text
-     */
-    global define string getFilterUppHelp () ``{
-	// Help
-	return _("<P><B>Printer settings</B> are located in files with the <i>.upp</i>
- extension located in the directory <i>/etc/gs.upp</i>.</P>
 ");
     }
     /**
@@ -414,14 +390,9 @@ To print using a remote printer or any other queue type, choose
      * @return help text
      */
    global define string getLocalConnectionHelp () ``{
-        // Help text 1/2
+        // Help text 1/1
         return _("<P><B><BIG>Parallel, USB, Serial, IrDA port:</BIG></B><BR>
-Printers connected to a local port.</P>
-")
-        // Help text 2/2
-        + _("<P><B><BIG>Disk file</BIG></B><BR>
-Printing to file can be useful for printing later without a printing application needing to be installed.</P>
-");
+Printers connected to a local port.</P>");
     }
     /**
      * Help text.
@@ -439,11 +410,7 @@ respecifying the printer location, manufacturer, and model name.</P>
 	// Help text 1/10
 	string forw = _("<P><B><BIG>Forwarding queue to remote LPD:</BIG></B><BR>
 Files to print are sent directly to the remote printer.</P>");
-	// Help text 2/10
-	string pref = _("<P><B><BIG>Prefilter queue for a LPD forwarding queue:</BIG></B><BR>
-Files are prepared on the local computer. Raw data is sent to the remote host with the printer using a local forwarding queue.</P>
-");
-	// Help text 3/10
+	// Help text 3/10 (2/10 was removed)
 	string filtfor = _("<P><B><BIG>Filtering and forwarding queue</BIG></B><BR>
 Files are prepared on the local computer. Raw data is sent to the remote host with the printer.</P>");
 	// Help text 4/10
@@ -474,11 +441,11 @@ You can set some printers into one class then print to the class. CUPS will divi
 	string ret = "";
 
 	if (order == `cups)
-	    ret = filtfor + ipp + smb + ipx + tcp + pipe + oth + class + forw + pref;
+	    ret = filtfor + ipp + smb + ipx + tcp + pipe + oth + class + forw;
 	else if (order == `lprng)
-	    ret = forw + pref + filtfor + smb + ipx + tcp + pipe + ipp + oth + class;
+	    ret = forw + filtfor + smb + ipx + tcp + pipe + ipp + oth + class;
 	else
-	    ret = forw + pref + filtfor + ipp + smb + ipx + tcp + oth + pipe + class;
+	    ret = forw + filtfor + ipp + smb + ipx + tcp + oth + pipe + class;
 	if (queue)
 	    ret = new_queue + ret;
 	return ret;
@@ -551,13 +518,6 @@ You can change host name and queue name for the remote
                 help_text = help_text + _("<P><B><BIG>Connection:</BIG></B><BR>
 You can change host name and queue name for the remote
  printer and the user name and password.</P>
-");
-            }
-            else if ("prefilter" == type)
-            {
-                // help text 4/7
-                help_text = help_text + _("<P><B><BIG>Connection:</BIG></B><BR>
-Choose the forwarding queue to use for this printer.</P>
 ");
             }
             else
@@ -743,26 +703,10 @@ Enter the user name and password to access the print server.</P>
 	    }
 	else
 	    {
-		if (type == "prefilter")
-		    {
-			// Help, 4 of 5
-			help_text = help_text + _("<P>Alternatively, you can use an already configured forwarding queue.</P>");
-		    }
-		// Help, 5 of 5
+		// Help, 5 of 5, 4/5 removed
 		help_text = help_text + _("<P>To verify the name, use <B>Test</B>.</P>");
 	    }
 	return help_text;
-    }
-    /**
-     * Help text.
-     * @return help text
-     */
-    global define string getChooseRemoteHelp () ``{
-	// Help text
-	return _("<P><B><BIG>Queues:</BIG></B><BR>
-Choose the forwarding queue to use
-for this prefilter queue.</P>
-");
     }
     /**
      * Help text.
