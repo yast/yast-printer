@@ -1513,7 +1513,6 @@ with a prefilled name?")))
 			"samba": `con_samba,
 			"novell": `con_novell,
 			"lpd": `con_lpd,
-			"ipp": `con_ipp,
 			"socket": `con_socket,
 			"pipe" : `con_pipe,
 			"parallel" : `con_local,
@@ -1522,7 +1521,23 @@ with a prefilled name?")))
 			"irda" : `con_local,
 			"bluetooth" : `con_local
 		    ];
-		    ret = retvals[uri_type]:`con_uri;
+		    if (uri_type == "ipp")
+		    {
+			string uri_queue = Printerlib::getUriRemoteQueue (uri);
+			if (substring (uri_queue, 0, 9) == "printers/"
+			    || substring (uri_queue, 0, 8) == "classes/")
+			{
+			    ret = `con_ipp;
+			}
+			else
+			{
+			    ret = `con_uri;
+			}
+		    }
+		    else
+		    {
+			ret = retvals[uri_type]:`con_uri;
+		    }
 		}
 		else if (`perm == ret)
 		{
