@@ -551,8 +551,8 @@ END { if (!used) print \"ServerName %1\" }
         if (-1 != cups_installation)
             return cups_installation;
 
-        if (SCR::Read (.targetpkg.installed, "cups-client") &&
-            !SCR::Read (.targetpkg.installed, "cups"))
+        if (Pkg::IsProvided ("cups-client") &&
+            !Pkg::IsProvided ("cups"))
         {
             loadClientHostName ();
             cups_installation = 1;
@@ -806,7 +806,7 @@ y2error ("Cups read: %1", ret);
 	    {
 		saveClientHostName ();
 		// popup
-		boolean delete = SCR::Read (.targetpkg.installed, "cups") && UI::YesNoPopup (_("Some packages installed are not needed
+		boolean delete = Pkg::IsProvided ("cups") && UI::YesNoPopup (_("Some packages installed are not needed
 for CUPS client-only installation. 
 Remove them?
 "));
@@ -814,7 +814,7 @@ Remove them?
 		{
 		    Printerlib::stopServices();
 		    list del = ["cups", "cups-drivers", "cups-drivers-stp", "cups-drivers-de", "cups-drivrers-cs"];
-		    del = filter (`e, del, ``(SCR::Read (.targetpkg.installed, e) == true));
+		    del = filter (`e, del, ``(Pkg::IsProvided(e) == true));
 		    map script = $["userInput" : false, "install" : "", "delete" : del];
 		    string fn = SCR::Read (.target.tmpdir);
 		    fn = fn + "/script.sw_single";

@@ -434,16 +434,16 @@
      */
     global define integer getSpoolSystem () ``{
 	// first try if some of the systems exists.
-	boolean cups_exists = SCR::Read (.targetpkg.installed, "cups-client");
+	boolean cups_exists = Pkg::IsProvided ("cups-client");
 	// for lpd we need to check the file because
 	boolean lpd_exists = (SCR::Read(.target.size, "/etc/init.d/lpd")!=-1);
-	boolean cups_complete = SCR::Read (.targetpkg.installed, "cups-drivers")
-//            && SCR::Read (.targetpkg.installed, "cups-drivers-stp")
-	    && SCR::Read (.targetpkg.installed, "cups-libs")
-	    && SCR::Read (.targetpkg.installed, "cups")
-	    && SCR::Read (.targetpkg.installed, "cups-client");
-	boolean lpd_complete = SCR::Read (.targetpkg.installed, "lpdfilter")
-            && SCR::Read (.targetpkg.installed, "filters");
+	boolean cups_complete = Pkg::IsProvided ("cups-drivers")
+//            && Pkg::IsProvided ("cups-drivers-stp")
+	    && Pkg::IsProvided ("cups-libs")
+	    && Pkg::IsProvided ("cups")
+	    && Pkg::IsProvided ("cups-client");
+	boolean lpd_complete = Pkg::IsProvided ("lpdfilter")
+            && Pkg::IsProvided ("filters");
 
 	if (cups_exists && !lpd_exists)
 	    {
@@ -451,7 +451,7 @@
 		    return 2;
 		else
 		{
-		    boolean cups_client = SCR::Read (.targetpkg.installed, "cups-libs");
+		    boolean cups_client = Pkg::IsProvided ("cups-libs");
 		    if (cups_client)
 			return 512 + 2;
 		    else
@@ -475,13 +475,13 @@
       * stop currently running printer spooler service
       */
     global define void stopServices () ``{
-	if (SCR::Read (.targetpkg.installed, "plp"))
+	if (Pkg::IsProvided ("plp"))
 	    SCR::Execute (.target.bash, "test -f /etc/init.d/lpd && /etc/init.d/lpd stop");
-	if (SCR::Read (.targetpkg.installed, "lprold"))
+	if (Pkg::IsProvided ("lprold"))
 	    SCR::Execute (.target.bash, "test -f /etc/init.d/lpd && /etc/init.d/lpd stop");
-	if (SCR::Read (.targetpkg.installed, "lprng"))
+	if (Pkg::IsProvided ("lprng"))
 	    SCR::Execute (.target.bash, "test -f /etc/init.d/lpd && /etc/init.d/lpd stop");
-	if (SCR::Read (.targetpkg.installed, "cups"))
+	if (Pkg::IsProvided ("cups"))
 	    SCR::Execute (.target.bash, "test -f /etc/init.d/cups && /etc/init.d/cups stop");
     }
 
@@ -494,7 +494,7 @@
 	stopServices ();
 	map script = $["userInput" : false];
 	list del = ["plp", "lprold", "lprng", "cups", "cups-client", "cups-drivers", "cups-drivers-cs", "cups-drivers-de", "lpdfilter", "filters"];
-	del = filter (`e, del, ``(SCR::Read (.targetpkg.installed, e) == true));
+	del = filter (`e, del, ``(Pkg::IsProvided (e) == true));
 	list inst = [];
 
 	if ("cups" == to)
