@@ -157,6 +157,15 @@
 	while (`abort != ret && `back != ret && ret != `next
 	    && ret != `specifyppd && ret != `downloadppd)
 	{
+	    if (Printer::spooler != "cups"
+		&& (ret == `specifyppd || ret == `downloadppd))
+	    {
+		// message popup
+		Popup::Message (_("PPD files can be added to database
+only if using CUPS spooler"));
+		ret = nil;
+		continue;
+	    }
 /*	    if (ret == `infobut)
 	    {
 		if (model_db == "" || model_db == nil)
