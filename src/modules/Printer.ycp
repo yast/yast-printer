@@ -942,6 +942,7 @@ Detect your printers?"));
         }
         if (Spooler::Get () == "lprng")
         {
+	    SCR::Execute (.target.bash, "test -d /etc/lpdfilter || /bin/mkdir /etc/lpdfilter");
             return printcapRead(printcap);
         }
 	return [];
@@ -1374,6 +1375,11 @@ the selected spooler does not support it."), name));
 	ret = Spooler::AdjustServices (size (printcap) > 0) && ret;
 	if (with_daemon)
 	{
+	    if (Spooler::Get () == "lprng")
+	    {
+		SCR::Execute (.target.bash,
+		    "test -d /etc/lpdfilter || /bin/mkdir /etc/lpdfilter");
+	    }
 	    Progress::NextStage (); // delete old printers
 	    if (testAbort ()) return false;
 	    ret = deleteDeletedPrinters () && ret;
@@ -1449,9 +1455,13 @@ the selected spooler does not support it."), name));
                 // summary text
                 // %1 is info about config status of the server
 		sformat (_("<LI>CUPS Client-Only Configuration:<BR>%1</LI>"),
-			// summary text part
+		    CUPS::server_hostname != "" && CUPS::server_hostname != nil
+			// summary text part, alt. 1
 			// %1 server name
-		    sformat (_("using server %1."), CUPS::server_hostname));
+			? sformat (_("using server %1."),
+			    CUPS::server_hostname)
+			// summary text part, alt. 1
+			: _("No server set."));
 	    list<string> servers = filter (string s, CUPS::cups_servers,
 		``(s != CUPS::server_hostname));
 	    servers = toset (servers);
@@ -1715,6 +1725,7 @@ the selected spooler does not support it."), name));
      * @param det map of detected printer
      */
     global define void editDetected (map det) ``{
+	Printerdb::InstallDrivers ();
 	index = -1;
 	y2debug ("Editing printer %1", det);
 	string config = Printerdb::getAutoPpdFile (
@@ -1762,6 +1773,8 @@ the selected spooler does not support it."), name));
     global define void Propose () ``{
 	if (Spooler::Get () == "cups")
 	    Printerlib::setCupsUsbDevicesInfo ();
+	if (! Spooler::AreDriversInstaller ())
+	    return;
 	// settings are read and hw is detected
 	list<string> forbidden_names = getForbiddenNames ();
 	symbol page_size = Printerlib::getDefaultPaperSize ();

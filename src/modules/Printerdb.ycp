@@ -33,6 +33,11 @@
       */
     global map<string,map> foomatic = nil;
 
+    /**
+      * Do not ask about installing drivers any more
+      */
+    boolean do_not_install_drivers = false;
+
 // local functions
 
     /**
@@ -467,5 +472,15 @@ printer model again.
 	return true;
     }
 
+    global define void InstallDrivers () ``{
+	if (do_not_install_drivers)
+	    return;
+	do_not_install_drivers = true;
+	if (Spooler::InstallDrivers ())
+	{
+	    foomatic = nil;
+	    loadFoomaticIfNeeded ();
+	}
+    }
 
 }
