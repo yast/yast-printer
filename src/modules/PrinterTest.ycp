@@ -170,13 +170,12 @@ When the whole page is printed, press
 	    return false;
 	}
 
-	if (Spooler::Get () != "lprng" && Spooler::Get () != "cups")
+	if (Spooler::Get () != "cups")
 	{
 	    // message box
 	    Popup::Message (_("Unable to print a test page. 
-Install a spooler 
-before printing test pages.
-"));
+Install a supported spooler 
+before printing test pages."));
 	    return true;
 	}
 
@@ -184,10 +183,10 @@ before printing test pages.
 	string cups_server_on_disk = "";
 	if (Spooler::Get () == "cups")
 	{
-	    CUPS::loadClientHostName ();
+	    CUPS::LoadServerHostName ();
 	    cups_server_on_disk = CUPS::server_hostname;
 	    CUPS::server_hostname = "";
-	    CUPS::saveClientHostName ();
+	    CUPS::SaveServerHostName ();
 	    CUPS::cups_installation = `server;
 	}
 
@@ -300,27 +299,9 @@ press 'OK'.
 
 	if (Spooler::Get () == "cups")
 	{
-	    CUPS::stopListenCupsServers ();
+	    CUPS::StopListenCupsServers ();
 	    Spooler::restartServices (true);
-	    Printer::writeCupsPrinter (printer);
-	}
-	else
-	{
-	    //
-	    // backup printcap
-	    //
-	    SCR::Execute (.target.bash, "/bin/cp /etc/printcap /etc/printcap.y2bak");
-
-	    //
-	    // write printer
-	    //
-	    if (!Printer::writeLpdPrinter (printer))
-		return false;
-
-	    //
-	    // restart lpd
-	    //
-	    SCR::Execute (.target.bash, "test -f /etc/init.d/lpd && /etc/init.d/lpd restart");
+	    CUPS::WriteQueue (printer);
 	}
 	//
 	// print test page
@@ -514,7 +495,7 @@ press 'OK'.
 	if (Spooler::Get () == "cups")
 	{
 	    CUPS::server_hostname = cups_server_on_disk;
-	    CUPS::saveClientHostName ();
+	    CUPS::SaveServerHostName ();
 	    CUPS::server_hostname = "";
 	}
 

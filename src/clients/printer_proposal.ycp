@@ -35,9 +35,7 @@
 
     integer spool_sys = Spooler::getSpoolSystem ();
 
-    if (spool_sys == 1)
-	Spooler::Set ("lprng");
-    else if (spool_sys == 2)
+    if (spool_sys == 2)
 	Spooler::Set ("cups");
     if (func == "MakeProposal")
     {
@@ -89,6 +87,8 @@ Detect your printers?
 		    && size (Printer::autodetected) == 0
 		    && Spooler::Get () == "cups")
 		{
+		    // no local printer found
+		    y2milestone ("No local printer found, trying IPP servers");
 		    CUPS::ProposeClientOnly ();
 		}
 		Printer::Propose ();

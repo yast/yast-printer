@@ -21,37 +21,10 @@
     textdomain "printer";
 
     import "CUPS";
-    import "Popup";
     import "Printerdb";
     import "Printerlib";
+    import "Report";
     import "Service";
-
-    /**
-      * Read settings of CUPS client-only
-      * @return boolean true on success
-      * TODO error handling
-      */
-    global define boolean cupsClientRead () ``{
-	map state = (map)SCR::Read (.target.ycp, "/var/lib/YaST2/printers");
-	if (nil == state)
-	{
-	    state = $[];
-	}
-	string cups_default = (string)SCR::Read (.cups.default_dest);
-	map out = (map) SCR::Execute (.target.bash_output,
-	    "/bin/grep ^Default </etc/cups/lpoptions | cut -f2 -d\\ ");
-	string lpoptions_default = out["stdout"]:"";
-	if (nil != findfirstof (lpoptions_default, "\n"))
-	{
-	    lpoptions_default = substring (lpoptions_default, 0,
-		findfirstof (lpoptions_default, "\n"));
-	}
-	CUPS::server_default = ! (cups_default == lpoptions_default);
-	Printer::default = CUPS::server_default
-	    ? ""
-	    : cups_default;
-	return true;
-    }
 
     /**
       * Write configuration to CUPS
@@ -125,7 +98,7 @@
 	{
 	    y2error ("Unexsistent PPD file: %1", ppd);
 		// error popup
-	    Popup::Message (sformat (_("An error occurred while saving queue %1.
+	    Report::Error (sformat (_("An error occurred while saving queue %1.
 
 The specified PPD file does not exist.
 "), name));
@@ -141,7 +114,7 @@ The specified PPD file does not exist.
         boolean res = SCR::Write (.cups.printers.add, entry);
         if (! res)
 	    // popup
-            Popup::Message (sformat (_("An error occurred while communicating with the 
+            Report::Error (sformat (_("An error occurred while communicating with the 
 CUPS server while saving queue %1.
 
 %2"), name, SCR::Read (.cups.last_error)));

@@ -5,8 +5,7 @@
 yncludedir = @yncludedir@/printer
 
 ynclude_DATA =			\
-	dialogs-cups.ycp	\
-	misc-cups.ycp
+	dialogs-cups.ycp
 
 
 EXTRA_DIST =				\

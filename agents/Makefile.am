@@ -5,6 +5,6 @@
 #
 
 scrconf_DATA = $(wildcard *.scr)
-agent_SCRIPTS = ag_etc_printcap ag_smb_queues ag_ppd_file_modify
+agent_SCRIPTS = ag_smb_queues ag_ppd_file_modify
 
 EXTRA_DIST = $(scrconf_DATA) $(agent_SCRIPTS)

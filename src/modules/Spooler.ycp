@@ -22,12 +22,12 @@
     textdomain "printer";
 
     import "CUPS";
-    import "LPRng";
     import "Mode";
     import "Label";
     import "Package";
     import "PackageAI";
     import "PackageSystem";
+    import "Printerdb";
     import "Popup";
     import "Report";
     import "Service";
@@ -35,13 +35,9 @@
 // local variables
 
     /**
-      * Currently used spooler, cups or lprng
+      * Currently used spooler, cups or unknown (means none installed)
       */
     string spooler = "unknown";
-
-    boolean are_drivers_installed = nil;
-
-    global map<string,boolean> available_packages = $[];
 
     /**
      * Printer's name mustn't be the same as a name of one of the files
@@ -89,26 +85,29 @@ This usually takes one or two minutes")),
       */
     global define void Set (string spooler_type) ``{
 	spooler = spooler_type;
+	if (spooler == "cups")
+	{
+	    Printerdb::SetDriverPackages (
+		["cups-drivers", "cups-drivers-stp", "filters",
+                "foomatic-filters", "manufacturer-PPDs"]
+	    );
+	    Printerdb::SetSupportedFilters (nil);
+	}
+	else // unknown spooler
+	{
+	    Printerdb::SetDriverPackages ([]);
+	    Printerdb::SetSupportedFilters (nil);
+	}
     }
 
     /**
       * get RadioButtonGroup for spooler selection
       * @param spooler string currently used spooler (cups, cups-client,
-      *  lprng or current)
+      *  or current)
       * @param none boolean show leaving current status
       * @return term RadioButtonGroup widget
       */
     global define term getSpoolerItems (string spooler, boolean none) ``{
-	boolean lprng_available = true;
-	if (haskey (available_packages,"lprng"))
-	{
-	    lprng_available = available_packages["lprng"]:false;
-	}
-	else
-	{
-	    lprng_available = Package::Available ("lprng");
-	    available_packages["lprng"] = lprng_available;
-	}
 	return `RadioButtonGroup (
 	    `id (`spooler),
 	    `HBox (`HSpacing (1), `VBox (
@@ -124,14 +123,6 @@ This usually takes one or two minutes")),
 		    // radiobutton
 		    _("CUPS &client-only installation"),
 		    spooler == "cups-client"),
-		lprng_available ? `VSpacing (0.5) : `VSpacing (0),
-		lprng_available
-		    ? `RadioButton (`id (`lprng),
-			`opt (`hstretch, `notify),
-			// radiobutton
-			_("&LPRng"),
-			spooler == "lprng")
-		    :`VSpacing (0),
 		none ? `VSpacing (0.5) : `VSpacing (0),
 		none ? `RadioButton (`id (`none),
 		    `opt (`hstretch, `notify),
@@ -145,10 +136,10 @@ This usually takes one or two minutes")),
     }
 
     /**
-      * Shows a question to a user whether he wants the LPRng or CUPS spooler.
+      * Shows a question to a user what spooler he wants.
       * @param msg string to be displayed
       * @param abort_msg label of abort button
-      * @return symbol specifying users selecion (lprng, cups, exit)
+      * @return symbol specifying users selecion (cups, cups_client, exit)
       */
     global define symbol chooseSpooler(string msg, string abort_msg)
     ``{
@@ -223,10 +214,8 @@ This usually takes one or two minutes")),
 	y2milestone ("CUPS exists: %1, LPRng exists: %2",
 	    cups_exists, lpd_exists);
 	boolean cups_complete = PackageSystem::InstalledAll (
-	    [/*"cups-drivers", "cups-libs",*/ "cups", "cups-client",/*"filters",
-	    "foomatic-filters"*/]);
-	boolean lpd_complete = PackageSystem::InstalledAll (
-	    [/*"lpdfilter", "filters", "cups-drivers", "foomatic-filters"*/]);
+	    ["cups", "cups-client"]);
+	boolean lpd_complete = true;
 
 	if (cups_exists && !lpd_exists)
 	    {
@@ -260,7 +249,7 @@ This usually takes one or two minutes")),
     /**
      * Uninstalls print spoolers and installs selected one.
      * Stops all spoolers before installation.
-     * @param to Spooler to install. Should be one of "cups" "lprng"
+     * @param to Spooler to install. Should be one of "cups" "cups_client"
      */
     global define void switchTo (string to) ``{
 	y2milestone ("Switching spooler to %1", to);
@@ -354,91 +343,8 @@ This usually takes one or two minutes")),
 	    SCR::Execute (.target.bash,
 		"/bin/ln -sf /etc/cups/printcap /etc/printcap");
 	}
-
+	Set (to);
 	sys_forbidden_names = nil;
-    }
-
-    /**
-     * Check if drivers for current spooler are installed
-     * @return boolean true if all available drivers are installed
-     */
-    global define boolean AreDriversInstaller () ``{
-	if (are_drivers_installed != nil)
-	    return are_drivers_installed;
-	list<string> packages = [];
-	if (spooler == "cups")
-	{
-	    packages = ["cups-drivers", "cups-drivers-stp", "filters",
-		"foomatic-filters", "manufacturer-PPDs"];
-	}
-	else
-	{
-	    packages = ["lpdfilter", "filters", "cups-drivers",
-		"foomatic-filters"];
-	}
-	packages = filter (string p, packages, ``(
-	    available_packages[p]:true
-	));
-	y2milestone ("Packages to check for installing: %1", packages);
-	if (Package::InstalledAll (packages))
-	{
-	    are_drivers_installed = true;
-	}
-	else
-	{
-	    packages = filter (string p, packages, ``{
-		boolean available = Package::Available (p);
-		available_packages[p] = available;
-		return available;
-	    });
-	    if (Package::InstalledAll (packages))
-		are_drivers_installed = true;
-	    else
-		are_drivers_installed = false;
-	}
-	return are_drivers_installed;
-    }
-
-    /**
-     * Install drivers for current spooler
-     * @return boolean true on success
-     */
-    global define boolean InstallDrivers () ``{
-	boolean i_result = true;
-	list<string> packages = [];
-	if (spooler == "cups")
-	{
-	    packages = ["cups-drivers", "cups-drivers-stp", "filters",
-		"foomatic-filters", "manufacturer-PPDs"];
-	}
-	else
-	{
-	    packages = ["lpdfilter", "filters", "cups-drivers",
-		"foomatic-filters"];
-	}
-	packages = filter (string p, packages, ``(
-	    available_packages[p]:true
-	));
-	y2milestone ("Packages to check for installing: %1", packages);
-	if (! Package::InstalledAll (packages))
-	{
-	    packages = filter (string p, packages, ``{
-		boolean available = Package::Available (p);
-		available_packages[p] = available;
-		return available;
-	    });
-	    y2milestone ("Available packages: %1", packages);
-	    i_result = Package::InstallAllMsg (packages,
-		// question popup, %1 is list of package names
-		_("Printer drivers are not installed. YaST will install
-packages %1."));
-	    if (! (i_result || Package::LastOperationCanceled ()))
-	    {
-		// error report
-		Report::Error (_("Installing packages failed."));
-	    }
-	}
-	return i_result;
     }
 
     /**
@@ -547,7 +453,7 @@ packages %1."));
 	spool_sys = spool_sys & 0xFF;
 	if (1 == spool_sys) //lpd is installed
 	{
-	    spooler = "lprng";
+	    spooler = "unknown"; // LPD is not supported
 	}
 	else if (2 == spool_sys) //cups is installed
 	{
@@ -557,6 +463,7 @@ packages %1."));
 	{
 	    spooler = "unknown";
 	}
+	Set (spooler);
 	return spooler;
     }
 
@@ -566,47 +473,37 @@ packages %1."));
      */
     global define string checkSpoolSystem () ``{
 	integer spool_sys = Spooler::getSpoolSystem ();
-	if (1 == spool_sys) //lpd is installed
-	{
-	    spooler = "lprng";
-	    return "lprng";
-	}
-	else if (2 == spool_sys) //cups is installed
+	if (2 == spool_sys) //cups is installed
 	{
 	    spooler = "cups";
 	    return "cups";
 	}
 	else if (0 == spool_sys || 3 == spool_sys || 256 + 1 == spool_sys
-	    || 256 + 2 == spool_sys)
+	    || 256 + 2 == spool_sys || 1 == spool_sys)
 	{
 	    string message = "";
 	    if (0 == spool_sys) //none installed
 	    {
 		// popup message
-		message = _("No printing system installed. 
-Select the spooler to 
-install and configure.
-");
+		message = _("No printing system installed.
+Select the CUPS installation type
+to install and configure.");
 	    }
 	    else if (3 == spool_sys) //both spoolers are installed
 	    {
 		// popup message
 	message = _("Both LPRng and CUPS are installed.
-Select the spooler  
-to leave installed and configure.");
+YaST supports only CUPS, LPRng will be removed.
+Select the CUPS installation type
+to install and configure.");
 	    }
-	    else if (256 + 1 == spool_sys) // lpd is installed, but seems
-					   // to be not complete
+	    else if (256 + 1 == spool_sys || 1 == spool_sys)
+		 // lpd is installed
 	    {
 		// popup message
-		message = _("An LPD-compatible spooler, probably LPRng,
-is installed, but the installation does not seem 
-complete. Choose to reinstall 
-LPRng, install CUPS, or leave the current status.
-To repair the current configuration, select LPRng.
-If you leave the current status, your spooler may not
-run properly.
-");
+		message = _("An LPD-compatible spooler is installed.
+Select the CUPS installation type
+to install and configure.");
 	    }
 	    else if (256 + 2 == spool_sys) // cups is installed, but seems
 					   // to be not complete
@@ -614,10 +511,10 @@ run properly.
 		// popup message
 		message =_("The CUPS spooler is installed, but the installation 
 does not seem complete. Choose to reinstall
-CUPS, install LPRng, or leave the current status. 
+CUPS, or leave the current status. 
 To repair the current configuration, select the 
 CUPS full server installation.
-If you leave the current status, your spooler 
+If you leave the current status, CUPS
 may not run properly.");
 	    }
 	    symbol result = chooseSpooler (message,
@@ -635,12 +532,6 @@ may not run properly.");
 		spooler = "cups";
                 return "cups";
             }
-	    else if (`lprng == result)
-	    {
-		Spooler::switchTo ("lprng");
-		spooler = "lprng";
-		return "lprng";
-	    }
             else if (`cancel == result)
                 return "exit";
 	    else
@@ -652,42 +543,35 @@ may not run properly.");
 	    spooler = "cups";
 	    return "cups";
 	}
-	return ""; //should be never reached
+	//should be never reached
+	y2error ("CheckSpoolSystem: Unknown spooler selected: %1", spool_sys);
+	return "";
     }
 
-    /**
-      * Test whether spooler supports queue type
-      * @param queue string queue type (eg. parallel)
-      * @param spooler string "cups" or "lprng"
-      * @return boolean true if supports
-      */
-    global define boolean testSupportedQueueBySpooler
-	(string queue, string spooler)
-    ``{
-	map supported = $[ "cups" : [ "parallel", "usb", "serial", "lpd", "ipp", "samba", "socket", "irda", "class", "novell", "pipe", "file", ],
-			   "lprng" : [ "parallel", "usb", "serial", "lpd", "samba", "novell", "irda", "socket", "pipe", ]];
-	list l = lookup (supported, spooler, []);
-	if (l == [])
-	    return true;
-	if (contains (l, queue))
-	    return true;
-	if (spooler == "cups")
-	{
-	    list<string> backends
-		= (list<string>)SCR::Read (.target.dir, "/usr/lib/cups/backend");
-	    if (backends != nil)
-		return contains (backends, queue);
-	}
-	return false;
-    }
-    /**
-      * Test whether currently used spooler supports queue type
-      * @param queue string queue type (eg. parallel)
-      * @return boolean true if supports
-      */
-    global define boolean testSupportedQueue (string queue) ``{
-	return testSupportedQueueBySpooler (queue, Spooler::Get ());
-    }
+/**
+ * Test whether spooler supports queue type
+ * @param queue string queue type (eg. parallel)
+ * @param spooler string spooler name ("cups")
+ * @return boolean true if supports
+ */
+global boolean testSupportedQueueBySpooler (string queue, string spooler) {
+    list<string> supported = [];
+    if (spooler == "cups")
+	supported = CUPS::GetSupportedUriTypes ();
+
+    if (supported == [])// unknown spooler
+	return true;
+    return contains (supported, queue);
+}
+
+/**
+ * Test whether currently used spooler supports queue type
+ * @param queue string queue type (eg. parallel)
+ * @return boolean true if supports
+ */
+global define boolean testSupportedQueue (string queue) {
+    return testSupportedQueueBySpooler (queue, Spooler::Get ());
+}
 
     /**
       * Restart printer daemon
@@ -718,10 +602,27 @@ may not run properly.");
 	{
 	    return CUPS::GetAvailableQueues ();
 	}
-	else
-	return LPRng::GetAvailableQueues ();
     }
 
-
-
+/**
+ * Initialize current spooler
+ * @return boolean true on success
+ */
+global boolean Initialize () {
+    if (Get () == "cups")
+    {
+	if (`server == CUPS::InstallationType ())
+	{
+	    integer status = (integer)SCR::Execute (.target.bash,
+		"/usr/bin/lpq 2>/dev/null");
+	    if (status != 0)
+	    {
+		Spooler::RestartIfNeeded (true);
+	    }
+	}
+    }
 }
+
+
+
+} // EOF

@@ -22,67 +22,123 @@
 
     import "Label";
     import "Mode";
+    import "Package";
     import "Printerlib";
     import "Report";
-    import "Spooler";
 
-// global variables
+// local variables
 
-    /**
-      * map of foomatic printers database
-      */
-    global map<string,map> foomatic = nil;
+/**
+ * List of printing filters known by the current spooler
+ * nil if all filters are supported
+ */
+list<string> known_filters = nil;
 
-    /**
-      * Do not ask about installing drivers any more
-      */
-    boolean do_not_install_drivers = false;
+/**
+ * True if printer drivers have already been installed
+ */
+boolean drivers_installed = nil;
+
+/**
+ * Map of packages that haev checked to be availabel (package name -> boolean)
+ */
+map<string,boolean> available_packages = $[];
+
+/**
+ * Packages containing driver for current spooler
+ */
+list<string> driver_packages = [];
+
+/**
+ * map of foomatic printers database
+ */
+global map<string,map> foomatic = nil;
 
 // local functions
 
-    /**
-      * Get the default encoding of the PPD file according to the language
-      * @param language string language in the form it is present in PPD file
-      * @return encoding in the form it is present in PPD file
-      */
-    global define string Language2Encoding (string language) ``{
-	map mapping = $[
-	    "English" : "ISOLatin1",
-	    "Danish" : "ISOLatin1",
-	    "Dutch" : "ISOLatin1",
-	    "Finnish" : "ISOLatin1",
-	    "French" : "ISOLatin1",
-	    "German" : "ISOLatin1",
-	    "Italian" : "ISOLatin1",
-	    "Japanese" : "JIS83-RKSJ,",
-	    "Norwegian" : "ISOLatin1",
-	    "Portuguese" : "ISOLatin1",
-	    "Spanish" : "ISOLatin1",
-	    "Swedish" : "ISOLatin1",
-	    "Czech" : "ISOLatin2",
-	];
-	return mapping[language]:"None";
-    }
+/**
+ * Get the default encoding of the PPD file according to the language
+ * @param language string language in the form it is present in PPD file
+ * @return encoding in the form it is present in PPD file
+ */
+string Language2Encoding (string language) ``{
+    map mapping = $[
+	"English" : "ISOLatin1",
+	"Danish" : "ISOLatin1",
+	"Dutch" : "ISOLatin1",
+	"Finnish" : "ISOLatin1",
+	"French" : "ISOLatin1",
+	"German" : "ISOLatin1",
+	"Italian" : "ISOLatin1",
+	"Japanese" : "JIS83-RKSJ,",
+	"Norwegian" : "ISOLatin1",
+	"Portuguese" : "ISOLatin1",
+	"Spanish" : "ISOLatin1",
+	"Swedish" : "ISOLatin1",
+	"Czech" : "ISOLatin2",
+    ];
+    return mapping[language]:"None";
+}
 
-    /**
-      * Get the characters encoding from the form in it is present in PPD file
-      * to the form that can be passed to iconv
-      * @param ppd_enc string encoding in the form for PPD file
-      * @return string encoding in the form for iconv
-      */
-    global define string PPDenc2UIenc (string ppd_enc) ``{
-	map mapping = $[
-	    "ISOLatin1" : "ISO-8859-1",
-	    "ISOLatin2" : "ISO-8859-2",
-	    "ISOLatin5" : "ISO-8859-5",
-	    "JIS83-RKSJ" : "SHIFT-JIS",
-	    "MacStandard" : "MAC",
-	    "WindowsANSI" : "MS_ANSI",
-	];
-	return mapping[ppd_enc]:"";
-    }
+/**
+ * Get the characters encoding from the form in it is present in PPD file
+ * to the form that can be passed to iconv
+ * @param ppd_enc string encoding in the form for PPD file
+ * @return string encoding in the form for iconv
+ */
+string PPDenc2UIenc (string ppd_enc) ``{
+    map mapping = $[
+	"ISOLatin1" : "ISO-8859-1",
+	"ISOLatin2" : "ISO-8859-2",
+	"ISOLatin5" : "ISO-8859-5",
+	"JIS83-RKSJ" : "SHIFT-JIS",
+	"MacStandard" : "MAC",
+	"WindowsANSI" : "MS_ANSI",
+    ];
+    return mapping[ppd_enc]:"";
+}
 
 // global functions
+
+/**
+ * Set list of packages containing drivers for the current spooler
+ * @param packages a list of package names
+ */
+global void SetDriverPackages (list<string> packages) {
+    driver_packages = packages;
+}
+
+/**
+ * Set the list of supported filters
+ * @param filters a list of known filters or nil if all filters are known
+ */
+global void SetSupportedFilters (list<string> filters) {
+    known_filters = filters;
+}
+
+/**
+ * Get the list of supported filters
+ * @return a list of known filters or nil if all filters are known
+ */
+global list<string> GetSupportedFilters () {
+    return known_filters;
+}
+
+/**
+ * Set the info if packages with drivers were installed
+ * @param installed boolean saying if the driver packages have been installed
+ */
+global void SetDriversAreInstalled (boolean installed) {
+    drivers_installed = installed;
+}
+
+/**
+ * Get the info if packages with drivers were installed
+ * @return boolean saying if the driver packages have been installed
+ */
+global boolean GetDriversAreInstalled () {
+    return drivers_installed;
+}
 
     /**
      * Get file names of all PPD files for specified model with the specified
@@ -441,26 +497,28 @@ of printers.
     }
 
 
-    /**
-      * Get the PPD file for automatic installation
-      * @param vendor_db string vendor database key
-      * @param device_db string model database key
-      * @param ppd_nicks list of PPD file nicknames, if nil, then PPD nicknames
-      *   are taken from foomatic database
-      * @return name of the PPD file (filename),
-      *   nil if no is usable
-      */
-    global define string getAutoPpdFile (string vendor_db, string device_db) {
-	list<string> ppds = sortPpds (vendor_db, device_db);
-	if (size (ppds) == 0)
-	    return nil;
-	if (Spooler::Get () == "cups")
-	    return (string) (ppds[0]:nil);
-	// for LPRng find first with foomatic-rip as filter
-	return (string)find (string s, ppds, ``(
-	    foomatic[vendor_db, device_db, s, "filter"]:""
-		== "foomatic-rip"));
-    }
+/**
+ * Get the PPD file for automatic installation
+ * @param vendor_db string vendor database key
+ * @param device_db string model database key
+ * @param ppd_nicks list of PPD file nicknames, if nil, then PPD nicknames
+ *   are taken from foomatic database
+ * @return name of the PPD file (filename),
+ *   nil if no is usable
+ */
+global define string getAutoPpdFile (string vendor_db, string device_db) {
+    list<string> ppds = sortPpds (vendor_db, device_db);
+    if (size (ppds) == 0)
+	return nil;
+    if (known_filters == nil)
+	return (string) (ppds[0]:nil);
+    // for LPRng find first with foomatic-rip as filter
+    return (string)find (string s, ppds, {
+	return contains (
+	    known_filters,
+	    foomatic[vendor_db, device_db, s, "filter"]:"");
+    });
+}
 
     /**
       * Get PPD file updated according to printer options and add it's name to
@@ -468,7 +526,9 @@ of printers.
       * @param entry map of printer
       * @return map updated printer map
       */
-    global define map getUpdatedPpdFile (map entry) ``{
+    global define map<string,any> getUpdatedPpdFile (map<string,any> entry) {
+        if (entry["uri"]:"class" == "class")
+	    return entry;
         string src_ppd = entry["ppd"]:"";
 	string dst_ppd = (string)SCR::Read (.target.tmpdir) + "/patched_ppd_"
 	    + entry["name"]:"";
@@ -565,17 +625,73 @@ printer model again.
     }
 
     /**
-     * Install drivers for current spooler, reread database
+     * Check if drivers for current spooler are installed
+     * @return boolean true if all available drivers are installed
      */
-    global define void InstallDrivers () ``{
-	if (do_not_install_drivers)
-	    return;
-	do_not_install_drivers = true;
-	if (Spooler::InstallDrivers ())
+    global define boolean AreDriversInstalled () ``{
+	if (drivers_installed != nil)
+	    return drivers_installed;
+	list<string> packages = filter (string p, driver_packages, ``(
+	    available_packages[p]:true
+	));
+	y2milestone ("Packages to check for installing: %1", packages);
+	if (Package::InstalledAll (packages))
+	{
+	    drivers_installed = true;
+	}
+	else
+	{
+	    packages = filter (string p, packages, ``{
+		boolean available = Package::Available (p);
+		available_packages[p] = available;
+		return available;
+	    });
+	    if (Package::InstalledAll (packages))
+		drivers_installed = true;
+	    else
+		drivers_installed = false;
+	}
+	return drivers_installed;
+    }
+
+    /**
+     * Install drivers for current spooler, reread database
+     * @return boolean true on success
+     */
+    global define boolean InstallDrivers () ``{
+	if (drivers_installed)
+	    return true;
+
+	boolean i_result = true;
+	list<string> packages = filter (string p, driver_packages, ``(
+	    available_packages[p]:true
+	));
+	y2milestone ("Packages to check for installing: %1", packages);
+	if (! Package::InstalledAll (packages))
+	{
+	    packages = filter (string p, packages, ``{
+		boolean available = Package::Available (p);
+		available_packages[p] = available;
+		return available;
+	    });
+	    y2milestone ("Available packages: %1", packages);
+	    i_result = Package::InstallAllMsg (packages,
+		// question popup, %1 is list of package names
+		_("Printer drivers are not installed. YaST will install
+packages %1."));
+	    if (! (i_result || Package::LastOperationCanceled ()))
+	    {
+		// error report
+		Report::Error (_("Installing packages failed."));
+	    }
+	}
+	if (i_result)
 	{
 	    foomatic = nil;
 	    loadFoomaticIfNeeded ();
+	    drivers_installed = true;
 	}
+	return i_result;
     }
 
 }

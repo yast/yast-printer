@@ -5,19 +5,15 @@
 YCPCFLAGS = -I common -I cups -I lprng
 
 module_DATA =			\
-	Printer.ycp		\
-	Printerlib.ycp		\
 	CUPS.ycp		\
-	LPRng.ycp		\
 	Spooler.ycp		\
+	Printerlib.ycp		\
 	Printerdb.ycp		\
+	Printer.ycp		\
 	PrinterTest.ycp
 
 EXTRA_DIST =				\
 	$(module_DATA)
-
-lprng:
-	test -d lprng || mkdir lprng && ln -sf ../../lprng lprng/printer
 
 cups:
 	test -d cups || mkdir cups && ln -sf ../../cups cups/printer
@@ -25,7 +21,7 @@ cups:
 common:
 	test -d common || mkdir common && ln -sf ../../common common/printer
 
-ycpchook = lprng cups common
+ycpchook = cups common
 
 
 
