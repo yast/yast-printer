@@ -1675,37 +1675,47 @@ bool PPD::cleanupLists () {
 		DriverInfo di = it3->second;
 		string driver_name = it3->first;
 		string filename = di.filename;
-		it3++;
 		PPD::PpdFiles::iterator it4 = ppdfiles.find(filename);
 		if (it4 == ppdfiles.end())
 		{ // no more existing file
+		    y2debug ("Erasing file %s", driver_name.c_str());
 		    (*it2).second.drivers.erase (driver_name);
 		}
 		else if (it4->second.dir_newer || it4->second.file_newer)
 		{ // parent dir changed or file changed,
 		  // check MD5 or size for being sure
-// FIXME filesize
 		    if (fast_check)
 		    {
 			off_t size = fileSize (filename);
 			if (size != di.size)
+			{
+			    y2debug ("Erasing %s", driver_name.c_str());
 			    (*it2).second.drivers.erase (driver_name);
+			}
 			else
+			{
 			    ppdfiles[filename].update = false;
+			}
 		    }
 		    else
 		    {
 			string checksum = fileChecksum (filename);
 			if (checksum != di.checksum)
+			{
+			    y2debug ("Erasing %s", driver_name.c_str());
 			    (*it2).second.drivers.erase (driver_name);
+			}
 		        else
+			{
 			    ppdfiles[filename].update = false;
+			}
 		    }
 		}
 		else
 		{ // not changed, we can ignore it
 		    ppdfiles[filename].update = false;
 		}
+		it3++;
             }
         }
     }
@@ -1753,21 +1763,21 @@ bool PPD::cleanupEmptyEntries () {
 
 string PPD::fileChecksum (const string &filename) {
     FILE* f;
-//    char buf[16];
-//    char sum[33];
+    char buf[16];
+    char sum[33];
     string ret = "";
 
     f = fopen (filename.c_str(), "r");
     if (f)
     {
-/*	if (! md5_stream (f, buf))
+	if (! md5_stream (f, buf))
 	{
 	    for (int i = 0 ; i < 16 ; i++)
 	    {
 		sprintf (sum+2*i, "%02x", (unsigned char) buf[i]);
 	    }
 	    ret = sum;
-	}*/
+	}
 	fclose (f);
     }
     return ret;
