@@ -329,21 +329,22 @@ with the SuSE database of printers only.</B></P>
      * @return symbol for wizard sequencer
      */
     global define symbol runPpdSelectDialog () ``{
-	y2milestone ("Running config dialog");
+	y2milestone ("Running config dialog for %1", Printer::printer);
 	string manuf_db = lookup (Printer::printer, "vendor_db", "");
 	string model_db = lookup (Printer::printer, "device_db", "");
 	string config = lookup (Printer::printer, "config", "");
 	map info = $[];
 	list cfgs = [];
 	map cfgsmap = $[];
-	if (! ((Printer::printer["vendor_db"]:"" != ""
-		&& Printer::printer["device_db"]:"" != "")
-	    || Printer::printer["ownppd"]:"" != ""));
+	y2error ("V: %1, M: %2", manuf_db, model_db);
+//	    manuf_db == "" || model_db == "")
+	if (! ((manuf_db != "" && model_db != "")))
+//	    || Printer::printer["ownppd"]:"" != ""));
 	{
-	    // TODO error message
+	    UI::MessagePopup ("This queue was configured using old SuSE
+database of printers. Select model first");
 	    return `back;
 	}
-	y2milestone ("Configuring queue %1", Printer::printer);
 	    loadFoomaticIfNeeded ();
 
 	    map opts = Printer::printer["options"]:$[];
@@ -403,15 +404,12 @@ with the SuSE database of printers only.</B></P>
 		    // selection box label
 		    `SelectionBox (`id (`selection), `opt (`hstretch), _("&Select configuration:"), cfgs),
 		    `VSpacing (1),
-		    ppd_only ? `VSpacing (0) : `HBox (
+		    `HBox (
 			`HStretch (),
 			// pushbutton
-			`HWeight (1, `PushButton (`id (`test), `opt (`key_F6), _("&Test printing"))),
-			// pushbutton
-			-1 == Printer::index ? `HWeight (1, `PushButton (`id (`advanced), `opt (`key_F7), _("Ad&vanced settings"))) : `HSpacing (0),
-			`HStretch ()
+			`HWeight (1, `PushButton (`id (`test), `opt (`key_F6), _("&Test printing")))
 		    ),
-		    `VSpacing (ppd_only ? 0 : 1)
+		    `VSpacing (1)
 		),
 	    `HSpacing (1)
 	);

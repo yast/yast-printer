@@ -739,9 +739,9 @@ actually selected."));
         // menu button
         term lookup_hosts = `MenuButton (_("&Lookup"), [
             // menuentry
-            `item (`id (`get_hosts_special), _("&LPD servers")),
+            `item (`id (`get_hosts_special), _("Scan for &LPD servers")),
             // menuentry
-            `item (`id (`get_hosts), _("&All hosts")),
+            `item (`id (`get_hosts), _("Lookup &all hosts")),
         ]);
         if (type == "novell")
         {
@@ -767,9 +767,9 @@ actually selected."));
                 // menu button
             lookup_hosts = `MenuButton (_("&Lookup"), [
                 // menuentry
-                `item (`id (`get_hosts_special), _("&Samba servers")),
+                `item (`id (`get_hosts_special), _("Scan for &Samba servers")),
                 // menuentry
-                `item (`id (`get_hosts), _("&All hosts")),
+                `item (`id (`get_hosts), _("Lookup &all hosts")),
             ]);
 	    workgroup_entry = `TextEntry (`id (`workgroup),
 		// text entry
@@ -792,9 +792,11 @@ actually selected."));
             // menu button
             lookup_hosts = `MenuButton (_("&Lookup"), [
                 // menu item
-                `item (`id (`get_hosts_special), _("&IPP servers")),
+                `item (`id (`get_hosts_special), _("Scan for &IPP servers")),
+		// menu item
+		`item (`id (`get_hosts_listen),_("Listen for IPP &broadcasts")),
                 // menu item
-                `item (`id (`get_hosts), _("&All hosts")),
+                `item (`id (`get_hosts), _("Lookup &all hosts")),
             ]);
         }
         else if (type == "socket")
@@ -811,9 +813,9 @@ actually selected."));
             // menu button
             lookup_hosts = `MenuButton (_("&Lookup"), [
                 // menu item
-                `item (`id (`get_hosts_special), _("&Direct socket servers")),
+                `item (`id (`get_hosts_special), _("Scan for &Direct socket servers")),
                 // menu item
-                `item (`id (`get_hosts), _("&All hosts")),
+                `item (`id (`get_hosts), _("Lookup &all hosts")),
             ]);
         }
 
@@ -893,7 +895,7 @@ actually selected."));
                 user = UI::QueryWidget (`id (`userent), `Value);
                 password = UI::QueryWidget (`id (`passwordent), `Value);
             }
-            if (`get_hosts == ret || `get_hosts_special == ret)
+            if (`get_hosts == ret || `get_hosts_special == ret || `get_hosts_listen == ret)
             {
                 // get remote hosts (we always offer list of hosts)
                 list hosts = [];
@@ -904,7 +906,14 @@ actually selected."));
                     if (type == "0" || type == "")
                         type = "9100";
                 }
-                hosts = getHostnames (`get_hosts_special == ret ? type : "");
+		if (`get_hosts_listen == ret)
+		{
+		    hosts = listenCupsServers ();
+		}
+		else
+		{
+		    hosts = getHostnames (`get_hosts_special == ret ? type :"");
+		}
                 type = save_type;
                 UI::ReplaceWidget (
                     `id (`hostent_replace),
