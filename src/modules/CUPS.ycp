@@ -345,6 +345,19 @@ END { if (!used) print \"ServerName %1\" }
     }
 
     /**
+      * Immediatelly stop listenning to IPP broadcasts via the script
+      */
+    global define void stopListenCupsServers () ``{
+        if (SCR::Read (.target.size, "/var/run/listen_remote_ipp.pid") > 0)
+        {
+            string pid = (string)SCR::Read (.target.string,
+                "/var/run/listen_remote_ipp.pid");
+	    y2milestone ("Stopping listining to CUPS IPP bcasts, PID %1", pid);
+	    SCR::Execute (.target.bash, sformat ("kill -15 %1", pid));
+        }
+    }
+
+    /**
       * Propose Client only with a CUPS server
       * listen_remote_ipp must have neen started befor this function is called
       */
