@@ -104,7 +104,10 @@ PPD::PPD(const char *ppddir, const char *ppddb) {
 
     /* Add special vendors hacks */
     for(i=0;(v=array_map[i].key);i++)
+    {
         vendors_map[string(v)]=string(array_map[i].val);
+	vendors_map[string(array_map[i].val)] = string(array_map[i].val);
+    }
 
     char buf[256];
     string filename = datadir + "models.equiv";
@@ -573,7 +576,7 @@ void PPD::addAdditionalInfo () {
                 support = support + buf[i];
             }
             string mlabel = model;
-	    string vlabel = vendor;
+	    string vlabel = strupper (vendor);
             vendor = getVendorId (vendor);
             model = getModelId (vendor, model);
             int size = vendor.size () + 1;
