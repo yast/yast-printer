@@ -63,9 +63,17 @@
       * return symbol (i.e. `finish || `accept || `next || `cancel || `abort)
       */
     else if (func == "Change") {
-    Wizard::CreateDialog ();
-    ret = runWizard (true);
-    UI::CloseDialog ();
+	y2error ("Spooler: %1", Printer::spooler);
+	if (Printer::spooler == "unknown" || Printer::spooler == "spooler")
+	    Printer::spooler = "cups";
+	y2error ("SPooler: %1", Printer::spooler);
+	Wizard::CreateDialog ();
+	do
+	{
+	    ret = runWizard (true);
+	}
+	while (ret == `switch);
+	UI::CloseDialog ();
     }
     /**
       * Return configuration data
