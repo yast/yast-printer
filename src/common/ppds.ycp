@@ -362,6 +362,14 @@ printer model again.
     global define void loadFoomaticIfNeeded () ``{
         if (Printer::foomatic != nil)
             return;
+	if (Mode::cont)
+	{
+	    // ensure to check database during installation
+	    // ppd_db can be newer than current time if clock not set correctly
+	    // and changes detection will fail in future
+	    SCR::Execute (.target.bash, "touch /var/lib/YaST2/ppd_db.ycp");
+	    SCR::Execute (.target.bash, "test -d /usr/share/cups/model && touch /usr/share/cups/model");
+	}
         y2milestone ("Checking foomatic database");
         if (SCR::Read (.ppd.db.changed))
         {
