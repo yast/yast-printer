@@ -512,6 +512,11 @@ start_from_scratch:
 
             PPD::Drivers::const_iterator it3 = (*it2).second.drivers.begin();
             for(f3 = true; it3 != (*it2).second.drivers.end(); it3++) {
+		y2debug ("PPD file information: %s:%s:%s",
+		    label.c_str(),
+		    it2->second.label.c_str (),
+		    (*it3).second.filename.c_str()
+		);
                 F(f3) fprintf(file,str);
                 fprintf(file,"      \"%s\"", (*it3).first.c_str());
                 fprintf(file," : $[\n");
