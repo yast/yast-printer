@@ -443,10 +443,36 @@ press 'OK'.
 	    os = os + sformat ("----X-SECT1: (%1)\n", virtual_name);
 
 	    list<string> sect2_values = [
-		sformat ("%1 %2", manuf, model),
-		printer["info"]:"",
-		printer["location"]:"",
-		Printerlib::getUriNiceName (printer["uri"]:""),
+		manuf != "" || model != ""
+		// label for test page, %1 will be printer manufacturer,
+		// %2 will be model,
+		// eg. Manufacturer ane model: EPSON Stylus Photo 810
+		// TRANSLATORS: keep this short! Only translations in languages
+		// with encodings ISO-8859-[1|2|15] will be used.
+		  ? sformat (_("Manufacturer ane model: %1 %2"), manuf, model)
+		  : "",
+		printer["info"]:"" != ""
+		// label for testpage, %1 will be text specified by use as
+		// description of the printer
+		// TRANSLATORS: keep this short! Only translations in languages
+		// with encodings ISO-8859-[1|2|15] will be used.
+		  ? sformat (_("Printer descripion: %1"), printer["info"]:"")
+		  : "",
+		printer["location"]:"" != ""
+		// label for testpage, %1 will be text specified by use as
+		// description of the location of the printer
+		// TRANSLATORS: keep this short! Only translations in languages
+		// with encodings ISO-8859-[1|2|15] will be used.
+		  ? sformat (_("Printer location: %1"), printer["location"]:"")
+		  : "",
+		Printerlib::getUriNiceName (printer["uri"]:"") != ""
+		// label for testpage, %1 will be user-friendly description
+		// of the URI of the printer
+		// TRANSLATORS: keep this short! Only translations in languages
+		// with encodings ISO-8859-[1|2|15] will be used.
+		  ? sformat (_("Device URI: %1"),
+		    Printerlib::getUriNiceName (printer["uri"]:""))
+		  : "",
 	    ];
 	    sect2_values = filter (string v, sect2_values, ``(
 		v != "" && v != " "
