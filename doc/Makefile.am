@@ -10,16 +10,13 @@ html_DATA = 			\
 	index.html		\
 	internals.html		\
 	des_common.html		\
-	dialogs.html		\
 	overview.html		\
 	spec_connection.html	\
 	spec_printconf.html	\
 	todo.html		\
-	trans_db.html		\
 	des_local.html		\
 	read.html		\
 	spec_filter.html	\
-	testpage.html		\
 	tools.html		\
 	write.html		\
 	errors.html

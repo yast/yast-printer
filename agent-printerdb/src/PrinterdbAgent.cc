@@ -875,11 +875,11 @@ string PrinterdbAgent::getOptions (List*u, YCPMap&selected, string prefix)
 		{
 		    if (!v.isNull ()) {
 			if (!v->isVoid () && v->isInteger ())
-			    snprintf (buf, 199, "(%s%s: %d) mm\n", prefix, _(uo->text), (int)v->asInteger()->value());
+			    snprintf (buf, 199, "(%s%s: %d) mm\n", prefix.c_str (), _(uo->text), (int)v->asInteger()->value());
 		    }
 		    else {
 			if (!(o->numint->flags & NUMOPT_NODEF))
-			    snprintf (buf, 199, "(%s%s: %d) mm\n", prefix, _(uo->text), (int)o->numint->def);
+			    snprintf (buf, 199, "(%s%s: %d) mm\n", prefix.c_str (), _(uo->text), (int)o->numint->def);
 		    }
 		    if (*buf)
 			s = s + buf;
@@ -889,11 +889,11 @@ string PrinterdbAgent::getOptions (List*u, YCPMap&selected, string prefix)
 		{
 		    if (!v.isNull ()) {
 			if (!v->isVoid () && v->isFloat ())
-			    snprintf (buf, 199, "(%s%s: %f) mm\n", prefix, _(uo->text), v->asFloat()->value());
+			    snprintf (buf, 199, "(%s%s: %f) mm\n", prefix.c_str (), _(uo->text), v->asFloat()->value());
 		    }
 		    else {
 			if (!(o->numfloat->flags & NUMOPT_NODEF))
-			    snprintf (buf, 199, "(%s%s: %f) mm\n", prefix, _(uo->text), o->numfloat->def);
+			    snprintf (buf, 199, "(%s%s: %f) mm\n", prefix.c_str (), _(uo->text), o->numfloat->def);
 		    }
 		    if (*buf)
 			s = s + buf;
@@ -902,7 +902,7 @@ string PrinterdbAgent::getOptions (List*u, YCPMap&selected, string prefix)
 	    case 3:
 		{
 		    if (!v.isNull () && v->isString ()) {
-			snprintf (buf, 199, "(%s%s: %s) mm\n", prefix, _(uo->text), v->asString ()->value_cstr ());
+			snprintf (buf, 199, "(%s%s: %s) mm\n", prefix.c_str (), _(uo->text), v->asString ()->value_cstr ());
 			s = s + buf;
 		    }
 		}
@@ -918,8 +918,8 @@ string PrinterdbAgent::getOptions (List*u, YCPMap&selected, string prefix)
 		    if (-1 != sel || !vall)
 			vall = o->vals;
 		    Value*val = (Value*)vall->data;
-		    if (val) {
-			if (! o->vals->next && val->use && (0 == strcmp (uo -> text, val -> text) || 0 == strcmp ("parameters", val -> text)))
+		    if (val && 0 != strcmp (val->text, "not set (using the default)")) {
+			if (! o->vals->next && val->use && (0 == strcmp (uo -> text, val -> text) || 0 == strcmp (_("parameters"), val -> text)))
 			    s = s + "(" + prefix + _(uo->text) + ":" + ") mm\n";
 			else
 			    s = s + "(" + prefix + _(uo->text) + ": " + _(val->text) + ") mm\n";
