@@ -30,6 +30,7 @@
     import "Arch";
     import "Crash";
     import "Label";
+    import "Confirm";
     include "printer/misc.ycp";
     include "printer/misc-lprng.ycp";
     include "printer/misc-cups.ycp";
@@ -237,6 +238,10 @@
      * Autodetect printers.
      */
     global define void Detect () ``{
+        /* Confirmation: label text (detecting hardware: xxx) */
+        if (!Confirm::Detection (_("Printers")))
+            return true;
+
 	dirty = true;
 	autodetected = Printerlib::Detect (false);
 	autodetected = maplist (`i, autodetected, ``{
