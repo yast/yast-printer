@@ -249,7 +249,10 @@ the CUPS spooler.</P>
      * @return help text
      */
     global define string getPrintersHelp () ``{
-	return "TODO: Write help";
+	// help text
+	return _("<P><B><BIG>Printers:</BIG></B><BR>
+Choose already installed printer. New queues will be added to this printer
+and you won't have to select vendor, model and connection again");
     }
 
     /**
@@ -345,20 +348,31 @@ For some languages, this choice is important to get correct output from
      * Help text.
      * @return help text
      */
-   global define string getConnectionHelp () ``{
-        // Help text 1/3
-        return _("<P><B><BIG>Parallel, USB, Serial, IrDA port:</BIG></B><BR>
+   global define string getConnectionHelp (boolean queue) ``{
+	string help_text = "";
+	if (queue)
+	{
+		// Help text 1/4
+	    help_text = _("<P><B><BIG>New queue to configured printer
+</BIG></B><BR>
+You can configure new queue of already configured printer without
+new specifying of printer location, manufacturer and model name.</P>");
+	}
+        // Help text 2/4
+        help_text = help_text +
+	    _("<P><B><BIG>Parallel, USB, Serial, IrDA port:</BIG></B><BR>
 Printers connected to a local port.</P>
 ")
-	// Help text 2/3
+	// Help text 3/4
 	+ _("<P><B><BIG>Disk file</BIG></B><BR>
 Printing to file can be useful for printing later without a printing application needing to be installed.</P>
 ")
-	// Help text 3/3
+	// Help text 4/4
 	+ _("<P><B><BIG>More connections</BIG></B><BR>
 To print using a remote printer or any other queue type, choose 
 <B>Show more connection types</B>.</P>
 ");
+	return help_text;
     }
     /**
      * Help text.
@@ -378,7 +392,11 @@ Printing to file can be useful for printing later without a printing application
      * Help text.
      * @return help text
      */
-    global define string getAdvancedConnectionHelp (symbol order) ``{
+    global define string getAdvancedConnectionHelp (symbol order, boolean queue) ``{
+	string new_queue = _("<P><B><BIG>New queue to configured printer
+</BIG></B><BR>
+You can configure new queue of already configured printer without
+new specifying of printer location, manufacturer and model name.</P>");
 	// Help text 1/10
 	string forw = _("<P><B><BIG>Forwarding queue to remote LPD:</BIG></B><BR>
 Files to print are sent directly to the remote printer.</P>");
@@ -413,12 +431,18 @@ You can print to another program using pipe.</P>");
 	string class = _("<P><B><BIG>CUPS class:</BIG></B><BR>
 You can set some printers into one class then print to the class. CUPS will divide print jobs between members of the class.</P>
 ");
+
+	string ret = "";
+
 	if (order == `cups)
-	    return filtfor + ipp + smb + tcp + oth + class + forw + pref + ipx + pipe;
+	    ret = filtfor + ipp + smb + tcp + oth + class + forw + pref + ipx + pipe;
 	else if (order == `lprng)
-	    return forw + pref + filtfor + smb + ipx + tcp + pipe + ipp + oth + class;
+	    ret = forw + pref + filtfor + smb + ipx + tcp + pipe + ipp + oth + class;
 	else
-	    return forw + pref + filtfor + ipp + smb + ipx + tcp + oth + pipe + class;
+	    ret = forw + pref + filtfor + ipp + smb + ipx + tcp + oth + pipe + class;
+	if (queue)
+	    ret = new_queue + ret;
+	return ret;
     }
     /**
      * Help text
@@ -734,6 +758,17 @@ usually differ in resolution, bit depth, quality, or speed. Choose the one
 that best matches your needs. You will be able to edit some settings,
 like paper size, later.</P>
 ");
+    }
+    /**
+     * Get help text.
+     * @return string help text
+     */
+    global define string getPpdSelectHelp () ``{
+	// help text
+	return _("<P><B><BIG>PPD files:</BIG><B><BR>
+For one printer more PPD files may exist. You can specify what PPD file
+you want to use. Different PPD files may result to different output quality,
+speed and adjustable settings.</P>");
     }
     /**
      * Get help text.

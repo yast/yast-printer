@@ -181,7 +181,8 @@
 		}
 		else
 		{
-		    boolean close_dialog = false;
+		    restartSpoolerIfNeeded (true);
+/*		    boolean close_dialog = false;
 		    status = SCR::Execute (.target.bash, "/etc/init.d/cups status");
 		    if (0 != status)
 		    {
@@ -192,9 +193,9 @@
 		    {
 			close_dialog = true;
 			showCupsInitPopup ();
-		    }
+		    }*/
 		    Progress::NextStep ();              if (testAbort ())                       {if (close_dialog) UI::CloseDialog (); return `back;}
-		    status = 1;
+/*		    status = 1;
 		    integer attempts = 0;
 		    while (true)
 		    {
@@ -230,8 +231,8 @@
 		        }
 	            }
 		    if (close_dialog)
-			UI::CloseDialog ();
-		    Progress::NextStep ();              if (testAbort ())                       return `back;
+			UI::CloseDialog ();*/
+		    Progress::NextStep (); if (testAbort ()) return `back;
 		}
 	    }
 	    else
@@ -315,21 +316,18 @@ the current configuration.
     /* Autodetection */
     if (!skip_autodetection)
     {
-	import "Crash";
-	if (Crash::FailedLast ("printer_detection") || nil == Printer::detect)
-//	if (nil == Printer::detect)
-	    Printer::detect = UI::AnyQuestionPopup (WarningMsg(),
+	if (Printer::detect != false)
+	    Printer::detect = Crash::AskRun ("printer_detection",
 		// popup
-		_("Note, that during the following step YaST2 will try to detect local printers only.\n\n") +
-		// popup, continuing
-		_("Printer detection can now start. In some cases, detection can cause a
+		_("Note, that during the following step YaST2 will try to detect local printers only.
+
+Printer detection can now start. In some cases, detection can cause a
 system freeze. If a freeze happens, select Skip Detection
 when next running the printer configuration.
 
 Detect your printers?
-"), YesButtonLabel (),
-	    // pushbutton
-	    _("&Skip detection"), `focus_yes);
+"));
+
 	if (Printer::detect)
 	{
 	    Crash::Run ("printer_detection");

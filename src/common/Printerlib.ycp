@@ -39,6 +39,12 @@
       */
     boolean taregt_inited = false;
 
+    /**
+      * Base directory of printconf's data files
+      */
+    global string baseDataDir = "/usr/share/YaST2/data/printer";
+
+
     global define void initTarget () ``{
 	if (! taregt_inited)
 	{
@@ -271,11 +277,11 @@
     // test the distribution
     // could be done by
     // if (Product::baseproduct == "UnitedLinux")
-    string path_to_testpage = "/usr/share/YaST2/data";
-    if (SCR::Read(.target.stat, path_to_testpage + "/ul_testpg.ascii") == $[])
-        path_to_testpage = path_to_testpage + "/suse_testpg.ascii";
+    string path_to_testpage = "";
+    if (SCR::Read(.target.stat, baseDataDir + "/ul_testpg.ascii") == $[])
+        path_to_testpage = baseDataDir + "/suse_testpg.ascii";
     else
-        path_to_testpage = path_to_testpage + "/ul_testpg.ascii";
+        path_to_testpage = baseDataDir + "/ul_testpg.ascii";
 
 	// now we have texts to replace.
 	SCR::Execute (
@@ -295,12 +301,12 @@
     global define string preparePsTestPage (string queue, string opt_file, boolean PS_printer) ``{
 	string out_file = SCR::Read (.target.tmpdir) + "/testpg.ps";
     // test the distribution
-    string path_to_testpage = "/usr/share/YaST2/data";
+    string path_to_testpage = "";
 
-    if (SCR::Read(.target.stat, path_to_testpage + "/ul_testpg.ps") == $[])
-        path_to_testpage = path_to_testpage + "/suse_testpg.ps";
+    if (SCR::Read(.target.stat, baseDataDir + "/ul_testpg.ps") == $[])
+        path_to_testpage = baseDataDir + "/suse_testpg.ps";
     else
-        path_to_testpage = path_to_testpage + "/ul_testpg.ps";
+        path_to_testpage = baseDataDir + "/ul_testpg.ps";
 
     y2debug("template test file to print: %1", path_to_testpage);
 
