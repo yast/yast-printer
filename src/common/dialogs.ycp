@@ -638,8 +638,11 @@ that your parallel port is not properly configured.
 
 	// button label
 	Wizard::SetContentsButtons (getAskDeviceLabel (type), contents, getAskRemoteHelp (type), BackButtonLabel (), NextButtonLabel ());
+
 	if (type != "socket")
 	    UI::ChangeWidget (`id (`queueent), `Value, queue);
+	else
+	    UI::ChangeWidget (`id (`queueent), `ValidChars, "1234567890");
 	UI::ChangeWidget (`id (`hostnameent), `Value, hostname);
 
 	symbol ret = nil;
@@ -698,7 +701,7 @@ that your parallel port is not properly configured.
                     _("Name of the remote &queue:"), queues);
                 UI::ReplaceWidget (`id (`queueent_replace), queue_entry);
 	    }
-	    if (ret == `test && checkHostName (hostname) && (type == "socket" || checkQueueName (queue)))
+	    if (ret == `test && checkHostName (hostname) && (type == "socket" || checkQueueName (queue)) && (!has_user_password || ( checkUserName (user) && checkPassword (password))))
 	    {
 		string test_queue = "";
 		if (type == "ipp" && "printers/" == substring (queue, 0, 9))
@@ -716,7 +719,8 @@ that your parallel port is not properly configured.
 	    {
 		ret = reallyAbort () ? `abort : nil;
 	    }
-	} until (ret == `abort || ret == `back || ret == `next && checkHostName (hostname) && (type == "socket" || checkQueueName (queue)));
+	} until (ret == `abort || ret == `back || ret == `next && checkHostName (hostname) && (type == "socket" || checkQueueName (queue))
+	     && (!has_user_password || ( checkUserName (user) && checkPassword (password))));
 	uri = type + "://";
 	uri = uri + (has_user_password ? user + ":" + password + "@" : "");
 	uri = uri + hostname;
@@ -1665,7 +1669,9 @@ and if you do not like the result, just press Back.")
 	if ("class" == uri_type)
 	{
 	    items = add (items, `item (`id (`class_members), _("Class members"), ""));
-	    items = add (items, `item (`id (`class), _("Class settings"), ""));
+	    items = add (items, `item (`id (`perm), _("Restrictions settings"), ""));
+	    items = add (items, `item (`id (`state), _("State and banners settings"), ""));
+//	    items = add (items, `item (`id (`class), _("Class settings"), ""));
 	}
 	else
 	{
@@ -1676,9 +1682,18 @@ and if you do not like the result, just press Back.")
 		}
 		else
 		{
-		    items = add (items, `item (`id (`settings), _("Hardware dependent settings"), ""));
+		    items = add (items, `item (`id (`settings), _("Printing filter settings"), ""));
 		}
-		items = add (items, `item (`id (`indep), _("Hardware independent settings"), ""));
+		if (Printer::spooler != "cups")
+		{
+		    items = add (items, `item (`id (`ascii), _("ASCII printing settings"), ""));
+		}
+		if (Printer::spooler != "lprng")
+		{
+		    items = add (items, `item (`id (`perm), _("Restrictions settings"), ""));
+		    items = add (items, `item (`id (`state), _("State and banners settings"), ""));
+		}
+//		items = add (items, `item (`id (`indep), _("Hardware independent settings"), ""));
 	    }
 	}
 
@@ -1778,9 +1793,17 @@ with prefilled name?")))
 		    ret = lookup ($["samba": `connection_samba, "novell": `connection_novell, "prefilter": `connection_prefilter, "filtering": `connection_filtering,
 			"ipp": `ipp, "socket": `socket, "lpd": `connection_remote, "pipe" : `connection_pipe ], uri_type, `connection);
 		}
-		else if (`indep == ret)
+		else if (`perm == ret)
+                {
+                    break;
+                }
+		else if (`state == ret)
+                {
+		    break;
+                }
+		else if (`ascii == ret)
 		{
-		    ret = Printer::spooler == "cups" ? `cups : `indep;
+		    break;
 		}
 		else if (`ppd == ret)
 		{
@@ -2715,7 +2738,7 @@ the current configuration.
 	    "other" : $[ `next : "name", `abort : `abort, ],
 	    "namerem" : $[ `abort : `abort, `next : "storeprinter", ],
 	    "name" : $[ `abort : `abort, `next : "model", `raw : "storeprinter", `class : "members", ],
-	    "members" : $[ `abort : `abort, `next : "cups_wz", ],
+	    "members" : $[ `abort : `abort, `advanced : "cups_wz", `next : "storeprinter", ],
 	    "model" : $[ `abort : `abort, `next : "config", `useppd : "useppd", `dbchange : "dbchange", ],
 	    "dbchange" : $[ `abort : `abort, `next : "model", ],
 	    "config" : $[ `abort : `abort, `advanced : "filter", `next: "storeprinter", ],
@@ -2767,6 +2790,9 @@ the current configuration.
 		`name : "name",
 		`model : "model",
 		`settings : "filter",
+		`ascii : "features",
+		`state : "state",
+		`perm : "users",
 		`indep : "features",
 		`ppd : "useppd",
 		`cups: "cups_wz",
@@ -2776,6 +2802,9 @@ the current configuration.
 		`next : "storeprinter",
 		`abort : `abort,
 		],
+	    "features" : $[ `next : "edit", `abort : `abort, ],
+	    "state" : $[ `next : "edit", `abort : `abort, ],
+	    "users" : $[ `next : "edit", `abort : `abort, ],
 	    "add_printer_wz" : $[ `next : "edit", `abort : `abort ],
 	    "samba" : $[ `next : "edit", `abort : `abort, ],
 	    "novell" : $[ `next : "edit", `abort : `abort, ],
@@ -2805,7 +2834,7 @@ the current configuration.
 	    "name" : $[ `abort : `abort, `next : "edit", `raw : "edit",],
 	    "filter" : $[ `abort : `abort, `next : "edit", `next_cups : "edit", ],
 	    "useppd" : $[ `abort : `abort, `next : "edit", `db : "model" ],
-	    "features" : $[ `abort : `abort, `next_cups : "cups_wz", `next : "edit", ],
+//	    "features" : $[ `abort : `abort, `next_cups : "cups_wz", `next : "edit", ],
 	    "members" : $[ `abort : `abort, `next : "edit", ],
 	    "cups_wz" : $[ `abort : `abort, `next : "edit", ],
 	    "ppdetails" : $[ `abort : `abort, `next : "parallel", ],

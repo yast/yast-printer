@@ -139,11 +139,10 @@
      * @return boolean true if hostname is correct.
      */
     global define boolean checkHostName (string name) ``{
-	return true;
 	if (size (name) > 0 &&
-	    size (name) < 50 &&
-	    name == filterchars (name,
-				"-_.0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"))
+	    /*size (name) < 50 &&*/
+	    "" == filterchars (name,
+				":/@"))
 	    {
 		return true;
 	    }
@@ -151,11 +150,56 @@
 	    {
 		// message box
 		UI::MessagePopup (_("You entered a wrong host name. It must be
-shorter than 50 characters and you can only use
-0..9, A..Z, a..z, dots, - and _."));
+shorter than 50 characters and can not contain
+:, / and @."));
 	    }
 	return false;
     };
+
+   /**
+     * Is the username correct? Check it for allowed characters. Display message if bad username.
+     * @param name Username to check
+     * @return boolean true if username is correct.
+     */
+    global define boolean checkUserName (string name) ``{
+        if (/*size (name) > 0 &&
+            size (name) < 50 &&*/
+            "" == filterchars (name,
+                                ":/@"))
+            {
+                return true;
+            }
+        else
+            {
+                // message box
+                UI::MessagePopup (_("You entered a wrong user name. It can not 
+contain characters :, / and @."));
+            }
+        return false;
+    };
+
+   /**
+     * Is the password correct? Check it for allowed characters. Display message if bad password.
+     * @param name password to check
+     * @return boolean true if hostname is correct.
+     */
+    global define boolean checkPassword (string name) ``{
+        if (/*size (name) > 0 &&
+            size (name) < 50 &&*/
+            "" == filterchars (name,
+                                ":/@"))
+            {
+                return true;
+            }
+        else
+            {
+                // message box
+                UI::MessagePopup (_("You entered a wrong password. It can not 
+contain characters :, / and @."));
+            }
+        return false;
+    };
+
 
 
     /**
@@ -699,21 +743,19 @@ and you can only use 0..9, a..z and _."));
      * @return boolean true if hostname is correct.
      */
     global define boolean checkQueueName (string name) ``{
-	return true;
-	if (size (name) > 0 && size (name) < 30 &&
+	if (size (name) > 0 && /*size (name) < 30 &&
 	    size (filterchars (substring (name, 0, 1),
-		    "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz")) > 0 &&
-	    name == filterchars (name,
-				"/_-0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"))
+		    "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz")) > 0 &&*/
+	    "" == filterchars (name,
+				"@:"))
 	    {
 		return true;
 	    }
 	else
 	    {
 		// message box
-		UI::MessagePopup (_("You entered a wrong remote name. It must be
-shorter than 30 characters and you can only use
-0..9, A..Z, a..z, /, - and _."));
+		UI::MessagePopup (_("You entered a wrong remote queue name. 
+It can not contain characters @ and :."));
 	    }
 	return false;
     }
@@ -993,7 +1035,7 @@ for any file in directory /etc/lpdfilter"));
                                 `VSpacing (0.5),
                                 `RadioButton (`id (`lprng), `opt (`hstretch), _("&LPRng"), spooler == "lprng"),
 				none ? `VSpacing (0.5) : `VSpacing (0),
-				none ? `RadioButton (`id (`none), `opt (`hstretch), _("&Leave current status"), spooler == "current") : `VSpacing (0),
+				none ? `RadioButton (`id (`none), `opt (`hstretch), _("L&eave current status"), spooler == "current") : `VSpacing (0),
                                 `VSpacing (1)
                             ),
                             `HSpacing (1)
