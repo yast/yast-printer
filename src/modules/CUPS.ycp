@@ -260,12 +260,12 @@ global boolean WriteCupsSettings () {
  * @return boolean true if successfull
  */
 global boolean WriteQueue (map entry) {
-    string name = lookup (entry, "name", "");
-    if (lookup (entry, "uri", "class") == "class")
+    string name = entry["name"]:"";
+    if (entry["uri"]:"class" == "class")
     {
 	return SCR::Write (.cups.classes.add, entry);
     }
-    string uri = lookup (entry, "uri", "");
+    string uri = entry["uri"]:"";
     string uri_type = Printerlib::getUriType (uri);
     if (uri_type == "ptal")
     {
@@ -315,7 +315,7 @@ global boolean WriteQueue (map entry) {
 	entry = add (entry, "uri", "smb" + substring (uri, 5));
     }
 
-    string ppd = lookup (entry, "ppd", "");
+    string ppd = entry["ppd"]:"";
     if (ppd != "" && -1 == SCR::Read (.target.size, ppd))
     {
 	y2error ("Unexsistent PPD file: %1", ppd);
@@ -365,7 +365,7 @@ global list<string> GetAvailableQueues () {
  */
 global list<string> getBannerList () {
     map out = (map)SCR::Execute (.target.bash_output, "/bin/ls -1 /usr/share/cups/banners");
-    list<string> ban = splitstring (lookup (out, "stdout", ""), "\n");
+    list<string> ban = splitstring (out["stdout"]:"", "\n");
     ban = toset (add (ban, "none"));
     return filter (string i, ban, {
 	return "" != i;

@@ -535,9 +535,9 @@ only if a CUPS spooler is used
      */
     define symbol runDeviceDialog (string type) ``{
         boolean problematic_usb = false;
-        string uri = lookup (Printer::printer, "tmpuri", "");
+        string uri = Printer::printer["tmpuri"]:"";
         if ("" == uri)
-            uri = lookup (Printer::printer, "uri", "parallel");
+            uri = Printer::printer["uri"]:"parallel";
         if ("" == type)
         {
             type = Printerlib::getUriType ("uri");
@@ -829,7 +829,7 @@ actually selected.
      * @return symbol `next, `back, `abort
      */
     define symbol runRemoteDialog (string type) ``{
-        string uri = lookup (Printer::printer, "uri", "");
+        string uri = Printer::printer["uri"]:"";
         string user = "";
         string password = "";
         string queue = type == "ipp" ? "printers/" : "";
@@ -1174,7 +1174,7 @@ actually selected.
       * @return symbol wizard sequencer symbol
       */
     define symbol runPipeDialog () ``{
-        string file = lookup (Printer::printer, "uri", "");
+        string file = Printer::printer["uri"]:"";
         if ("" != file && nil != file)
         {
             // file must start with "pipe:"
@@ -1266,7 +1266,7 @@ actually selected.
         //
         // parse Uri
         //
-        string device = lookup (Printer::printer, "uri", "");
+        string device = Printer::printer["uri"]:"";
         term contents = `HBox (
             `HSpacing (8),
             `VBox (
@@ -1342,7 +1342,7 @@ Continue?
 	    `VStretch (),
             // textentry label
             `TextEntry (`id (`io), _("IO &Ports of parallel ports:"),
-		lookup (params, "io", "")),
+		params["io"]:""),
             `VSpacing (2),
             `VStretch ()
           ),
@@ -1375,7 +1375,7 @@ Continue?
      * @return symbol for wizard sequencer
      */
     define symbol editSerialPort () ``{
-        string uri = lookup (Printer::printer, "tmpuri", "parallel");
+        string uri = Printer::printer["tmpuri"]:"parallel";
         integer baudrate = Printerlib::getUriBaudrate (uri);
         string ser_settings = Printerlib::getUriValue (uri, "ty");
 

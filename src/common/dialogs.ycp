@@ -542,7 +542,7 @@ y2error ("File: %1", file);
 		term item = (term) (cfgs[0]:nil);
 		if (nil != item)
 		{
-		    file = select (select (item, 0, nil), 0, "");
+		    file = item[0, 0]:"";
 		}
             }
 	    if (file != "" && file != nil)
@@ -894,16 +894,16 @@ and test the queue after the printer model is selected."));
      */
     define string choosePrinterOrClass () ``{
 	list onlyprinters = filter (map e, Printer::printcap,
-	    ``(lookup (e, "uri", "class") != "class"));
+	    ``(e["uri"]:"class" != "class"));
 	list<string> printers =
 	    (list<string>)flatten ([
 		toset (
 		    maplist (map i, filter (
 			map e, Printer::printcap, ``(
-			    lookup (e, "uri", "class") != "class"
+			    e["uri"]:"class" != "class"
 			)
 		    ), ``{
-			return lookup (i, "name", "");
+			return i["name"]:"";
 		    })
 		)
 	    ]);
@@ -951,7 +951,7 @@ and test the queue after the printer model is selected."));
      * @return symbol `next or `back
      */
     define symbol runMembersDialog () ``{
-	list<string> printers = (list<string>)toset (lookup (Printer::printer, "printers", []));
+	list<string> printers = (list<string>)toset (Printer::printer["printers"]:[]);
 	term contents =
 	    `VBox (
 		`ReplacePoint (
@@ -1128,10 +1128,8 @@ and test the queue after the printer model is selected."));
 	UI::ReplaceWidget (`id (`upper), `SelectionBox (`id (`opts), `opt (`notify, `immediate), Label::Options (), opts));
 
 	UI::ChangeWidget (`id (`opts), `CurrentItem,
-	    lookup ((map)select ((list)lookup ((map)SCR::Read (
-		    .ppd.file.options,
-		    [filename, ""]),
-		"data", []), 0, $[]), "name", ""));
+	    ((map)SCR::Read (.ppd.file.options,[filename, ""]))[
+		"data", 0, "name"]:"");
 
 	string option_type = "";
 	string option = "";
@@ -1320,12 +1318,12 @@ and test the queue after the printer model is selected."));
 	string help_text = "";
 	// determine printer type ...
 	//
-	string uri = lookup (Printer::printer, "uri", "");
+	string uri = Printer::printer["uri"]:"";
 	string uri_type = Printerlib::getUriType (uri);
-	boolean conf_type = lookup (Printer::printer, "type", "yast2") == "yast2";
-	boolean know = conf_type || lookup (Printer::printer, "type", "yast2") == "non-yast-now";
-	boolean raw = lookup (Printer::printer, "raw", false);
-	string model = lookup (Printer::printer, "device", "");
+	boolean conf_type = Printer::printer["type"]:"yast2" == "yast2";
+	boolean know = conf_type || Printer::printer["type"]:"yast2" == "non-yast-now";
+	boolean raw = Printer::printer["raw"]:false;
+	string model = Printer::printer["device"]:"";
 
 	//
 	// texts
@@ -1344,13 +1342,13 @@ and test the queue after the printer model is selected."));
 	if (config_text == "")
 	    config_text = _("unknown");
 
-	string name_text = lookup (Printer::printer, "name", "");
+	string name_text = Printer::printer["name"]:"";
 	string connection_text = "";
 	list items = [];
 	string rich = "";
 
 	// table entry
-	items = add (items, `item (`id (`name), _("Name and basic settings"), lookup (Printer::printer, "name", "")));
+	items = add (items, `item (`id (`name), _("Name and basic settings"), Printer::printer["name"]:""));
 	if ("class" != uri_type)
 	{
 	    if (! raw)
@@ -1432,7 +1430,7 @@ and test the queue after the printer model is selected."));
     define symbol runEditDialog () ``{
 	any ret = nil;
 	createEditDialog ();
-	if (lookup (Printer::printer, "type", "yast2") == "yast2")
+	if (Printer::printer["type"]:"yast2" == "yast2")
 	{
 	    UI::ChangeWidget (`id (`test), `Enabled, true);
 	    UI::ChangeWidget (`id (`edit), `Enabled, true);
@@ -1504,9 +1502,9 @@ with a prefilled name?")))
 		}
 		else if (`connection == ret)
 		{
-		    string uri = lookup (Printer::printer, "uri", "");
+		    string uri = Printer::printer["uri"]:"";
 		    string uri_type = Printerlib::getUriType (uri);
-		    ret = lookup ($[
+		    map<string,symbol> retvals = $[
 			"samba": `con_samba,
 			"novell": `con_novell,
 			"lpd": `con_lpd,
@@ -1517,8 +1515,9 @@ with a prefilled name?")))
 			"serial" : `con_local,
 			"usb" : `con_local,
 			"irda" : `con_local,
-			"bluetooth" : `con_local ],
-		    uri_type, `con_uri);
+			"bluetooth" : `con_local
+		    ];
+		    ret = retvals[uri_type]:`con_uri;
 		}
 		else if (`perm == ret)
 		{
@@ -1542,7 +1541,7 @@ with a prefilled name?")))
 		}
 		if (`update == ret)
 		{
-		    if (lookup (Printer::printer, "type", "yast2") == "yast2")
+		    if (Printer::printer["type"]:"yast2" == "yast2")
 		    {
 			UI::ChangeWidget (`id (`test), `Enabled, true);
 			UI::ChangeWidget (`id (`edit), `Enabled, true);
@@ -1983,7 +1982,7 @@ the current configuration."));
 		else
 		{
 		    foreach (map<string,any> e, queues, ``{
-			if (lookup (e, "name", "") == i)
+			if (e["name"]:"" == i)
 			    PrinterTest::testPrinter (e, `ask);
 		    });
 		}
@@ -2283,7 +2282,7 @@ Set up this device for printing only?");
 			else if (`delete_button == ret)
 			{
 			    // message box, %1 is replaced by printer name
-			    if (Popup::YesNo (sformat (_("Really delete the \"%1\" printer?"), lookup (Printer::printer, "name", ""))))
+			    if (Popup::YesNo (sformat (_("Really delete the \"%1\" printer?"), Printer::printer["name"]:"")))
 				Printer::deletePrinter ();
 			    UI::ChangeWidget (`id (`table), `Items, printcapTable ());
 			    UI::ChangeWidget (`id (`table), `CurrentItem, Printer::index);

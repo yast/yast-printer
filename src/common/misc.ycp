@@ -136,8 +136,8 @@ define string GetPpdFileDescription (string nick, string language,
             string suffix = Printer::getQueueSuffix (new_queues);
 
             new_queues = maplist (map<string,any> v, new_queues, ``{
-                v = add (v, "name", Printer::adjustQueueName (lookup (v, "name", "lp") + suffix, forbidden_names));
-                forbidden_names = add (forbidden_names, lookup (v, "name", ""));
+                v = add (v, "name", Printer::adjustQueueName (v["name"]:"lp" + suffix, forbidden_names));
+                forbidden_names = add (forbidden_names, v["name"]:"");
                 return (map<string,any>)union (Printer::printer, v);
         });
         y2debug ("Proposing queues %1", maplist (map q, new_queues, ``(
@@ -158,7 +158,7 @@ define string GetPpdFileDescription (string nick, string language,
 	    $[k: (string)UI::Recode ("UTF-8", enc, v)]));
 	list<term> l = (list<term>)SCR::Read (.ppd.sort_items, items);
 	l = maplist (term i, l, ``{
-	    string label = select (i, 1, "");
+	    string label = i[1]:"";
 	    label = (string)UI::Recode (enc, "UTF-8", label);
 	    i = remove (i, 2);
 	    i = add (i, label);
@@ -537,16 +537,16 @@ All changes will be lost.
 	integer count = 0;
 	Printer::sortPrinters ();
 	return maplist (map ent, Printer::printcap, ``{
-		string name = lookup (ent, "name", "???");
+		string name = ent["name"]:"???";
 		term ret =
 		    `item (
 			`id (count),
 			name == Printer::default ? UI::Glyph (`BulletArrowRight) : " ",
-			lookup (ent, "name", ""));
+			ent["name"]:"");
 
-		if ("yast2" == lookup (ent, "type", "yast2"))
+		if ("yast2" == ent["type"]:"yast2")
 		{
-		    string description = Printerlib::getUriNiceName (lookup (ent, "uri", ""));
+		    string description = Printerlib::getUriNiceName (ent["uri"]:"");
 		    if (! ent["valid"]:true)
 			// table item. SHORT!
 			description = _("- invalid for selected spooler -");
@@ -557,7 +557,7 @@ All changes will be lost.
 		    ret = add (ret, _("- not YaST2 -"));
 		if (Spooler::Get () == "cups")
 		{
-		    if ("yast2" == lookup (ent, "type", "yast2"))
+		    if ("yast2" == ent["type"]:"yast2")
 			// table item. SHORT
 			ret = add (ret, ! ent["changed"]:false ? _("OK") : "");
 		    else

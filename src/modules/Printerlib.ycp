@@ -25,6 +25,7 @@ import "Directory";
 import "Mode";
 import "Popup";
 import "Report";
+import "String";
 
 include "printer/texts.ycp";
 
@@ -206,7 +207,7 @@ ECHO_PID=$!
 	wakeUpEpson (device);
 	// now we can run escputil
 
-	string model = select (GetCupsUsbDeviceInfo (device), 1, "");
+	string model = GetCupsUsbDeviceInfo (device)[1]:"";
 	if (substring (model, 0, 6) == "EPSON ")
 	    model = substring (model, 6);
 	return model;
@@ -249,11 +250,11 @@ ECHO_PID=$!
 	    test_return = (map)SCR::Execute (.target.bash_output, sformat ("/usr/lib/YaST2/bin/test_remote_smb \"%1\" \"%2\" \"%3\" \"%4\" \"%5\" 5", wg, hname, rname, user, pass));
 	else if ("novell" == type)
 	    test_return = (map)SCR::Execute (.target.bash_output, sformat ("/usr/lib/YaST2/bin/test_remote_novell \"%1\" \"%2\" \"%3\" \"%4\" 5", hname, rname, user, pass));
-	integer tst = lookup (test_return, "exit", 0);
+	integer tst = test_return["exit"]:0;
 	string message = textTestRemotePrinterResult (tst);
 	if (4 == tst)
 	{
-	    message = message + lookup (test_return, "stdout", "");
+	    message = message + test_return["stdout"]:"";
 	}
 	UI::CloseDialog ();
 	Popup::Message (message);
@@ -289,13 +290,13 @@ ECHO_PID=$!
 	}
 
 	map test_return = (map)SCR::Execute (.target.bash_output, test_command);
-	integer tst = lookup (test_return, "exit", 0);
+	integer tst = test_return["exit"]:0;
 	if (4 == tst && type == "ipp_server")
 	    tst = 0;
 	string message = textTestRemotePrinterResult (tst);
 	if (4 == tst)
 	    {
-		message = message + lookup (test_return, "stdout", "");
+		message = message + test_return["stdout"]:"";
 	    }
 	UI::CloseDialog ();
 	Popup::Message (message);
@@ -319,7 +320,7 @@ ECHO_PID=$!
     global define string getUriType (string uri) ``{
 	if ("" == uri || nil == uri)
 	    return "";
-	string ss = select (splitstring (uri, ":"), 0, "");
+	string ss = String::FirstChunk (uri, ":");
 	if ("http" == ss)
 	    ss = "ipp";
 	return ss;
@@ -626,7 +627,7 @@ ECHO_PID=$!
 	    else
 		return dev;
 	}
-	return lookup ($[
+	map descriptions = $[
 	    // Names of devices. Labels in dialog
 	    "/dev/lp0" : _("First Parallel Port (/dev/lp0)"),
 	    // Names of devices. Labels in dialog
@@ -677,7 +678,8 @@ ECHO_PID=$!
             "/dev/usb/lp14" : _("Fifteenth USB Printer (/dev/usb/lp14)"),
             // Names of devices. Labels in dialog
             "/dev/usb/lp15" : _("Sixteenth USB Printer (/dev/usb/lp15)"),
-	    ], dev, dev);
+	];
+	return descriptions[dev]:dev;
     }
     /**
      * get paper size from system and returns `a4 for a4 or `letter for letter
