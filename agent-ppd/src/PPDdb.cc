@@ -410,7 +410,7 @@ void* PPD::createdbThread(const char* filename) {
 	    goto start_from_scratch;
 	time_t mtime = fileinfo.st_mtime;
 
-	y2debug ("Loading prebilt database");
+	y2debug ("Loading prebuilt database");
 	if (! loadPrebuiltDatabase ())
 	    goto start_from_scratch;
 	creation_status = 2;
@@ -1364,12 +1364,11 @@ bool PPD::loadPrebuiltDatabase () {
     parser.setInput (infile, ppd_db);
     parser.setBuffered ();
 
-    YCode* parsed_code = parser.parse ();
+    YCodePtr parsed_code = parser.parse ();
     YCPValue val = YCPNull ();
     if (parsed_code != NULL)
     {
 	val = parsed_code->evaluate (true);
-	delete parsed_code;
     }
     else
     {
