@@ -1736,8 +1736,6 @@ the selected spooler does not support it."), name));
 	string filename = Printerdb::foomatic[det["vendor_db"]:"",
 	    det["device_db"]:"", config, "filename"]:"";
 	y2debug ("Filename: %1", filename);
-	filename = (string)SCR::Read (.ppd.file.open,
-	    [filename, SCR::Read (.target.tmpdir)]);
 	printer = $[
 	    "detected" : det,
 	    "unique_key" : det["unique_key"]:"",
@@ -1750,10 +1748,15 @@ the selected spooler does not support it."), name));
 	    "name" : generateQueueName (nil, det["uri"]:"",
 		det["vendor_db"]:"", det["device_db"]:"",
 		getForbiddenNames ()),
-	    "ppd" : filename,
-	    "ppd_info" : ppdInfo (filename),
 	    "type" : "yast2",
 	];
+	if (filename != "" && filename != nil)
+	{
+	    filename = (string)SCR::Read (.ppd.file.open,
+		[filename, SCR::Read (.target.tmpdir)]);
+	    printer["ppd"] =  filename;
+	    printer["ppd_info"] = ppdInfo (filename);
+	}
 	y2milestone ("Detected printer after editation: %1", printer);
     }
     /**
