@@ -892,6 +892,7 @@ bool PPD::process_file(const char *filename, PPDInfo *newinfo) {
     char pnp_id[MAX]="";
     char filter[MAX]="";
     set<string> products;
+    set<pair<string,string> > device_ids;
 
     y2debug("Processing: %s",filename);
 
@@ -990,26 +991,45 @@ bool PPD::process_file(const char *filename, PPDInfo *newinfo) {
 
             int size;
             char *start, *end;
+	    char vendor_id[MAX]="";
+	    char device_id[MAX]="";
 
             /* parse vendor from id */
             if((start=strstr(pnp_id,"MANUFACTURER:"))) start+=13;
             else if((start=strstr(pnp_id,"MFG:"))) start+=4;
+            else if((start=strstr(pnp_id,"MAKE:"))) start+=5;
 
-            if(start && (end=strchr(start,';'))) {
-                size=(end-start)<MAX?end-start:MAX;
-                strncpy(pnp_vendor,start,size);
-                y2debug("pnp_vendor: _%s_", pnp_vendor);
+y2error ("S1: %s", start);
+
+            if(start) {
+		end = strchr(start,';');
+                size = end == NULL
+		    ? (strlen(start) < MAX) ? strlen(start) : MAX
+		    : (end-start) < MAX ? end-start : MAX;
+                strncpy(vendor_id,start,size);
+                y2debug("vendor_id: _%s_", vendor_id);
             }
 
             /* parse printer from id */
             if((start=strstr(pnp_id,"MODEL:"))) start+=6;
             else if((start=strstr(pnp_id,"MDL:"))) start+=4;
+            else if((start=strstr(pnp_id,"Model:"))) start+=6;
 
-            if(start && (end=strchr(start,';'))) {
-                size=(end-start)<MAX?end-start:MAX;
-                strncpy(pnp_printer,start,size);
-                y2debug("pnp_printer: _%s_", pnp_printer);
+
+y2error ("S2: %s", start);
+
+            if(start) {
+	 	end=strchr(start,';');
+                size = end == NULL
+		    ? (strlen(start) < MAX) ? strlen(start) : MAX
+		    : (end-start) < MAX ? end-start : MAX;
+                strncpy(device_id,start,size);
+                y2debug("device_id: _%s_", device_id);
             }
+y2error ("ID: %s:%s", vendor_id, device_id);
+
+	    pair<string,string> id = pair<string,string>(vendor_id, device_id);
+	    device_ids.insert (id);
             
             y2debug("PNP: _%s_", pnp_id);
             ready+=2;
@@ -1047,6 +1067,20 @@ bool PPD::process_file(const char *filename, PPDInfo *newinfo) {
     info.size = fileSize (filename);
     info.filter = filter;
     preprocess(info, newinfo);
+
+    if (NULL == newinfo)
+    {
+	for (set<pair<string,string> >::iterator it = device_ids.begin ();
+	    it != device_ids.end ();
+	   it++)
+	{
+    	    info.vendor = clean (it->first.c_str ());
+	    info.printer = clean (it->second.c_str ());
+	    info.vendor_db = info.vendor;
+	    info.printer_db = info.printer;
+	    preprocess(info, newinfo);
+	}
+    }
 
     if (total_files != 0)
 	creation_status = (done_files * 80) / (total_files) + 10;
