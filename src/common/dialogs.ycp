@@ -150,6 +150,8 @@
 	Wizard::SetContentsButtons (_("Printer model"),
 	    contents, getManufModelHelp (), Label::BackButton (),
 	    Label::NextButton ());
+	Wizard::RestoreAbortButton ();
+	Wizard::RestoreBackButton ();
 
 	if (manuf_db == "" || manuf_db == nil)
 	{
@@ -441,6 +443,8 @@ user name, and password.
 
 	// dialog box label
         Wizard::SetContentsButtons (_("Printers"), contents, getPrintersHelp (), Label::BackButton (), Label::NextButton ());
+	Wizard::RestoreBackButton ();
+	Wizard::RestoreAbortButton ();
 	UI::ChangeWidget (`id (`printers), `CurrentItem, 0);
 	symbol ret = (symbol)UI::UserInput ();
             if (ret == `cancel)
@@ -749,6 +753,8 @@ Select the model first.
 		Label::BackButton (),
 		Label::NextButton ()
 		);
+	Wizard::RestoreBackButton ();
+	Wizard::RestoreAbortButton ();
 	UI::ChangeWidget (`id (`name), `ValidChars, "_0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ");
 
 	if (name == "")
@@ -1072,6 +1078,8 @@ and test the queue after the printer model is selected."));
 		`VWeight (1, `ReplacePoint (`id (`lower), `VSpacing (1))),
 		`HBox (`HStretch (), test_button, `HStretch ())
 		), getFilterHelp (), Label::BackButton (),Label::NextButton ());
+	Wizard::RestoreBackButton ();
+	Wizard::RestoreAbortButton ();
 
 	map selected = Printer::printer["options"]:$[];
 	map ppd_selected = Printer::printer["ppd_options"]:$[];
@@ -1421,6 +1429,7 @@ and test the queue after the printer model is selected."));
 	Wizard::SetContentsButtons (_("Edit configuration"), contents, getEditHelp (uri_type, raw),
 	    Label::BackButton (), Label::OKButton ());
 	Wizard::RestoreBackButton ();
+	Wizard::RestoreAbortButton ();
     }
 
     /**
@@ -1605,6 +1614,7 @@ with a prefilled name?
 		&& `server == CUPS::InstallationType ()),
 	    Label::BackButton (), Label::AcceptButton ());
 	Wizard::RestoreBackButton ();
+	Wizard::RestoreAbortButton ();
 	symbol ret = nil;
 	while (nil == ret)
 	{
@@ -1939,6 +1949,8 @@ y2error ("CIT: %1", CUPS::InstallationType ());
 	// label of the dialog
 	Wizard::SetContentsButtons (_("Printer overview"), contents,
 	    getShowPrinterHelp (), Label::BackButton (), Label::OKButton ());
+	Wizard::RestoreBackButton ();
+	Wizard::RestoreAbortButton ();
 
 	if (default_queue != nil && default_queue != "")
 	    UI::ChangeWidget (`id (`table), `CurrentItem, default_queue);
@@ -2071,7 +2083,8 @@ y2error ("CIT: %1", CUPS::InstallationType ());
 	    );
 	// dialog label
 	Wizard::SetContentsButtons (_("Printers configuration"), contents, getDetectedHelp (), Label::BackButton (), Label::FinishButton ());
-//	Wizard::HideBackButton();
+	Wizard::SetAbortButton(`abort, Label::CancelButton() );
+	Wizard::HideBackButton();
 	any ret = nil;
 	while (true)
 	{
@@ -2085,16 +2098,7 @@ y2error ("CIT: %1", CUPS::InstallationType ());
 		PrinterTest::testPrinter (Printer::printer, `ask);
 		continue ;
 	    }
-	    if (`abort == ret)
-	    {
-		ret = `abort;
-		if (reallyAbort ())
-		{
-		    break;
-		}
-		continue;
-	    }
-	    if (`back == ret || `cancel == ret)
+	    if (`back == ret || `cancel == ret || `abort == ret)
 	    {
 		ret = `back;
 		if (reallyExit ())
@@ -2212,14 +2216,8 @@ Continue?
 	    Label::BackButton (),
 	    Label::FinishButton ()
 	);
-	if (Printer::detection)
-	{
-	    Wizard::RestoreBackButton ();
-	}
-	else
-	{
-//	    Wizard::HideBackButton();
-	}
+	Wizard::RestoreBackButton ();
+	Wizard::RestoreAbortButton ();
 	UI::ChangeWidget (`id (`table), `CurrentItem, -1 == Printer::index ? 0 : Printer::index);
 	symbol ret = nil;
 	while (true)
@@ -2282,24 +2280,11 @@ Continue?
 		}
 		if (`back == ret)
 		{
-		    if (Printer::detection || reallyExit())
-			break;
+		    break;
 		}
 		if (`next == ret)
 		{
 		    break;
-		}
-		if (`scratch == ret)
-		{
-			// message box
-		    if (! Popup::AnyQuestion(Label::WarningMsg(), _("Really reinstall your printing system? 
-All your changes will be lost.
-"),
-			// push button
-			_("&Reinstall"), Label::CancelButton (), `focus_no))
-			    continue;
-		    boolean success = reinstallAll ();
-			break;
 		}
 	    }
 	return ret;
