@@ -52,11 +52,36 @@
       */
     global string baseDataDir = "/usr/share/YaST2/data/printer";
 
+    /**
+     * list of HP all-in-one models
+     */
+    list<string> hp_all_in_one = nil;
+
 // local functions
 
 
 
 // global functions
+
+    /**
+     * Get the list of all HP all-in-one models
+     */
+    global define list<string> GetHPAllInOneModels () {
+	if (hp_all_in_one != nil)
+	    return hp_all_in_one;
+
+	string file = (string)SCR::Read (.target.string,
+	    baseDataDir + "/hp_all_in_one_model_list");
+	list<string> models = splitstring (file, "\n");
+	models = filter (string m, models, {return m != "";});
+	models = maplist (string m, models, {
+	    m =(string) SCR::Read (.ppd.db.modelname, ["HP", m]);
+	    return m;
+	});
+	hp_all_in_one = models;
+	y2milestone ("Known HP all-in-one devices: %1", hp_all_in_one);
+	return hp_all_in_one;
+    }
 
     /**
       * Inform user that function isn't available during preparatino of AI
@@ -179,6 +204,10 @@ ECHO_PID=$!
 		return nil;
 	});
 	ptal_devs = filter (list<string> pd, ptal_devs, ``(pd != nil));
+	ptal_devs = maplist (list<string> pd, ptal_devs, {
+	    pd[1] = (string)SCR::Read (.ppd.db.modelname, ["HP", pd[1]:""]);
+	    return pd;
+	});
 	y2milestone ("ptal devices: %1", ptal_devs);
 	return ptal_devs;
     }
@@ -213,7 +242,7 @@ ECHO_PID=$!
      * @param device USB Device to examine.
      * @return string Printer model. If unsuccessful, returns "Stylus".
      */
-    define string getEpsonUsbModel (string device) ``{
+    global define string getEpsonUsbModel (string device) ``{
 	// we must wake Epson first
 	wakeUpEpson (device);
 	// now we can run escputil
@@ -222,161 +251,6 @@ ECHO_PID=$!
 	if (substring (model, 0, 6) == "EPSON ")
 	    model = substring (model, 6);
 	return model;
-    }
-
-    /**
-     * Finally detection of hardware
-     * @param cups true if usb devices should be in form /dev/usb/lp?vendor=04a9&prod_id=1052
-     * @return a list Detected printers. See example.
-     * @example
-     *  Return:
-     *   [
-     *       $[
-     *           "vendor"       : "...",
-     *           "device"       : "...",
-     *           "unique_key"   : "...",
-     *           "uri"          : "...", // usb:/dev/usb/lp0, ...
-     *       ], ...
-     *   ]
-     * FIXME this function must be merged with Printer::Detect
-     */
-    global define list<map<string,any> > Detect (boolean cups) ``{
-	y2milestone ("Detecting printers");
-	boolean have_usb = false;
-	boolean have_ptal = false;
-	if (Mode::config)
-	{
-	    DisplayUnavailableAIPopup ();
-	    return [];
-	}
-	SCR::Execute (.target.bash,
-	    "test -f /etc/init.d/hotplug && (test -d /proc/bus/usb/001 || /etc/init.d/hotplug start)");
-	list<map> aprobe = (list<map>)SCR::Read (.probe.printer);
-	if (0 == size (aprobe))
-	    {
-		return [];
-	    }
-	list<map<string,any> > ret = maplist (map pr, aprobe, ``{
-	    map record = $[];
-	    string bus = pr["bus"]:"Parallel";
-	    string unique_key = "";
-
-	    if ("Parallel" == bus)
-	    {
-		record = $[
-		    "vendor" : lookup (pr, "vendor", ""),
-		    "device" : lookup (pr, "device", ""),
-		    "unique_key": lookup (pr,"unique_key",""),
-		    "uri" : "parallel:" + pr["dev_name"]:""
-		];
-	    }
-	    else if  ("USB" == bus)
-	    {
-		have_usb = true;
-		if (0 !=  SCR::Execute (.target.bash, "grep '^usblp ' /proc/modules"))
-		    return $[];
-		if ("epson" == tolower (lookup (pr, "sub_vendor", "")))
-		{
-			string sub_dev = getEpsonUsbModel (lookup (pr, "dev_name", ""));
-			if (sub_dev != "")
-			    pr["sub_device"] = sub_dev;
-		}
-		string class_dev = lookup (pr, "dev_name", "");
-		string dev_name = class_dev;
-
-		if (Spooler::Get () == "cups")
-		{
-
-		    dev_name = select (getCupsUsbDeviceInfo (class_dev), 0, "");
-		    if (dev_name == nil || dev_name == "" || Mode::autoinst)
-		    {
-			dev_name = class_dev;
-		    }
-		}
-		record = $[
-		    "vendor" : lookup (pr, "sub_vendor", ""),
-		    "device" : lookup (pr, "sub_device", ""),
-		    "unique_key": lookup (pr,"unique_key",""),
-		    "vendor_id": lookup (pr, "vendor_id",0),
-		    "device_id": lookup (pr, "device_id",0),
-		    "uri": "usb:" + dev_name,
-		];
-		if (Spooler::Get () == "cups")
-		{
-		    if (contains (pr["requires"]:[], "hp-officeJet"))
-		    {
-			y2milestone ("PTAL device found");
-			boolean req_ret = true;
-			if (! Pkg::IsProvided ("hp-officeJet"))
-			{
-			    req_ret = Require::RequireAndConflict (
-				 ["hp-officeJet"],
-				[],
-				// question, %1 is package name
-				_("An HP all-in-one device has been detected. To
-use it as both printer and scanner,
-package %1 must be installed.
-
-Install it now?
-"));
-			}
-			if (! req_ret && ! Require::LastOperationCanceled ())
-			{
-			    // error report
-			    Report::Error (_("Failed to install required package."));
-			}
-			have_ptal = true;
-			string ptal_uri = getPtalUri (pr["model"]:"");
-			if (ptal_uri != nil)
-			{
-			    record["uri"] = ptal_uri;
-			}
-		    }
-		}
-	    }
-	    return record;
-	});
-	if (have_usb)
-	{
-	    if (0 !=  SCR::Execute (.target.bash, "grep '^usblp ' /proc/modules"))
-	    {
-		y2error ("USB printer found and printer module not loaded, loading it");
-		boolean probe_success = (boolean)SCR::Execute(.target.modprobe, "usblp", "");
-		string hotplug
-		    = (string)SCR::Read (.sysconfig.hotplug.HOTPLUG_USB_STATIC_MODULES);
-		y2debug ("Current hotplug: %1", hotplug);
-		list<string> hplist = splitstring (hotplug, " ");
-		if (! contains (hplist, "usblp"))
-		{
-		    hplist = add (hplist, "usblp");
-		    hotplug = mergestring (hplist, " ");
-		    y2debug ("Final hotplug: %1", hotplug);
-		    SCR::Write (.sysconfig.hotplug.HOTPLUG_USB_STATIC_MODULES,
-			hotplug);
-		    SCR::Write (.sysconfig.hotplug, nil);
-		}
-		sleep (100);
-		if (probe_success)
-		{
-		    probe_success = 0 == SCR::Execute (.target.bash, "grep '^usblp ' /proc/modules");
-		}
-		if (probe_success)
-		{
-		    y2milestone ("Restarting detection");
-		    ret = Detect (cups);
-		    y2debug ("Redetection done");
-		}
-		else
-		{
-		    y2error ("Error occured while loading usblp.ko module");
-		}
-	    }
-	}
-	if (have_ptal)
-	{
-	    SCR::Execute (.target.bash, "test -x /etc/init.d/cups && /etc/init.d/cups status && /etc/init.d/cups restart");
-	}
-	return ret;
     }
 
     /**

@@ -19,6 +19,9 @@
     import "Pkg";
 
     include "testsuite.ycp";
+
+    // testedfiles: Printer.ycp Spooler.ycp Printerlib.ycp
+
     map I_READ = $[
 	"target" : $[
 	    "size" : -1,
@@ -68,6 +71,7 @@
         ],
     ];
     TESTSUITE_INIT ([I_READ, I_WRITE, I_EXEC], 0);
+    import "Printer";
     import "Printerlib";
     import "Spooler";
 
@@ -75,10 +79,8 @@
 
     map READ =
         $[
-            "probe" :
-            $[
-                "printer" :
-                [
+            "probe" : $[
+                "printer" : [
                     $[
                         "bus":"Parallel",
                         "class_id":265,
@@ -87,7 +89,7 @@
                         "sub_class_id":0,
                         "unique_key":"xVOt.CRhzf0_Mb88",
                         "vendor":"Canon"
-                        ],
+                    ],
                     $[
                         "bus":"USB",
                         "class_id":265,
@@ -101,11 +103,17 @@
                         "unique_key":"Q0jS.ZoQ4aZ8KEv3",
                         "vendor":"Canon Inc.",
                         "vendor_id":197801
-                        ]
                     ]
-                ],
-		"proc" : $[ "modules" : $[ "printer" : ""]],
-            ];
+                ]
+            ],
+	    "proc" : $[ "modules" : $[ "printer" : ""]],
+	    "ppd" : $[
+		"db" : $[
+		    "vendorname" : "",
+		    "modelname" : "",
+		],
+	    ],
+	];
     map EXEC= $[
 	"target" : $[
 	    "bash_output" : $[
@@ -116,10 +124,10 @@
     ];
     DUMP ("--- Detection for lprng");
     Spooler::Set ("lprng");
-    TEST (``(Printerlib::Detect (false)), [READ, $[], EXEC], true);
+    TEST (``(Printer::Detect ()), [READ, $[], EXEC], true);
     DUMP ("--- Detection for cups");
     Spooler::Set ("cups");
-    TEST (``(Printerlib::Detect (true)), [READ, $[], EXEC], true);
+    TEST (``(Printer::Detect ()), [READ, $[], EXEC], true);
 
     READ =
         $[
@@ -144,13 +152,19 @@
                     ]
                 ],
 		"proc" : $[ "modules" : $[ "printer" : ""]],
-            ];
+    	    "ppd" : $[
+		"db" : $[
+		    "vendorname" : "",
+		    "modelname" : "",
+		],
+	    ],
+        ];
     DUMP ("--- Detection for lprng");
     Spooler::Set ("lprng");
-    TEST (``(Printerlib::Detect (false)), [READ, $[], EXEC], true);
+    TEST (``(Printer::Detect ()), [READ, $[], EXEC], true);
     DUMP ("--- Detection for cups");
     Spooler::Set ("cups");
-    TEST (``(Printerlib::Detect (true)), [READ, $[], EXEC], true);
+    TEST (``(Printer::Detect ()), [READ, $[], EXEC], true);
 
     // try to detect for cups but without vendor_id and device_id
     READ =
@@ -175,7 +189,13 @@
                 ],
 		"proc" : $[ "modules" : $[ "printer" : ""]],
 		"target" : $[ "size" : 555],
-            ];
+       	    "ppd" : $[
+		"db" : $[
+		    "vendorname" : "",
+		    "modelname" : "",
+		],
+	    ],
+     ];
     EXEC = $[
 	"target" : $[
 	    "bash_output" : $[
@@ -189,7 +209,7 @@ direct usb:/dev/usb/lp2 \"Unknown\" \"USB Printer #3\"",
 	];
     DUMP ("--- Detection for cups");
     Spooler::Set ("cups");
-    TEST (``(Printerlib::Detect (true)), [READ, $[], EXEC], true);
+    TEST (``(Printer::Detect ()), [READ, $[], EXEC], true);
 
     // try to detect all-in-one device
     READ =
@@ -215,7 +235,13 @@ direct usb:/dev/usb/lp2 \"Unknown\" \"USB Printer #3\"",
                 ],
                 "proc" : $[ "modules" : $[ "printer" : ""]],
                 "target" : $[ "size" : 555],
-            ];
+       	    "ppd" : $[
+		"db" : $[
+		    "vendorname" : "",
+		    "modelname" : "",
+		],
+	    ],
+     ];
 
     EXEC = $[
 	"target" : $[
@@ -230,7 +256,8 @@ direct usb:/dev/usb/lp2 \"Unknown\" \"USB Printer #3\"",
 
     DUMP ("--- Detection for cups");
     Spooler::Set ("cups");
-    TEST (``(Printerlib::Detect (true)), [READ, $[], EXEC], true);
+    Printerlib::hp_all_in_one = ["USB Printer"];
+    TEST (``(Printer::Detect ()), [READ, $[], EXEC], true);
 
 
 }
