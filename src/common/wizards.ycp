@@ -18,13 +18,13 @@
     import "Label";
     import "Mode";
     import "Printer";
+    import "Sequencer";
     import "Wizard";
 
     include "printer/dialogs-connection.ycp";
     include "printer/dialogs-cups.ycp";
     include "printer/dialogs-lprng.ycp";
     include "printer/dialogs.ycp";
-    include "wizard/sequencer.ycp";
 
 // pre-declare sequences
 
@@ -37,12 +37,12 @@
       * Get map of aliases for wizard sequencer.
       * @return aliases
       */
-    define map getAliases () ``{
+    define map<string,any> getAliases () ``{
 	 return $[
 	    // switchers, no dialogs
 	    "detectconftype" :	[ ``(detectConfigType ()), true],
 	    "config_type" :	[ ``(getInstType ()), true, ],
-	    "mark_yast" : 	[ ``(markQueueYaST ()), true ],
+	    "mark_yast" :	[ ``(markQueueYaST ()), true ],
 
 	    // sequences
 	    "main_wz" :		``(MainSequence ()),
@@ -129,7 +129,7 @@
 	Printer::default = "lp";
 	Printer::selectPrinter (3);
 	list seq = [ "detected", "configdetected", "quick", "complex", "connection_local", "usb", "name", "model", "filter", "featues", "edit", ];
-	foreach (`i, seq, ``{
+	foreach (string i, seq, ``{
 	    eval (lookup (getAliases (), i, nil));
 	});
 	Printer::index = -1;									runLocalConnectionDialog ();
@@ -146,7 +146,7 @@
       * @return sequence result
       */
     define symbol EditPrinterSequence () ``{
-	map aliases = getAliases ();
+	map<string,any> aliases = getAliases ();
 	map sequence = $[
 	    "ws_start"   : "edit",
 	    "edit" : $[
@@ -237,11 +237,11 @@
 	    "members" : $[ `abort : `abort, `next : "edit", ],
 	    "storeprinter" : $[`next : `next, ],
 	];
-	aliases = filter (string k, any v, aliases, ``(haskey (sequence, k)));
-	return WizardSequencer(aliases, sequence);
+	aliases = (map<string,any>)filter (string k, any v, aliases, ``(haskey (sequence, k)));
+	return Sequencer::Run (aliases, sequence);
     }
 
-    define map getAddPrinterSubSequence () ``{
+    define map<string,any> getAddPrinterSubSequence () ``{
 	return $[
 	    "ws_start"   : "detectconftype",
 	    "detectconftype" : $[
@@ -349,10 +349,10 @@
       * @return sequence result
       */
     define symbol AddPrinterSubSequence () ``{
-	map aliases = getAliases ();
+	map<string,any> aliases = getAliases ();
 	map sequence = getAddPrinterSubSequence ();
-	aliases = filter (string k, any v, aliases, ``(haskey (sequence, k)));
-	return WizardSequencer(aliases, sequence);
+	aliases = (map<string,any>)filter (string k, any v, aliases, ``(haskey (sequence, k)));
+	return Sequencer::Run(aliases, sequence);
     }
 
     /**
@@ -360,7 +360,7 @@
       * @return sequence result
       */
     define symbol AddPrinterSequence () ``{
-	map aliases = getAliases ();
+	map<string,any> aliases = getAliases ();
 	map sequence = $[
 /*	    "ws_start"   : "add_printer_sub_wz",
 	    "add_printer_sub_wz" : $[
@@ -374,7 +374,7 @@
 	    ],*/
 	    "edit_printer_wz" : $[ `abort : `abort, `next : `next ],
 	];
-	map add_seq =  getAddPrinterSubSequence ();
+	map<string,any> add_seq = getAddPrinterSubSequence ();
 	add_seq = mapmap (string k, any v, add_seq, ``{
 	    if (is (v, map))
 	    {
@@ -387,8 +387,8 @@
 	    return $[ k : v ];
 	});
 	sequence = union (sequence, add_seq);
-	aliases = filter (string k, any v, aliases, ``(haskey (sequence, k)));
-	return WizardSequencer(aliases, sequence);
+	aliases = (map<string,any>)filter (string k, any v, aliases, ``(haskey (sequence, k)));
+	return Sequencer::Run(aliases, sequence);
     }
 
     /**
@@ -396,7 +396,7 @@
       * @return sequence result
       */
     define symbol MainSequence() ``{
-	map aliases = getAliases ();
+	map<string,any> aliases = getAliases ();
 	map sequence = $[
 	    "ws_start" : "config_type",
 	    "config_type" : $[
@@ -464,8 +464,8 @@
 		`switch : `switch,
 	    ],
 	];
-	aliases = filter (string k, any v, aliases, ``(haskey (sequence, k)));
-	return WizardSequencer(aliases, sequence);
+	aliases = (map<string,any>)filter (string k, any v, aliases, ``(haskey (sequence, k)));
+	return Sequencer::Run(aliases, sequence);
     }
 
     /**
@@ -473,7 +473,7 @@
       * @return sequence result
       */
     define symbol DetectedSequence() ``{
-	map aliases = getAliases ();
+	map<string,any> aliases = getAliases ();
 	map sequence = $[
 	    "ws_start" : "detected",
 	    "redetect" : $[`next : "detected", ],
@@ -495,8 +495,8 @@
 		`reinstall : `reinstall,
 	    ],
 	];
-	aliases = filter (string k, any v, aliases, ``(haskey (sequence, k)));
-	return WizardSequencer(aliases, sequence);
+	aliases = (map<string,any>)filter (string k, any v, aliases, ``(haskey (sequence, k)));
+	return Sequencer::Run(aliases, sequence);
     }
 
     /**
@@ -551,7 +551,7 @@
 	];
 
 	Wizard::CreateDialog();
-	symbol ret = WizardSequencer(aliases, sequence);
+	symbol ret = Sequencer::Run(aliases, sequence);
 
 	UI::CloseDialog();
 	return ret;
