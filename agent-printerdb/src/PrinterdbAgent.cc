@@ -579,7 +579,7 @@ YCPValue PrinterdbAgent::Read(const YCPPath &path, const YCPValue& arg)
 	Printer**p = (Printer**)findinset (printerset, printersize, (char*)ident.c_str());
 	YCPList l;
 	if (!p)
-	    return YCPError (ident + ":Config not found.", l);
+	    return YCPError (ident + ": Config not found.", l);
 	List *cfgs = ((*p)->use);
 	List*walk = cfgs;
         while (walk) {
@@ -632,7 +632,7 @@ YCPValue PrinterdbAgent::Read(const YCPPath &path, const YCPValue& arg)
 	Printer**p = (Printer**)findinset (printerset, printersize, (char*)ident.c_str());
 	YCPMap m;
 	if (!p)
-	    return YCPError (ident + ": Printer not found.", m);
+	    return YCPError (ident + ": Printer not found.", YCPList ());
 	return getAutoQueues ((*p)->use);
     }
     else if (path->length () == 2 && path->component_str (0) == "configsrt") {
@@ -647,7 +647,7 @@ YCPValue PrinterdbAgent::Read(const YCPPath &path, const YCPValue& arg)
 	Printer**p = (Printer**)findinset (printerset, printersize, (char*)ident.c_str());
 	YCPList l;
 	if (!p)
-	    return YCPError (ident + ":Config not found.", l);
+	    return YCPError (ident + ": Config not found.", l);
 	string s = getConfigRichText ((*p)->use, spooler);
 	YCPList ret;
 	ret->add (YCPString (s));
@@ -665,9 +665,9 @@ YCPValue PrinterdbAgent::Read(const YCPPath &path, const YCPValue& arg)
 	Config**c = (Config**)findinset (configset, configsize, (char*)ident.c_str());
 	YCPList l;
 	if (!c)
-	    return YCPError (ident + ":Config not found.", l);
+	    return YCPError (ident + ": Config not found.", l);
 	if (!(*c)->type)
-	    return YCPError (ident + ":Config has subconfigs, not suboptions!", l);
+	    return YCPError (ident + ": Config has subconfigs, not suboptions!", l);
 	l = getOptionTree((*c)->use);
 	return l;
     }
@@ -684,9 +684,9 @@ YCPValue PrinterdbAgent::Read(const YCPPath &path, const YCPValue& arg)
 	    preselect = path->component_str (2);
 	Config**c = (Config**)findinset (configset, configsize, (char*)ident.c_str());
 	if (!c)
-	    return YCPError (ident + ":Config not found.", YCPList ());
+	    return YCPError (ident + ": Config not found.", YCPList ());
 	if (!(*c)->type)
-	    return YCPError (ident + ":Config has subconfigs, not suboptions!", YCPList ());
+	    return YCPError (ident + ": Config has subconfigs, not suboptions!", YCPList ());
 	YCPMap m;
 	if (!arg.isNull () && arg->isMap ())
 	    m = arg->asMap ();
@@ -1163,7 +1163,7 @@ YCPValue PrinterdbAgent::Write (const YCPPath &path, const YCPValue& value, cons
 		enc = "X";
 	}
 	Config**c = (Config**)findinset (configset, configsize, (char*)cfg.c_str());
-	if (cfg != "")
+	if (cfg != "" && cfg != "raw")
 	{
 	    if (!c)
 	    	return YCPError (cfg + ": config not found.", YCPString (""));
@@ -1206,12 +1206,20 @@ YCPValue PrinterdbAgent::Write (const YCPPath &path, const YCPValue& value, cons
 	con = (cfg == "") ? strdup(__(PPD_FILE_STRING)) : textWithoutDetails (con);
 
 	fprintf (f, "----X-ENCODING: %s\n", "ISO-8859-2" == enc ? "h02" : "h01");
-	fprintf (f, "----X-VENDOR: (%s: %s)\n", ven ? (const char*)ven : "", mod ? (const char*)mod : "");
-	fprintf (f, "----X-CONFIG: (%s)\n", con ? (const char*)con : "");
+	if (cfg == "raw")
+	{
+	    fprintf (f, "----X-VENDOR: (%s)\n", __(RAW_MODEL_STRING));
+	    fprintf (f, "----X-CONFIG: (%s)\n", __(RAW_CONFIG_STRING));
+	}
+	else
+	{
+	    fprintf (f, "----X-VENDOR: (%s: %s)\n", ven ? (const char*)ven : "", mod ? (const char*)mod : "");
+	    fprintf (f, "----X-CONFIG: (%s)\n", con ? (const char*)con : "");
+	}
 	fprintf (f, "----X-QUEUE-L: (%s)\n", __(PRINT_QUEUE_STRING));
 	fprintf (f, "----X-PRINTER-L: (%s)\n", __(PRINTER_STRING));
 	fprintf (f, "----X-CONFIG-L: (%s)\n", __(CONFIGURATION_STRING));
-	fprintf (f, "----X-OPTION-L: (%s)\n", cfg == "" ? __(NO_OPTS_STRING) : __(OPTIONS_STRING));
+	fprintf (f, "----X-OPTION-L: (%s)\n", (cfg == "" || cfg == "raw") ? __(NO_OPTS_STRING) : __(OPTIONS_STRING));
 	fprintf (f, "----X-HEAD: (%s)\n", __(Y2TESTPAGE_STRING));
 	// add other info here...
 	if (enc == "ISO-8859-2")

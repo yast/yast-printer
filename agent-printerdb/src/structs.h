@@ -32,6 +32,8 @@ struct List
 #define NOT_AVAILABLE_STRING	"Not available:"
 #define PPD_FILE_STRING		"non-YaST PPD file"
 #define NO_OPTS_STRING		"No options available for queues configured \n using non-YaST PPD files"
+#define RAW_MODEL_STRING	"Unknown model"
+#define RAW_CONFIG_STRING	"Raw printing"
 
 #define DB_TEXTDOMAIN		"printerdb"
 #define PRG_TEXTDOMAIN		"printer"

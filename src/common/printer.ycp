@@ -158,7 +158,7 @@
 	{
 	    if (0 == Printer::cupsInstallationType ())
 	    {
-		integer status = SCR::Execute (.target.bash, "/usr/bin/lpq");
+		integer status = SCR::Execute (.target.bash, "/usr/bin/lpq 2>/dev/null");
                 if (status == 0)
 		{
 		    Progress::NextStep ();              if (testAbort ())                       return `back;
@@ -166,20 +166,31 @@
 		}
 		else
 		{
+		    boolean close_dialog = false;
 		    status = SCR::Execute (.target.bash, "/etc/init.d/cups status");
 		    if (0 != status)
 		        SCR::Execute (.target.bash, "/etc/init.d/cups start");
-		    UI::OpenDialog(`opt(`decorated ),`Label(_("Initializing CUPS server...
-This usually takes one or two minutes")));
-		    Progress::NextStep ();              if (testAbort ())                       {UI::CloseDialog (); return `back;}
+		    if (SCR::Read (.target.size, "/etc/cups/ppds.dat") <= 0)
+		    {
+			close_dialog = true;
+			showCupsInitPopup ();
+		    }
+		    Progress::NextStep ();              if (testAbort ())                       {if (close_dialog) UI::CloseDialog (); return `back;}
 		    status = 1;
+		    integer attempts = 0;
 		    while (true)
 		    {
-		        status = SCR::Execute (.target.bash, "/usr/bin/lpq");
+		        status = SCR::Execute (.target.bash, "/usr/bin/lpq 2>/dev/null");
 		        if (status == 0)
 			    break;
+			attempts = attempts + 1;
+			if (attempts > 5 && ! close_dialog)
+			{
+                            close_dialog = true;
+			    showCupsInitPopup ();
+			}
 		        sleep (1000);
-		        if (testAbort ())                       {UI::CloseDialog (); return `back;}
+		        if (testAbort ())                       {if (close_dialog) UI::CloseDialog (); return `back;}
 		        status = SCR::Execute (.target.bash, "/etc/init.d/cups status");
 		        if (0 != status)
 		        {
@@ -189,7 +200,8 @@ This usually takes one or two minutes")));
 			        _("CUPS daemon died during initialization"),
 			        UI::ContinueButtonLabel (), UI::AbortButtonLabel (), `focus_no))
 			    {
-			        UI::CloseDialog ();
+			        if (close_dialog)
+				    UI::CloseDialog ();
                                 UI::CloseDialog ();
                                 return `back;
 			    }
@@ -197,7 +209,8 @@ This usually takes one or two minutes")));
 			        break;
 		        }
 	            }
-		    UI::CloseDialog ();
+		    if (close_dialog)
+			UI::CloseDialog ();
 		    Progress::NextStep ();              if (testAbort ())                       return `back;
 		}
 	    }
@@ -260,15 +273,18 @@ the current configuration.
     /* Autodetection */
     if (!skip_autodetection)
     {
-	// popup
-	if (UI::AnyQuestionPopup (WarningMsg(), _("Printer detection can now start. In some cases, detection can cause a
+	if (nil == Printer::detect)
+	    // popup
+	    // FIXME: there is a typo, shall be ... If a freeze happens, ...
+	    Printer::detect = UI::AnyQuestionPopup (WarningMsg(), _("Printer detection can now start. In some cases, detection can cause a
 system freeze. If a free happens, select Skip Detection
 when next running the printer configuration.
 
 Detect your printers?
 "), YesButtonLabel (),
-	// pushbutton
-	_("&Skip detection"), `focus_yes))
+	    // pushbutton
+	    _("&Skip detection"), `focus_yes);
+	if (Printer::detect)
 	    runProbeDialog ();
     }
     Progress::Finish ();		if (testAbort ())			return `back;

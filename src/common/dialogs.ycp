@@ -1205,12 +1205,14 @@ that your parallel port is not properly configured.
 		`VSpacing (1),
 		"lprng" == Printer::spooler ? `VSpacing (0) :
 		// text entry
-		    `TextEntry (`id (`info), `opt (`hstretch), is_class ? _("&Description of class")
+		    `TextEntry (`id (`info), `opt (`hstretch, `autoShortcut), is_class ? _("&Description of class")
+		// FIXME set shortcut
 		// text entry
 			 : _("Description of printer"), info),
 		"lprng" == Printer::spooler ? `VSpacing (0) :
 		// text entry
-		    `TextEntry (`id (`loc), `opt (`hstretch), is_class ? _("&Location of class")
+		    `TextEntry (`id (`loc), `opt (`hstretch, `autoShortcut), is_class ? _("&Location of class")
+		// FIXME set shortcut
 		// text entry
 			 : _("Location of printer"), loc),
 		`VSpacing ("cups" == Printer::spooler ? 0 : 1),
@@ -1245,7 +1247,7 @@ that your parallel port is not properly configured.
 	{
 	    UI::ChangeWidget (`id (`prefilter), `ValidChars, "_0123456789abcdefghijklmnopqrstuvwxyz-");
 	}
-	if (-1 != Printer::index && lookup (Printer::printer, "type", "yast2") == "yast2")
+	if (-1 != Printer::index && lookup (Printer::printer, "type", "yast2") == "yast2" && Printer::spooler != "cups")
 	{
 	    UI::ChangeWidget (`id (`raw), `Enabled, false);
 	}
@@ -1256,11 +1258,22 @@ that your parallel port is not properly configured.
 	    ret = UI::UserInput ();
 	    if (ret == `next)
 	    {
-		raw = ("lpd" == Printer::getUriType () ? "false" : UI::QueryWidget (`id (`raw), `Value));
-		ff = UI::QueryWidget (`id (`ff), `Value);
+		if (Printer::spooler != "cups")
+		{
+		    raw = ("lpd" == Printer::getUriType () ? "false" : UI::QueryWidget (`id (`raw), `Value));
+		    ff = UI::QueryWidget (`id (`ff), `Value);
+		}
+		else
+		{
+		    raw = false;
+		    ff = false;
+		}
 		name = tolower (UI::QueryWidget (`id (`name), `Value));
-		info = UI::QueryWidget (`id (`info), `Value);
-		loc = UI::QueryWidget (`id (`loc), `Value);
+		if (Printer::spooler != "lprng")
+		{
+		    info = UI::QueryWidget (`id (`info), `Value);
+		    loc = UI::QueryWidget (`id (`loc), `Value);
+		}
 		if (checkName (forbidden_names, name) && checkLocalQueueName (name))
 		{
 		    if (is_prefilter_editable)
@@ -1334,8 +1347,7 @@ that your parallel port is not properly configured.
 		)
             ]);
 
-        UI (``{
-            OpenDialog (
+        UI::OpenDialog (
                 `HBox (
                     `HSpacing (0.7),
                     `VSpacing (16),
@@ -1343,7 +1355,7 @@ that your parallel port is not properly configured.
                         `VSpacing (0.5),
                         `HSpacing (16),
                         // selection box label
-                        `SelectionBox ( `id (`printers), _("Choose &printer:"), maplist (`i, Printer::printers, ``{return `item (`id(i),i);})),
+                        `SelectionBox ( `id (`printers), _("Choose &printer:"), maplist (`i, printers, ``{return `item (`id(i),i);})),
                         `HBox (
                             `PushButton (`id (`ok), OKButtonLabel ()),
                             `PushButton (`id (`cancel), CancelButtonLabel ())
@@ -1353,7 +1365,7 @@ that your parallel port is not properly configured.
                     `HSpacing (0.7)
                     )
                 );
-        });
+
         string member = "";
         symbol ret = nil;
         while (true)
@@ -1637,6 +1649,7 @@ and if you do not like the result, just press Back.")
 
 	//label of the dialog
 	Wizard::SetContentsButtons (_("Connection for printer:"), contents, getConnectionHelp (), BackButtonLabel (), NextButtonLabel ());
+	Wizard::RestoreBackButton ();
 	symbol ret = nil;
 	symbol type = nil;
 
@@ -1825,6 +1838,7 @@ and if you do not like the result, just press Back.")
 	// dialog caption
 	Wizard::SetContentsButtons (_("Edit configuration"), contents, getEditHelp (uri_type, raw, lookup (Printer::printer, "ownppd", "") != ""),
 	    BackButtonLabel (), NextButtonLabel ());
+	Wizard::RestoreBackButton ();
     }
 
     /**
@@ -1966,18 +1980,20 @@ with a prefilled name?
 			`HStretch ()
 		    ),
 		    `VStretch (),
-		    // chackbox
+		    // checkbox
 		    `CheckBox (`id (`save), _("&Force saving everything"), Printer::save_all),
 		    `VStretch (),
+		    `HBox (`HWeight (999, `HStretch ()), `VBox (
 		    // pushbutton
-		    `HWeight (1, `PushButton (`id (`reinstall), _("Re&install printing packages"))),
+		    `PushButton (`id (`reinstall), `opt (`hstretch), _("Re&install printing packages")),
 		    `VStretch (),
 		    // pushbutton
-		    `HWeight (1, `PushButton (`id (`scratch), _("Cl&ear current configuration"))),
+		    `PushButton (`id (`scratch), `opt (`hstretch), _("Cl&ear current configuration")),
 		    Printer::spooler == "cups" && 0 == Printer::cupsInstallationType () ? `VStretch () :`VSpacing (0),
 		    // pushbutton
-		    Printer::spooler == "cups" && 0 == Printer::cupsInstallationType () ? `HWeight (1, `PushButton (`id (`cupsd), _("CUPS server se&ttings"))) : `VSpacing (0),
+		    Printer::spooler == "cups" && 0 == Printer::cupsInstallationType () ? `PushButton (`id (`cupsd), `opt (`hstretch), _("CUPS server se&ttings")) : `VSpacing (0),
 		    `VStretch ()
+		    ), `HWeight (999, `HStretch ()))
 		),
 		`HSpacing (1)
 	    ),
@@ -1986,6 +2002,7 @@ with a prefilled name?
 
 	// dialog caption
         Wizard::SetContentsButtons (_("Edit configuration"), contents, getAdvancedHelp (), BackButtonLabel (), NextButtonLabel ());
+	Wizard::RestoreBackButton ();
 	symbol ret = nil;
 	while (nil == ret)
 	{
@@ -2018,6 +2035,15 @@ All your changes will be lost.
 		}
 		boolean success = reinstallAll ();
 		break;
+	    }
+	    else if (`cups_server == ret || `cups_client == ret || `lprng == ret)
+	    {
+		symbol spooler = UI::QueryWidget (`id (`spooler), `CurrentButton);
+		string spoolerstring = spooler == `lprng ? "lprng" : (spooler == `cups_client ? "cups-client" : "cups");
+		if (spoolerstring != new_spooler)
+		    UI::ChangeWidget (`id(`next), `Label, AcceptButtonLabel ());
+		else
+		    UI::ChangeWidget (`id(`next), `Label, NextButtonLabel ());
 	    }
 	    else if (`back == ret)
 		break;
@@ -2145,6 +2171,7 @@ the current configuration.
 
 	// dialog box label
 	Wizard::SetContentsButtons (_("Autodetected printer"), contents, getProbedPrinterHelp (2 != lookup (info, "type", 2)), BackButtonLabel (), NextButtonLabel ());
+	Wizard::RestoreBackButton ();
 	if (`none != runProbedPrinterDlg__current)
 	{
 	    UI::ChangeWidget (`id (`action), `CurrentButton, runProbedPrinterDlg__current);
@@ -2421,12 +2448,13 @@ the current configuration.
 	    _("Printers to configure"),
 	    getAutoprobedSelectionBox (runAutoprobedListDialog__current),
 	    true,
-	    // ruchtext caption
+	    // richtext caption
 	    _("<P>Already installed printers and queues:</P>")
 	    + Printer::Summary ([`nonew, `test])
 	    );
 	// dialog label
 	Wizard::SetContentsButtons (_("Printer setup: Autodetected printers"), contents, getDetectedHelp (), BackButtonLabel (), FinishButtonLabel ());
+//	Wizard::ReplaceBackButton(`VSpacing (0));
 	any ret = nil;
 	while (true)
 	{
@@ -2540,6 +2568,14 @@ system will be saved.
 	    BackButtonLabel (),
 	    FinishButtonLabel ()
 	);
+	if (Printer::detection)
+	{
+	    Wizard::RestoreBackButton ();
+	}
+	else
+	{
+//	    Wizard::ReplaceBackButton (`VSpacing (0));
+	}
 	UI::ChangeWidget (`id (`table), `CurrentItem, -1 == Printer::index ? 0 : Printer::index);
 	symbol ret = nil;
 	while (true)

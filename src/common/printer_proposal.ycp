@@ -46,7 +46,20 @@
 		Printerlib::proposal_valid = true;
 		Printer::Reset ();
 		Printer::Read ();
-		Printer::Detect ();
+		if (nil == Printer::detect)
+	        // popup
+		// FIXME: there is a typo, shall be ... If a freeze happens, ...
+		    Printer::detect = UI::AnyQuestionPopup (WarningMsg(), _("Printer detection can now start. In some cases, detection can cause a
+system freeze. If a free happens, select Skip Detection
+when next running the printer configuration.
+
+Detect your printers?
+"), YesButtonLabel (),
+		    // pushbutton
+		    _("&Skip detection"), `focus_yes);
+
+		if (Printer::detect)
+		    Printer::Detect ();
 		Printer::Propose ();
 	    }
 	    if (size (Printer::printcap) > 0)

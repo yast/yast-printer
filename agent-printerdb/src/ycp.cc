@@ -553,11 +553,13 @@ YCPValue WriteTransStrings (const char*fn, const char*type)
 	addTranslatableString (f, CONFIGURATION_STRING, 1);
 	addTranslatableString (f, OPTIONS_STRING, 1);
 	addTranslatableString (f, Y2TESTPAGE_STRING, 1);
-	addTranslatableString (f, CUPS_ONLY_STRING, 1);
-	addTranslatableString (f, LPRNG_ONLY_STRING, 1);
-	addTranslatableString (f, NOT_AVAILABLE_STRING, 1);
+	addTranslatableString (f, CUPS_ONLY_STRING, 0);
+	addTranslatableString (f, LPRNG_ONLY_STRING, 0);
+	addTranslatableString (f, NOT_AVAILABLE_STRING, 0);
 	addTranslatableString (f, PPD_FILE_STRING, 1);
 	addTranslatableString (f, NO_OPTS_STRING, 1);
+	addTranslatableString (f, RAW_MODEL_STRING, 1);
+	addTranslatableString (f, RAW_CONFIG_STRING, 1);
 	fprintf (f, "}\n");
 	fclose (f);
 	return YCPBoolean (true);

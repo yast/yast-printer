@@ -65,10 +65,11 @@
 	// we must wake Epson first
 	wakeUpEpson (device);
 	// now we can run escputil
-	map esc = SCR::Execute (.target.bash_output, sformat ("/usr/bin/escputil -q -u -r %1 -d", device));
+	map esc = SCR::Execute (.target.bash_output, sformat ("/usr/bin/escputil -q -u -r %1 -d & export PID=$! ; sleep 10s ; kill $PID 2>/dev/null || exit 0 && exit 1", device));
 	if (0 != lookup (esc, "exit", ""))
 	    {
-		return "Stylus";
+		return "";
+//		return "Stylus";
 	    }
 	// get model from output
 	string out = lookup (esc, "stdout", "");
@@ -89,7 +90,8 @@
 		i = i + 1;
 		out = substring (out, 1);
 	    }
-	return "Stylus Color";
+	return "";
+//	return "Stylus Color";
     }
 
     /**
@@ -101,13 +103,13 @@
      * @return string device uri as specified
      */
     global define string getCupsUsbDevice (integer device_id, integer vendor_id, string orig_device)``{
-	device_id = device_id & 0xFFFF;
+/*	device_id = device_id & 0xFFFF;
 	vendor_id = vendor_id & 0xFFFF;
 	if (0 == device_id || 0 == vendor_id)
-	    {
+	    {*/
 		return orig_device;
-	    }
-	return sformat ("/dev/usb/lp?vendor=%1&prod_id=%2", tohexWithout0x4digits (device_id), tohexWithout0x4digits (vendor_id));
+/*	    }
+	return sformat ("/dev/usb/lp?vendor=%1&prod_id=%2", tohexWithout0x4digits (device_id), tohexWithout0x4digits (vendor_id));*/
     }
 
     /**
@@ -176,7 +178,11 @@
 	    {
 		if ("epson" == tolower (lookup (pr, "sub_vendor", "")))
 		    {
-			pr = add (pr, "sub_device", getEpsonUsbModel (lookup (pr, "dev_name", "")));
+			string sub_dev = getEpsonUsbModel (lookup (pr, "dev_name", ""));
+			if (sub_dev == "")
+			    sub_dev = lookup (pr, "sub_device", "");
+			pr = add (pr, "sub_device", sub_dev);
+//			pr = add (pr, "sub_device", lookup (pr, "dev_name", "")));
 		    }
 		record = $[
 		    "vendor" : lookup (pr, "sub_vendor", ""),

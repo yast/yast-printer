@@ -23,27 +23,48 @@
     import "Printerlib";
 
     /**
+      * display CUPS initialization popup
+      */
+    global define void showCupsInitPopup () ``{
+	// popup
+	UI::OpenDialog(`opt(`decorated ),`Label(_("Initializing CUPS server...
+This usually takes one or two minutes")));
+    }
+
+    /**
       * check whether spooler (if needed to be running) runns, if not start it
+      * @param boolean true if shall show a popup if needed
       */
     global define void restartSpoolerIfNeeded (boolean showPopup) ``{
         if (Printer::spooler == "cups")
         {
             if (0 == Printer::cupsInstallationType ())
             {
-		integer status = SCR::Execute (.target.bash, "/usr/bin/lpq");
+		boolean close_dialog = false;
+		integer status = SCR::Execute (.target.bash, "/usr/bin/lpq 2>/dev/null");
                 if (status == 0)
                     return;
-		UI::OpenDialog(`opt(`decorated ),`Label(_("Initializing CUPS server...
-This usually takes one or two minutes")));
+		if (SCR::Read (.target.size, "/etc/cups/ppds.dat") <= 0)
+		{
+		    close_dialog = true;
+		    showCupsInitPopup ();
+		}
                 status = SCR::Execute (.target.bash, "/etc/init.d/cups status");
                 if (0 != status)
                     SCR::Execute (.target.bash, "/etc/init.d/cups start");
                 status = 1;
+		integer attempts = 0;
                 while (true)
                 {
-                    status = SCR::Execute (.target.bash, "/usr/bin/lpq");
+                    status = SCR::Execute (.target.bash, "/usr/bin/lpq >/dev/null");
                     if (status == 0)
                         break;
+		    attempts = attempts + 1;
+		    if (attempts > 5 && ! close_dialog)
+		    {
+			close_dialog = true;
+			showCupsInitPopup ();
+		    }
                     sleep (1000);
                     status = SCR::Execute (.target.bash, "/etc/init.d/cups status");
                     if (0 != status)
@@ -54,7 +75,10 @@ This usually takes one or two minutes")));
 			break;
                     }
                 }
-		UI::CloseDialog ();
+		if (close_dialog)
+		{
+		    UI::CloseDialog ();
+		}
             }
         }
     }
@@ -458,7 +482,7 @@ press the 'OK' button.")),
 	    string p = sformat (".printerdb.testpg_options.\"%1\".\"%2\".\"%3\".\"%4\".\"%5\".\"%6\"",
 		    lookup (printer, "vendor", ""),
 		    lookup (printer, "device", ""),
-		    lookup (printer, "config", ""),
+		    lookup (printer, "raw", false) ? "raw" : lookup (printer, "config", ""),
 		    lookup (printer, "vendor_ieee", ""),
 		    lookup (printer, "device_ieee", ""),
 		    ce
@@ -1159,16 +1183,16 @@ for any file in directory /etc/lpdfilter"));
                             `VBox (
                                 `VSpacing (1),
 				// radiobutton
-                                `RadioButton (`id (`cups_server), `opt (`hstretch), _("CUPS full &server installation"), spooler == "cups"),
+                                `RadioButton (`id (`cups_server), `opt (`hstretch, `notify), _("CUPS full &server installation"), spooler == "cups"),
                                 `VSpacing (0.5),
 				// radiobutton
-                                `RadioButton (`id (`cups_client), `opt (`hstretch), _("CUPS &client only installation"), spooler == "cups-client"),
+                                `RadioButton (`id (`cups_client), `opt (`hstretch, `notify), _("CUPS &client only installation"), spooler == "cups-client"),
                                 `VSpacing (0.5),
 				// radiobutton
-                                `RadioButton (`id (`lprng), `opt (`hstretch), _("&LPRng"), spooler == "lprng"),
+                                `RadioButton (`id (`lprng), `opt (`hstretch, `notify), _("&LPRng"), spooler == "lprng"),
 				none ? `VSpacing (0.5) : `VSpacing (0),
 				// radiobutton
-				none ? `RadioButton (`id (`none), `opt (`hstretch), _("L&eave current status"), spooler == "current") : `VSpacing (0),
+				none ? `RadioButton (`id (`none), `opt (`hstretch, `notify), _("L&eave current status"), spooler == "current") : `VSpacing (0),
                                 `VSpacing (1)
                             ),
                             `HSpacing (1)
@@ -1192,7 +1216,12 @@ for any file in directory /etc/lpdfilter"));
 		    `HWeight (1, `PushButton (`id (`ok), OKButtonLabel ())),
 		    `HWeight (1, `PushButton (`id (`cancel), abort_msg))))
 	);
-	ret = UI::UserInput ();
+	while (true)
+	{
+	    ret = UI::UserInput ();
+	    if (ret == `ok || ret == `cancel)
+		break;
+	}
 	if (`ok == ret)
 	{
 	    ret = UI::QueryWidget (`id (`spooler), `CurrentButton);
@@ -1299,7 +1328,7 @@ If you want to only repair current configuration, select LPRng.
 If you leave current status, your spooler doesn't have
 to run properly"),
 	    // pushbutton
-	    _("Abo&tr setup"));
+	    _("Abo&rt setup"));
 	    if (`cups_server == result)
 	    {
 		Printerlib::switchTo ("cups");
