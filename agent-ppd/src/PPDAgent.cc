@@ -60,6 +60,13 @@ YCPValue PPDAgent::Read(const YCPPath &path, const YCPValue& arg)
 	    }
 	}
     }
+    else if (path->length() == 1 && path->component_str(0) == "sort_items")
+    {
+	if (arg->isMap ())
+	{
+	    return database.sortItems (arg->asMap ());
+	}
+    }
     else if (path->length() == 2 && path->component_str(0) == "file")
     {
 	if (path->component_str(1)=="open" && arg->isList ())

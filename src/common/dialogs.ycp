@@ -29,33 +29,11 @@
     include "printer/dialogs-lprng.ycp";
 
 
-    // popup
-    string __tmp__ = _("Detecting CUPS server...");
-
-    // popup
-    __tmp__ = _("Looking for CUPS server...");
-
     /**
       * for temporary storing of printer model
       * because of `back button
       */
     global map tmp_printer_manuf_model = $[];
-
-    /**
-      * Ask user to install requested packages
-      * @param packages list of package names
-      * @return boolean true if wants to install
-      */
-    global define boolean AskInstallPackages (list packages) ``{
-	// yes-no popup, %1 is list of package names
-	string popup = sformat (_("For the selected function, the additional packages
-%1
-must be installed.
-
-Install them now?
-"), mergestring (packages, ", "));
-	return UI::YesNoPopup (popup);
-    }
 
     /**
       * Casts value type to integer if you know what I am talking about.
@@ -298,10 +276,9 @@ that your serial ports are not properly configured.
 	{
 	    if (Printer::conf_detected)
 	    {
-		// message popup // FIXME in future: better ..found..
 		UI::MessagePopup (_("Warning!
 
-USB printer detection finds at least two printers
+USB printer detection found at least two printers
 that have the same identification.
 You must select and configure them manually.
 Do the \"Test\" to make sure which printer is
@@ -311,10 +288,9 @@ actually selected.
 	    }
 	    else
 	    {
-		// message popup // FIXME in future: better ..found..
 		UI::MessagePopup (_("Warning!
 
-USB printer detection finds at least two printers
+USB printer detection found at least two printers
 that have the same identification.
 Do the \"Test\" to make sure which printer is
 actually selected.
@@ -562,39 +538,21 @@ actually selected.
 	integer port = 0;
 
 	// check necessary packages
+	list packages_to_check = [];
 	if (type == "samba")
 	{
-            if (Mode::config)
-            {
-		import "Require";
-		Require::RequireAndConflictTarget (["samba-client"], [], "");
-            }
-            else if (! Pkg::IsProvided ("samba-client")
-		&& AskInstallPackages (["samba-client"]))
-	    {
-		import "PackageCallbacks";
-		Pkg::DoProvide (["samba-client"]);
-		Pkg::PkgSolve ();
-		Pkg::PkgCommit (0);
-		WFM::CallModule("inst_suseconfig", []);
-	    }
+	    packages_to_check = ["samba-client"];
 	}
 	else if (type == "novell")
 	{
-            if (Mode::config)
-            {
-		import "Require";
-		Require::RequireAndConflictTarget (["ncpfs"], [], "");
-            }
-            else if (! Pkg::IsProvided ("ncpfs")
-		&& AskInstallPackages (["ncpfs"]))
-            {
-		import "PackageCallbacks";
-		Pkg::DoProvide (["ncpfs"]);
-		Pkg::PkgSolve ();
-		Pkg::PkgCommit (0);
-		WFM::CallModule("inst_suseconfig", []);
-	    }
+	    packages_to_check = ["ncpfs"];
+	}
+	if (packages_to_check != [])
+	{
+	    import "Require";
+	    Require::RequireAndConflictTarget (packages_to_check, [],
+		"<P>For the selected function, the additional packages<BR>
+<TT>%1</TT><BR> must be installed.<BR><BR> Install them now?</P>");
 	}
 
 	boolean supported = testSupportedQueue (type);
@@ -1043,8 +1001,13 @@ with the SuSE database of printers only.</B></P>
 		// selection boc title
 	    _("&Select manufacturer:"),
 	    Printer::db == `foomatic
-// FIXME vendor labels
-		? maplist (`k, `v, Printer::foomatic, ``(k))
+		?   {
+			map vendorsmap = mapmap (`kk, `vv,
+			    filter (`k, `v, Printer::foomatic,
+				``(is (k, string))),
+			    ``([kk, vv[`label]:kk]));
+			return sortitems (vendorsmap);
+		     }
 		: SCR::Read (.printerdb.vendors, [ manuf, manuf_ieee ]));
 
 	list model_val = [];
@@ -1118,74 +1081,18 @@ with the SuSE database of printers only.</B></P>
 		    manuf = select (temp, 0, "");
 		    manuf_ieee = select (temp, 1, "");
 		}
-		map modnames = $[];
-		if (Printer::db == `foomatic)
-		{
-		    map models = filter (`k, `v,
-			Printer::foomatic[manuf_db]:$[],
-			``(is (k, string)));
-		    foreach (`k, `v, models, ``{
-			string l = v[`label]:k;
-			boolean add_blank = true;
-			while (haskey (modnames, l))
-			{
-			    y2warning ("Printer label %1:%2 doubled", manuf_db,
-				v[`label]:"");
-			    if (add_blank)
-				l = l + " ";
-			    l = l + "I";
-			    add_blank = false;
-			}
-			modnames[toupper (l)] = k;
-		    });
-
-		}
-
 		modelsel = `SelectionBox (`id (`modelsel), `opt (`notify),
 					  // selection box caption
 					  _("Select &model:"),
 		    Printer::db == `foomatic
-
-			? maplist (`k, `v, modnames, ``{
-			    string cur_label
-				= Printer::foomatic[manuf_db, v, `label]:k;
-			    if (toupper (substring (cur_label, 0, 7))
-				== "DESKJET")
-			    {
-				cur_label
-				    = "DeskJet" + substring (cur_label, 7);
-			    }
-                            else if (toupper (substring (cur_label, 0, 8))
-				== "LASERJET")
-                            {
-                                cur_label
-                                    = "LaserJet" + substring (cur_label, 8);
-                            }
-                            else if (toupper (substring (cur_label, 0, 9))
-				== "OFFICEJET")
-                            {
-                                cur_label
-                                    = "OfficeJet" + substring (cur_label, 9);
-                            }
-                            else if (toupper (substring (cur_label, 0, 10))
-				== "PHOTOSMART")
-                            {
-                                cur_label
-                                    = "PhotoSmart" + substring (cur_label, 10);
-                            }
-	                    else if (toupper (substring (cur_label, 0, 12))
-                                == "Stylus COLOR")
-                            {
-                                cur_label
-                                    = "Stylus Color"
-					+ substring (cur_label, 12);
-                            }
-			    else if (regexpmatch (cur_label, "BJ[C]* [0-9]*"))
-				cur_label = regexpsub (cur_label,
-				    "(BJ[C]*) ([0-9]*.*)", "\\1-\\2");
-
-			    return `item (`id (v), cur_label);
-			})
+			? {
+			    map modelsmap = mapmap (`kk, `vv,
+				filter (`k, `v,
+				    Printer::foomatic[manuf_db]:$[],
+				    ``(is (k, string))),
+				``([kk, vv[`label]:kk]));
+			    return sortitems (modelsmap);
+			  }
 			: SCR::Read (add (.printerdb.models, manuf),
 			    [ model, model_ieee ]));
 		UI::ReplaceWidget (`id (`modelsel_rep), modelsel);
@@ -1578,9 +1485,9 @@ with the SuSE database of printers only.</B></P>
 		    string complabel = composite["values", v]:v;
 		    cfgs = add (cfgs, `item (
 			`id (sformat ("%1__\n__%2__\n__%3", k, optname, v)),
-			sformat ("    %1"/* (%2)"*/, complabel/*, ppd_label_part*/)));
+			sformat ("    %1", complabel)));
 		    cfgsmap[sformat ("%1__\n__%2__\n__%3", k, optname, v)]
-			= sformat ("%1"/* (%2)"*/, complabel/*, ppd_label_part*/);
+			= sformat ("%1", complabel);
                 });
 
 	    });
@@ -1588,8 +1495,7 @@ with the SuSE database of printers only.</B></P>
 	    Printer::printer["database"] = "foomatic";
 	    model = Printer::printer["device"]:"";
 	    list suse_cfgs = SCR::Read (add (.printerdb.configscups, model));
-//	    list suse_cfgs = SCR::Read (add (.printerdb.configsrt,model), Printer::spooler);
-	    list tmp_suse_items = suse_cfgs;//[1]:[];
+	    list tmp_suse_items = suse_cfgs;
 	    list suse_items = [];
 	    if (ppd_only)
 	    {
@@ -1874,13 +1780,6 @@ with the SuSE database of printers only.</B></P>
             }
 	    // add comment
 	    Printer::printer["comment"] = cfgsmap[config_id]:config_id;
-/*	    foreach (`i, foomatic ? cfgs : select (cfgs, 1, []), ``{
-		if (select (select (i, 0, []), 0, nil) == config_id
-		    && select (i, 1, nil) != nil)
-		{
-		    Printer::printer["comment"] = select (i, 1, nil);
-		}
-	    });*/
 
 	    Printer::printer = add (Printer::printer, "config", config);
 	    // FIXME: check if it is not necessary to clean options.
@@ -2012,10 +1911,6 @@ with the SuSE database of printers only.</B></P>
 	{
 	    UI::ChangeWidget (`id (`prefilter), `ValidChars, "_0123456789abcdefghijklmnopqrstuvwxyz-");
 	}
-/*	if (-1 != Printer::index && lookup (Printer::printer, "type", "yast2") == "yast2" && Printer::spooler != "cups")
-	{
-	    UI::ChangeWidget (`id (`raw), `Enabled, false);
-	}*/
 
 	any ret = nil;
 	string fwd = "";
@@ -2028,12 +1923,10 @@ with the SuSE database of printers only.</B></P>
 		raw = ("lpd" == Printer::getUriType () ? true : UI::QueryWidget (`id (`raw), `Value));
 		if (Printer::spooler != "cups")
 		{
-//		    raw = ("lpd" == Printer::getUriType () ? true : UI::QueryWidget (`id (`raw), `Value));
 		    ff = UI::QueryWidget (`id (`ff), `Value);
 		}
 		else
 		{
-//		    raw = false;
 		    ff = false;
 		}
 		name = tolower (UI::QueryWidget (`id (`name), `Value));
@@ -2090,12 +1983,7 @@ with the SuSE database of printers only.</B></P>
 	    if (old_name != "" && old_name != name)
 	    {
 		Printer::addToDeleted (old_name, is_class ? "class" : "printer");
-//		Printer::deleted = add (Printer::deleted, $["name": old_name, "type": is_class ? "class" : "printer",
-//			"states" : $["cups-state" : "changed", "lprng-state" : "changed"] ]);
 	    }
-
-//	    if (ret == `next && Printer::printer["modelset_required"]:false)
-//		ret = `model;
 	}
 	y2milestone ("Returning %1", ret);
 	return ret;
@@ -2973,10 +2861,6 @@ All your changes will be lost.
 	    {
 		symbol spooler = UI::QueryWidget (`id (`spooler), `CurrentButton);
 		string spoolerstring = spooler == `lprng ? "lprng" : (spooler == `cups_client ? "cups-client" : "cups");
-//		if (spoolerstring != new_spooler)
-//		    UI::ChangeWidget (`id(`next), `Label, AcceptButtonLabel ());
-//		else
-//		    UI::ChangeWidget (`id(`next), `Label, NextButtonLabel ());
 	    }
 	    else if (`back == ret)
 		break;
@@ -4021,6 +3905,87 @@ All your changes will be lost.
     }
 
     /**
+     * Change parallel port settings. This function must be called when
+     * wizard dialog has been set up. Hence it suppose Wizard library to
+     * be imported.
+     * @return symbol for wizard sequencer
+     */
+    global define symbol editParallelPort () ``{
+        map params = SCR::Read (.modules.options, "parport_pc");
+        // dialog caption
+        Wizard::SetContentsButtons (_("Parallel port settings"), `VBox (
+                    `VStretch (),
+                    // textentry label
+                    `TextEntry (`id (`io), _("IO &Ports of parallel ports:"), lookup (params, "io", "")),
+                    `VSpacing (2),
+                    `VStretch ()
+                    ),
+                textEditParallelPort (), BackButtonLabel (), OKButtonLabel ());
+        symbol r = UI::UserInput (); 
+        if (`next == r)
+        {
+            string s = UI::QueryWidget (`id (`io), `Value);
+            if (nil == s || "" == s)
+            {
+                params = filter (`k, `v, params, ``("io" != k));
+            }
+            else
+            {
+                params = add (params, "io", s);
+            }
+            SCR::Write (.modules.options, 0 == size (params) ? nil : params, "parport_pc");
+        }
+        return r;
+    }
+
+    /**
+     * Change serial port settings. This function must be called when
+     * wizard dialog has been set up. Hence it suppose Wizard library to
+     * be imported.
+     * @return symbol for wizard sequencer
+     */
+    global define symbol editSerialPort () ``{
+        string uri = lookup (Printer::printer, "tmpuri", "parallel");
+        integer baudrate = Printerlib::getUriBaudrate (uri);
+        string ser_settings = Printerlib::getUriValue (uri, "ty");
+
+        term contents = `VBox (
+                                // combobox label
+                                `ComboBox (`id (`baudent), `opt (`editable, `hstretch), _("Baud &rate:"),
+                                      [ sformat ("%1", baudrate),
+                                      "1200","2400", "4800", "9600", "19200", "38400", "57600", "115200"
+                                      ]),
+                                // textentry label
+                                `TextEntry (`id (`ser_settings), `opt (`hstretch), _("Serial Port &Settings"), ser_settings)
+                        );
+
+        // dialog caption
+        Wizard::SetContentsButtons (_("Other settings"), contents,  textEditSerialPort (), BackButtonLabel (), NextButtonLabel ());
+        symbol r = nil;
+        while (r != `back && r != `abort)
+        {
+            r = UI::UserInput ();
+
+            ser_settings = UI::QueryWidget (`id (`ser_settings), `Value);
+            string tmp = UI::QueryWidget (`id (`baudent), `Value);
+            baudrate = tointeger (tmp);
+            if (`next == ret && !testBaudRate (baudrate))
+                ret = nil;
+
+            if (`next == r)
+            {
+                uri = "serial:" + getUriDevice (uri) + sformat ("?baudrate=%1+ty=%2", baudrate, ser_settings);
+                Printer::printer = add (Printer::printer, "tmpuri", uri);
+                return r;
+            }
+            if (`abort == r && ! reallyAbort ())
+                r = nil;
+        }
+        return r;
+    }
+
+
+    /**
       * Get configuration type for queue
       * @return symbol for wizard sequencer
       */
@@ -4144,8 +4109,8 @@ All your changes will be lost.
 	    "redetect" :	[ ``(runProbeDialog ()), true ],
 	    "storeprinter" :	[ ``(storePrinter ()) , true ],
 	    "storequeue" :	[ ``(storeQueue ()), true ],
-	    "ppdetails" :	[ ``(Printerlib::editParallelPort ()), true ],
-	    "spdetails" :	[ ``(Printerlib::editSerialPort ()), true ],
+	    "ppdetails" :	[ ``(editParallelPort ()), true ],
+	    "spdetails" :	[ ``(editSerialPort ()), true ],
 	    "revertdb" :	[ ``(revertDbPopup ()), true ],
 	    "queue_conf" :	[ ``(queueConfType ()), true ],
 	    "main_wz" :		``(WizardSequencer (getAliases (), main_sequence)),
