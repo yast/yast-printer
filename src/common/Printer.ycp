@@ -966,11 +966,15 @@ END { if (!used) print \"ServerName %1\" }
 		if (SCR::Read (.init.scripts.exists, "cups"))
 		    Runlevel::ServiceAdjust ("cups", "disable");
 		saveClientHostName ();
-		// popup
-		boolean delete = Pkg::IsProvided ("cups") && UI::YesNoPopup (_("Some packages installed are not needed
+		boolean delete = false;
+		if (! Mode::autoinst)
+		{
+		    // popup
+		    delete = Pkg::IsProvided ("cups") && UI::YesNoPopup (_("Some packages installed are not needed
 for CUPS client-only installation. 
 Remove them?
 "));
+		}
 		if (delete)
 		{
 		    import "PackageCallbacks";
