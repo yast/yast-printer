@@ -956,9 +956,10 @@
     /**
      * Get nice name of some device.
      * @param dev device
+     * @param detected boolean set to true if displaying detected dialog
      * @return device nice name
      */
-    global define string getDeviceNiceName (string dev) ``{
+    global define string getDeviceNiceName (string dev, boolean detected) ``{
 	if (regexpmatch (dev, "//.*?serial=.*")
 	    && SCR::Read (.target.size, "/usr/lib/cups/backend/usb") > 0)
 	{
@@ -975,6 +976,8 @@
 		if (e[0]:"" == dev)
 		    ret = e[1]:"";
 	    });
+	    if (detected)
+		ret = "USB";
 	    if (ret != "" && ret != nil)
 		return sformat ("%1 (%2)", ret, dev);
 	}
