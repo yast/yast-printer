@@ -347,7 +347,7 @@
             SCR::Write (.ppd.db.create, "");
 	    UI::OpenDialog (`ProgressBar (`id(`pr),
 		// progress bar label
-		_("Initializing database of printers"), 100, 0));
+		_("Initializing database of printers..."), 100, 0));
 	    integer result = 0;
 	    while (true)
 	    {
@@ -363,8 +363,9 @@
 	    if (result < 0)
 	    {
 		// error report
-		Report::Error (_("An error occured while creating database
-of printers"));
+		Report::Error (_("An error occurred while creating the database
+of printers.
+"));
 	    }
         }
 	Printer::foomatic= SCR::Read (.target.ycp, "/var/lib/YaST2/ppd_db.ycp");
@@ -745,9 +746,11 @@ This usually takes one or two minutes")),
 	else
 	    {
 		// message box
+		// the ',' character isn't separator,
+		//  but one of a list of characters
 		UI::MessagePopup (_("Invalid host name. It must be
 shorter than fifty characters and cannot contain
-:, / and @.
+:, / or @.
 "));
 	    }
 	return false;
@@ -769,8 +772,10 @@ shorter than fifty characters and cannot contain
         else
             {
                 // message box
+                // the ',' character isn't separator,
+                //  but one of a list of characters
                 UI::MessagePopup (_("Invalid user name. It cannot 
-contain characters :, / and @.
+contain the characters :, / and @.
 "));
             }
         return false;
@@ -792,8 +797,10 @@ contain characters :, / and @.
         else
             {
                 // message box
+                // the ',' character isn't separator,
+                //  but one of a list of characters
                 UI::MessagePopup (_("Invalid password. It cannot 
-contain characters :, / and @.
+contain the characters :, / and @.
 "));
             }
         return false;
@@ -883,7 +890,7 @@ queue you want to use."));
 
     if (do_not_test) {
 		// message popup
-	    UI::MessagePopup (_("Unable to print a test page, you are using different spooler."));
+	    UI::MessagePopup (_("Unable to print a test page. You are using different spooler."));
         return false;
     }
 
@@ -1250,8 +1257,9 @@ When the whole page is printed, press
             }
 	return UI::AnyQuestionPopup( NoHeadline(),
 // question popup
-_("Really leave Printers configuration without saving?
-All changes will be lost!"),
+_("Really leave printer configuration without saving?
+All changes will be lost.
+"),
                                       YesButtonLabel(),
                                       NoButtonLabel(),
                                       `focus_no );
@@ -1283,7 +1291,7 @@ All changes will be lost!"),
 	return Printer::spooler == "cups" ?
 		`VBox (
 		    // radiobutton
-		    queue ? `RadioButton (`id (`existing), `opt (`hstretch), _("N&ew queue to configured printer"), type == "queue") : `VSpacing (0),
+		    queue ? `RadioButton (`id (`existing), `opt (`hstretch), _("N&ew Queue to Configured Printer"), type == "queue") : `VSpacing (0),
 		    // label
 		    `Label (`opt (`hstretch), _("LPD and IPP network printing:")),
 		    // radiobutton
@@ -1301,7 +1309,7 @@ All changes will be lost!"),
 		    // label
 		    `Label (`opt (`hstretch), _("Other:")),
 		    // radiobutton
-		    `RadioButton (`id (`pipe), `opt (`hstretch),     _("&Pipe printing"), type == "pipe"),
+		    `RadioButton (`id (`pipe), `opt (`hstretch),     _("&Pipe Printing"), type == "pipe"),
 		    // radiobutton
 		    `RadioButton (`id (`other), `opt (`hstretch),  _("&Other Printer (set URI)"), "" == knowConnection (type) && type != "class"),
 		    // radiobutton
@@ -1315,12 +1323,12 @@ All changes will be lost!"),
 		    // radiobutton
 //                    `RadioButton (`id (`novell), `opt (`hstretch, `disabled),   _("IPX printing (Nove&ll printer)"), type == "novell"),
 		    // radiobutton
-//		    `RadioButton (`id (`pipe), `opt (`hstretch, `disabled),     _("&Pipe printing"), type == "pipe")
+//		    `RadioButton (`id (`pipe), `opt (`hstretch, `disabled),     _("&Pipe Printing"), type == "pipe")
 		    )
 		: Printer::spooler == "lprng" ?
                 `VBox (
 		    // radiobuton
-		    queue ? `RadioButton (`id (`existing), `opt (`hstretch), _("N&ew queue to configured printer"), type == "queue") : `VSpacing (0),
+		    queue ? `RadioButton (`id (`existing), `opt (`hstretch), _("N&ew Queue to Configured Printer"), type == "queue") : `VSpacing (0),
 		    // label
                     `Label (`opt (`hstretch), _("LPD and IPP network printers:")),
 		    // radiobutton
@@ -1340,7 +1348,7 @@ All changes will be lost!"),
 		    // label
 		    `Label (`opt (`hstretch), _("Other printing:")),
 		    // radiobutton
-		    `RadioButton (`id (`pipe), `opt (`hstretch),     _("&Pipe printing"), type == "pipe"),
+		    `RadioButton (`id (`pipe), `opt (`hstretch),     _("&Pipe Printing"), type == "pipe"),
 		    // label
 		    `Label (`opt (`hstretch), _("Unsupported printing in LPRng:")),
 		    // radiobutton
@@ -1353,7 +1361,7 @@ All changes will be lost!"),
 		: //unknown spooler
 		`VBox (
 		    // radiobutton
-		    queue ? `RadioButton (`id (`existing), `opt (`hstretch), _("N&ew queue to configured printer"), type == "queue") : `VSpacing (0),
+		    queue ? `RadioButton (`id (`existing), `opt (`hstretch), _("N&ew Queue to Configured Printer"), type == "queue") : `VSpacing (0),
 		    // label
                     `Label (`opt (`hstretch), _("LPD and IPP network printing:")),
 		    // radiobutton
@@ -1377,7 +1385,7 @@ All changes will be lost!"),
 		    // radiobutton
                     `RadioButton (`id (`other), `opt (`hstretch),  _("&Other Printer (set URI)"), "" == knowConnection (type) && type != "class"),
 		    // radiobutton
-                    `RadioButton (`id (`pipe), `opt (`hstretch),     _("&Pipe printing"), type == "pipe"),
+                    `RadioButton (`id (`pipe), `opt (`hstretch),     _("&Pipe Printing"), type == "pipe"),
 		    // radiobutton
                     `RadioButton (`id (`class), `opt (`hstretch),  _("CUPS &class"), type == "class")
 		);
@@ -1395,7 +1403,7 @@ All changes will be lost!"),
         return all ?
 	    `VBox (
 		    // radiobutton
-		queue ? `RadioButton (`id (`existing), `opt (`hstretch), _("N&ew queue to configured printer"), type == "queue") : `VSpacing (0),
+		queue ? `RadioButton (`id (`existing), `opt (`hstretch), _("N&ew Queue to Configured Printer"), type == "queue") : `VSpacing (0),
 		    // label
 		`Label (`opt (`hstretch), _("Local printing:")),
 		    // radiobutton
@@ -1523,7 +1531,7 @@ All changes will be lost!"),
 		// popup
 		 UI::MessagePopup (_("Invalid queue name. It must be
 shorter than 127 characters, start with a letter,
-and only contain 0..9, a..z and _.
+and only contain 0...9, a...z, and _.
 "));
 		return false;
 	    }
@@ -1547,7 +1555,7 @@ and only contain 0..9, a..z and _.
 	    {
 		// message box
 		UI::MessagePopup (_("Invalid remote queue name. 
-It cannot contain characters @ and :.
+It cannot contain the characters @ and :.
 "));
 	    }
 	return false;
@@ -1838,10 +1846,10 @@ for any file in directory /etc/lpdfilter"));
                             `VBox (
                                 `VSpacing (1),
 				// radiobutton
-				`RadioButton (`id (`foomatic), `opt (`hstretch, `notify), _("CUPS with &Foomatic database"), spooler == "cups" && db == `foomatic),
+				`RadioButton (`id (`foomatic), `opt (`hstretch, `notify), _("CUPS with &Foomatic Database"), spooler == "cups" && db == `foomatic),
 				`VSpacing (0.5),
 				// radiobutton
-                                `RadioButton (`id (`cups_server), `opt (`hstretch, `notify), _("CUPS with &SuSE printer database"), spooler == "cups" && db != `foomatic),
+                                `RadioButton (`id (`cups_server), `opt (`hstretch, `notify), _("CUPS with &SuSE Printer Database"), spooler == "cups" && db != `foomatic),
                                 `VSpacing (0.5),
 				// radiobutton
                                 `RadioButton (`id (`cups_client), `opt (`hstretch, `notify), _("CUPS &client-only installation"), spooler == "cups-client"),
@@ -1923,7 +1931,7 @@ for any file in directory /etc/lpdfilter"));
 	{
 	    // popup message
 	    symbol result = chooseSpooler (_("No printing system installed. 
-Choose the spooler to 
+Select the spooler to 
 to install and configure.
 "),
 	    // pushbutton
@@ -1960,7 +1968,7 @@ to install and configure.
 	{
 	    // popup message
             symbol result = chooseSpooler (_("Both LPRng and CUPS are installed.
-Choose the spooler  
+Select the spooler  
 to leave installed and configure.
 "),
 	    // pushbutton

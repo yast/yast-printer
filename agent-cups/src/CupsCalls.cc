@@ -135,7 +135,7 @@ bool setPrinter(const char*name,const char*info,const char*loc,const char*state,
   /*
    * Do the request and get back a response...
    */
-  if(NULL!=ppd)
+  if(NULL!=ppd && '\0' != ppd[0])
     response = cupsDoFileRequest(http,request,"/admin/",ppd);
   else
     response = cupsDoRequest(http,request,"/admin/");
