@@ -565,6 +565,7 @@ start_from_scratch:
                 sup_status = 2;
 	    mi.support = sup_status;
 
+	    mlabel = updateLabel (mlabel);
             string old_label = mi.label;
             bool old_fuzzy = mi.fuzzy_label;
             bool new_fuzzy
@@ -1308,6 +1309,7 @@ void PPD::preprocess(PPD::PPDInfo info, PPDInfo *newinfo) {
         label = killbraces(label);
 	if (label == "")
 	    label = printer;
+	label = updateLabel (label);
 
         if (((mi.label == "" || mi.label.size () > label.size ()))
 	    && label.size () > 0)
@@ -1794,6 +1796,55 @@ bool PPD::setCheckMethod (YCPSymbol method) {
 	return true;
     }
     return false;
+}
+
+string PPD::updateLabel (const string& label) {
+    if (strupper (label.substr (0, 7)) == "DESKJET")
+	return "DeskJet" + label.substr (7);
+    if (strupper (label.substr (0, 8)) == "LASERJET")
+        return "LaserJet" + label.substr (8);
+    if (strupper (label.substr (0, 9)) == "OFFICEJET")
+        return "OfficeJet" + label.substr (9);
+    if (strupper (label.substr (0, 10)) == "PHOTOSMART")
+        return "PhotoSmart" + label.substr (10);
+    if (strupper (label.substr (0, 12)) == "STYLUS COLOR")
+        return "Stylus Color" + label.substr (12);
+    return label;
+}
+
+struct ltstr {
+    bool operator()(const string& s1, const string& s2) const
+    {
+	return strcoll(s1.c_str(), s2.c_str()) < 0;
+    }
+};
+
+YCPList PPD::sortItems (const YCPMap& items) {
+    map<string, string, ltstr> listmap;
+    YCPMapIterator it1 = items->begin();
+    for (; it1 != items->end(); it1++)
+    {
+	YCPValue k = it1.key();
+	YCPValue v = it1.value();
+	if (v->isString () && k->isString ())
+	{
+	    string val = v->asString ()->value();
+	    string key = k->asString ()->value();
+	    listmap[val] = key;
+	}
+    }
+    YCPList ret;
+    map<string, string, ltstr>::const_iterator it = listmap.begin();
+    for (; it != listmap.end(); it++)
+    {
+	YCPTerm k = YCPTerm ("id", true);
+	k->add (YCPString (it->second));
+	YCPTerm item = YCPTerm ("item", true);
+	item->add (k);
+	item->add (YCPString (it->first));
+	ret->add (item);
+    }
+    return ret;
 }
 
 

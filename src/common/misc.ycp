@@ -21,7 +21,23 @@
     textdomain "printer";
     import "Printer";
     import "Printerlib";
+    import "Console";
 
+
+    global define list sortitems (map items) ``{
+	string enc = Console::encoding;
+	items = mapmap (`k, `v, items, ``(
+	    [k, UI::Recode ("UTF-8", enc, v)]));
+	list l = SCR::Read (.ppd.sort_items, items);
+	l = maplist (`i, l, ``{
+	    string label = select (i, 1, "");
+	    label = UI::Recode (enc, "UTF-8", label);
+	    i = remove (i, 2);
+	    i = add (i, label);
+	    return i;
+	});
+	return l;
+    }
 
     /**
       * Check if paper size is set and if not, then set the defaul
@@ -307,7 +323,6 @@ preparation for autoinstallation.
 	    [ppdfile_orig, SCR::Read (.target.tmpdir)]);
         map options = SCR::Read (.ppd.file.options, [ppdfile, ""]);
         list opts = options["data"]:[];
-// FIXME multiple composite options checking ????
             integer ind = -1;
             boolean found = true;
             find (`i, opts, ``{
@@ -421,17 +436,6 @@ of printers.
         }
 	SCR::Execute (.target.bash, "test -f /var/lib/YaST2/ppd_db_list && rm -f /var/lib/YaST2/ppd_db_list");
 	Printer::foomatic= SCR::Read (.target.ycp, "/var/lib/YaST2/ppd_db.ycp");
-
-/*	string res = "";
-	foreach (`k, `v, Printer::foomatic, ``{
-	    foreach (`kk, `vv, v, ``{
-		if (is (kk, string) && vv[`support]:3 == 3)
-		{
-		    res = res + sformat ("%1|%2|||\n", k, vv[`label]:"");
-		}
-	    });
-	});
-	SCR::Write (.target.string, "/tmp/ppdfiles", res);*/
     }
 
     /**
@@ -686,13 +690,11 @@ This usually takes one or two minutes")),
 	Printer::save_all = false;
 
 	Printerlib::stopServices();
-    // added "cups-drivers-stp"
 	list to_delete = ["plp", "lprold", "lprng", "cups", "cups-client", "cups-drivers", "cups-drivers-cs", "cups-drivers-de", "cups-drivers-stp",
 	    "cups-libs", "cups-devel", "lpdfilter", "filters", "ghostscript-fonts-other", "ghostscript-x11", "ghostscript-fonts-std", "ghostscript-library",
 	    "ghostscript-fonts-kanji", "ghostscript-serv", "ghostscript-fonts-rus", "ghostscript-library", "a2ps"];
 	to_delete = filter (`e, to_delete, ``(Pkg::IsProvided (e) == true));
 
-    // have to add "cups-libs", because it is not solved (bug #19426)
 	list to_install = ["ghostscript-library", "ghostscript-x11", "ghostscript-fonts-std", "ghostscript-fonts-other", "a2ps", "cups-libs"];
 
 	y2milestone("deleting: %1", to_delete);
@@ -1126,7 +1128,7 @@ press 'OK'.
 	if (0 == testpage_type)
 	{
 	    map consolefonts = SCR::Read (.target.yast2, "consolefonts.ycp");
-	    string ce = select (lookup (consolefonts, UI::GetLanguage (false), []), 4, "X");
+	    string ce = select (lokup (consolefonts, UI::GetLanguage (false), []), 4, "X");
 	    string opts = SCR::Read (.target.tmpdir) + "/testpg.options";
 	    if (foomatic)
 	    {

@@ -56,19 +56,6 @@
 	}
     };
     /**
-     * Returns haxadecimal value of input number
-     * @param i number to be converted
-     * @return string number
-     */
-    define string tohexWithout0x4digits (integer i) ``{
-	string hex = substring (tohexstring (i), 2);
-	if (size (hex) < 4)
-	    hex = "0000" + hex;
-	if (size (hex) > 4)
-	    hex = substring (hex, size (hex) - 4);
-	return hex;
-    }
-    /**
      * Sends sequence to wake up Epson stylus usb printers.
      * @see <a href="http://sdb.suse.de/en/sdb/html/jsmeix_print-stcXXXusb.html">Installing an Epson Stylus Color Printer on USB</a>
      * @param device Device to send sequence to. Should be /dev/usblp? (or /dev/usb/lp?)
@@ -213,24 +200,6 @@ ECHO_PID=$!
     }
 
     /**
-     * Returns special device string for cups in form:
-     * /dev/usb/lp?vendor=04a9&prod_id=1052
-     * @param device_id device_id from hwinfo
-     * @param vendor_id vendor_id from hwinfo
-     * @param orig_device Device file the printer is connected to (/dev/usblp0). Used in case device_id or vendor_id are 0.
-     * @return string device uri as specified
-     */
-    global define string getCupsUsbDevice (integer device_id, integer vendor_id, string orig_device)``{
-/*	device_id = device_id & 0xFFFF;
-	vendor_id = vendor_id & 0xFFFF;
-	if (0 == device_id || 0 == vendor_id)
-	    {*/
-		return orig_device;
-/*	    }
-	return sformat ("/dev/usb/lp?vendor=%1&prod_id=%2", tohexWithout0x4digits (device_id), tohexWithout0x4digits (vendor_id));*/
-    }
-
-    /**
      * Finally detection of hardware
      * @param cups true if usb devices should be in form /dev/usb/lp?vendor=04a9&prod_id=1052
      * @return list Detected printers. See example.
@@ -338,7 +307,6 @@ ECHO_PID=$!
 		    "bus" : "usb",
 		    "vendor_id": lookup (pr, "vendor_id",0),
 		    "device_id": lookup (pr, "device_id",0),
-//		    "cups_dev_name" : getCupsUsbDevice (lookup (pr, "vendor_id",0), lookup (pr, "device_id",0), lookup (pr, "dev_name", "")),
 		    "dev_name": dev_name,
 		];
 	    }
@@ -1087,84 +1055,6 @@ Install them now?"));
             // Names of devices. Labels in dialog
             "/dev/usb/lp15" : _("Sixteenth USB Printer (/dev/usb/lp15)"),
 	    ], dev, dev);
-    }
-    /**
-     * Change parallel port settings. This function must be called when
-     * wizard dialog has been set up. Hence it suppose Wizard library to
-     * be imported.
-     * @return symbol for wizard sequencer
-     */
-    global define symbol editParallelPort () ``{
-	map params = SCR::Read (.modules.options, "parport_pc");
-	// dialog caption
-	Wizard::SetContentsButtons (_("Parallel port settings"), `VBox (
-		    `VStretch (),
-		    // textentry label
-		    `TextEntry (`id (`io), _("IO &Ports of parallel ports:"), lookup (params, "io", "")),
-		    `VSpacing (2),
-		    `VStretch ()
-		    ),
-		textEditParallelPort (), BackButtonLabel (), OKButtonLabel ());
-	symbol r = UI::UserInput ();
-	if (`next == r)
-	{
-	    string s = UI::QueryWidget (`id (`io), `Value);
-	    if (nil == s || "" == s)
-	    {
-		params = filter (`k, `v, params, ``("io" != k));
-	    }
-	    else
-	    {
-		params = add (params, "io", s);
-	    }
-	    SCR::Write (.modules.options, 0 == size (params) ? nil : params, "parport_pc");
-	}
-	return r;
-    }
-    /**
-     * Change serial port settings. This function must be called when
-     * wizard dialog has been set up. Hence it suppose Wizard library to
-     * be imported.
-     * @return symbol for wizard sequencer
-     */
-    global define symbol editSerialPort () ``{
-	string uri = lookup (Printer::printer, "tmpuri", "parallel");
-	integer baudrate = Printerlib::getUriBaudrate (uri);
-	string ser_settings = Printerlib::getUriValue (uri, "ty");
-
-	term contents = `VBox (
-				// combobox label
-                                `ComboBox (`id (`baudent), `opt (`editable, `hstretch), _("Baud &rate:"),
-                                      [ sformat ("%1", baudrate),
-                                      "1200","2400", "4800", "9600", "19200", "38400", "57600", "115200"
-                                      ]),
-				// textentry label
-                                `TextEntry (`id (`ser_settings), `opt (`hstretch), _("Serial Port &Settings"), ser_settings)
-                        );
-
-	// dialog caption
-        Wizard::SetContentsButtons (_("Other settings"), contents,  textEditSerialPort (), BackButtonLabel (), NextButtonLabel ());
-	symbol r = nil;
-	while (r != `back && r != `abort)
-	{
-            r = UI::UserInput ();
-
-	    ser_settings = UI::QueryWidget (`id (`ser_settings), `Value);
-	    string tmp = UI::QueryWidget (`id (`baudent), `Value);
-	    baudrate = tointeger (tmp);
-	    if (`next == ret && !testBaudRate (baudrate))
-		ret = nil;
-
-            if (`next == r)
-            {
-		uri = "serial:" + getUriDevice (uri) + sformat ("?baudrate=%1+ty=%2", baudrate, ser_settings);
-		Printer::printer = add (Printer::printer, "tmpuri", uri);
-		return r;
-	    }
-	    if (`abort == r && ! reallyAbort ())
-		r = nil;
-        }
-	return r;
     }
     /**
      * get paper size from system and returns 0 for a4 or 1 for letter

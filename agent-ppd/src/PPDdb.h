@@ -130,6 +130,7 @@ class PPD {
 	string getModelId (string vendor, string model);
 	bool fileinfo(const char *file, PPDInfo *info);
 	bool setCheckMethod (YCPSymbol method);
+	YCPList sortItems (const YCPMap& items);
 
     private:
         Vendors db;
@@ -167,6 +168,7 @@ class PPD {
 	bool cleanupEmptyEntries ();
 	string fileChecksum (const string &filename);
 	off_t fileSize (const string &filename);
+	string updateLabel (const string& label);
 
     protected:
         string strupper(const string s);

@@ -32,6 +32,7 @@ $[
     ],
     ....
 ]
+
 </screen>
 </para>
 <para>
@@ -49,6 +50,16 @@ Vendor and model comments and support status is taken from file generated from S
 <title>Write (.db.create_ot) -> boolean</title>
 <para>
 makes the same job as .db.create, but doesn't create any new thread and all work makes synchronous. Returns true if database was successfully rebuilt.
+</para>
+</section>
+
+<section>
+<title>Write (.db.check_method, symbol method) -> boolean</title>
+<para>
+sets the method how to check whether file is changed during pre-built database update. Two values are possible - <computeroutput>`size</computeroutput> checks only the size
+of PPD file, <computeroutput>`checksum</computeroutput> compares MD5 checksum of PPD file. Size-only checking is less reliable, but faster. Should be used only for checking
+during second stage of installation, because the probability that some file was changed is very low and waiting too much time (because of need to read the files) isn't usable
+during proposal. Normally (when typically not all dates were changed and not all files are checked) MD5 checking isn't too much slow.
 </para>
 </section>
 
@@ -114,6 +125,7 @@ $[
 	    ....
     ]
 ]
+
 </screen>
 </para>
 </section>
@@ -155,8 +167,36 @@ $[
 	....
     ]
 ]
+
 </screen>
 </para>
+</section>
+
+<section>
+<title>Read (.db.sort_items, map items) -> list</title>
+<para>
+takes a map where key is vendor or model database key and value is vendor or model label (recoded to console encoding - eg. ISO-8859-2 for Czech), and returns a list of items
+for selection box, where item keys are keys from map, and labels are values from input map.
+</para>
+<para>
+Example input can be
+<screen>
+$[
+    "STYLUSPHOTO" : "Stylus Photo",
+    "STYLUSCOLOR" : "Stylus Color",
+]
+
+</screen>
+Output for this case (with English locale) is
+<screen>
+[
+    `item (`id ("STYLUSCOLOR"), "Stylus Color"),
+    `item (`id ("STYLUSPHOTO"), "Stylus Photo"),
+]
+
+</screen>
+</para>
+
 </section>
 
 </section>

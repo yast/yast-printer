@@ -22,9 +22,13 @@ The pre-built database and list of files contained in package <computeroutput>ya
 <computeroutput>yast2-printerdb</computeroutput> has in needed-for-build list all packages containing PPD files, and pre-builds the database the same way
 as on running system, file list is created using <computeroutput>find</computeroutput>.
 	    </para>
+	    <para>
+Once database file is created (as it is done during building process), it isn't needed to get rebuilt complete if only one PPD file changes.
+Because of this fast rebuilding feature was added.
+	    </para>
 	</section>
 	<section>
-	    <title>Building process</title>
+	    <title>Building process (from scratch)</title>
 	    <para>
 Database building process consists from 3 steps:
 	    </para>
@@ -65,21 +69,68 @@ Two multi-level maps are merged together, target data are organized as one big Y
 	    </section>
 	</section>
 	<section>
+	    <title>Database update</title>
+	    <para>
+Database update consists from 5 steps.
+	    </para>
+	    <orderedlist>
+		<listitem><para>Parse current pre-built database</para></listitem>
+		<listitem><para>Get informations about PPD files</para></listitem>
+		<listitem><para>Clean up database</para></listitem>
+		<listitem><para>Insert new and changed PPD files</para></listitem>
+		<listitem><para>Clean up printers without PPD file</para></listitem>
+		<listitem><para>Flush data as YCP map to file</para></listitem>
+	    </orderedlist>
+	    <para>
+If any of these steps fails, the database must be rebuilt from scratch.
+	    </para>
+	    <section>
+		<title>Parsing current pre-built database</title>
+		<para>
+Parsing is done by YCP parser, which creates YCP structure describing the database. After this is done, YCP structures are translated to internally used 
+and easier to work STL structures. Types checking is done, if something is wrong, database must be rebuilt completely.
+		</para>
+	    </section>
+	    <section>
+		<title>Getting informations about PPD files</title>
+		<para>
+List of PPD files is created, and each gets attributes saying whether it is newer than pre-built database (or some directory in path from 
+<computeroutput>/usr/share/cups/model</computeroutput> is newer - because of file moving).
+		</para>
+	    </section>
+            <section>
+                <title>Cleaning up database</title>
+                <para>
+Database of PPD files is walked through, and each PPD file is checked. Informations about PPD files, which are no longer present on disk are removed, 
+files which are newer than pre-built database are checked whether size of checksum has changed (depending on current checking mode set by SCR call), and 
+if file was really changed, entry is removed from database. At the end of this stage only unchanged files are present in internal structures.
+                </para>
+            </section>
+            <section>
+                <title>Inserting new and changed PPD files</title>
+                <para>
+Files are inserted to internal structures the same way as in creation of database from scratch.
+                </para>
+            </section>
+            <section>
+                <title>Cleaning up printers without PPD file</title>
+                <para>
+not implemented yet.
+                </para>
+            </section>
+            <section>
+                <title>Flushing data as YCP map to file</title>
+                <para>
+Flushing data is done the same way as during creating database from scratch.
+                </para>
+            </section>
+	</section>
+	<section>
 	    <title>Used structures</title>
-	    <section>
-		<title>Main database</title>
-		<para>
-Main database is organized the same way as final YCP file (see interface description). The main difference is that it contains only basic informations, like vendor key,
-model key and list of PPD files. Doesn't contain support status, comments and labels. Is organized as one big map with 3 levels.
-		</para>
-	    </section>
-	    <section>
-		<title>Additional data</title>
-		<para>
-Additional data, like model names, support status and comments are stored in separate map. The organization doesn't differ from the main structure.
-Usually not all the data are filled. The only entry from this structure, which is created from PPD file, is readable model name. Other entries are added
-only from file created from SuSE database, and can be missing.
-		</para>
-	    </section>
+	    <para>
+The structure to hold the data is one big multi-level map, each level contains as key structure, one of entries is map for level bellow. The structure is similar to
+result in YCP format. Contains all required informations, like vendor and model keys and labels, vendor and model comments, support status and informations about PPD files.
+Entries come from PPD files and SuSE database informations.
+	    </para>
 	</section>
     </section>

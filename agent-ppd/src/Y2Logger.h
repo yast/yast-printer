@@ -23,7 +23,7 @@
 #ifndef Y2Logger_h
 #define Y2Logger_h
 
-#define y2log_component "ag_cups"
+#define y2log_component "ag_ppd"
 #include <ycp/y2log.h>
 
 //FIXME:
