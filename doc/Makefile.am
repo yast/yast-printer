@@ -3,45 +3,42 @@
 #
 
 SUBDIRS = autodocs
+htmldir = $(docdir)
+xml_files =  $(wildcard *.xml) 
 
-CATALOG="./catalog.xml"
-BUILD=html
-STYLESHEET_FO=$(ydatadir)/docbook/stylesheets/customize-fo.xsl
-STYLESHEET_HTML=$(ydatadir)/docbook/stylesheets/customize-html.xsl
-
-xml_files = $(wildcard *.xml)
-
-EXTRA_DIST = $(xml_files) $(wildcard *.xsl) $(wildcard *.css)
-
-CLEANFILES = *.dvi *.aux *.tex *.log *.bak *.out *.ent *.sum *.pdf *.ps \
-  db2html.*
-
-ps: printer.ps
+html_DATA = $(wildcard html/*.html) \
+	    html/index.html \
+	    html/yast2docs.css
 
 pdf: printer.pdf
 
-html: chunks
+html/index.html: printer.xml
+	XML_CATALOG_FILES=@XML_CATALOG@\
+	@XSLTPROC@ @XSLTPROC_FLAGS@ --xinclude \
+	@STYLESHEET_HTML@ $<
 
-chunks:
-	XML_CATALOG_FILES=$(CATALOG) \
-	xsltproc -stringparam base.dir "$(BUILD)/" \
-	--xinclude \
-	$(STYLESHEET_HTML) \
-	printer.xml
+printer.fo: printer.xml
+	XML_CATALOG_FILES=@XML_CATALOG@ \
+	@XSLTPROC@ @XSLTPROC_FLAGS@ --xinclude \
+	-o $@ @STYLESHEET_PDF@  $<
 
-dvi: printer.dvi
+printer.pdf: printer.fo
+	fop -q $< $@
 
-printer.dvi: $(xml_files)
-	db2dvi printer.xml
 
-printer.ps: $(xml_files)
-	db2ps printer.xml
+html/yast2docs.css: html/index.html
+	cp @STYLESHEET_CSS@ html
+	cp -a $(ydatadir)/docbook/images html
 
-printer.pdf: $(xml_files)
-	db2pdf printer.xml
 
-all: html
+EXTRA_DIST = $(xml_files)
+
+CLEANFILES =  $(html_DATA)
+
+clean-local:
+	rm -rf html
 
 install-data-local:
-	install -d -m 755 $(DESTDIR)/@docdir@/html
-	cp -a $(BUILD)/* $(DESTDIR)/@docdir@/html
+	mkdir -p $(DESTDIR)$(htmldir)
+	cp -a $(srcdir)/html/images $(DESTDIR)$(htmldir)
+
