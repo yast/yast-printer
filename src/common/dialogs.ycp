@@ -368,6 +368,7 @@ actually selected.
 	string password = "";
 	string queue = type == "ipp" ? "printers/" : "";
 	string hostname = "";
+	string workgroup = "";
 	integer port = 0;
 
 	// check necessary packages
@@ -405,6 +406,7 @@ actually selected.
 	{
 	    queue = Printerlib::getUriRemoteQueue (uri);
 	    hostname = Printerlib::getUriHost (uri);
+	    workgroup = Printerlib::getUriWorkgroup (uri);
 	}
 	if (has_user_password)
 	{
@@ -502,6 +504,7 @@ actually selected.
 				    `VSquash (`VBox (
 					`HBox (`HSpacing (0.5),
 					       `VBox (
+						   type != "samba" ? `VSpacing (0) : `TextEntry (`id (`workgroup), _("&Workgroup"), workgroup),
 						   `HBox (
 						       `ReplacePoint (
 							   `id (`hostent_replace),
@@ -541,6 +544,8 @@ actually selected.
             if (ret == `cancel)
                 ret = `abort;
 	    hostname = UI::QueryWidget (`id (`hostnameent), `Value);
+	    if (type == "samba")
+		workgroup = UI::QueryWidget (`id (`workgroup), `Value);
 	    if (type != "socket")
 		queue = UI::QueryWidget (`id (`queueent), `Value);
 	    else
@@ -610,7 +615,7 @@ actually selected.
 		    test_queue = queue;
 		if ("samba" == type || "novell" == type)
 		{
-		    Printerlib::testRemoteUP (hostname, test_queue, user, password, type);
+		    Printerlib::testRemoteUP (workgroup, hostname, test_queue, user, password, type);
 		}
 		else
 		    Printerlib::testRemote (hostname, test_queue, type, port);
@@ -623,6 +628,8 @@ actually selected.
 	     && (!has_user_password || ( checkUserName (user) && checkPassword (password))));
 	uri = type + "://";
 	uri = uri + (has_user_password ? user + ":" + password + "@" : "");
+	if (workgroup != "")
+	    uri = uri + workgroup + "/";
 	uri = uri + hostname;
 	if (type == "ipp" && "printers/" != substring (queue, 0, 9))
 	{
