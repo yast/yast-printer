@@ -32,16 +32,31 @@
      * @return boolean true if successful
      */
     global define boolean createUppFile (map entry) ``{
-	// FIXME
-	string pagesize = "a4";
-	// FIXME
+	// save modified PPD file
+        entry = getUpdatedPpdFile (entry);
+        if (entry == nil)
+            return false;
+
+        string from = entry["ppd"]:"";
+        string to = sformat ("/etc/lpdfilter/%1/ppd", name);
+        SCR::Execute (.target.bash, sformat ("/bin/cp %1 %2", from, to));
+
+	string pagesize = tolower (entry["options", "PageSize"]:"a4");
+	map out = SCR::Execute (.target.bash_output, sformat (
+	    "/usr/lib/YaST2/bin/real_resolution %1", to));
 	string resolution = "1800x1800";
+	if (out["exit"]:-1 == 0)
+	    resolution = tolower (out["stdout"]:resolution);
+	integer nl_index = findfirstof (resolution, "\n\t ");
+	if (nl_index != nil)
+	{
+	    resolution = substring (resolution, 0, nl_index);
+	}
         string upp_file = sformat (
 	    "-sDEVICE=pswrite\n-sPAPERSIZE=%1\n-r%2\n", pagesize, resolution);
         string name = lookup (entry, "name", "");
 
         // Save the .upp file
-        SCR::Execute (.target.mkdir, sformat ("/etc/lpdfilter/%1", name));
         string fname = sformat ("/etc/lpdfilter/%1/upp", name);
         if (!SCR::Write (.target.string, fname, upp_file))
         {
@@ -68,18 +83,10 @@
                 // error popup
             Report::Error (sformat (_("An error occurred while saving queue %1.
 
-The specified PPD file does not exist.
-"), name));
+The specified PPD file does not exist."), name));
             return false;
         }
 
-	entry = getUpdatedPpdFile (entry);
-	if (entry == nil)
-	    return false;
-
-	string from = entry["ppd"]:"";
-	string to = sformat ("/etc/lpdfilter/%1/ppd", name);
-	SCR::Execute (.target.bash, sformat ("/bin/cp %1 %2", from, to));
         return true;
     }
 
@@ -116,9 +123,6 @@ The specified PPD file does not exist.
                 {
                     baudrate_str = sformat ("-br %1", baudrate);
                 }
-            }
-            if (con_type == "serial")
-            {
                 string ser_opt = Printerlib::getUriValue (uri, "ty");
                 if (filterchars (ser_opt, "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890-") == "")
                     ser_opt = "ixon -imaxbel -ixany -ixoff -crtscts";
@@ -143,14 +147,6 @@ The specified PPD file does not exist.
             if (callLprsetup (sformat ("/usr/lib/lpdfilter/bin/lprsetup -lprng -overwrite %1 -redirect '%2' -device /dev/null", name, Printerlib::getUriDevice (uri)) + tail))
                 return true;
         }
-        else if (con_type == "ipp")
-        {
-            string queue = Printerlib::getUriRemoteQueue (uri);
-            if ("printers/" == substring (queue, 0, 9))
-                queue = substring (queue, 9);
-            if (callLprsetup (sformat ("/usr/lib/lpdfilter/bin/lprsetup -lprng -overwrite %1 -device '| -$ /usr/bin/lp.cups -d %3 -h %2'", name, Printerlib::getUriHost (uri), queue) + tail))
-                return true;
-        }
         else if (con_type == "lpd")
         {
             if (callLprsetup (sformat ("/usr/lib/lpdfilter/bin/lprsetup -lprng -overwrite %1 -host %2 -rp %3", name, Printerlib::getUriHost (uri), Printerlib::getUriRemoteQueue (uri)) + tail))
@@ -159,14 +155,12 @@ The specified PPD file does not exist.
         else if (con_type == "socket")
         {
             if (callLprsetup (sformat ("/usr/lib/lpdfilter/bin/lprsetup -lprng -overwrite %1 -host %2 -port %3", name, Printerlib::getUriHost (uri), Printerlib::getUriPort (uri)) + tail))
-//Printerlib::getUriRemoteQueue (uri)) + tail))
                 return true;
         }
         // message box
         Report::Error (_("Unable configure a printer
 queue. The internal structure
-is not completed properly.
-"));
+is not completed properly."));
         return false;
     }
     /**
@@ -203,109 +197,35 @@ is not completed properly.
      * @return boolean success?
      */
     global define boolean writeLpdPrinter (map entry) ``{
-        if (entry["database"]:"" == "foomatic")
-        {
-            loadFoomaticIfNeeded ();
-        }
-        else
-        {
-            Report::Error (sformat (_("Only foomatic queues are supported: %1"),
-                entry["name"]:""));
-        }
-        map saved = lookup (entry, "saved", $[]);
-        string printcap_part =     lookup (saved, "printcap_part", "");
-        map conf = lookup (entry, "conf", $[]);
-        string upp_fname = lookup (saved, "upp_fname", "");
-        string upp_orig =  lookup (saved, "upp", "");
-        string uri = lookup (entry, "uri", "");
-        string name = lookup (entry, "name", "");
-        string uri_type = Printerlib::getUriType (uri);
+        loadFoomaticIfNeeded ();
+        map conf = entry["conf"]:$[];
+        string uri = entry["uri"]:"";
+        string name = entry["name"]:"";
 
-        if (lookup (entry, "type", "yast2") != "yast2")
+        if (entry["type"]:"yast2" != "yast2")
             return false;
-        if (lookup (entry, "uri", "class") == "class")
-        {
-            return false;
-        }
-        if ("void" == lookup (entry, "lprng-state", "changed"))
-        {
-            return false;
-        }
 
-        //
-        // new or renamed printer?
-        //
-        if (printcap_part != "" && !lookup (entry, "recreate", false))
-        {
-            // We have a part of the printcap from previous configuration...
-            if (lookup (entry, "type", "yast2") == "yast2")
-            {
-                if ("" != upp_fname && "" != upp_orig)
-                {
-                    // We have saved upp file. Save it.
-                    // Why do we save it when it was already saved? Because printer could be renamed.
-                    SCR::Write (.target.string, upp_fname, upp_orig);
-                }
-                else
-                {
-                    // upp file changed (or did not exist). Save it again.
-                    if (!createUppFile (entry))
-                    {
-			// message box
-                        UI::MessagePopup (sformat (_("Error occurred while saving queue %1."), name));
-                        return false;
-                    }
-                }
-            }
-            SCR::Execute (.target.bash, sformat ("/bin/echo -n '%1' >> /etc/printcap", printcap_part));
-        }
-        else
-        {
-            // New entry - we must do everything
-            if (lookup (entry, "type", "yast2") == "yast2")
-            {
-                SCR::Execute (.target.mkdir, "/etc/lpdfilter/" + name);
-                    if (!createEntry (entry))
-                    {
-			// message box
-                        UI::MessagePopup (sformat (_("Error occurred while saving queue %1."), name));
-                        return false;
-                    }
-                    if ("" != upp_orig)
-                    {
-                        // create rc file name
-                        upp_fname = sformat ("/etc/lpdfilter/%1/upp", name);
-                        // We have saved upp file. Save it.
-                        // Why do we save it when it was already saved? Because printer could be renamed.
-                        SCR::Write (.target.string, upp_fname, upp_orig);
-                    }
-                    else
-                    {
-                        // upp file changed (or did not exist). Save it again.
-                        if (!createUppFile (entry))
-                        {
-			    // message box
-                            UI::MessagePopup (sformat (_("Error occurred while saving queue %1."), name));
-                            return false;
-                        }
-                    }
-            }
-        }
+	SCR::Execute (.target.mkdir, "/etc/lpdfilter/" + name);
+	if (! (createEntry (entry) && createUppFile (entry)))
+	{
+	    UI::MessagePopup (sformat (
+		// message box
+		_("Error occurred while saving queue %1."), name));
+	    return false;
+	}
 
-        // conf file...
-        if (lookup (entry, "type", "yast2") == "yast2")
-        {
-            // create rc file name
-            string conf_fname = sformat ("/etc/lpdfilter/%1/conf", name);
-            // Is it Epson Stylus on USB? Add magic sequence to be printed before each job.
-            if ("usb" == Printerlib::getUriType (uri) && issubstring (tolower (lookup (entry,"vendor_ieee","")),"epson"))
-            {
-                conf = add (conf, "reset_before",// this must stay as one line
-                                  "\\x0\\x0\\x0\\x1b\\x01\\x40\\x45\\x4a\\x4c\\x20\\x31\\x32\\x38\\x34\\x2e\\x34\\x0a\\x40\\x45\\x4a\\x4c\\x20\\x20\\x20\\x20\\x20\\x0a");
-            }
-            writeConf (conf_fname, conf);
-        }
-        return true;
+	// conf file...
+	string conf_fname = sformat ("/etc/lpdfilter/%1/conf", name);
+	// Is it Epson Stylus on USB?
+	// Add magic sequence to be printed before each job.
+	if ("usb" == Printerlib::getUriType (uri)
+	    && issubstring (tolower (entry["vendor_ieee"]:""), "epson"))
+	{
+	    conf["reset_before"] = // this must stay as one line
+		"\\x0\\x0\\x0\\x1b\\x01\\x40\\x45\\x4a\\x4c\\x20\\x31\\x32\\x38\\x34\\x2e\\x34\\x0a\\x40\\x45\\x4a\\x4c\\x20\\x20\\x20\\x20\\x20\\x0a";
+	}
+	writeConf (conf_fname, conf);
+	return true;
     }
 
 

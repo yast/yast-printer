@@ -9,6 +9,7 @@ ybin_SCRIPTS =			\
 	test_remote_socket 	\
 	test_remote_smb		\
 	test_remote_novell	\
-	listen_remote_ipp
+	listen_remote_ipp	\
+	real_resolution
 
 EXTRA_DIST = $(ybin_SCRIPTS)

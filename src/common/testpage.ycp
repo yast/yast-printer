@@ -36,20 +36,12 @@
 	    return true;
 	}
 
-	boolean do_not_test = false;
-	boolean foomatic = printer["database"]:"" == "foomatic";
+	printer = Printer::assignStates (printer, true);
 
-	if (foomatic)
-	    loadFoomaticIfNeeded ();
-	else
-	    do_not_test = true;
-	if (printer["raw"]:false)
-	    do_not_test = false;
+	loadFoomaticIfNeeded ();
 
 	if (Printer::getPrinterState(printer, Printer::spooler) == "void")
-	    do_not_test = true;
-
-	if (do_not_test) {
+	{
 	    // message popup
 	    UI::MessagePopup (_("Unable to print a test page. You are using different spooler."));
 	    return false;

@@ -1,0 +1,49 @@
+#! /bin/bash
+
+# Parse specified file and guess the resolution to use for lpdfilter
+# 
+# Parameters: filename
+#
+# Exits: 0  success, recommended resolution is on stdout
+#        1  file not found
+#
+# Johannes Meixner <jsmeix@suse.de>, 2003
+# Jiri Srain <jsrain@suse.cz>, 2003
+
+#set -x
+
+MY_NAME=${0##*/}
+FILE="$1"
+[ -z "$FILE" ] && { echo -en "\nUsage:\n$MY_NAME FILE\n" 1>&2 ; exit 1 ; }
+
+# if *DefaultResolution keyword exists then use it and output the resolution from the option keyword
+zgrep '^\*DefaultResolution' $FILE | egrep -o '[0-9][0-9]*[dD][pP][iI]|[0-9][0-9]*x[0-9][0-9]*[dD][pP][iI]' | egrep -m 1 -o '[0-9][0-9]*|[0-9][0-9]*x[0-9][0-9]*' && exit 0
+
+zgrep '^\*DefaultGSResolution' $FILE | egrep -o '[0-9][0-9]*[dD][pP][iI]|[0-9][0-9]*x[0-9][0-9]*[dD][pP][iI]' | egrep -m 1 -o '[0-9][0-9]*|[0-9][0-9]*x[0-9][0-9]*' && exit 0
+
+# if *Resolution keywords exists then use them and output a reasonable resolution
+zgrep '^\*Resolution' $FILE | grep -q '1200' && { echo "1200" ; exit 0 ; }
+zgrep '^\*Resolution' $FILE | grep -q '600' && { echo "600" ; exit 0 ; }
+zgrep '^\*Resolution' $FILE | grep -q '300' && { echo "300" ; exit 0 ; }
+zgrep '^\*Resolution' $FILE | grep -q '1440' && { echo "1440" ; exit 0 ; }
+zgrep '^\*Resolution' $FILE | grep -q '720' && { echo "720" ; exit 0 ; }
+zgrep '^\*Resolution' $FILE | grep -q '360' && { echo "360" ; exit 0 ; }
+
+# if any kind of resolution keywords exists then use them and output a reasonable resolution 
+zgrep '^\*.*esolution' $FILE | grep -q '1200' && { echo "1200" ; exit 0 ; }
+zgrep '^\*.*esolution' $FILE | grep -q '600' && { echo "600" ; exit 0 ; }
+zgrep '^\*.*esolution' $FILE | grep -q '300' && { echo "300" ; exit 0 ; }
+zgrep '^\*.*esolution' $FILE | grep -q '1440' && { echo "1440" ; exit 0 ; }
+zgrep '^\*.*esolution' $FILE | grep -q '720' && { echo "720" ; exit 0 ; }
+zgrep '^\*.*esolution' $FILE | grep -q '360' && { echo "360" ; exit 0 ; }
+
+# if the resolution is set as Ghostscript parameter then use it and output the Ghostscript resolution
+zgrep -e '-r[0-9][0-9]*' $FILE | grep -q '1200' && { echo "1200" ; exit 0 ; }
+zgrep -e '-r[0-9][0-9]*' $FILE | grep -q '600' && { echo "600" ; exit 0 ; }
+zgrep -e '-r[0-9][0-9]*' $FILE | grep -q '300' && { echo "300" ; exit 0 ; }
+zgrep -e '-r[0-9][0-9]*' $FILE | grep -q '1440' && { echo "1440" ; exit 0 ; }
+zgrep -e '-r[0-9][0-9]*' $FILE | grep -q '720' && { echo "720" ; exit 0 ; }
+zgrep -e '-r[0-9][0-9]*' $FILE | grep -q '360' && { echo "360" ; exit 0 ; }
+
+# if nothing reasonable was found then output the lowest common multiple of 360 and 300
+echo "1800" ; exit 0
