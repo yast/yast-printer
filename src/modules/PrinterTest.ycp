@@ -105,11 +105,11 @@
       * Prepare test page
       * @param queue queue name
       * @param opt_file file with queue options
-      * @param photo string filename of the photo for the testpage
+      * @param photo boolean true ifphoto should be present
       * @return filename of the test page
       */
     define string preparePsTestPage (string queue, string opt_file,
-	string photo)
+	boolean photo)
     ``{
 	string out_file = (string)SCR::Read (.target.tmpdir) + "/testpg.ps";
 	string command = sformat (
@@ -118,6 +118,8 @@
 	    out_file,
 	    "/usr/share/YaST2/theme/current/testpage/logo.eps",
 	    photo
+		? "/usr/share/YaST2/theme/current/testpage/photo.eps"
+		: ""
 	);
 	y2milestone ("Testpage prepare command: %1", command);
 	SCR::Execute (.target.bash, command);
@@ -162,17 +164,6 @@ When the whole page is printed, press
 	{
 	    Printerlib::DisplayUnavailableAIPopup ();
 	    return true;
-	}
-
-	string photo_filename = "/usr/share/YaST2/theme/current/testpage/photo.eps";
-
-	if (testpage_type == `photo)
-	{
-	    testpage_type = `postscript;
-	}
-	else if (testpage_type == `postscript)
-	{
-	    photo_filename = "";
 	}
 
 	printer = Printer::assignState (printer, true);
@@ -231,6 +222,8 @@ on and ONLINE then press the 'OK' button.
 	}
 	else
 	{
+	    boolean photo_exists = 0 < SCR::Read (.target.size,
+		"/usr/share/YaST2/theme/current/testpage/photo.eps");
 	    UI::OpenDialog (
 		`VBox (
 		    // label
@@ -242,12 +235,22 @@ press 'OK'.
 ")),
 		    `VSpacing (1),
 		    `RadioButtonGroup (`id (`type), `VBox (
-			// radiobutton
-			`Left (`RadioButton (`id (`graphic), _("&Graphical test page without photo"))),
-			// radiobutton
-			`Left (`RadioButton (`id (`photo), _("Graphical test page with &photo"))),
-			// radiobutton
-			`Left (`RadioButton (`id (`ascii), _("&Text test page")))
+			photo_exists
+			    ? `Left (`RadioButton (`id (`graphic),
+				// radiobutton
+				_("Test &graphical printing without photo")))
+			    : `Left (`RadioButton (`id (`graphic),
+				// radiobutton
+				_("Test &graphical printing"))),
+			photo_exists
+			    ? `Left (`RadioButton (`id (`photo),
+				// radiobutton
+				_("Test graphical printing with &photo")))
+			    : `VSpacing (0),
+
+			`Left (`RadioButton (`id (`ascii),
+			    // radiobutton
+			    _("Test &text printing")))
 		    )),
 		    `VSpacing (1),
 		    `HBox (
@@ -270,16 +273,19 @@ press 'OK'.
 		}
 		if (ret == `ok)
 		{
-		    if (UI::QueryWidget (`id (`type), `CurrentButton) == `ascii)
+		    symbol button = (symbol)
+			UI::QueryWidget (`id (`type), `CurrentButton);
+		    if (button == `ascii)
+		    {
 			testpage_type = `ascii;
-		    else
+		    }
+		    else if (button == `graphic)
 		    {
 			testpage_type = `postscript;
-			if (UI::QueryWidget (`id (`type), `CurrentButton)
-			    == `graphic)
-			{
-			    photo_filename = "";
-			}
+		    }
+		    else
+		    {
+			testpage_type = `photo;
 		    }
 		    break;
 		}
@@ -335,8 +341,8 @@ press 'OK'.
 	string config = ppd_info["nick"]:"";
 	if (findfirstof (config, "(") != nil)
 	    config = substring (config, 0, findfirstof (config, "("));
-
-	if (`postscript == testpage_type)
+y2error ("testpage type: %1", testpage_type);
+	if (`postscript == testpage_type || `photo == testpage_type)
 	{
 	    map consolefonts = (map)SCR::Read (.target.yast2,
 		"consolefonts.ycp");
@@ -473,7 +479,8 @@ press 'OK'.
 		    os = (string)UI::Recode ("UTF-8", ce, os);
 	    }
 	    SCR::Write (.target.string, opts, os);
-	    test_page = preparePsTestPage (virtual_name, opts, photo_filename);
+	    test_page = preparePsTestPage (virtual_name, opts,
+		`photo == testpage_type);
 	}
 	else
 	{
