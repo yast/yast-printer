@@ -50,7 +50,7 @@ bool setPrinter(const char*name,const char*info,const char*loc,const char*state,
 
   if(!(http = httpConnect("localhost"/*cupsServer()*/, ippPort())))
     {
-      Y2_ERROR("httpConnect error.");
+      Y2_ERROR("Error while contacting CUPS server occured.");
       return false;
     }
 
@@ -173,7 +173,7 @@ bool setClass(const char*name,const char*info,const char*loc,const char*state,co
 
   if(!(http = httpConnect("localhost"/*cupsServer()*/, ippPort())))
     {
-      Y2_ERROR("httpConnect error.");
+      Y2_ERROR("Error while contacting CUPS server occured.");
       return false;
     }
 
@@ -301,7 +301,7 @@ bool deletePrinter(const char*name)
 
   if(!(http = httpConnect("localhost"/*cupsServer()*/, ippPort())))
     {
-      Y2_ERROR("httpConnect error %s",ippErrorString(cupsLastError()));
+      Y2_ERROR("Error while contacting CUPS server occured");
       return false;
     }
   
@@ -358,7 +358,7 @@ bool deleteClass(const char*name)
 
   if(!(http = httpConnect("localhost"/*cupsServer()*/, ippPort())))
     {
-      Y2_ERROR("httpConnect error %s",ippErrorString(cupsLastError()));
+      Y2_ERROR("Error while contacting CUPS server occured");
       return false;
     }
   
@@ -414,15 +414,12 @@ string getDefaultDest()
 
   for(int i = 0;i<num_dests;i++)
   {
-//    Y2_ERROR("Testing %s", dests[i].name);
     if(dests[i].is_default)
       {
-//	Y2_ERROR("Passed");
         s = dests[i].name;
         break;
       }
   }
-//  Y2_ERROR("Returning default %s", s.c_str());
   return s;
 }
 
@@ -449,7 +446,7 @@ bool setDefaultDest(const char*d)
 
   if(!(http = httpConnect("localhost"/*cupsServer()*/, ippPort())))
     {
-      Y2_ERROR("httpConnect error %s",ippErrorString(cupsLastError()));
+      Y2_ERROR("Error while contacting CUPS server occured");
       return false;
     }
 
@@ -629,7 +626,7 @@ bool getRemoteDestinations(const char*host,YCPList&ret,ipp_op_t what_to_get)
 
     if(http == NULL)
         {
-            Y2_ERROR("httpConnect error.");
+            Y2_ERROR("Error while contacting CUPS server occured.");
             return false;
         }
     /*
