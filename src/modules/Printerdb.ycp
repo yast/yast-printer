@@ -26,6 +26,7 @@
     import "Package";
     import "Printerlib";
     import "Report";
+    import "Stage";
 
 // local variables
 
@@ -317,17 +318,17 @@ global boolean GetDriversAreInstalled () {
             return;
 	boolean contains_flag = 0 == SCR::Execute (.target.bash, "/bin/grep '#this database was generated during package building' /var/lib/YaST2/ppd_db.ycp");
         y2milestone ("Checking foomatic database");
-        if (((boolean)SCR::Read (.ppd.db.changed) || contains_flag) && ! Mode::test)
+        if (((boolean)SCR::Read (.ppd.db.changed) || contains_flag) && ! Mode::test ())
         {
             y2milestone ("Database changed");
             boolean fast_update = false;
-            if (Mode::cont)
+            if (Stage::cont ())
             {
                 fast_update = true;
                 SCR::Write (.ppd.db.check_method, `size);
             }
             SCR::Write (.ppd.db.create, "");
-	    if (Mode::commandline)
+	    if (Mode::commandline ())
 	    {
 		CommandLine::Print (
 		    _("The list of installed drivers has changed.
@@ -350,11 +351,11 @@ Building database of drivers..."), 100, 0)));
                         break;
                     if (result == 100)
                         break;
-		    if (! Mode::commandline)
+		    if (! Mode::commandline ())
 			UI::ChangeWidget (`id (`pr), `Value, result);
                     sleep (1000);
             }
-	    if (! Mode::commandline)
+	    if (! Mode::commandline ())
 		UI::CloseDialog ();
             if (result < 0)
             {
@@ -460,11 +461,11 @@ of printers."));
 		  {
                     if (issubstring (v["nickname"]:"", "(recommended)"))
                     {
-                        downrec[i] = add (downrec[i]:[], fn);
+                        downrec[i] = (list<string>)add (downrec[i]:[], fn);
                     }
                     else
                     {
-                        downoth[i] = add (downoth[i]:[], fn);
+                        downoth[i] = (list<string>)add (downoth[i]:[], fn);
                     }
 		  }
 		  else if (issubstring (fn,
@@ -472,22 +473,22 @@ of printers."));
 		  {
                     if (issubstring (v["nickname"]:"", "(recommended)"))
                     {
-                        vendrec[i] = add (vendrec[i]:[], fn);
+                        vendrec[i] = (list<string>)add (vendrec[i]:[], fn);
                     }
                     else
                     {
-                        vendoth[i] = add (vendoth[i]:[], fn);
+                        vendoth[i] = (list<string>)add (vendoth[i]:[], fn);
                     }
 		  }
 		  else
 		  {
                     if (issubstring (v["nickname"]:"", "(recommended)"))
                     {
-                        recom[i] = add (recom[i]:[], fn);
+                        recom[i] = (list<string>)add (recom[i]:[], fn);
                     }
                     else
                     {
-                        other[i] = add (other[i]:[], fn);
+                        other[i] = (list<string>)add (other[i]:[], fn);
                     }
 		  }
                   found = true;
@@ -500,11 +501,11 @@ of printers."));
 	      {
                 if (issubstring (v["nickname"]:"", "(recommended)"))
                 {
-                    downrec["other"] = add (downrec["other"]:[], fn);
+                    downrec["other"] = (list<string>)add (downrec["other"]:[], fn);
                 }
                 else
                 {
-                    downoth["other"] = add (downoth["other"]:[], fn);
+                    downoth["other"] = (list<string>)add (downoth["other"]:[], fn);
                 }
 	      }
 	      else if (issubstring (fn,
@@ -512,22 +513,22 @@ of printers."));
 	      {
                 if (issubstring (v["nickname"]:"", "(recommended)"))
                 {
-                    vendrec["other"] = add (vendrec["other"]:[], fn);
+                    vendrec["other"] = (list<string>)add (vendrec["other"]:[], fn);
                 }
                 else
                 {
-                    vendoth["other"] = add (vendoth["other"]:[], fn);
+                    vendoth["other"] = (list<string>)add (vendoth["other"]:[], fn);
                 }
 	      }
 	      else
 	      {
                 if (issubstring (v["nickname"]:"", "(recommended)"))
                 {
-                    recom["other"] = add (recom["other"]:[], fn);
+                    recom["other"] = (list<string>)add (recom["other"]:[], fn);
                 }
                 else
                 {
-                    other["other"] = add (other["other"]:[], fn);
+                    other["other"] = (list<string>)add (other["other"]:[], fn);
                 }
 	      }
             }
@@ -661,7 +662,7 @@ global define string getAutoPpdFile (string vendor_db, string device_db) {
         string src_ppd = entry["ppd"]:"";
 	string dst_ppd = (string)SCR::Read (.target.tmpdir) + "/patched_ppd_"
 	    + entry["name"]:"";
-	if (! Mode::test)
+	if (! Mode::test ())
 	{
 	    while (SCR::Read (.target.size, dst_ppd) > 0)
 		dst_ppd = dst_ppd + "x"; // FIXME this isn't the best

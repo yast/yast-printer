@@ -25,6 +25,7 @@
     import "PrinterTest";
     import "Report";
     import "Spooler";
+    import "Stage";
     import "Wizard";
     import "Wizard_hw";
 
@@ -387,7 +388,7 @@ user name, and password."));
 		Printer::index = -1;
 		map ppd_info = Printer::printer["ppd_info"]:$[];
 		Printer::printer["name"] = Printer::generateQueueName (
-		    (string) (Printer::printer["name"]:nil),
+		    Printer::printer["name"]:"",
 		    Printer::printer["uri"]:"",
                     ppd_info["manufacturer"]:"",
                     ppd_info["model"]:"",
@@ -1515,7 +1516,8 @@ with a prefilled name?")))
 			"parallel" : `con_local,
 			"serial" : `con_local,
 			"usb" : `con_local,
-			"irda" : `con_local, ],
+			"irda" : `con_local,
+			"bluetooth" : `con_local ],
 		    uri_type, `con_uri);
 		}
 		else if (`perm == ret)
@@ -1633,7 +1635,7 @@ with a prefilled name?")))
 	    if (ret == `scratch || ret == `reinstall || ret == `cupsusb
 		|| ret == `cupsd)
 	    {
-		if (Mode::config)
+		if (Mode::config ())
 		{
 		    Printerlib::DisplayUnavailableAIPopup ();
 		    ret = nil;
@@ -1656,7 +1658,7 @@ with a prefilled name?")))
 	    }
 	    else if (`reinstall == ret)
 	    {
-		if (Mode::cont)
+		if (Stage::cont ())
 		{
 		    Printerlib::DisplayUnavailableAIPopup ();
 		    continue;
