@@ -193,11 +193,11 @@
     global define void Detect () ``{
         /* Confirmation: label text (detecting hardware: xxx) */
         if (!Confirm::Detection (_("Printers")))
-            return true;
+            return;
 
 	dirty = true;
 	autodetected = Printerlib::Detect (false);
-	autodetected = maplist (`i, autodetected, ``{
+	autodetected = maplist (map i, autodetected, ``{
 	    i["info"] = i["vendor"]:"" + " " + i["device"]:"";
             i["location"] = Printerlib::getUriNiceName (i["uri"]:"");
 	    i["vendor_db"] = SCR::Read (.ppd.db.vendorname, i["vendor"]:"");
@@ -229,7 +229,7 @@
 	    return ;
 	}
 	index = i;
-	printer = select (printcap, index, $[]);
+	printer = (map)select (printcap, index, $[]);
     }
     /**
      * Select printer to edit or something.
@@ -240,7 +240,7 @@
         index = -1;
         printer = $[];
 	integer ind = -1;
-	foreach (`p, printcap, ``{
+	foreach (map p, printcap, ``{
 	    ind = ind + 1;
 	    if (p["name"]:"" == name)
 	    {

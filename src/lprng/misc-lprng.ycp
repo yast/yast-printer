@@ -51,11 +51,11 @@
             return false;
 
         string from = entry["ppd"]:"";
-        string to = sformat ("/etc/lpdfilter/%1/ppd", name);
+        string to = sformat ("/etc/lpdfilter/%1/ppd", entry["name"]:"");
         SCR::Execute (.target.bash, sformat ("/bin/cp %1 %2", from, to));
 
 	string pagesize = tolower (entry["options", "PageSize"]:"a4");
-	map out = SCR::Execute (.target.bash_output, sformat (
+	map out = (map)SCR::Execute (.target.bash_output, sformat (
 	    "/usr/lib/YaST2/bin/real_resolution %1", to));
 	string resolution = "1800x1800";
 	if (out["exit"]:-1 == 0)
@@ -103,6 +103,33 @@ The specified PPD file does not exist."), name));
         return true;
     }
 
+
+    /**
+     * Call lprsetup
+     * @param command command to call
+     * @return boolean true if successful
+     */
+    global define boolean callLprsetup (string command) ``{
+        integer succ = (integer)SCR::Execute (.target.bash, command);
+	if (succ != 0 && regexpmatch (command, "^.* -overwrite .*$"))
+	{
+	    // Ugly hack - workaround of lprsetup problems (#24979)
+	    command = regexpsub (command, "^(.*) -overwrite (.*)$",
+		"\\1 -add \\2");
+	    succ = (integer)SCR::Execute (.target.bash, command);
+	}
+        if (succ != 0 || (-1 == SCR::Read(.target.size, "/etc/printcap")))
+	{
+	    // Ugly hack - workaround of lprsetup problems (#24979)
+	    if (! regexpmatch (command, "^.* -delete .*$"))
+            {
+                // message box
+                Report::Error (sformat (_("Running lprsetup (%1) was not successful."), command));
+                return false;
+            }
+	}
+        return true;
+    }
 
     /**
      * Add a yast2 printer to the printcap
@@ -174,32 +201,6 @@ The specified PPD file does not exist."), name));
 queue. The internal structure
 is not completed properly."));
         return false;
-    }
-    /**
-     * Call lprsetup
-     * @param command command to call
-     * @return boolean true if successful
-     */
-    global define boolean callLprsetup (string command) ``{
-        integer succ = SCR::Execute (.target.bash, command);
-	if (succ != 0 && regexpmatch (command, "^.* -overwrite .*$"))
-	{
-	    // Ugly hack - workaround of lprsetup problems (#24979)
-	    command = regexpsub (command, "^(.*) -overwrite (.*)$",
-		"\\1 -add \\2");
-	    succ = SCR::Execute (.target.bash, command);
-	}
-        if (succ != 0 || (-1 == SCR::Read(.target.size, "/etc/printcap")))
-	{
-	    // Ugly hack - workaround of lprsetup problems (#24979)
-	    if (! regexpmatch (command, "^.* -delete .*$"))
-            {
-                // message box
-                Report::Error (sformat (_("Running lprsetup (%1) was not successful."), command));
-                return false;
-            }
-	}
-        return true;
     }
 
     /**

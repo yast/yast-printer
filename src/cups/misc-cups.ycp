@@ -30,7 +30,7 @@
       * @return list banners names
       */
     global define list getBannerList () ``{
-        map out = SCR::Execute (.target.bash_output, "/bin/ls -1 /usr/share/cups/banners");
+        map out = (map)SCR::Execute (.target.bash_output, "/bin/ls -1 /usr/share/cups/banners");
         list ban = splitstring (lookup (out, "stdout", ""), "\n");
         ban = toset (add (ban, "none"));
         return filter (`i, ban, ``("" != i));
@@ -42,13 +42,13 @@
       * TODO error handling
       */
     global define boolean cupsClientRead () ``{
-	map state = SCR::Read (.target.ycp, "/var/lib/YaST2/printers");
+	map state = (map)SCR::Read (.target.ycp, "/var/lib/YaST2/printers");
 	if (nil == state)
 	{
 	    state = $[];
 	}
-	string cups_default = SCR::Read (.cups.default_dest);
-	map out = SCR::Execute (.target.bash_output,
+	string cups_default = (string)SCR::Read (.cups.default_dest);
+	map out = (map) SCR::Execute (.target.bash_output,
 	    "/bin/grep ^Default </etc/cups/lpoptions | cut -f2 -d\\ ");
 	string lpoptions_default = out["stdout"]:"";
 	if (nil != findfirstof (lpoptions_default, "\n"))
@@ -57,7 +57,7 @@
 		findfirstof (lpoptions_default, "\n"));
 	}
 	CUPS::server_default = ! (cups_default == lpoptions_default);
-	default = CUPS::server_default
+	Printer::default = CUPS::server_default
 	    ? ""
 	    : cups_default;
 	return true;
