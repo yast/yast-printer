@@ -23,6 +23,7 @@
     import "Printerdb";
     import "Printerlib";
     import "PrinterTest";
+    import "Product";
     import "Report";
     import "Spooler";
     import "Wizard";
@@ -86,8 +87,9 @@
 	if (support == "not")
 	{
 	    info_text =
-		// part of richtext
-		_("<p><B>This printer is not supported by SuSE Linux.</B></P>")
+		// part of richtext, %1 is name of the product, eg. SUSE Linux
+		sformat(_("<p><B>This printer is not supported by %1.</B></P>"),
+		    Product::name)
 		+ info_text;
 	}
 
@@ -251,14 +253,18 @@ only if using CUPS spooler"));
 		string old_text = _("No PPD file available for selected model");
 
 		// richtext - information about support status
-		string unsup_message = _("This printer is not supported by SUSE LINUX.<BR>
+		// %1 is product name - eg. SUSE Linux
+		// %2 is URL
+		// %3 is URL
+		string unsup_message = sformat (_("This printer is not supported by %1.
+Perhaps a package containing the driver is missing and must be installed.<BR>
 Find information regarding supported and unsupported printers
 in your manual or in the support database articles
 \"Purchase of Printers and Compatibility\" and \"GDI Printers\",
 available online at<BR>
-http://sdb.suse.de/en/sdb/html/jsmeix_print-kompatibel.html<BR>
+%2<BR>
 and<BR>
-http://sdb.suse.de/sdb/en/html/ke_printer-gdi.html<BR>
+%3<BR>
 If the printer can be switched to support a standard
 printer language (PostScript, PCL, ESC/P), it can be
 configured as a PostScript, PCL, or ESC/P printer.<BR>
@@ -266,11 +272,21 @@ Ask the vendor of the printer whether this model
 \"understands\" a standard printer language directly (not
 through a driver emulation) and how to switch the printer
 into the standard printer language mode (e.g., via an
-additional PostScript module).
-");
+additional PostScript module)."),
+		// %1 of text above
+		Product::name,
+		// URL, localized version may exist
+		// for German, use 'http://portal.suse.com/sdb/de/1999/12/jsmeix_print-kompatibel.html'
+		_("http://portal.suse.com/sdb/en/2000/08/jsmeix_print-kompatibel.html"),
+		// URL, localized version may exist
+		// For German, use 'http://portal.suse.com/sdb/de/1998/05/ke_printer-gdi.html'
+		_("http://portal.suse.com/sdb/en/1998/06/ke_printer-gdi.html"));
 		term d = `VBox (
-		    `HSpacing (40),
-		    `RichText (unsup_message),
+		    `HSpacing (60),
+		    `HBox (
+			`RichText (unsup_message),
+			`VSpacing (15)
+		    ),
 		    `PushButton (`id (`ok), Label::OKButton ())
                 );
 		UI::OpenDialog (d);
