@@ -2622,7 +2622,7 @@ with the SuSE database of printers only.</B></P>
 		    `Left (`CheckBox (`id (`yast), `opt (`notify), _("&Allow editing of this queue"), conf_type)),
 		    `VSpacing (1),
 			// table header
-		    `Table (`id (`options), `opt(`keepSorting), `header ( _("Option area"),
+		    `Table (`id (`options), `opt(`keepSorting, `notify), `header ( _("Option area"),
 			// table header
 			 _("Current values")), items),
 		    `HBox (
@@ -2672,6 +2672,10 @@ with the SuSE database of printers only.</B></P>
 	while (nil == ret)
 	    {
 		ret = UI::UserInput ();
+		if (ret == `options)
+		{
+		    ret = `edit;
+		}
 		if (`edit == ret)
 		{
 		    ret = UI::QueryWidget (`id (`options), `CurrentItem);
@@ -3407,7 +3411,7 @@ the current configuration.
 			    `VSpacing (0.5),
 			    `Table (
 				// table header
-				`id (`table), `header (_("Queue name"),
+				`id (`table), `opt (`notify), `header (_("Queue name"),
 				// table header
 				 _("Comment"),
 				// table header
@@ -3453,6 +3457,10 @@ the current configuration.
 	while (true)
 	{
 	    ret = UI::UserInput ();
+	    if (ret == `table)
+	    {
+		ret = `edit;
+	    }
 	    if (`abort == ret || `cancel == ret)
 	    {
 		ret = `abort;
@@ -3782,6 +3790,11 @@ system will be saved.
 	while (true)
 	    {
 		ret = UI::UserInput ();
+y2error ("Ret: %1", ret);
+		if (ret == `table)
+		{
+		    ret = `edit_button;
+		}
 	        if (ret == `cancel)
 		    ret = `abort;
 
