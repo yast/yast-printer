@@ -15,6 +15,8 @@
 #include "CupsCalls.h"
 #include "PpdOptions.h"
 
+char last_error[1024];
+
 bool getClasses ();
 
 /**
@@ -43,6 +45,8 @@ YCPValue CupsAgent::Dir(const YCPPath& path)
  */
 YCPValue CupsAgent::Read(const YCPPath &path, const YCPValue& arg)
 {
+    if (path->component_str (0) == "last_error")
+	return YCPString (last_error);
     if (path->component_str (0) == "isppd" && !arg.isNull () && arg->isString ()) {
         return isPpd (arg->asString()->value_cstr ());
     }

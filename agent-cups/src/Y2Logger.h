@@ -29,6 +29,8 @@
 //FIXME:
 #define Y2_DEBUG_YES 1
 
+extern char last_error[1024];
+
 /*
  * Logging macros
  */
@@ -43,7 +45,10 @@
     y2warning(format,##args)
 
 #define Y2_ERROR(format,args...) \
-    y2error(format,##args)
+    {\
+    y2error(format,##args);\
+    snprintf (last_error,1023,format,##args);\
+    }
 
 /*
  * Log the error and return ...
