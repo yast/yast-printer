@@ -45,6 +45,7 @@ class PPD {
                 string pnp_printer;
 		string checksum;
 		off_t size;
+		string filter;
         };
 
         typedef string VendorKey;
@@ -156,6 +157,7 @@ class PPD {
         bool process_dir(const char *dirname);
         bool process_file(const char *filename, PPDInfo *newinfo = NULL);
         void preprocess(PPDInfo info, PPDInfo *newinfo);
+	void addAdditionalInfo ();
         void debugdb() const;
 	// creation status variables
 	volatile int creation_status;
@@ -170,6 +172,7 @@ class PPD {
 	bool cleanupEmptyEntries ();
 	string fileChecksum (const string &filename);
 	off_t fileSize (const string &filename);
+	string fileFilter (const string &filename);
 	string updateLabel (const string& label);
 
     protected:
