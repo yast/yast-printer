@@ -125,7 +125,7 @@
       * @param queues list of queues
       * @return proposed default queue name
       */
-    global define string getFoomaticDefaultQueue (list<any> queues) ``{
+    global define string getFoomaticDefaultQueue (list<map> queues) ``{
         string default_queue = (string) (queues[0, "name"]:nil);
         foreach (map q, queues, ``{
             if (regexpmatch (q["name"]:"", "normal[0-9]")
@@ -205,7 +205,7 @@ of printers.
         SCR::Execute (.target.bash, sformat (
 	    "/usr/bin/touch %1/ppd_preference_list",
 	    Printerlib::baseDataDir));
-        map order = (map)SCR::Read (.target.ycp,
+        map<string,map> order = (map<string,map>)SCR::Read (.target.ycp,
 	    sformat ("%1/ppd_preference_list", Printerlib::baseDataDir));
         if (order == nil)
             order = $[];
@@ -214,7 +214,7 @@ of printers.
         foreach (string k, map v, order, ``{
             if (regexpmatch (vendor_db, k))
             {
-                foreach (string kk, list vv, v, ``{
+                foreach (string kk, list vv, (map<string,list>)v, ``{
                     if (regexpmatch (device_db, kk))
                     {
                         y2debug ("Matched %1, %2", k, kk);
