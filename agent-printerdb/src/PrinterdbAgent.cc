@@ -34,9 +34,9 @@ extern int yylineno;
  */
 PrinterdbAgent::PrinterdbAgent() : SCRAgent()
 {
-    bindtextdomain (DB_TEXTDOMAIN, "/usr/lib/YaST2/locale");
+    bindtextdomain (DB_TEXTDOMAIN, "/usr/share/YaST2/locale");
     bind_textdomain_codeset (DB_TEXTDOMAIN, "UTF-8");
-    bindtextdomain (PRG_TEXTDOMAIN, "/usr/lib/YaST2/locale");
+    bindtextdomain (PRG_TEXTDOMAIN, "/usr/share/YaST2/locale");
     bind_textdomain_codeset (PRG_TEXTDOMAIN, "UTF-8");
     db_up = false;
 }
