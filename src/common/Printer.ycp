@@ -132,7 +132,8 @@
      * the list hasn't been initialized yet. Use function
      * getSystemForbiddenNames for accessing this list.
      */
-    list sys_forbidden_names = nil;
+     // this wasn't global before, but variable is used directly in printer.ycp
+     global list sys_forbidden_names = nil;
 
     /**
      * List of unique keys of the printers read at the beginning.
@@ -518,7 +519,8 @@
      * Save client.conf host name host name
      */
     global define void saveClientHostName () ``{
-	if (server_hostname == "")
+    // added check for nil value (bug #19226)
+	if (server_hostname == "" || server_hostname == nil)
 	{
 	     SCR::Execute (.target.bash, "test -f /etc/cups/client.conf && (/usr/bin/awk '
 BEGIN { used = 0 }
@@ -690,7 +692,9 @@ END { if (!used) print \"ServerName %1\" }
 	printcap = maplist (`e, printcap, ``{
 	    boolean ready = contains (nyl, lookup (e, "name", ""));
 	    string state = Printer::spooler + "-state";
-	    e = add (e, state, ready ? lookup (e, "cups-state", "changed") : "changed");
+        // changed due to bug #19224, but I'm not sure, if it is really OK!
+	    e = add (e, state, ready ? lookup (e, state, "changed") : "changed");
+//	    e = add (e, state, ready ? lookup (e, "cups-state", "changed") : "changed");
 //	    e = add (e, "lprng-state", ready ? lookup (e, "lprng-state", "changed") : "changed");
 	    return e;
 	});
@@ -825,7 +829,7 @@ Remove them?
 "));
 		if (delete)
 		{
-		    list del = ["cups", "cups-drivers", "cups-drivers-stp", "cups-drivers-de", "cups-drivrers-cs"];
+		    list del = ["cups", "cups-drivers", "cups-drivers-stp", "cups-drivers-de", "cups-drivers-cs"];
 		    del = filter (`e, del, ``(Pkg::IsProvided(e) == true));
 /*		    map script = $["userInput" : false, "install" : "", "delete" : del];
 		    string fn = SCR::Read (.target.tmpdir);

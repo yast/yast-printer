@@ -509,7 +509,8 @@
 	Runlevel::ServiceAdjust ("lpd", "disable");
 	Runlevel::ServiceAdjust ("cups", "disable");
 	map script = $["userInput" : false];
-	list del = ["plp", "lprold", "lprng", "cups", "cups-client", "cups-drivers", "cups-drivers-cs", "cups-drivers-de", "lpdfilter", "filters"];
+	list del = ["plp", "lprold", "lprng", "cups", "cups-client", "cups-drivers", "cups-drivers-cs", "cups-drivers-de", "cups-drivers-stp", "lpdfilter", "filters"];
+//	list del = ["plp", "lprold", "lprng", "cups", "cups-client", "cups-drivers", "cups-drivers-cs", "cups-drivers-de", "lpdfilter", "filters"];
 	del = filter (`e, del, ``(Pkg::IsProvided (e) == true));
 	list inst = [];
 
@@ -532,7 +533,9 @@
 	fn = fn + "/script.sw_single";
 	SCR::Write (.target.ycp, fn, script);
 	CallFunction (`sw_single (fn));*/
+    y2milestone("-------- deleting = %1", del);
 	foreach (`e, del, ``{Pkg::PkgDelete (e);});
+    y2milestone("-------- installing = %1", inst);
 	foreach (`e, inst, ``{Pkg::PkgInstall (e);});
 	Pkg::PkgSolve ();
 	Pkg::PkgCommit (0);
