@@ -158,16 +158,21 @@ is not completed properly.
         integer succ = SCR::Execute (.target.bash, command);
 	if (succ != 0 && regexpmatch (command, "^.* -overwrite .*$"))
 	{
+	    // Ugly hack - workaround of lprsetup problems (#24979)
 	    command = regexpsub (command, "^(.*) -overwrite (.*)$",
 		"\\1 -add \\2");
 	    succ = SCR::Execute (.target.bash, command);
 	}
         if (succ != 0 || (-1 == SCR::Read(.target.size, "/etc/printcap")))
+	{
+	    // Ugly hack - workaround of lprsetup problems (#24979)
+	    if (! regexpmatch (command, "^.* -delete .*$"))
             {
                 // message box
                 Report::Error (sformat (_("Running lprsetup (%1) was not successful."), command));
                 return false;
             }
+	}
         return true;
     }
 
