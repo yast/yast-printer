@@ -22,6 +22,8 @@
     include "printer/texts.ycp";
     include "ui/common_messages.ycp";
 
+    import "PackageCallbacks";
+
     /**
      * set to true after function Read had been called.
      */
@@ -531,10 +533,9 @@
 	SCR::Write (.target.ycp, fn, script);
 	CallFunction (`sw_single (fn));*/
 	foreach (`e, del, ``{Pkg::PkgDelete (e);});
-	Pkg::DoRemove (del);
-	foreach (`e, inst, ``{Pkg::DoProvide (e);});
+	foreach (`e, inst, ``{Pkg::PkgInstall (e);});
 	Pkg::PkgSolve ();
-	Pkg::PkgCommit ();
+	Pkg::PkgCommit (0);
 	WFM::CallModule("inst_suseconfig", []);
     }
     /**
