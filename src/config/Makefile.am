@@ -5,8 +5,7 @@
 yncludedir = @yncludedir@/printer
 
 config_DATA =                           \
-	printer.y2cc                  \
-	printer_nodet.y2cc
+	printer.y2cc                  
 
 
 EXTRA_DIST = \

@@ -48,13 +48,13 @@
 
 	SCR::Execute (.target.bash, "/bin/rm -rf /etc/cups/");
 	SCR::Execute (.target.bash, "/bin/rm -rf /etc/lpdfilter/");
-	SCR::Execute (.target.bash, "/bin/rm -r /etc/printcap");
-	SCR::Execute (.target.bash, "/bin/rm -r /etc/printcap.rpm*");
-	SCR::Execute (.target.bash, "/bin/rm -r /etc/printcap-2*");
-	SCR::Execute (.target.bash, "/bin/rm -r /etc/printcap.y2*");
+	SCR::Execute (.target.bash, "/bin/rm -rf /etc/printcap");
+	SCR::Execute (.target.bash, "/bin/rm -rf /etc/printcap.rpm*");
+	SCR::Execute (.target.bash, "/bin/rm -rf /etc/printcap-2*");
+	SCR::Execute (.target.bash, "/bin/rm -rf /etc/printcap.y2*");
 	SCR::Execute (.target.bash, "/bin/rm -rf /var/spool/lpd/");
 	SCR::Execute (.target.bash, "/bin/rm -rf /var/spool/cups/");
-	SCR::Execute (.target.bash, "/bin/rm -rf /var/lib/YaST2/printers/");
+	SCR::Execute (.target.bash, "/bin/rm -rf /var/lib/YaST2/printers");
 
 	CallFunction (`sw_single (fn));
 
@@ -277,13 +277,13 @@ queue you want to use."));
     global define boolean testPrinter (map printer, integer testpage_type) ``{
 	if (Printer::spooler != "lprng" && Printer::spooler != "cups")
 	{
-	    UI::MessagePopup (_("I'm not able to print a testpage. \n You have to install some spooler \n before printing testpages"));
+	    UI::MessagePopup (_("Unable to print a testpage. \n You have to install some spooler \n before printing testpages"));
 	    return true;
 	}
 	// message box
 	if (testpage_type != -1)
 	{
-	    if (!UI::AnyQuestionPopup ("", _("YaST2 is ready to print a sample page.
+	    if (!UI::AnyQuestionPopup ("", _("Sample page is ready to be printed..
 
 Please make sure that the printer is turned
 on and ONLINE, then press the 'OK' button."),
@@ -296,7 +296,7 @@ on and ONLINE, then press the 'OK' button."),
 	{
 	    UI::OpenDialog (
 		`VBox (
-		    `Label (_("YaST2 is ready to print a sample page.
+		    `Label (_("Sample page is ready to be printed.
 
 Please select testpage type, make sure that
 the printer is turned on and ONLINE, then 
@@ -374,7 +374,7 @@ press the 'OK' button.")),
 	}
 
 	printer = Printer::fixPrinter (printer);
-	y2error ("Printer for testpage: %1", printer);
+	y2debug ("Printer for testpage: %1", printer);
 	if (Printer::spooler == "cups")
 	{
 	    Printer::writeCupsPrinter (printer);
@@ -436,7 +436,7 @@ press the 'OK' button.")),
 	{
 	    // message box
 	    UI::MessagePopup (
-		sformat (_("I was unable to print the testpage.\n\nOutput from lpr:\n"), test_page) +
+		sformat (_("It was unable to print the testpage.\n\nOutput from lpr:\n"), test_page) +
 		lookup (out, "stderr", ""));
 	    Printer::deletePrinters ([$["name": name, "type": printer_type ], $["name" : prefilter_name, "type": printer_type]]);
 //	    wipePrinters ([name, prefilter_name]);
@@ -484,7 +484,7 @@ you made previously."));
 	}
 	Printer::deletePrinters ([$["name": name, "type": printer_type], $["name" : prefilter_name, "type": printer_type]]);
 //	wipePrinters ([name, prefilter_name]);
-	SCR::Execute (.target.bash, sformat ("/bin/rm /var/lib/YaST2/printers/y2test; \n"));
+//	SCR::Execute (.target.bash, sformat ("/bin/rm /var/lib/YaST2/printers/y2test; \n"));
 	return true;
     }
     /**
@@ -708,8 +708,19 @@ All changes will be lost!",
 		else
 		    // This printer was not configured using YaST2. Item in table. SHORT!
 		    ret = add (ret, _("- not YaST2 -"));
-		ret = add (ret, "commited" == Printer::getPrinterState (ent, "cups") ? _("OK") : "");
-		ret = add (ret, "commited" == Printer::getPrinterState (ent, "lprng") ? _("OK") : "");
+		if (Printer::spooler == "cups" || Printer::spooler == "lprng")
+		{
+		    if ("yast2" == lookup (ent, "type", "yast2"))
+			ret = add (ret, "commited" == Printer::getPrinterState (ent, Printer::spooler) ? _("OK") : "");
+		    else
+			ret = add (ret, _("unknown"));
+		}
+		else
+		{
+		    ret = add (ret, "void" != Printer::getPrinterState (ent, "cups") ? _("OK") : "");
+		    ret = add (ret, "void" != Printer::getPrinterState (ent, "lprng") ? _("OK") : "");
+		}
+//		ret = add (ret, "commited" == Printer::getPrinterState (ent, "lprng") ? _("OK") : "");
 		count = count+1;
 		return ret;
 	});
@@ -1051,7 +1062,6 @@ for any file in directory /etc/lpdfilter"));
     global define symbol chooseSpooler(string msg, string abort_msg)
     ``{
 	symbol ret = `none_symbol;
-	y2error (-1, "%1", msg);
 	UI::OpenDialog (
             `VBox (
 		`Label (msg),

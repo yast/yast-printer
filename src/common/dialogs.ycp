@@ -877,7 +877,7 @@ that your parallel port is not properly configured.
 			  `HWeight (1, `ReplacePoint (`id (`modelsel_rep), `HSpacing ()))),
 		   // Button which provides information about selected manufacturer/model
 		   `HBox (`PushButton (`id (`dbchange), _("&Change database")), `HSpacing(),
-			  `PushButton (`id (`useppd), _("Use non YaST &ppd file"))),
+			  `PushButton (`id (`useppd), _("Use non YaST2 &ppd file"))),
 		   `PushButton (`id (`infobut), _("&Info")));
 	// dialog box label
 	Wizard::SetContentsButtons (_("Manufacturer and model of the printer"), contents, getManufModelHelp (), BackButtonLabel (), NextButtonLabel ());
@@ -981,13 +981,14 @@ that your parallel port is not properly configured.
 	);
 	// dialog box label
 	Wizard::SetContentsButtons (_("Configurations"), contents, getConfigHelp (), BackButtonLabel (), NextButtonLabel ());
-	UI::ChangeWidget (`id (`selection), `CurrentItem, config);
+	if (config != "")
+	    UI::ChangeWidget (`id (`selection), `CurrentItem, config);
 
+	boolean found = false;
 	if (config == "")
 	{
 	    if (Printer::spooler == "cups")
 	    {
-		boolean found = false;
 		foreach (`e, select (cfgs, 1, []), ``{
 		    string conf = select (select (e, 0, `id("0")), 0, "");
 		    if ( !found && lookup (SCR::Read (.printerdb.configinfo, conf), "cups", false))
@@ -999,7 +1000,6 @@ that your parallel port is not properly configured.
 	    }
 	    else if (Printer::spooler == "lprng")
 	    {
-		boolean found = false;
 		foreach (`e, select (cfgs, 1, []), ``{
 		    string conf = select (select (e, 0, `id("0")), 0, "");
 		    if ( !found && lookup (SCR::Read (.printerdb.configinfo, conf), "cups", false))
@@ -1008,6 +1008,28 @@ that your parallel port is not properly configured.
 			UI::ChangeWidget (`id (`selection), `CurrentItem, conf);
 		    }
 		});
+	    }
+	    else
+	    {
+                foreach (`e, select (cfgs, 1, []), ``{
+                    string conf = select (select (e, 0, `id("0")), 0, "");
+                    if ( !found && lookup (SCR::Read (.printerdb.configinfo, conf), "cups", false) && lookup (SCR::Read (.printerdb.configinfo, conf), "lprng", false))
+                    {
+                        found = true;
+                        UI::ChangeWidget (`id (`selection), `CurrentItem, conf);
+                    }
+                });
+
+	    }
+	}
+
+	if (! found)
+	{
+	    e = select (select (cfgs, 1, []), 0, nil);
+	    if (e != nil)
+	    {
+		string conf = select (select (e, 0, `id("0")), 0, "");
+		UI::ChangeWidget (`id (`selection), `CurrentItem, conf);
 	    }
 	}
 
@@ -1089,8 +1111,6 @@ that your parallel port is not properly configured.
 	boolean raw = lookup (Printer::printer, "raw", false);
 	boolean ff = lookup (Printer::printer, "ff", false);
 	boolean is_class = Printerlib::getUriType (lookup (Printer::printer, "uri", "")) == "class" ? true : false;
-	y2error ("Is class: %1", is_class);
-	y2error ("URI: %1", lookup (Printer::printer, "uri", ""));
 
 	if (-1 != Printer::index)
 	{
@@ -1760,7 +1780,7 @@ and if you do not like the result, just press Back.")
 		    boolean state = UI::QueryWidget (`id (`yast), `Value);
 		    if (! state)
 		    {
-			if (UI::YesNoPopup (_("If you forget to edit this queue,\n I will not be able to change it's settings. \nDo you really want to continue?")))
+			if (UI::YesNoPopup (_("If you forbid editing this queue,\nyou will not be able to change its settings\nusing YaST2. Continue?")))
 			{
 			    Printer::printer = add (Printer::printer, "type", "non-yast-now");
 			    ret = `update;
@@ -1779,7 +1799,8 @@ and if you do not like the result, just press Back.")
 		    }
 		    else
 		    {
-			if (UI::YesNoPopup (_("I don't have enough informations about \n this queue. Do you want to add printer 
+			if (UI::YesNoPopup (_("Selected queue wasn't configured 
+using YaST2. Do you want to add printer 
 with prefilled name?")))
 			    ret = `add;
 			else
@@ -1875,7 +1896,7 @@ with prefilled name?")))
 	    ret = UI::UserInput ();
 	    if (`scratch == ret)
 	    {
-		if (! UI::AnyQuestionPopup (_("Do you really want to discard all your configuration?"), _("&Discard"), _("D&on't do it"), `focus_no))
+		if (! UI::AnyQuestionPopup (WarningMsg(), _("Do you really want to discard all your configuration?"), _("&Discard"), CancelButtonLabel (), `focus_no))
 		{
 		    ret = nil;
 		    continue;
@@ -1887,7 +1908,7 @@ with prefilled name?")))
 	    else if (`reinstall == ret)
 	    {
 		if (! UI::AnyQuestionPopup(WarningMsg(), _("Do you really want to completely reinstall \nyour printing system? \nAll your changes will be lost."),
-		    _("&Reinstall"), _("D&on't do it"), `focus_no))
+		    _("&Reinstall"), CancelButtonLabel (), `focus_no))
 		{
 		    ret = nil;
 		    continue;
@@ -2286,6 +2307,13 @@ the current configuration.
      * @return symbol for ws
      */
     global define symbol runDetectedDialog () ``{
+/*	term contents = `Frame (
+	    `SelectionBox 
+	    `HBox (
+		`PushButton
+		`HStretch (),
+		`PushButton (`id (`configure_button), _("&Configure")
+	    )*/
 	term contents = Wizard_hw::DetectedContent (
 	    _("Printers to configure"),
 	    getAutoprobedSelectionBox (runAutoprobedListDialog__current),
@@ -2294,7 +2322,7 @@ the current configuration.
 	    + Printer::Summary ([`nonew, `test])
 	    );
 	// dialog label
-	Wizard::SetContentsButtons (_("Printer setup: Autodetected printers"), contents, getDetectedHelp (), BackButtonLabel (), FinishButtonLabel ());
+	Wizard::SetContentsButtons (_("Printer setup: Autodetected printers"), contents, getDetectedHelp (), BackButtonLabel (), NextButtonLabel ());
 	any ret = nil;
 	while (true)
 	{
@@ -2368,7 +2396,11 @@ the current configuration.
 	Wizard::SetContentsButtons (
 	    sformat (_("Printer administration for %1"), spoolerlabel),
 	    Wizard_hw::ConfiguredContent (
-	        `header (_("Default"), _("Name"), _("Type"), `Center(_("CUPS")), `Center(_("LPRng"))),
+		(Printer::spooler == "cups" || Printer::spooler == "lprng")
+		?
+		    `header (_("Default"), _("Name"), _("Type"), `Center(_("Ready")))
+		:
+		    `header (_("Default"), _("Name"), _("Type"), `Center(_("CUPS")), `Center(_("LPRng"))),
 		printcapTable (),
 		nil, nil,
 		`HBox (
@@ -2392,8 +2424,43 @@ the current configuration.
 
 		if (ret == `add_button)
 		{
-		    Printer::selectPrinter (-1);
-		    return `add;
+/*		    term cont = `VBox (
+			`Label (_("YaST can try to recognize and configure your new printer automatically")),
+			`Label (_("(recommended) or you can add the printer manually. Please choose:")),
+			`RadioButtonGroup (`id (`add_type), `VBox (
+			    `RadioButton (`id (`auto), _("Automatical recognition and configuration"), true),
+			    `RadioButton (`id (`manual), _("Manual adding and configuration"), false)
+			)),
+			`HBox (
+			    `PushButton (`id (`back), BackButtonLabel ()),
+			    `HStretch (),
+			    `PushButton (`id (`ok), OKButtonLabel ())
+			)
+		    );
+		    UI::OpenDialog (cont);
+		    symbol r = nil;
+		    while (r == nil)
+		    {
+			r = UI::UserInput ();
+			if (r != `back && r != `ok)
+			    r = nil;
+		    }
+		    if (r == `back)
+		    {
+			UI::CloseDialog ();
+			continue;
+		    }
+		    if (UI::QueryWidget (`id (`add_type), `CurrentButton) == `auto)
+		    {
+			UI::CloseDialog ();
+			return `detect;
+		    }
+		    else
+		    {
+			UI::CloseDialog ();*/
+			Printer::selectPrinter (-1);
+			return `add;
+//		    }
 		}
 		else if (ret == `edit_button || ret == `delete_button || ret == `setdefault)
 		{
@@ -2454,7 +2521,7 @@ the current configuration.
 		if (`scratch == ret)
 		{
 		    if (! UI::AnyQuestionPopup(WarningMsg(), _("Do you really want to completely reinstall \nyour printing system? \nAll your changes will be lost."),
-			_("&Reinstall"), _("D&on't do it"), `focus_no))
+			_("&Reinstall"), CancelButtonLabel (), `focus_no))
 			    continue;
 		    boolean success = reinstallAll ();
 			break;
@@ -2551,6 +2618,7 @@ the current configuration.
 	    "auto_wz" :		``(WizardSequencer (getAliases (), auto_sequence)),
 	    "manual_wz" :	``(WizardSequencer (getAliases (), manual_sequence)),
 	    "cups_wz" :		``(WizardSequencer (getAliases (), cups_sequence)),
+//	    "detected_wz" :	``(WizardSequencer (getAliases (), detected_sequence)),
 	    ];
     }
     /**
@@ -2646,7 +2714,9 @@ the current configuration.
 		`abort : `abort,
 		`client : "cups_client",
 		`advanced : "advanced",
+//		`detect : "detected_wz",
 		],
+//	    "detected_wz" : $[`abort : `abort, `next : "complex" ],
 	    "advanced" : $[
 		`next : "type",
 		`this : "advanced",
