@@ -646,9 +646,13 @@ It cannot contain the characters @ and :.
 		    "Incorrect size of possible values for boolean option: %1",
 		    vals);
 	    }
-	    list<term> r_buttons = maplist (list entry, vals, ``(
-		`Left (`RadioButton (`id (entry[0]:""), entry[1]:""))
-	    ));
+	    integer index = -1;
+	    list<term> r_buttons = maplist (list entry, vals, {
+		index = index + 1;
+		return `Left (`RadioButton (`id (index),
+		    `opt (`notify, `immediate),
+		    entry[1]:""));
+	    });
 	    term ret = `VBox (`VSpacing (1));
 	    foreach (term button, r_buttons, ``{
 		ret = add (ret, button);
@@ -656,7 +660,7 @@ It cannot contain the characters @ and :.
 	    ret = add (ret, `VSpacing (1));
 	    ret = `HBox (
 		`HSpacing (3),
-		`RadioButtonGroup (`id (`vals), `opt (`notify,`immediate), ret),
+		`RadioButtonGroup (`id (`vals), ret),
 		`HSpacing (3)
 	    );
 	    // frame
