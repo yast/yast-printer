@@ -279,8 +279,8 @@ $["bus":"USB", "bus_hwcfg":"usb", "class_id":265, "dev_name":"/dev/usb/lp0", "de
 
 		if (Spooler::Get () == "cups")
 		{
-		    dev_name = select (Printerlib::GetCupsUsbDeviceInfo (
-			class_dev), 0, "");
+		    dev_name
+			= Printerlib::GetCupsUsbDeviceInfo (class_dev)[0]:"";
 		    if (dev_name == nil || dev_name == "")
 		    {
 			dev_name = class_dev;
@@ -515,13 +515,13 @@ Install it now?"));
 	if (nil == printer)
 	    printer = $[];
 	string printer_type = "";
-	if (lookup (printer, "type", "yast2") == "yast2")
-	    printer_type = lookup (printer, "uri", "class") == "class" ? "class" : "printer";
+	if (printer["type"]:"yast2" == "yast2")
+	    printer_type = printer["uri"]:"class" == "class" ? "class" : "printer";
 	else
 	{
-	    if (lookup (printer, "uri", "") == "class")
+	    if (printer["uri"]:"" == "class")
 		printer_type = "class";
-	    else if (lookup (printer, "uri", "") != "")
+	    else if (printer["uri"]:"" != "")
 		printer_type = "printer";
 	    else
 	    {
@@ -578,10 +578,10 @@ Install it now?"));
     global define map<string,any> assignState (map<string,any> p,
 	boolean changed)
     ``{
-	if (lookup (p, "type", "yast2") != "yast2")
+	if (p["type"]:"yast2" != "yast2")
 	    return p;
 	boolean supported = true;
-	string uri = lookup (p, "uri", "");
+	string uri = p["uri"]:"";
 	string q_type = Printerlib::getUriType (uri);
 	string q_filter = "";
 
@@ -816,17 +816,17 @@ Install it now?"));
       * Sorts entries of printcap
       */
     global define void sortPrinters () ``{
-	list<map<string,any> > yast = (list<map<string,any> >)filter (map<string,any> e, printcap, ``(lookup (e, "type", "yast2") == "yast2"));
-	list<map<string,any> > non_yast = (list<map<string,any> >)filter (map<string,any> e, printcap, ``(lookup (e, "type", "yast2") != "yast2"));
-	list<map<string,any> > classes = (list<map<string,any> >)filter (map<string,any> e, yast, ``(lookup (e, "uri", "class") == "class"));
-	list<map<string,any> > printers = (list<map<string,any> >)filter (map<string,any> e, yast, ``(lookup (e, "uri", "class") != "class"));
-	list<map<string,any> > locals = (list<map<string,any> >)filter (map<string,any> e, printers, ``(contains (["parallel", "serial", "irda", "usb", "pipe"], Printerlib::getUriType (lookup (e, "uri", "")))));
-	list<map<string,any> > remote = (list<map<string,any> >)filter (map<string,any> e, printers, ``(! contains (["parallel", "serial", "irda", "usb", "pipe"], Printerlib::getUriType (lookup (e, "uri", "")))));
+	list<map<string,any> > yast = (list<map<string,any> >)filter (map<string,any> e, printcap, ``(e["type"]:"yast2" == "yast2"));
+	list<map<string,any> > non_yast = (list<map<string,any> >)filter (map<string,any> e, printcap, ``(e["type"]:"yast2" != "yast2"));
+	list<map<string,any> > classes = (list<map<string,any> >)filter (map<string,any> e, yast, ``(e["uri"]:"class" == "class"));
+	list<map<string,any> > printers = (list<map<string,any> >)filter (map<string,any> e, yast, ``(e["uri"]:"class" != "class"));
+	list<map<string,any> > locals = (list<map<string,any> >)filter (map<string,any> e, printers, ``(contains (["parallel", "serial", "irda", "usb", "pipe"], Printerlib::getUriType (e["uri"]:""))));
+	list<map<string,any> > remote = (list<map<string,any> >)filter (map<string,any> e, printers, ``(! contains (["parallel", "serial", "irda", "usb", "pipe"], Printerlib::getUriType (e["uri"]:""))));
 	map<string,list> sorted = $[];
 
 	foreach (map<string,any> e, locals, ``{
-	    string uri = lookup (e, "uri", "");
-	    list s = lookup (sorted, uri, []);
+	    string uri = e["uri"]:"";
+	    list s = sorted[uri]:[];
 	    s = add (s, e);
 	    sorted = add (sorted, uri, s);
 	});
@@ -834,8 +834,8 @@ Install it now?"));
 	foreach (string k, list v, sorted, ``{locals = (list<map<string,any> >)merge (locals, v);});
 	sorted = $[];
 	foreach (map<string,any> e, remote, ``{
-	    string uri = lookup (e, "uri", "");
-	    list s = lookup (sorted, uri, []);
+	    string uri = e["uri"]:"";
+	    list s = sorted[uri]:[];
 	    s = add (s, e);
 	    sorted = add (sorted, uri, s);
 	});
@@ -843,9 +843,9 @@ Install it now?"));
         foreach (string k, list v, sorted, ``{remote = (list<map<string,any> >)merge (remote, v);});
 
 	printcap = (list<map<string,any> >)merge (locals, remote);
-	classes = sort (map<string,any> x, map<string,any> y, classes, ``(lookup (x, "name", "") < lookup (y, "name", "")));
+	classes = sort (map<string,any> x, map<string,any> y, classes, ``(x["name"]:"" < y["name"]:""));
 	printcap = (list<map<string,any> >)merge (printcap, classes);
-	non_yast = sort (map<string,any> x, map<string,any> y, non_yast, ``(lookup (x, "name", "") < lookup (y, "name", "")));
+	non_yast = sort (map<string,any> x, map<string,any> y, non_yast, ``(x["name"]:"" < y["name"]:""));
 	printcap = (list<map<string,any> >)merge (printcap, non_yast);
     }
 
@@ -985,7 +985,7 @@ Detect your printers?"));
         original_unique_keys = $[];
         foreach (map i, printcap, ``{
             if (haskey (i, "unique_key"))
-                original_unique_keys = add (original_unique_keys, lookup (i, "unique_key", ""), true);
+                original_unique_keys = add (original_unique_keys, i["unique_key"]:"", true);
         });
     }
 
@@ -1140,8 +1140,8 @@ Detect your printers?"));
       */
     global define boolean wipePrinter (map printer) ``{
 	string command = "";
-	string name = lookup (printer, "name", "");
-	string p_type = lookup (printer, "type", "class");
+	string name = printer["name"]:"";
+	string p_type = printer["type"]:"class";
 	if ("" != name)
 	{
 	    if (Spooler::Get () == "cups")
@@ -1188,8 +1188,8 @@ Detect your printers?"));
 	//
 	boolean default_printer_found = false;
 	foreach (map<string,any> entry, printcap, ``{
-	    string uri = lookup (entry, "uri", "");
-	    string name = lookup (entry, "name", "");
+	    string uri = entry["uri"]:"";
+	    string name = entry["name"]:"";
 	    entry["default"] = (name == default);
 	    // progress title, %1 is queue name
 	    Progress::Title (sformat (_("Saving queue %1..."), name));
@@ -1202,7 +1202,7 @@ Detect your printers?"));
 	    if (name == default && entry["valid"]:true)
 		default_printer_found = true;
 
-	    string unique_key = lookup (entry,"unique_key", nil);
+	    string unique_key = entry["unique_key"]:(string)nil;
 	    if (nil != unique_key)
 	    {
 		unique_keys = add (unique_keys, unique_key);
@@ -1460,8 +1460,8 @@ the selected spooler does not support it."), name));
 	map result = $[];
 
 	foreach (any k, any v, config, ``{
-	    map valmap = lookup (config, k, $[]);
-	    string value = lookup (valmap,type,"");
+	    map valmap = config[k]:$[];
+	    string value = valmap[type]:"";
 	    if (value != "") {
 		result = add (result, k, value);
 	    }
@@ -1526,7 +1526,7 @@ the selected spooler does not support it."), name));
 		if (i["unique_key"]:"" == entry["unique_key"]:" ")
 		{
 		    entry = assignState (entry, false);
-		    string cache = lookup (entry, "name", "");
+		    string cache = entry["name"]:"";
 		    used = add (used, cache);
 		    if (contains (style, `test))
 		    {
@@ -1615,9 +1615,9 @@ the selected spooler does not support it."), name));
 		    i = assignState (i, false);
 		    string dev = (raw ?
 			// menu item, %1 is URI
-			sformat (_("Raw queue: %1"), Printerlib::getUriNiceName (lookup (i, "uri", "")))
+			sformat (_("Raw queue: %1"), Printerlib::getUriNiceName (i["uri"]:""))
 			:
-			sformat ("%1: %2", model, Printerlib::getUriNiceName (lookup (i, "uri", "")))
+			sformat ("%1: %2", model, Printerlib::getUriNiceName (i["uri"]:""))
 		    );
 		    if (contains (style, `test))
 		    {
@@ -1670,7 +1670,7 @@ the selected spooler does not support it."), name));
 		    // menu item part
 		    if (haskey (other_printers, _("- not YaST2 -")))
 			// menu item part
-			other_printers = add (other_printers, _("- not YaST2 -"), lookup (other_printers, _("- not YaST2 -"), "???") + ", " + cache);
+			other_printers = add (other_printers, _("- not YaST2 -"), other_printers[_("- not YaST2 -")]:"???" + ", " + cache);
 		    else
 			// menu item part
 			other_printers = add (other_printers, _("- not YaST2 -"), cache);
@@ -1700,7 +1700,7 @@ the selected spooler does not support it."), name));
 		if (! Mode::config () && SuSEFirewall::start)
 		{
 		    map<string,boolean> service_status = $[];
-		    map<string,map<string,boolean> > ifaces_info = $[];
+		    map<string,map<string,boolean> > ifaces_info
 			= SuSEFirewall::GetServices ([ "ipp-udp" ]);
 		    foreach (string s, map<string,boolean> status, ifaces_info,{
 			foreach (string iface, boolean en, status, {
@@ -1756,7 +1756,7 @@ the selected spooler does not support it."), name));
      * @return printer type
      */
     global define string getUriType () ``{
-	return Printerlib::getUriType (lookup (printer, "uri", ""));
+	return Printerlib::getUriType (printer["uri"]:"");
     }
 
     /**
@@ -1866,7 +1866,7 @@ the selected spooler does not support it."), name));
     global define boolean alreadyConfigured (string uk) ``{
 	boolean was = false;
 	foreach (map i, printcap, ``{
-	    if (!was && lookup (i, "unique_key", ".a") == uk)
+	    if (!was && i["unique_key"]:".a" == uk)
 		was = true;
 	});
 	return was;

@@ -286,9 +286,9 @@ press 'OK'.")),
 
 	// create new name for the printer
 	list forbidden_names = union (Printer::getForbiddenNames (), Printer::DeletedNames ());
-	string virtual_name = lookup (printer, "name", "");
+	string virtual_name = printer["name"]:"";
 	string name = Printer::adjustQueueName ("y2test", forbidden_names);
-	string uri = lookup (printer, "uri", "");
+	string uri = printer["uri"]:"";
 	string printer_type = uri == "class" ? "class" : "printer";
 	printer = add (printer, "name", name);
 	printer = add (printer, "recreate", true);
@@ -320,7 +320,7 @@ press 'OK'.")),
 	{
 	    map consolefonts = (map)SCR::Read (.target.yast2,
 		"consolefonts.ycp");
-	    string ce = (string)select (lookup (consolefonts, UI::GetLanguage (false), []), 4, "X");
+	    string ce = consolefonts[UI::GetLanguage (false), 4]:"X";
 	    string opts = (string)SCR::Read (.target.tmpdir)
 		+ "/testpg.options";
 	    string os = "";
@@ -497,7 +497,7 @@ press 'OK'.")),
 	    CUPS::server_hostname = "";
 	}
 
-	if (lookup (out, "exit", 0) != 0)
+	if (out["exit"]:0 != 0)
 	{
 	    Popup::Message (
 		// message box
@@ -505,7 +505,7 @@ press 'OK'.")),
 
 Output from lpr:
 ") +
-		lookup (out, "stderr", ""));
+		out["stderr"]:"");
 	    Printer::wipePrinter ($["name": name, "type": printer_type ]);
 	    return false;
 	}
