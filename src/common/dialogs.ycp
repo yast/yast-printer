@@ -499,36 +499,17 @@ database of printers. Select model first");
 	    foreach (`k, ppds, ``{
 		string ppdfile_orig = "";
 
-		if (k == `ownppd && Printer::printer["ownppd"]:"" != "")
-		    ppdfile_orig = Printer::printer["ownppd"]:"";
-		else if (is (k, string))
+		if (is (k, string))
 		{
 		    y2debug ("V: %1, M: %2, K: %3", manuf_db, model_db, k);
 		    ppdfile_orig = Printerdb::foomatic[manuf_db, model_db, k, "filename"]:"";
 		}
-
-		if (ppdfile_orig == "")
-		    return;
-
-		if (k == `ownppd)
-		{
-		    cfgs = add (cfgs, `item (`id ("_____default_____"),
-                            // selection box item
-                            _("Default Configuration")));
-		    cfgsmap["_____default_____"] = _("Default Configuration");
-		}
-		else if (is (k, symbol))
-		{
-		    return;
-		}
 		else
-		{			// done inside agent
-		    string label = k;//sformat ("%1 (%2)", k, ppdfile_orig);
-		    cfgs = add (cfgs, `item (`id (k), label));
-		    cfgsmap[k] = label;
-		}
+		    return;
 
-		return;
+		string label = k;
+		cfgs = add (cfgs, `item (`id (k), label));
+		cfgsmap[k] = label;
 	    });
 
 	term contents = `HBox (
@@ -536,7 +517,7 @@ database of printers. Select model first");
 	    `VBox (
 		    `VSpacing (1),
 		    // selection box label
-		    `SelectionBox (`id (`selection), `opt (`hstretch), _("&Select configuration:"), cfgs),
+		    `SelectionBox (`id (`selection), `opt (`hstretch), _("&Select PPD file:"), cfgs),
 		    `VSpacing (1),
 		    `HBox (
 			`HStretch (),
@@ -1105,7 +1086,7 @@ and test the queue after the printer model is selected."));
 			// list item
 		"gui" : _("Pages per sheet"),
 		"name" : "number-up",
-		"type" : "pick_one",
+		"type" : "PickOne",
 		"valorder" : ["1", "2", "4"],
 		"values" : $[
 			"1" : "1",
@@ -1126,6 +1107,8 @@ and test the queue after the printer model is selected."));
 			 [filename, ""]),
 		    "data", []), 0, $[]), "name", ""));
 
+	string option_type = "";
+	string option = "";
 	while (`next != ret && `back != ret && `abort != ret)
 	{
 	    if (`test == ret)
@@ -1136,33 +1119,63 @@ and test the queue after the printer model is selected."));
 	    }
 	    if (`opts == ret)
 	    {
-		    string option = UI::QueryWidget (`id (`opts), `CurrentItem);
-		    string ppd_default = "";
-		    foreach (`i, optlist, ``{
-			if (i["name"]:"" == option)
-			{
-			    vals = maplist (`k, i["valorder"]:$[], ``(
-				`item (`id (k), i["values", k]:k)
-			    ));
-			    ppd_default = i["current"]:"";
-			    if (ppd_default == "")
-				ppd_default = i["valorder", 0]:"";
-			}
-		    });
-		    UI::ReplaceWidget (`id (`lower), getValuesUI (vals));
-		    // FIXME type of option
+		option = UI::QueryWidget (`id (`opts), `CurrentItem);
+		string ppd_default = "";
+		foreach (`i, optlist, ``{
+		    if (i["name"]:"" == option)
 		    {
-			string current = selected[option]:"";
-			if (current == "")
-			    current = ppd_default;
-			UI::ChangeWidget (`id (`vals), `CurrentItem, current);
+			option_type = i["type"]:"PickOne";
+			vals = maplist (`k, i["valorder"]:$[], ``(
+			    [k, i["values", k]:k]
+			));
+			ppd_default = i["current"]:"";
+			if (ppd_default == "")
+			    ppd_default = i["valorder", 0]:"";
 		    }
+		});
+		UI::ReplaceWidget (`id (`lower),
+		    getWidgetForOption (option_type, vals));
+		string current = selected[option]:"";
+		if (current == "")
+		    current = ppd_default;
+		if (option_type == "Boolean")
+		{
+		    UI::ChangeWidget (`id (`vals), `CurrentButton, current);
+		}
+		else if (option_type == "PickMany")
+		{
+		    if (current == "None")
+			current = "";
+		    list<string> items = splitstring (current, ",");
+		    UI::ChangeWidget (`id (`vals), `SelectedItems, items);
+		}
+		else
+		{
+		    UI::ChangeWidget (`id (`vals), `CurrentItem, current);
+
+		}
 	    }
-	    else if (`vals == ret || `vals2 == ret)
+	    else if (`vals == ret)
 	    {
-		string o = UI::QueryWidget (`id (`opts), `CurrentItem);
-		string v = UI::QueryWidget (`id (`vals), `CurrentItem);
-		selected[o] = v;
+		string current = "";
+		if (option_type == "Boolean")
+		{
+		    current = UI::QueryWidget (`id (`vals), `CurrentButton);
+		}
+		else if (option_type == "PickMany")
+		{
+		    current = mergestring (
+			UI::QueryWidget (`id (`vals), `SelectedItems),
+			","
+		    );
+		    if (current == "")
+			current = "None";
+		}
+		else
+		{
+		    current = UI::QueryWidget (`id (`vals), `CurrentItem);
+		}
+		selected[option] = current;
 	    }
 	    ret = UI::UserInput ();
 	    if (ret == `cancel)
@@ -1214,9 +1227,9 @@ and test the queue after the printer model is selected."));
 	{
 	    if (! lookup (Printer::printer, "raw", false))
 	    {
-		if (lookup (Printer::printer, "ownppd", "") != "")
+/*		if (lookup (Printer::printer, "ownppd", "") != "")
 		{
-		    string filename = lookup (Printer::printer, "ownppd", "");
+		   string filename = lookup (Printer::printer, "ownppd", "");
 		    if (filename != "" && Printer::isPpd (filename))
 		    {
 			map ppd = Printer::ppdInfo (filename);
@@ -1229,14 +1242,14 @@ and test the queue after the printer model is selected."));
 			// table entry
 		    items = add (items, `item (`id (`ppd), _("PPD file"), know ? filename : _("unknown")));
 
-		}
-		else
-		{
+		}*/
+//		else
+//		{
 			// table entry
 		    items = add (items, `item (`id (`model), _("Printer model"), know ? model_text : _("unknown")));
 			// table entry
-		    items = add (items, `item (`id (`config), _("Printer configuration"), config_text));
-		}
+		    items = add (items, `item (`id (`ppd), _("PPD file"), config_text));
+//		}
 	    }
 		// table entry
 	    items = add (items, `item (`id (`connection), _("Connection"), know ? Printerlib::getUriNiceName (uri) : _("unknown")));

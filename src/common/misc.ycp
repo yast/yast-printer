@@ -729,177 +729,68 @@ It cannot contain the characters @ and :.
     }
 
     /**
-     * Get value from UI
-     * @param vals values
-     * @return selected value
-     */
-    global define any grabValueUI (any vals) ``{
-	if (is (vals, list))
+      * Creates UI widgets from values.
+      * @param option_type string type of the option
+      *  (pick_one, pick_many, boolean)
+      * @param vals any values, type depends on option type
+      * @return UI representation of vals
+      */
+    global define term getWidgetForOption (string option_type, any values) ``{
+	if (option_type == "Boolean")
 	{
-	    return UI::QueryWidget (`id (`vals), `CurrentItem);
-	}
-	if (is (vals, term))
-	{
-	    if (`text == symbolof (vals))
+	    list vals = (list) values;
+	    if (size (vals) != 2)
 	    {
-		string c = UI::QueryWidget (`id (`vals), `Value);
-		return regexpsub (c, "(" + select (vals, 0, ".*") + ")", "\\1");
+		y2error (
+		    "Incorrect size of possible values for boolean option: %1",
+		    vals);
 	    }
-	    if (true == UI::QueryWidget (`id (`vals2), `Value))
-	    {
-		UI::ChangeWidget (`id (`vals), `Enabled, false);
-		return nil;
-	    }
-	    UI::ChangeWidget (`id (`vals), `Enabled, true);
-	    if (`int == symbolof (vals))
-	    {
-		integer i = UI::QueryWidget (`id (`vals), `Value);
-		if (0 != select (vals, 2, 0))
-		{
-		    i = i - select (vals, 0, 0);
-		    i = i / select (vals, 2, 1);
-		    i = i * select (vals, 2, 1);
-		    i = i + select (vals, 0, 0);
-		    if (i < select (vals, 0, 0))
-			i = select (vals, 0, 0);
-		    if (i > select (vals, 1, select (vals, 0, 0) + 1))
-			i = select (vals, 1, select (vals, 0, 0) + 1);
-		}
-		return i;
-	    }
-	    if (`float == symbolof (vals))
-	    {
-		float i = tofloat (UI::QueryWidget (`id (`vals), `Value));
-		if (0 != select (vals, 2, 0))
-		{
-		    i = i - select (vals, 0, 0);
-		    i = i / select (vals, 2, 1);
-		    i = i * select (vals, 2, 1);
-		    i = i + select (vals, 0, 0);
-		    if (i < select (vals, 0, 0))
-			i = select (vals, 0, 0);
-		    if (i > select (vals, 1, select (vals, 0, 0) + 1))
-			i = select (vals, 1, select (vals, 0, 0) + 1);
-		}
-		return i;
-	    }
-	}
-	return nil;
-    }
-    /**
-     * Creates UI widgets from values.
-     * @param vals values
-     * @return UI representation of vals
-     */
-    global define term getValuesUI (any vals) ``{
-	if (is (vals,list))
-	{
-	    // selectionbox label
-	    return `SelectionBox (`id (`vals), `opt (`notify), _("Val&ues"), vals);
-	}
-	if (!is (vals, term))
-	    return `VStretch ();
-	if (`text == symbolof (vals))
-	{
-	    // textentry label
-	    term out = `TextEntry (`id (`vals), `opt (`notify), _("&Value:"), select (vals, 1, ""));
-	    return `VBox (
+	    list r_buttons = maplist (list entry, vals, ``(
+		`Left (`RadioButton (`id (entry[0]:""), entry[1]:""))
+	    ));
+	    term ret = `VBox (`VSpacing (1));
+	    foreach (term button, r_buttons, ``{
+		ret = add (ret, button);
+	    });
+	    ret = add (ret, `VSpacing (1));
+	    ret = `HBox (
+		`HSpacing (3),
+		`RadioButtonGroup (`id (`vals), `opt (`notify), ret),
+		`HSpacing (3)
+	    );
+	    // frame
+	    ret = `Frame (_("Value:"), ret);
+	    ret = `HBox (
+		`HStretch (),
+		`VBox (
 		    `VStretch (),
-		    out,
-		    // label
-		    `Right (`Label (sformat (_("Allowed characters: %1"), select (vals, 0, "")))),
-		    `VStretch ());
+		    ret,
+		    `VStretch ()
+		),
+		`HStretch ()
+	    );
+	    return ret;
 	}
-	if (`int == symbolof (vals))
+	if (option_type == "PickMany")
 	{
-	    boolean not_used = (nil == select (vals, 4, nil) && nil == select (vals, 3, nil));
-	    integer initial = select (vals, 4, nil);
-	    if (nil == initial)
-	    {
-		initial = select (vals, 3, nil);
-	    }
-	    if (nil == initial)
-	    {
-		initial = select (vals, 0, nil);
-	    }
-	    term out = UI::HasSpecialWidget (`Slider) ?
-		// slider
-		`Slider (`id (`vals), not_used ? `opt (`notify, `disabled) : `opt (`notify), _("&Values")) :
-		// int field
-		`IntField (`id (`vals), not_used ? `opt (`hstretch, `notify, `disabled) : `opt (`notify), _("&Values"));
-	    out = add (out, select (vals, 0, 0));
-	    out = add (out, select (vals, 1, 0));
-	    out = add (out, initial);
-	    if (nil == select (vals, 3, nil))
-	    {
-		out = `VBox (
-			`VStretch (),
-			// check box
-			`CheckBox (`id (`vals2), `opt (`hstretch, `notify), _("Not &set (use the driver default)"), not_used),
-			out,
-			// label
-			`Label (`opt (`hstretch), sformat (_("Minimal value: %1\nMaximal value: %2\nStep: %3"),
-				select (vals, 0, 0), select (vals, 1, 0), select (vals, 2, 0))),
-			`VStretch ()
-			);
-	    }
-	    else
-	    {
-		out = `VBox (
-			`VStretch (),
-			out,
-			// label
-			`Label (`opt (`hstretch), sformat (_("Minimal value: %1\nMaximal value: %2\nStep: %3"),
-				select (vals, 0, 0), select (vals, 1, 0), select (vals, 2, 0))),
-			`VStretch ()
-			);
-	    }
-	    return out;
+	    list vals = (list) values;
+	    // multiselectionbox label
+	    return `MultiSelectionBox(`id (`vals), `opt (`notify), _("Val&ues"),
+		maplist (list entry, vals, ``(
+		    `item (`id (entry[0]:""), entry[1]:"")
+		))
+	    );
 	}
-	if (`float == symbolof (vals))
-	{
-	    boolean not_used = (nil == select (vals, 4, nil) && nil == select (vals, 3, nil));
-	    float initial = select (vals, 4, nil);
-	    if (nil == initial)
-	    {
-		initial = select (vals, 3, nil);
-	    }
-	    if (nil == initial)
-	    {
-		initial = select (vals, 0, nil);
-	    }
-	    term out = `TextEntry (`id (`vals),
-		    not_used ? `opt (`disabled, `hstretch, `notify) :
-			// textentry label
-		    `opt (`hstretch, `notify), _("&Values"), sformat ("%1", initial));
-	    if (nil == select (vals, 3, nil))
-	    {
-		out = `VBox (
-			`VStretch (),
-			// checkbox
-			`CheckBox (`id (`vals2), `opt (`hstretch, `notify), _("Not &set (use the driver default)"), not_used),
-			out,
-			// label
-			`Label (`opt (`hstretch), sformat (_("Minimal value: %1\nMaximal value: %2\nStep: %3"),
-				select (vals, 0, 0), select (vals, 1, 0), select (vals, 2, 0))),
-			`VStretch ()
-			);
-	    }
-	    else
-	    {
-		out = `VBox (
-			`VStretch (),
-			out,
-			// label
-			`Label (`opt (`hstretch), sformat (_("Minimal value: %1\nMaximal value: %2\nStep: %3"),
-				select (vals, 0, 0), select (vals, 1, 0), select (vals, 2, 0))),
-			`VStretch ()
-			);
-	    }
-	    return out;
-	}
-	return `VStretch ();
+	list vals = (list) values;
+	y2error ("value: %1", values);
+	// selectionbox label
+	return `SelectionBox (`id (`vals), `opt (`notify), _("Val&ues"),
+	    maplist (list entry, vals, ``(
+		`item (`id (entry[0]:""), entry[1]:"")
+	    ))
+	);
     }
+
     /**
      * Remove characters that are not allowed by ieee1284.
      * @param id string to check
