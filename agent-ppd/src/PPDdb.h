@@ -19,6 +19,7 @@
 #include <list>
 #include <map>
 #include <vector>
+#include <set>
 
 using namespace std;
 
@@ -44,7 +45,7 @@ class PPD {
                 string filename;
                 string vendor;
                 string printer;
-                string product;
+                set<string> products;
                 string nick;
 		string shortnick;
                 string lang;
@@ -107,6 +108,7 @@ class PPD {
 	string filternotchars(const string s, const string chr);
 	string regexpsub (const string input, const string pattern,
 		const string result);
+	bool validateModel (const string vendor, const string printer);
 };
 
 #endif /* _PPDdb_h */

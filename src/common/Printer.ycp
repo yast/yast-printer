@@ -766,6 +766,8 @@ END { if (!used) print \"ServerName %1\" }
 	    deleted = lookup (state, "deleted", []);
 	    default = lookup (state, "default", "");
 	    db = state["database"]:nil;
+	    if (spooler == "cups" && db == nil)
+		db = `foomatic;
 	    printcap = maplist (`e, printcap, ``(
 		add (e, "type", "yast2")
 	    ));
@@ -1534,11 +1536,8 @@ the selected spooler does not support it.
                             i["vendor"]:"");
 			string mdb = SCR::Read (.ppd.db.modelname,
                             [vdb, i["device"]:""]);
-			y2error ("Printer: %1 %2", vdb, mdb);
 			boolean supp = size (filter (`k, `v, Printer::foomatic[vdb, mdb]:$[], ``(is (k, string)))) > 0;
-			y2error ("Supp: %1", supp);
 			integer type = Printer::foomatic[vdb, mdb, `support]:1;
-			y2error ("Type: %1", type);
 			if (! supp)
 			    type = 2;
 			info = $["supported":true, "type":type];// FIXME type
