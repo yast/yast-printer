@@ -8,7 +8,7 @@ liby2ag_ppd_la_LIBADD = -lcups -lz
 libpy2ag_ppd_la_LIBADD = -lcups -lz
 
 plugin_LTLIBRARIES = libpy2ag_ppd.la
-lib_LTLIBRARIES = liby2ag_ppd.la
+noinst_LTLIBRARIES = liby2ag_ppd.la
 
 liby2ag_ppd_la_SOURCES = 	\
 	PPDAgent.cc		\

@@ -15,13 +15,17 @@
     textdomain "printer";
 
     import "Wizard_hw";
+    import "Wizard";
     import "Printerlib";
     import "Printer";
     import "Arch";
 
     include "printer/misc.ycp";
     include "printer/helps.ycp";
-    include "ui/common_popups.ycp";
+    import "Label";
+    import "Popup";
+    import "Report";
+    import "Mode";
     include "ui/file_popups.ycp";
     include "wizard/sequencer.ycp";
 
@@ -77,7 +81,7 @@ with the SuSE database of printers only.</B></P>
                         info_text = _("<p><B>This printer is not supported by SuSE Linux.</B></P>") + info_text;
 
                     // message box caption
-                    UI::LongTextPopup (_("Printer information"),
+                    Popup::LongText (_("Printer information"),
                         `RichText (info_text), 50, 18);
 
 
@@ -120,8 +124,8 @@ with the SuSE database of printers only.</B></P>
 	    ));
 	// dialog box label
 	Wizard::SetContentsButtons (_("Manufacturer and model of the printer"),
-	    contents, getManufModelHelp (), BackButtonLabel (),
-	    NextButtonLabel ());
+	    contents, getManufModelHelp (), Label::BackButton (),
+	    Label::NextButton ());
 
 	if (manuf_db == "" || manuf_db == nil)
 	{
@@ -140,7 +144,7 @@ with the SuSE database of printers only.</B></P>
 		if (model_db == "" || model_db == nil)
 	        {
 	            // popup
-	            UI::MessagePopup (_("Select a printer model."));
+	            Popup::Message (_("Select a printer model."));
 		    UI::SetFocus (`id (`modelsel));
 	        }
 		else
@@ -202,7 +206,7 @@ with the SuSE database of printers only.</B></P>
 	    if (ret == `next && (model_db == "" || model_db == nil))
 	    {
 		// popup
-		UI::MessagePopup (_("Select a printer model."));
+		Popup::Message (_("Select a printer model."));
 		UI::SetFocus (`id (`modelsel));
 		ret = nil;
 	    }
@@ -210,7 +214,7 @@ with the SuSE database of printers only.</B></P>
 		Printer::foomatic[manuf_db, model_db]:$[],
 		``(is (k, string)))) <= 0)
 	    {
-		UI::MessagePopup (_(
+		Popup::Message (_(
 		    // message popup
 		    "No PPD file available for selected model"));
 		ret = nil;
@@ -285,7 +289,7 @@ with the SuSE database of printers only.</B></P>
 	), `HSpacing (2));
 
 	// dialog box label
-        Wizard::SetContentsButtons (_("Printers"), contents, getPrintersHelp (), BackButtonLabel (), NextButtonLabel ());
+        Wizard::SetContentsButtons (_("Printers"), contents, getPrintersHelp (), Label::BackButton (), Label::NextButton ());
 	UI::ChangeWidget (`id (`printers), `CurrentItem, 0);
 	symbol ret = UI::UserInput ();
             if (ret == `cancel)
@@ -342,7 +346,7 @@ with the SuSE database of printers only.</B></P>
 	if (! ((manuf_db != "" && model_db != "")))
 //	    || Printer::printer["ownppd"]:"" != ""));
 	{
-	    UI::MessagePopup ("This queue was configured using old SuSE
+	    Popup::Message ("This queue was configured using old SuSE
 database of printers. Select model first");
 	    return `back;
 	}
@@ -418,7 +422,7 @@ database of printers. Select model first");
 	string caption = ppd_only ? _("PPD Files")
 		// dialog box label
 	    : _("Configurations");
-	Wizard::SetContentsButtons (caption, contents, ppd_only ? getPpdSelectHelp () : getConfigHelp (), BackButtonLabel (), OKButtonLabel ());
+	Wizard::SetContentsButtons (caption, contents, ppd_only ? getPpdSelectHelp () : getConfigHelp (), Label::BackButton (), Label::OKButton ());
 
 	if (config != "" && config != nil)
 	{
@@ -448,7 +452,7 @@ database of printers. Select model first");
 		string i
 		    = info["comment"]:_("<P>No information available.</P>");
 		// popup header
-		UI::LongTextPopup (_("Configuration information"), `RichText (i), 50, 18);
+		Popup::LongText (_("Configuration information"), `RichText (i), 50, 18);
 	    }
 	    if (`abort == ret)
 	    {
@@ -595,8 +599,8 @@ database of printers. Select model first");
 		is_class ? _("Class name") : _("Queue name"),
 		contents,
 		getSpoolInfoHelp (is_class),
-		BackButtonLabel (),
-		NextButtonLabel ()
+		Label::BackButton (),
+		Label::NextButton ()
 		);
 	UI::ChangeWidget (`id (`name), `ValidChars, "_0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ");
 
@@ -756,8 +760,8 @@ be tested here."));
 			// selection box label
 			`SelectionBox ( `id (`printers), _("Choose &printer:"), maplist (`i, printers, ``{return `item (`id(i),i);})),
 			`HBox (
-			    `PushButton (`id (`ok), `opt (`key_F10), OKButtonLabel ()),
-			    `PushButton (`id (`cancel), `opt (`key_F9), CancelButtonLabel ())
+			    `PushButton (`id (`ok), `opt (`key_F10), Label::OKButton ()),
+			    `PushButton (`id (`cancel), `opt (`key_F9), Label::CancelButton ())
 			    ),
 			`VSpacing (0.3)
 			),
@@ -803,12 +807,12 @@ be tested here."));
 			)
 		    ),
 		`HBox(
-		    `PushButton(`id(`add), `opt (`key_F3), AddButtonLabel ()),
-		    `PushButton(`id(`delete), `opt (`key_F5), DeleteButtonLabel ())
+		    `PushButton(`id(`add), `opt (`key_F3), Label::AddButton ()),
+		    `PushButton(`id(`delete), `opt (`key_F5), Label::DeleteButton ())
 		    )
 		);
 	// dialog label
-	Wizard::SetContentsButtons (_("Members of class"), contents, getMembersHelp (), BackButtonLabel (), NextButtonLabel ());
+	Wizard::SetContentsButtons (_("Members of class"), contents, getMembersHelp (), Label::BackButton (), Label::NextButton ());
 
 	symbol ret = nil;
 	while (true)
@@ -835,7 +839,7 @@ be tested here."));
 		    else
 			{
 			    // message box
-			    UI::MessagePopup (_("Select printer to delete."));
+			    Popup::Message (_("Select printer to delete."));
 			}
 		}
 	    else if (`add == ret)
@@ -865,7 +869,7 @@ be tested here."));
 		    else
 			{
 			    // message box
-			    UI::MessagePopup (_("Class must contain at least one printer."));
+			    Popup::Message (_("Class must contain at least one printer."));
 			}
 		}
 	    else if (`back == ret)
@@ -935,7 +939,7 @@ be tested here."));
 		`VWeight (1, `ReplacePoint (`id (`upper), `VSpacing (1))),
 		`VWeight (1, `ReplacePoint (`id (`lower), `VSpacing (1))),
 		`HBox (`HStretch (), test_button, `HStretch ())
-		), getFilterHelp (), BackButtonLabel (), NextButtonLabel ());
+		), getFilterHelp (), Label::BackButton (), Label::NextButton ());
 
 	map selected = lookup (Printer::printer, "options", $[]);
 
@@ -1157,7 +1161,7 @@ be tested here."));
 			 _("Current values")), items),
 		    `HBox (
 			// push button
-			`PushButton (`id (`edit), `opt (`key_F4), EditButtonLabel ()),
+			`PushButton (`id (`edit), `opt (`key_F4), Label::EditButton ()),
 			`HStretch (),
 			// push button
 			"class" == uri_type ? `HSpacing (0.1) : `PushButton (`id (`test), `opt (`key_F6), _("&Test"))
@@ -1170,7 +1174,7 @@ be tested here."));
 
 	// dialog caption
 	Wizard::SetContentsButtons (_("Edit configuration"), contents, getEditHelp (uri_type, raw, Printer::printer["ownppd"]:"" != "", Printer::index >= 0),
-	    BackButtonLabel (), OKButtonLabel ());
+	    Label::BackButton (), Label::OKButton ());
 	Wizard::RestoreBackButton ();
     }
 
@@ -1218,7 +1222,7 @@ be tested here."));
 		    if (! state)
 		    {
 			// popup
-			if (UI::YesNoPopup (_("If you forbid editing this queue,\nyou will not be able to change its settings\nusing YaST2. Continue?")))
+			if (Popup::YesNo (_("If you forbid editing this queue,\nyou will not be able to change its settings\nusing YaST2. Continue?")))
 			{
 			    Printer::printer = add (Printer::printer, "type", "non-yast-now");
 			    ret = `update;
@@ -1238,7 +1242,7 @@ be tested here."));
 		    else
 		    {
 			// popup
-			if (UI::YesNoPopup (_("The selected queue was not configured 
+			if (Popup::YesNo (_("The selected queue was not configured 
 using YaST2. Do you want to add a printer 
 with a prefilled name?
 ")))
@@ -1349,7 +1353,7 @@ with a prefilled name?
 	Wizard::SetContentsButtons (_("Edit configuration"), contents,
 	    getAdvancedHelp (Printer::spooler == "cups"
 		&& `server == Printer::cupsInstallationType ()),
-	    BackButtonLabel (), AcceptButtonLabel ());
+	    Label::BackButton (), Label::AcceptButton ());
 	Wizard::RestoreBackButton ();
 	symbol ret = nil;
 	while (nil == ret)
@@ -1369,9 +1373,9 @@ with a prefilled name?
 	    if (`scratch == ret)
 	    {
 		// popup
-		if (! UI::AnyQuestionPopup (WarningMsg(),
+		if (! Popup::AnyQuestion (Label::WarningMsg(),
 		    _("Really discard your configuration?"),
-		    YesButtonLabel(), NoButtonLabel (), `focus_no))
+		    Label::YesButton(), Label::NoButton (), `focus_no))
 		{
 		    ret = nil;
 		    continue;
@@ -1388,12 +1392,12 @@ with a prefilled name?
 		    continue;
 		}
 		// popup
-		if (! UI::AnyQuestionPopup(WarningMsg(),
+		if (! Popup::AnyQuestion(Label::WarningMsg(),
 		    _("Really reinstall your printing system? 
 All your changes will be lost.
 "),
 		    // pushbutton
-		    _("&Reinstall"), CancelButtonLabel (), `focus_no))
+		    _("&Reinstall"), Label::CancelButton (), `focus_no))
 		{
 		    ret = nil;
 		    continue;
@@ -1444,7 +1448,7 @@ All your changes will be lost.
 		    if (!Printer::Read ())
 		    {
 			// message box
-			UI::MessagePopup (_("ERROR: Unable to read
+			Popup::Message (_("ERROR: Unable to read
 the current configuration.
 "));
 		    }
@@ -1509,7 +1513,7 @@ the current configuration.
 	), `HStretch ());
 	// dialog caption
 	Wizard::SetContentsButtons (_("CUPS USB Device Name Type"), contents,
-	    getCupsUsbDeviceTypeHelp (), BackButtonLabel (), OKButtonLabel ());
+	    getCupsUsbDeviceTypeHelp (), Label::BackButton (), Label::OKButton ());
 
 	UI::ChangeWidget (`id (`devtype), `CurrentButton,
 	    Printer::cups_usb_dev_names);
@@ -1633,8 +1637,8 @@ the current configuration.
 			    _("&Enter device:"),
 			    pre_filled),
 		`HBox (
-		    `PushButton (`id (`ok), `opt (`key_F10), OKButtonLabel ()),
-		    `PushButton (`id (`cancel), `opt (`key_F9), CancelButtonLabel ())
+		    `PushButton (`id (`ok), `opt (`key_F10), Label::OKButton ()),
+		    `PushButton (`id (`cancel), `opt (`key_F9), Label::CancelButton ())
 		    )
 		)
 	    );
@@ -1697,7 +1701,7 @@ the current configuration.
 
 	// label of the dialog
 	Wizard::SetContentsButtons (_("Printer overview"), contents,
-	    getShowPrinterHelp (), BackButtonLabel (), OKButtonLabel ());
+	    getShowPrinterHelp (), Label::BackButton (), Label::OKButton ());
 
 	if (default_queue != nil && default_queue != "")
 	    UI::ChangeWidget (`id (`table), `CurrentItem, default_queue);
@@ -1724,7 +1728,7 @@ the current configuration.
 		if (i == nil || i != "")
 		{
 		    // message popup
-		    UI::MessagePopup (_("Select a queue"));
+		    Popup::Message (_("Select a queue"));
 		    continue;
 		}
 		foreach (`e, queues, ``{
@@ -1818,7 +1822,7 @@ the current configuration.
 	    + Printer::Summary ([`nonew, `test, `state])
 	    );
 	// dialog label
-	Wizard::SetContentsButtons (_("Printer setup: Autodetected printers"), contents, getDetectedHelp (), BackButtonLabel (), FinishButtonLabel ());
+	Wizard::SetContentsButtons (_("Printer setup: Autodetected printers"), contents, getDetectedHelp (), Label::BackButton (), Label::FinishButton ());
 //	Wizard::ReplaceBackButton(`VSpacing (0));
 	any ret = nil;
 	while (true)
@@ -1853,7 +1857,7 @@ the current configuration.
 	    {
 		// message box
 		if (Printer::warn_finish && ! Mode::config &&
-		  !UI::ContinueCancelPopup (_("Now the changes to your printing 
+		  !Popup::ContinueCancel (_("Now the changes to your printing 
 system will be saved.")))
 		{
 		    continue;
@@ -1865,7 +1869,7 @@ system will be saved.")))
 		    && Printer::cups_installation == `client)
 		{
 		    // popup
-		    boolean b = UI::YesNoPopup (_("Warning!
+		    boolean b = Popup::YesNo (_("Warning!
 
 Your system is configured as CUPS client-only.
 Setting any queue will discard these settings.
@@ -1956,8 +1960,8 @@ Continue?"));
 		nil
 	    ),
 	    getComplexHelp (),
-	    BackButtonLabel (),
-	    FinishButtonLabel ()
+	    Label::BackButton (),
+	    Label::FinishButton ()
 	);
 	if (Printer::detection)
 	{
@@ -1997,7 +2001,7 @@ Continue?"));
 			else if (`delete_button == ret)
 			{
 			    // message box, %1 is replaced by printer name
-			    if (UI::YesNoPopup (sformat (_("Really delete the \"%1\" printer?"), lookup (Printer::printer, "name", ""))))
+			    if (Popup::YesNo (sformat (_("Really delete the \"%1\" printer?"), lookup (Printer::printer, "name", ""))))
 				Printer::deletePrinter ();
 			    UI::ChangeWidget (`id (`table), `Items, printcapTable ());
 			    UI::ChangeWidget (`id (`table), `CurrentItem, Printer::index);
@@ -2012,7 +2016,7 @@ Continue?"));
 		    else
 		    {
 			// message box
-			UI::MessagePopup (_("Select a printer."));
+			Popup::Message (_("Select a printer."));
 		    }
 		}
 		else if (`advanced == ret)
@@ -2035,7 +2039,7 @@ Continue?"));
 		if (`next == ret)
 		{
 		    // message box
-		    if (!Printer::warn_finish || Mode::config || UI::ContinueCancelPopup (Printer::save_all ? _("Now the configuration of the printing 
+		    if (!Printer::warn_finish || Mode::config || Popup::ContinueCancel (Printer::save_all ? _("Now the configuration of the printing 
 system will be saved
 ")
 			// message box
@@ -2047,11 +2051,11 @@ system will be saved
 		if (`scratch == ret)
 		{
 			// message box
-		    if (! UI::AnyQuestionPopup(WarningMsg(), _("Really reinstall your printing system? 
+		    if (! Popup::AnyQuestion(Label::WarningMsg(), _("Really reinstall your printing system? 
 All your changes will be lost.
 "),
 			// push button
-			_("&Reinstall"), CancelButtonLabel (), `focus_no))
+			_("&Reinstall"), Label::CancelButton (), `focus_no))
 			    continue;
 		    boolean success = reinstallAll ();
 			break;

@@ -26,6 +26,7 @@
     import "Summary";
     import "Mode";
     import "HTML";
+    import "Popup";
     include "printer/misc.ycp";
     include "printer/misc-lprng.ycp";
     include "printer/misc-cups.ycp";
@@ -247,7 +248,7 @@
 	    y2milestone ("Detected printer %1", i);
 	    return i;
 	});
-	if (Printer::spooler == "cups")
+	if (spooler == "cups")
 	{
 	    Printerlib::setCupsUsbDevicesInfo ();
 	    autodetected = filter (`a, autodetected, ``(
@@ -352,7 +353,7 @@
 	boolean found_defstr = false;
 	string norm_name = "";
 	string first = "";
-	string state_string = Printer::spooler + "-state";
+	string state_string = spooler + "-state";
 	foreach (`e, printcap, ``{
 	    string name = lookup (e, "name", "");
 	    if (lookup (e, state_string, "") != "void")
@@ -438,7 +439,7 @@
 	string q_filter = "";
 	if (p["ownppd"]:"" == "")
 	{
-	    q_filter = Printer::foomatic [p["vendor_db"]:"",
+	    q_filter = foomatic [p["vendor_db"]:"",
 		p["device_db"]:"", config, "filter"]:nil;
 	}
 	else
@@ -504,16 +505,16 @@
      */
     global define void storePrinter () ``{
 	cups_installation = `server;
-	if (Printer::printer["uri"]:"" == "listen_ipp")
+	if (printer["uri"]:"" == "listen_ipp")
 	{
-	    if (Printer::cups_server_settings["Browsing"]:"On" == "On")
+	    if (cups_server_settings["Browsing"]:"On" == "On")
 	    {
 		// TODO make sure CUPS server will be running
 
 	    }
 	    return;
 	}
-	else if (Printer::printer["uri"]:"" == "cups_client")
+	else if (printer["uri"]:"" == "cups_client")
 	{
 	    cups_installation = `client;
 	    return;
@@ -591,10 +592,10 @@
      */
     global define void Reset () ``{
 
-	list pr = Printer::printcap;
+	list pr = printcap;
 	foreach (`e, pr, ``{
 	    string uri = lookup (e, "uri", "");
-	    Printer::deletePrinters ([$["name": lookup (e, "name", ""), "type":  uri == "class" ? "class" : "printer"]]);
+	    deletePrinters ([$["name": lookup (e, "name", ""), "type":  uri == "class" ? "class" : "printer"]]);
 	});
 	server_hostname = "";
 	cups_installation = nil;
@@ -823,7 +824,7 @@ END { if (!used) print \"ServerName %1\" }
 	nyl = filter (`e, nyl, ``(e != ""));
 	printcap = maplist (`e, printcap, ``{
 	    boolean ready = contains (nyl, lookup (e, "name", ""));
-	    string state = Printer::spooler + "-state";
+	    string state = spooler + "-state";
         // changed due to bug #19224, but I'm not sure, if it is really OK!
 	    e[state] = ready ? e[state]:"changed" : "changed";
 	    return e;
@@ -921,14 +922,14 @@ END { if (!used) print \"ServerName %1\" }
      */
     global define boolean Write () ``{
 	Printerlib::stopServices();
-	if (Printer::spooler == "cups")
+	if (spooler == "cups")
 	{
 	    if (SCR::Read (.init.scripts.exists, "lpd"))
 		Runlevel::ServiceAdjust ("lpd", "disable");
 	    if (`server == cupsInstallationType ())
 	    {
 		writeCupsSettings ();
-		Printer::server_hostname = "";
+		server_hostname = "";
 		saveClientHostName ();
 	    }
             if (`client == cupsInstallationType ())
@@ -941,7 +942,7 @@ END { if (!used) print \"ServerName %1\" }
 		if (! Mode::autoinst)
 		{
 		    // popup
-		    delete = Pkg::IsProvided ("cups") && UI::YesNoPopup (_("Some packages installed are not needed
+		    delete = Pkg::IsProvided ("cups") && Popup::YesNo (_("Some packages installed are not needed
 for CUPS client-only installation. 
 Remove them?
 "));
@@ -1022,7 +1023,7 @@ Remove them?
 		Report::Error (sformat (_("Attempting to save unnamed printer. Skipping: %1"), ent));
 		return;
 	    }
-	    string state = Printer::spooler + "-state";
+	    string state = spooler + "-state";
 	    if (name == default && lookup (entry, state, "changed") != "void")
 		default_printer_found = true;
 
@@ -1037,12 +1038,12 @@ Remove them?
 	    {
 		if (lookup (entry, "cups-state", "changed") == "void")
 		{
-		    UI::MessagePopup (sformat(
+		    Popup::Message (sformat(
 			// popup %1 is queue name
 			_("Queue %1 cannot be saved because
 the selected spooler does not support it."), name));
 		}
-		else if ((lookup (entry, "cups-state", "changed") == "changed" || Printer::save_all) && (lookup (entry, "type", "yast2") == "yast2"))
+		else if ((lookup (entry, "cups-state", "changed") == "changed" || save_all) && (lookup (entry, "type", "yast2") == "yast2"))
 		{
 		    y2debug ("Saving printer %1", entry);
 		    if (writeCupsPrinter (entry))
@@ -1056,12 +1057,12 @@ the selected spooler does not support it."), name));
 	    {
 		if (lookup (entry, "lprng-state", "changed") == "void")
 		{
-		    UI::MessagePopup (sformat(
+		    Popup::Message (sformat(
 			// popup %1 is queue name
 			_("Queue %1 cannot be saved because
 the selected spooler does not support it."), name));
 		}
-		else if ((lookup (entry, "lprng-state", "changed") == "changed" || Printer::save_all) && (lookup (entry, "type", "yast2") == "yast2"))
+		else if ((lookup (entry, "lprng-state", "changed") == "changed" || save_all) && (lookup (entry, "type", "yast2") == "yast2"))
 		{
 		    if (writeLpdPrinter (entry))
 			entry = add (entry, "lprng-state", "commited");
@@ -1092,7 +1093,7 @@ the selected spooler does not support it."), name));
 	    SCR::Write (.sysconfig.printer, nil);
 	    SCR::Write (.cups.default_dest, default_printer_found ? default : "");
 	    SCR::Execute (.target.bash, "/usr/sbin/rccups restart");
-	    if (size (Printer::printcap) > 0)
+	    if (size (printcap) > 0)
 		Runlevel::ServiceAdjust ("cups", "enable");
 	    else
 	    {
@@ -1105,7 +1106,7 @@ the selected spooler does not support it."), name));
 	{
 	    SCR::Write (.sysconfig.printer.DEFAULT_PRINTER, default_printer_found ? default : "none");
 	    SCR::Write (.sysconfig.printer, nil);
-	    if (size (Printer::printcap) > 0)
+	    if (size (printcap) > 0)
 		Runlevel::ServiceAdjust ("lpd", "enable");
 	    else
 	    {
@@ -1254,7 +1255,7 @@ the selected spooler does not support it."), name));
      * @return summary string
      */
     global define string Summary (list style) ``{
-	if (Printer::spooler == "cups" && Printer::cups_installation == `client)
+	if (spooler == "cups" && cups_installation == `client)
 	{
 	    string ret =
                 // summary text
@@ -1262,7 +1263,7 @@ the selected spooler does not support it."), name));
 		sformat (_("<LI>CUPS Client-Only Configuration:<BR>%1</LI>"),
 			// summary text part
 			// %1 server name
-		    sformat (_("using server %1."), Printer::server_hostname));
+		    sformat (_("using server %1."), server_hostname));
 	    list servers = filter (`s, cups_servers, ``(s != server_hostname));
 	    servers = toset (servers);
 	    if (size (servers) > 0)
@@ -1282,7 +1283,7 @@ the selected spooler does not support it."), name));
 	list used = [];
 	// autodetected printer
 //	y2milestone ("Listing autodetected");
-	foreach (`i, Printer::autodetected, ``{
+	foreach (`i, autodetected, ``{
 	    string found = "";
 	    string vendor = lookup (i, "vendor", "");
 	    string model = lookup (i, "device", "");
@@ -1295,8 +1296,8 @@ the selected spooler does not support it."), name));
 		    used = add (used, cache);
 		    if (contains (style, `test))
 		    {
-			if ((Printer::spooler == "cups" && lookup (entry, "cups-state", "") != "void")
-			    || (Printer::spooler == "lprng" && lookup (entry, "lprng-state", "") != "void"))
+			if ((spooler == "cups" && lookup (entry, "cups-state", "") != "void")
+			    || (spooler == "lprng" && lookup (entry, "lprng-state", "") != "void"))
 			{
 			    cache = sformat ("%1 [<a href=\"%1\">test</a>]", cache);
 			}
@@ -1308,9 +1309,9 @@ the selected spooler does not support it."), name));
 		    else
 		    {
 			string state = "";
-			if (Printer::spooler == "cups")
+			if (spooler == "cups")
 			    state = entry["cups-state"]:"changed";
-			else if (Printer::spooler == "lprng")
+			else if (spooler == "lprng")
 			    state = entry["lprng-state"]:"changed";
 			if (state != "" && state != nil)
 			{
@@ -1380,8 +1381,8 @@ the selected spooler does not support it."), name));
 		    );
 		    if (contains (style, `test) && !raw)
 		    {
-			if ((Printer::spooler == "cups" && lookup (i, "cups-state", "") != "void")
-			    || (Printer::spooler == "lprng" && lookup (i, "lprng-state", "") != "void"))
+			if ((spooler == "cups" && lookup (i, "cups-state", "") != "void")
+			    || (spooler == "lprng" && lookup (i, "lprng-state", "") != "void"))
 			{
 			    cache = sformat ("%1 [<a href=\"%1\">test</a>]", cache);
 			}
@@ -1392,9 +1393,9 @@ the selected spooler does not support it."), name));
 			    cache = cache + "  -  " + cfg;
 
                         string state = "";
-                        if (Printer::spooler == "cups")
+                        if (spooler == "cups")
                             state = i["cups-state"]:"changed";
-                        else if (Printer::spooler == "lprng")
+                        else if (spooler == "lprng")
                             state = i["lprng-state"]:"changed";
                         if (state != "" && state != nil)
                         {
@@ -1443,7 +1444,7 @@ the selected spooler does not support it."), name));
 	foreach (`k, `v, other_printers, ``{
 	    summary = add (summary, Summary::Device (k, sformat (format, v)));
 	});
-	if (Printer::spooler == "cups")
+	if (spooler == "cups")
 	{
 	    if (cups_server_settings["Browsing"]:"On" == "On")
 	    {
@@ -1531,7 +1532,7 @@ to access queues of remote CUSP servers.</LI>"));
      * Autoconfigure all printers that haven't been configured yet.
      */
     global define void Propose () ``{
-	if (Printer::spooler == "cups")
+	if (spooler == "cups")
 	    Printerlib::setCupsUsbDevicesInfo ();
 	// settings are read and hw is detected
 	list forbidden_names = getForbiddenNames ();
@@ -1544,7 +1545,7 @@ to access queues of remote CUSP servers.</LI>"));
 		string mdb = printer["device_db"]:"";
 		string ppd_file = getAutoPpdFile (vdb, mdb, nil);
 		boolean configure
-		    = 0 == Printer::foomatic[vdb, mdb, `support]:0;
+		    = 0 == foomatic[vdb, mdb, `support]:0;
 		if (ppd_file != nil && configure)
 		{
 		    boolean ok = true;

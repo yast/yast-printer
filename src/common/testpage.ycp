@@ -21,6 +21,10 @@
     import "Printer";
     import "Printerlib";
     import "Console";
+    import "Mode";
+    import "Label";
+    import "Popup";
+    import "Report";
 
     /**
       * Saves printer under some new name and tests it.
@@ -43,7 +47,7 @@
 	if (Printer::getPrinterState(printer, Printer::spooler) == "void")
 	{
 	    // message popup
-	    UI::MessagePopup (_("Unable to print a test page. You are using different spooler."));
+	    Popup::Message (_("Unable to print a test page. You are using different spooler."));
 	    return false;
 	}
 
@@ -51,7 +55,7 @@
 	if (Printer::spooler != "lprng" && Printer::spooler != "cups")
 	{
 	    // message box
-	    UI::MessagePopup (_("Unable to print a test page. 
+	    Popup::Message (_("Unable to print a test page. 
 Install a spooler 
 before printing test pages.
 "));
@@ -67,12 +71,12 @@ before printing test pages.
 	if (testpage_type != `ask)
 	{
 	    // message box
-	    if (!UI::AnyQuestionPopup ("", _("Ready to print a sample page.
+	    if (!Popup::AnyQuestion ("", _("Ready to print a sample page.
 
 Make sure the printer is turned
 on and ONLINE then press the 'OK' button.
 "),
-		    OKButtonLabel (), CancelButtonLabel (), `focus_yes))
+		    Label::OKButton (), Label::CancelButton (), `focus_yes))
 	    {
 		return ;
 	    }
@@ -98,9 +102,9 @@ press 'OK'.
 		    `VSpacing (1),
 		    `HBox (
 			// pushbutton
-			`PushButton (`id (`ok), `opt (`key_F10, `default), OKButtonLabel ()),
+			`PushButton (`id (`ok), `opt (`key_F10, `default), Label::OKButton ()),
 			// pushbutton
-			`PushButton (`id (`cancel), `opt (`key_F9), CancelButtonLabel ())
+			`PushButton (`id (`cancel), `opt (`key_F9), Label::CancelButton ())
 		    )
 		)
 	    );
@@ -255,7 +259,7 @@ press 'OK'.
 	map out = SCR::Execute (.target.bash_output, lpr_command);
 	if (lookup (out, "exit", 0) != 0)
 	{
-	    UI::MessagePopup (
+	    Popup::Message (
 		// message box
 		sformat (_("Unable to print the test page.
 
@@ -295,7 +299,7 @@ Output from lpr:
 		SCR::Execute (.target.bash, "/etc/init.d/lpd start"); // restart lpd
 
 	    // message box
-	    UI::MessagePopup (_("Printing was stopped.
+	    Popup::Message (_("Printing was stopped.
 
 If the printer is still printing, push the reset button
 on the printer or remove all the paper from its tray.
