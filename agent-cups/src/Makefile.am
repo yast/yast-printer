@@ -24,6 +24,7 @@ liby2ag_cups_la_SOURCES = 	\
 	Y2Logger.h
 
 liby2ag_cups_la_LDFLAGS = -version-info 2:0
+liby2ag_cups_la_LIBADD = @AGENT_LIBADD@
 
 libpy2ag_cups_la_SOURCES =		\
 	$(liby2ag_cups_la_SOURCES)	\
@@ -33,5 +34,6 @@ libpy2ag_cups_la_SOURCES =		\
 #	Y2CupsAgentComponent.h		\
 #	Y2CupsAgentComponent.cc
 libpy2ag_cups_la_LDFLAGS = -version-info 2:0
+libpy2ag_cups_la_LIBADD = @AGENT_LIBADD@
 
 INCLUDES = -I$(includedir)
