@@ -14,7 +14,7 @@ INCLUDES = -I$(includedir)
 noinst_PROGRAMS = runag_printerdb
 runag_printerdb_SOURCES = runag_printerdb.cc
 
-runag_printerdb_LDADD = -lscr -ly2 -lycp -lcrypt
+runag_printerdb_LDADD = -lscr -ly2 -lycp
 runag_printerdb_LDFLAGS = -L$(libdir)	\
 	-Xlinker --whole-archive	\
 	$(plugindir)/libpy2stdio.la	\
