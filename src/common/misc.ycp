@@ -21,6 +21,7 @@
     textdomain "printer";
     import "Printer";
     import "Printerlib";
+//    include "printer/dialogs.ycp";
 
     /**
      * Get list of available banners from /usr/share/cups/banners, adds
@@ -107,7 +108,7 @@
     }
 
     global define boolean testSupportedQueueBySpooler (string queue, string spooler) ``{
-	map supported = $[ "cups" : [ "parallel", "usb", "serial", "filtering", "ipp", "samba", "socket", "irda", "file", ],
+	map supported = $[ "cups" : [ "parallel", "usb", "serial", "filtering", "ipp", "samba", "socket", "irda", "file", "class", ],
 			   "lprng" : [ "parallel", "usb", "serial", "lpd", "prefilter", "samba", "novell", "irda", "filtering", "socket", "pipe", "ipp", "file", ]];
 	list l = lookup (supported, spooler, []);
 /*	boolean res = contains (l, queue);
@@ -235,14 +236,60 @@ queue you want to use."));
      */
     global define boolean testPrinter (map printer, integer testpage_type) ``{
 	// message box
-	if (!UI::AnyQuestionPopup ("", _("YaST2 is ready to print a sample page.
+	if (testpage_type != -1)
+	{
+	    if (!UI::AnyQuestionPopup ("", _("YaST2 is ready to print a sample page.
 
 Please make sure that the printer is turned
 on and ONLINE, then press the 'OK' button."),
 		    OKButtonLabel (), CancelButtonLabel (), `focus_yes))
-	{
-	    return ;
+	    {
+		return ;
+	    }
 	}
+	else
+	{
+	    UI::OpenDialog (
+		`VBox (
+		    `Label (_("YaST2 is ready to print a sample page.
+
+Please select testpage type, make sure that
+the printer is turned on and ONLINE, then 
+press the 'OK' button.")),
+		    `VSpacing (1),
+		    `RadioButtonGroup (`id (`type), `VBox (
+			`Left (`RadioButton (`id (`graphic), _("Test &graphical printing"))),
+			`Left (`RadioButton (`id (`ascii), _("Test &text printing")))
+		    )),
+		    `VSpacing (1),
+		    `HBox (
+			`PushButton (`id (`ok), OKButtonLabel ()),
+			`PushButton (`id (`cancel), CancelButtonLabel ())
+		    )
+		)
+	    );
+	    UI::ChangeWidget (`id (`type), `CurrentButton, `graphic);
+	    symbol ret = nil;
+	    while (nil == ret)
+	    {
+		ret = UI::UserInput ();
+		if (ret == `cancel)
+		{
+		    UI::CloseDialog ();
+		    return;
+		}
+		if (ret == `ok)
+		{
+		    if (UI::QueryWidget (`id (`type), `CurrentButton) == `ascii)
+			testpage_type = 1;
+		    else
+			testpage_type = 0;
+		    break;
+		}
+		ret = nil;
+	    }
+	}
+	UI::CloseDialog ();
 
 	// create new name for the printer
 	list forbidden_names = union (Printer::getForbiddenNames (), Printer::DeletedNames ());
@@ -282,7 +329,7 @@ on and ONLINE, then press the 'OK' button."),
 	}
 
 	printer = Printer::fixPrinter (printer);
-
+	y2error ("Printer for testpage: %1", printer);
 	if (Printer::spooler == "cups")
 	{
 	    Printer::writeCupsPrinter (printer);
@@ -928,6 +975,26 @@ for any file in directory /etc/lpdfilter"));
 	}
 	return selected;
     }
+    /**
+      *
+      */
+    global define term getSpoolerItems (string spooler) ``{
+        return `RadioButtonGroup (
+                        `id (`spooler),
+                        `HBox (`HSpacing (1),
+                            `VBox (
+                                `VSpacing (1),
+                                `RadioButton (`id (`cups_server), `opt (`hstretch), _("CUPS full server installation"), spooler == "cups"),
+                                `VSpacing (0.5),
+                                `RadioButton (`id (`cups_client), `opt (`hstretch), _("CUPS client only installation"), spooler == "cups-client"),
+                                `VSpacing (0.5),
+                                `RadioButton (`id (`lprng), `opt (`hstretch), _("LPRng"), spooler == "lprng"),
+                                `VSpacing (1)
+                            ),
+                            `HSpacing (1)
+                        )
+                    );
+    }
 
     /**
       * Shows a question to a user whether he wants the LPRng or CUPS spooler.
@@ -941,12 +1008,16 @@ for any file in directory /etc/lpdfilter"));
 	UI::OpenDialog (
             `VBox (
 		`Label (msg),
+		getSpoolerItems (""),
 		`HBox (
-		    `PushButton (`id (`lprng), "&LPRng"),
-		    `PushButton (`id (`cups), "&CUPS"),
-		    `PushButton (`id (`exit), abort_msg)))
+		    `PushButton (`id (`ok), "&OK"),
+		    `PushButton (`id (`cancel), abort_msg)))
 	);
 	ret = UI::UserInput ();
+	if (`ok == ret)
+	{
+	    ret = UI::QueryWidget (`id (`spooler), `CurrentButton);
+	}
 	UI::CloseDialog();
 	return ret;
     }
@@ -991,9 +1062,14 @@ the LPRng spooler or the CUPS spooler"), _("&Abort setup"));
 		Printerlib::switchTo ("lprng");
 		return "switched";
 	    }
-	    else if (`cups == result)
+	    else if (`cups_server == result)
 	    {
 		Printerlib::switchTo ("cups");
+		return "switched";
+	    }
+	    else if (`cups_client == result)
+	    {
+		Printerlib::switchTo ("cups_client");
 		return "switched";
 	    }
 	    else
@@ -1027,10 +1103,15 @@ or let current status.
 If you want to only repair current configuration, select LPRng.
 If you leave current status, your spooler doesn't have
 to run properly"), _("&Leave current"));
-	    if (`cups == result)
+	    if (`cups_server == result)
 	    {
 		Printerlib::switchTo ("cups");
 		return "switched";
+	    }
+	    else if (`cups_client == result)
+	    {
+                Printerlib::switchTo ("cups_client");
+                return "switched";
 	    }
 	    else if (`lprng == result)
 	    {
@@ -1049,11 +1130,16 @@ CUPS, install LPRng, or leave current status.
 If you want to only repair current configuration, select CUPS.
 If you leave current status, your spooler doesn't have
 to run properly"), _("&Leave current"));
-	    if (`cups == result)
+	    if (`cups_server == result)
 	    {
 		Printerlib::switchTo ("cups");
 		return "switched";
 	    }
+	    else if (`cups_client == result)
+            {
+                Printerlib::switchTo ("cups_client");
+                return "switched";
+            }
 	    else if (`lprng == result)
 	    {
 		Printerlib::switchTo ("lprng");

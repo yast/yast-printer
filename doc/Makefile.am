@@ -4,7 +4,7 @@
 
 SUBDIRS = autodocs
 
-htmldir = $(docdir)
+htmldir = @docdir@
 
 html_DATA = 			\
 	index.html		\

@@ -2,7 +2,7 @@
 # Makefile.am
 #
 
-dbdir = $(YAST2DIR)/lib/printerdb
+dbdir = @ydatadir@/printerdb
 
 SOURCES = main.ascii manufacturers.ascii printers.ascii configs.ascii options.ascii
 

@@ -1,0 +1,40 @@
+Read	.targetpkg.installed "cups-client" true
+Read	.targetpkg.installed "cups" true
+Execute	.target.bash_output "/usr/bin/awk '/^ServerName/ { print $2 }' /etc/cups/client.conf" $[]
+Execute	.target.bash "/usr/bin/awk '\nBEGIN { used = 0 }\n/^ServerName/ { print \"ServerName \"; used = 1; next }\n{ print $0; }\nEND { if (!used) print \"ServerName \" }\n' /etc/cups/client.conf > /etc/cups/client.conf.yast2; mv /etc/cups/client.conf.yast2 /etc/cups/client.conf" 0
+Write	.sysconfig.printer.CUPS_SERVER "" true
+Write	.sysconfig.printer nil true
+Execute	.target.bash "/sbin/SuSEconfig --module profiles" 0
+Write	.target.ycp "/var/lib/YaST2/printers" $["deleted":[], "printers":[]] true
+Execute	.target.bash "/bin/chmod 600 /var/lib/YaST2/printers" 0
+Write	.sysconfig.printer.DEFAULT_PRINTER "" true
+Write	.sysconfig.printer nil true
+Write	.cups.default_dest "" true
+Read	.init.scripts.exists "cups" true
+Read	.init.scripts.exists "cups" true
+Read	.init.scripts.runlevel "cups" $[]
+Read	.init.scripts.comment "cups" $[]
+Execute	.target.bash "/sbin/insserv -d cups" 0
+Return	true
+Dump	====================================================
+Execute	.target.bash "/usr/bin/awk '\nBEGIN { used = 0 }\n/^ServerName/ { print \"ServerName \"; used = 1; next }\n{ print $0; }\nEND { if (!used) print \"ServerName \" }\n' /etc/cups/client.conf > /etc/cups/client.conf.yast2; mv /etc/cups/client.conf.yast2 /etc/cups/client.conf" 0
+Write	.sysconfig.printer.CUPS_SERVER "" true
+Write	.sysconfig.printer nil true
+Execute	.target.bash "/sbin/SuSEconfig --module profiles" 0
+Write	.cups.printers.remove "lpx" true
+Write	.printerdb.ppd."" $[] "*#PPDFile"
+Read	.target.tmpdir "/tmp"
+Write	.target.string "/tmp/ppdfile" "*#PPDFile" true
+Write	.cups.printers.add $["accepting":true, "bannerend":"none", "bannerstart":"none", "changed":true, "name":"lp", "ppd":"/tmp/ppdfile", "state":"idle", "uri":"parallel://dev/lp0"] true
+Write	.target.ycp "/var/lib/YaST2/printers" $["deleted":[$["name":"lpx", "states":$["cups-state":"commited", "lprng-state":"changed"], "type":"printer"]], "printers":[$["accepting":true, "bannerend":"none", "bannerstart":"none", "cups-state":"commited", "name":"lp", "state":"idle", "uri":"parallel://dev/lp0"]]] true
+Execute	.target.bash "/bin/chmod 600 /var/lib/YaST2/printers" 0
+Write	.sysconfig.printer.DEFAULT_PRINTER "" true
+Write	.sysconfig.printer nil true
+Write	.cups.default_dest "" true
+Read	.init.scripts.exists "cups" true
+Read	.init.scripts.exists "cups" true
+Read	.init.scripts.runlevel "cups" $[]
+Read	.init.scripts.comment "cups" $[]
+Execute	.target.bash "/sbin/insserv -d cups" 0
+Return	true
+Dump	====================================================

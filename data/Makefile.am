@@ -2,10 +2,8 @@
 # Makefile.am for y2c_prnt/data
 #
 
-datadir = $(YAST2DIR)
-
-data_DATA = \
+ydata_DATA = \
 	suse_testpg.ps		\
 	suse_testpg.ascii
 
-EXTRA_DIST = $(data_DATA)
+EXTRA_DIST = $(ydata_DATA)

@@ -6,8 +6,8 @@
 
 SUBDIRS = autodocs
 
-htmldir = $(docdir)
-asciidir = $(docdir)
+htmldir = @docdir@
+asciidir = @docdir@
 
 ascii_DATA = configs.ascii main.ascii manufacturers.ascii options.ascii printers.ascii
 

@@ -109,6 +109,28 @@ serial port settings. Improper values may damage your system.</p>
 
 	return help_text;
     }
+    /**
+      * Help text
+      * @return help text
+      */
+    global define string getAdvancedHelp () ``{
+	return
+	// Help 1/4
+	_("<P><B><BIG>Spooler</BIG></B><BR>You can switch between LPRng and CUPS spoolers. Cups spooler can be installed as client for network printing server
+or as standalone printing system. 
+For using local printers you cannot use client-only installation</P>")
+	+
+	// Help 2/4
+	_("<P><B><BIG>Save method</BIG></B><BR>Select whether you want to save changed queues only, or all queues.</P>")
+	+
+	// Help 3/4
+	_("<P><B><BIG>Reinstalling printing packages</BIG></B><BR>If you have problems with configuring printing, the problem can be caused
+with corrupted or old pacages installed. Pushing <B>Reinstall printing packages</B> can fix these problems.</P>")
+	+
+	// Help 4/4
+	_("<P><B><BIG>Clearing current configuration</BIG></B><BR>If you want to uninstall all currently configured queues,
+you can push <B>Clear current configuration</B>.</P>");
+    }
 
     /**
      * Help text.
@@ -256,63 +278,85 @@ Remote printer connected to Novell Netware print server.</P>");
      * @param raw is it raw printer?
      * @return help text
      */
-    global define string getEditHelp (string type, boolean raw) ``{
-	// help text 2/5 or 2/2
-	string help_text = _("<P><B><BIG>Name:</BIG></B><BR>
+    global define string getEditHelp (string type, boolean raw, boolean ppd) ``{
+	// help text 1/4 or 1/7
+	string help_text = _("<P><B><BIG>Allowing to edit</BIG></B><BR> If you disallow to edit this queue, YaST2 will be unable to change it's settings</P>");
+	// help text 2/4 or 2/7
+	help_text = help_text + _("<P><B><BIG>Name:</BIG></B><BR>
 You may change the name under which to access the configuration in the spool system.
  Form feed settings can also be changed here.</P>
 ");
-	if (raw)
+	if (type != "class")
 	{
-	    // help text 1/2
-	    return _("<P><B><BIG>Connection:</BIG></B><BR>You can change connection for this printer.</P>") + help_text;
-	}
-	else if ("lpd" == type || "filtering" == type || "ipp" == type)
-	{
-	    // help text 1/2
-	    return _("<P><B><BIG>Connection:</BIG></B><BR>
+	    if (type != "lpd" && ! raw)
+	    {
+		if (ppd)
+		    // help text 3/7
+		    help_text = help_text + _("<P><B><BIG>PPD File:</BIG></B><BR>
+To select another PPD file, select it here.</P>
+");
+		else
+		    // help text 3/7
+		    help_text = help_text + _("<P><B><BIG>Model:</BIG></B><BR>
+To try your printer with another driver, choose it here.</P>
+");
+	    }
+            if ("lpd" == type || "filtering" == type || "ipp" == type)
+            {
+                // help text 4/7
+                help_text = help_text + _("<P><B><BIG>Connection:</BIG></B><BR>
 Choose the remote host name and queue name for this remote printer.</P>
-") + help_text;
-	}
-	else if ("samba" == type)
-	{
-	    // help text 1/5
-	    help_text = _("<P><B><BIG>Connection:</BIG></B><BR>
+");
+            }
+            else if ("samba" == type)
+            {
+                // help text 4/7
+                help_text = help_text + _("<P><B><BIG>Connection:</BIG></B><BR>
 You can change host name and queue name for the remote
  printer and the user name and password.</P>
-") + help_text;
-	}
-	else if ("novell" == type)
-	{
-	    // help text 1/5
-	    help_text = _("<P><B><BIG>Connection:</BIG></B><BR>
+");
+            }
+            else if ("novell" == type)
+            {
+                // help text 4/7
+                help_text = help_text + _("<P><B><BIG>Connection:</BIG></B><BR>
 You can change host name and queue name for the remote
  printer and the user name and password.</P>
-") + help_text;
-	}
-	else if ("prefilter" == type)
-	{
-	    // help text 1/5
-	    help_text = _("<P><B><BIG>Connection:</BIG></B><BR>
-Choose forwarding queue that will be used for this printer.</P>") + help_text;
+");
+            }
+            else if ("prefilter" == type)
+            {
+                // help text 4/7
+                help_text = help_text + _("<P><B><BIG>Connection:</BIG></B><BR>
+Choose forwarding queue that will be used for this printer.</P>");
+            }
+            else
+            {
+                // help text 4/7
+                help_text = help_text + _("<P><B><BIG>Connection:</BIG></B><BR>You can change connection for this printer.</P>");
+            }
+	    if (!raw && "lpd" != type && !ppd)
+		// help text 5/7
+		help_text = help_text + _("<P><B><BIG>Model dependent settings:</BIG></B><BR>
+Edit filter options here. These options differ for various printer models.</P>
+");
+	        // help text 6/7
+            help_text = help_text + _("<P><B><BIG>Hardware-independent settings:</BIG></B><BR>
+Edit some settings dependent on spooler, but common for all printers.</P>
+");
+		// help text 7/7
+	    help_text = help_text + _("<P><B><BIG>Testpage printing</BIG></B><BR>
+Push <B>Test</B> button to test this queue</P>");
 	}
 	else
 	{
-	    // help text 1/5
-	    help_text = _("<P><B><BIG>Connection:</BIG></B><BR>You can change connection for this printer.</P>") + help_text;
+	    // help text 3/4
+	    help_text = help_text + _("<P><B><BIG>Class members:</BIG></B><BR>
+Choose queues, which will be members of this class.</P>");
+	    // help text 4/4
+	    help_text = help_text + _("<P><B><BIG>Class settings:</BIG></B><BR>You can change some settings for this class.</P>");
+
 	}
-	// help text 3/5
-	help_text = help_text + _("<P><B><BIG>Model:</BIG></B><BR>
-To try your printer with another driver, choose it here.</P>
-") +
-	// help text 4/5
-	_("<P><B><BIG>Model dependent settings:</BIG></B><BR>
-Edit filter options here. These options differ for various printer models.</P>
-") +
-	// help text 5/5
-	_("<P><B><BIG>Hardware-independent settings:</BIG></B><BR>
-Edit the settings for text printing here.</P>
-");
 	return help_text;
     }
     /**

@@ -52,6 +52,8 @@
 	}
 	return false;
     }
+
+y2error ("Start");
     // ===== arguments ================================================
 
     boolean test_mode = false;
@@ -93,11 +95,13 @@
     // make sure we are root
     if (!Printerlib::amIRoot () && !test_mode)
     {
-        UI (``{
-            MessagePopup (_("You must be root to run the printer configuration tool."));
+        if (! UI::AnyQuestionPopup ("",
+	    _("You must be root to run the printer configuration tool. \n If you will continue, you will not be able to save your settings. \n Do you wish to continue?"),
+	    YesButtonLabel (), NoButtonLabel (), `focus_no))
+	{
             CloseDialog ();
-        });
-        return `back;
+            return `back;
+	}
     }
 
     Printer::spooler = checkSpoolSystem();
@@ -267,7 +271,7 @@ the current configuration.
 	    UI::MessagePopup (_("The new configuration \nwas stored successfully."));
 	}
     }
-    if (`switch == ret || `scratch == ret)
+    if (`switch == ret || `reinstall == ret)
     {
 //	UI::CloseDialog ();
 	if (`switch == ret)

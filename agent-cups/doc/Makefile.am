@@ -6,7 +6,7 @@
 
 SUBDIRS = autodocs
 
-htmldir = $(docdir)
+htmldir = @docdir@
 
 html_DATA = cups.html cups.txt ppd.txt
 EXTRA_DIST = $(html_DATA)

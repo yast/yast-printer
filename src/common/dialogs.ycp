@@ -454,7 +454,7 @@ that your parallel port is not properly configured.
 	string uri = lookup (Printer::printer, "uri", "");
 	string user = "";
 	string password = "";
-	string queue = "";
+	string queue = type == "ipp" ? "printers/" : "";
 	string hostname = "";
 	integer port = 0;
 
@@ -657,6 +657,14 @@ that your parallel port is not properly configured.
 	uri = type + "://";
 	uri = uri + (has_user_password ? user + ":" + password + "@" : "");
 	uri = uri + hostname;
+	if (type == "ipp" && "printers/" != substring (queue, 0, 9))
+	{
+	    string tmp = queue;
+	    while (substring (tmp, 0, 1) == "/")
+		tmp = substring (tmp, 1);
+	    if (filterchars (tmp, "/") == "")
+		queue = "printers/" + tmp;
+	}
 	queue = substring (queue, 0, 1) == "/" ? queue : "/" + queue;
 	uri = uri + (type == "socket" ? ":" + port : queue);
 	if (ret == `next)
@@ -985,6 +993,8 @@ that your parallel port is not properly configured.
 	boolean raw = lookup (Printer::printer, "raw", false);
 	boolean ff = lookup (Printer::printer, "ff", false);
 	boolean is_class = Printerlib::getUriType (lookup (Printer::printer, "uri", "")) == "class" ? true : false;
+	y2error ("Is class: %1", is_class);
+	y2error ("URI: %1", lookup (Printer::printer, "uri", ""));
 
 	if (-1 != Printer::index)
 	{
@@ -1448,12 +1458,13 @@ and if you do not like the result, just press Back.")
 	if (`next == ret)
 	{
 	    ret = type;
-//	    if (Printerlib::getUriType(lookup (Printer::printer, "uri", "")) != "type")
-//		Printer::printer = add (Printer::printer, "uri", substring (sformat ("%1", ret), 1));
 	    Printer::printer = add (Printer::printer, "type", "yast2");
+	    if (type == `class)
+		Printer::printer = add (Printer::printer, "uri", "class");
 	}
 	return ret;
     }
+
     /**
      * Create contents for edit dialog. Calls Setwizardcontents at the end.
      */
@@ -1464,6 +1475,8 @@ and if you do not like the result, just press Back.")
 	string uri = lookup (Printer::printer, "uri", "");
 	string uri_type = Printerlib::getUriType (uri);
 	boolean conf_type = lookup (Printer::printer, "type", "yast2") == "yast2";
+	boolean know = conf_type || lookup (Printer::printer, "type", "yast2") == "non-yast-now";
+	boolean raw = lookup (Printer::printer, "raw", false);
 
 	//
 	// texts
@@ -1476,11 +1489,33 @@ and if you do not like the result, just press Back.")
 	list items = [];
 	string rich = "";
 
+	items = add (items, `item (`id (`name), _("Name and basic settings"), lookup (Printer::printer, "name", "")));
 	if ("class" != uri_type)
 	{
-	    items = add (items, `item (`id (`connection), _("Connection"), Printerlib::getUriNiceName (uri)));
+            if (uri_type != "lpd" && ! lookup (Printer::printer, "raw", false))
+            {
+                if (lookup (Printer::printer, "ownppd", "") != "")
+                {
+                    string filename = lookup (Printer::printer, "ownppd", "");
+                    if (filename != "" && Printer::isPpd (filename))
+                    {
+                        map ppd = Printer::ppdInfo (filename);
+                        filename = lookup (ppd, "manufacturer", "") + " : " + lookup (ppd, "model", "");
+                    }
+                    else
+                    {
+                        filename = "";
+                    }
+                    items = add (items, `item (`id (`ppd), _("PPD file"), know ? filename : _("unknown")));
+
+                }
+                else
+                {
+                    items = add (items, `item (`id (`model), _("Printer model"), know ? model_text : _("unknown")));
+                }
+            }
+	    items = add (items, `item (`id (`connection), _("Connection"), know ? Printerlib::getUriNiceName (uri) : _("unknown")));
 	}
-	items = add (items, `item (`id (`name), _("Name and basic settings"), lookup (Printer::printer, "name", "")));
 	if ("class" == uri_type)
 	{
 	    items = add (items, `item (`id (`class_members), _("Class members"), ""));
@@ -1492,22 +1527,9 @@ and if you do not like the result, just press Back.")
 	    {
 		if (lookup (Printer::printer, "ownppd", "") != "")
 		{
-		    string filename = lookup (Printer::printer, "ownppd", "");
-		    if (filename != "" && Printer::isPpd (filename))
-		    {
-			map ppd = Printer::ppdInfo (filename);
-			filename = lookup (ppd, "manufacturer", "") + " : " + lookup (ppd, "model", "");
-		    }
-		    else
-		    {
-			filename = "";
-		    }
-		    items = add (items, `item (`id (`ppd), _("PPD file"), filename));
-
 		}
 		else
 		{
-		    items = add (items, `item (`id (`model), _("Printer model"), model_text));
 		    items = add (items, `item (`id (`settings), _("Hardware dependent settings"), ""));
 		}
 		items = add (items, `item (`id (`indep), _("Hardware &independent settings"), ""));
@@ -1519,14 +1541,13 @@ and if you do not like the result, just press Back.")
 	    `HBox (
 		`HSpacing (1),
 		`VBox (
-		    `Left (`CheckBox (`id (`yast), _("YaST has permission to edit this queue"), conf_type)),
+		    `Left (`CheckBox (`id (`yast), `opt (`notify), _("&Allow to edit this queue"), conf_type)),
 		    `VSpacing (1),
 		    `Table (`id (`options), `header ( _("Option area"), _("Current values")), items),
 		    `HBox (
 			`PushButton (`id (`edit), _("&Edit...")),
 			`HStretch (),
-			`PushButton (`id (`test), _("&Test graphical printing")),
-			`PushButton (`id (`asciitest), _("Test te&xt printing"))
+			"class" == uri_type ? `HSpacing (0.1) : `PushButton (`id (`test), _("&Test"))
 		    )
 		),
 		`HSpacing (1)
@@ -1534,7 +1555,8 @@ and if you do not like the result, just press Back.")
 	    `VSpacing (1)
 	);
 
-	Wizard::SetContentsButtons (_("Edit configuration"), contents, help_text, BackButtonLabel (), NextButtonLabel ());
+	Wizard::SetContentsButtons (_("Edit configuration"), contents, getEditHelp (uri_type, raw, lookup (Printer::printer, "ownppd", "") != ""),
+	    BackButtonLabel (), NextButtonLabel ());
     }
 
     /**
@@ -1545,6 +1567,17 @@ and if you do not like the result, just press Back.")
 	any ret = nil;
 	Printer::changeDb (lookup (Printer::printer, "database", nil));
 	createEditDialog ();
+	if (lookup (Printer::printer, "type", "yast2") == "yast2")
+	{
+	    UI::ChangeWidget (`id (`test), `Enabled, true);
+	    UI::ChangeWidget (`id (`edit), `Enabled, true);
+	}
+	else
+	{
+	    UI::ChangeWidget (`id (`test), `Enabled, false);
+	    UI::ChangeWidget (`id (`edit), `Enabled, false);
+	}
+
 	while (nil == ret)
 	    {
 		ret = UI::UserInput ();
@@ -1555,23 +1588,41 @@ and if you do not like the result, just press Back.")
 		if (`test == ret)
 		{
 		    ret = nil;
-		    testPrinter (Printer::printer, 0);
-		}
-		else if (`asciitest == ret)
-		{
-		    ret = nil;
-		    testPrinter (Printer::printer, 1);
+		    testPrinter (Printer::printer, -1);
 		}
 		else if (`abort == ret || `cancel == ret)
 		{
 		    ret = reallyAbort () ? `abort : nil;
 		}
-		else if (`nonyast == ret)
+		else if (`yast == ret)
 		{
-		    if (UI::YesNoPopup (_("If you switch the queue to non-YaST mode,\n YaST will not be able to change it's settings. \nDo you really want to continue?")))
+		    boolean state = UI::QueryWidget (`id (`yast), `Value);
+		    if (! state)
 		    {
-			Printer::printer = add (Printer::printer, "type", "non-yast");
-			ret = `next;
+			if (UI::YesNoPopup (_("If you forget to edit this queue,\n I will not be able to change it's settings. \nDo you really want to continue?")))
+			{
+			    Printer::printer = add (Printer::printer, "type", "non-yast-now");
+			    ret = `update;
+			}
+			else
+			{
+			    UI::ChangeWidget (`id (`yast), `Value, true);
+			    ret = nil;
+			}
+		    }
+		    else if (lookup (Printer::printer, "type", "yast2") == "non-yast-now"
+			|| lookup (Printer::printer, "type", "yast2") == "yast2")
+		    {
+			Printer::printer = add (Printer::printer, "type", "yast2");
+			ret = `update;
+		    }
+		    else
+		    {
+			if (UI::YesNoPopup (_("I don't have enough informations about \n this queue. Do you want to add printer 
+with prefilled name?")))
+			    ret = `add;
+			else
+			    ret = nil;
 		    }
 		}
 		else if (`connection == ret)
@@ -1592,13 +1643,228 @@ and if you do not like the result, just press Back.")
 			cont = UI::YesNoPopup (getPpdWarning ());//_("PPD files are supported by CUPS only.\n Do you wish to continue?"));
 		    ret = cont ? `ppd : nil;
 		}
+		if (`update == ret)
+		{
+		    if (lookup (Printer::printer, "type", "yast2") == "yast2")
+		    {
+			UI::ChangeWidget (`id (`test), `Enabled, true);
+			UI::ChangeWidget (`id (`edit), `Enabled, true);
+		    }
+		    else
+		    {
+			UI::ChangeWidget (`id (`test), `Enabled, false);
+			UI::ChangeWidget (`id (`edit), `Enabled, false);
+		    }
+		    ret = nil;
+		}
 	    }
 	return ret;
     }
 
-    global define symbol runAdvancedDialog () ``{
+    /**
+      *
+      */
+/*    global define term getSpoolerItems (string spooler) ``{
+	return `RadioButtonGroup (
+                        `id (`spooler),
+			`HBox (`HSpacing (1),
+                            `VBox (
+				`VSpacing (1),
+                                `RadioButton (`id (`cups_server), `opt (`hstretch), _("CUPS full server installation"), spooler == "cups"),
+				`VSpacing (0.5),
+                                `RadioButton (`id (`cups_client), `opt (`hstretch), _("CUPS client only installation"), spooler == "cups-client"),
+				`VSpacing (0.5),
+                                `RadioButton (`id (`lprng), `opt (`hstretch), _("LPRng"), spooler == "lprng"),
+				`VSpacing (1)
+                            ),
+			    `HSpacing (1)
+			)
+                    );
+    }*/
 
-	return `next;
+    /**
+      * Start dialog with advanced spooler settings
+      * @return symbol for wizzard seq
+      */
+    global define symbol runAdvancedDialog () ``{
+	string new_spooler = Printer::spooler;
+	integer new_cups_i = Printer::cupsInstallationType ();
+	list items = [];
+	if (new_spooler == "cups" && Printer::cupsInstallationType () != 0)
+	    new_spooler = "cups-client";
+
+	items = add (items, `item (`id (`spooler), _("Current spooler"), Printer::spooler == "cups" ? "CUPS" : Printer::spooler == "lprng" ? "LPRng" : _("unknown")));
+	items = add (items, `item (`id (`spoolermode), _("Spooler installation type"), Printer::spooler != "cups" ? _("unavailable")
+	    : Printer::cupsInstallationType () == 0 ? _("Full server installation") : _("Network client only installation")));
+	items = add (items, `item (`id (`save), _("Save method"), Printer::save_all ? _("Save all queues") : _("Save modified queues only")));
+
+/*        term contents = `VBox (
+            `VSpacing (1),
+            `HBox (
+                `HSpacing (1),
+                `VBox (
+                    `Table (`id (`options), `header ( _("Option area"), _("Current values")), items),
+                    `HBox (
+                        `PushButton (`id (`edit), _("&Edit...")),
+			`HStretch (),
+			`HWeight (1, `PushButton (`id (`reinstall), _("&Reinstall printing packages"))),
+			`HWeight (1, `PushButton (`id (`scratch), _("&Clear current configuration")))
+                    )
+                ),
+                `HSpacing (1)
+            ),
+            `VSpacing (1)
+        );*/
+	term contents = `VBox (
+	    `VSpacing (1),
+	    `HBox (
+		`HSpacing (1),
+		`VBox (
+		    `VStretch (),
+		    `HBox (
+			`HStretch (),
+			`Frame (_("Spooler"),
+			    getSpoolerItems (new_spooler)
+		        ),
+			`HStretch ()
+		    ),
+		    `VStretch (),
+		    `CheckBox (`id (`save), _("Force saving everythying"), Printer::save_all),
+		    `VStretch (),
+		    `HWeight (1, `PushButton (`id (`reinstall), _("&Reinstall printing packages"))),
+		    `VStretch (),
+		    `HWeight (1, `PushButton (`id (`scratch), _("&Clear current configuration"))),
+		    `VStretch ()
+		),
+		`HSpacing (1)
+	    ),
+	    `VSpacing (1)
+	);
+
+        Wizard::SetContentsButtons (_("Edit configuration"), contents, getAdvancedHelp (), BackButtonLabel (), NextButtonLabel ());
+	symbol ret = nil;
+	while (nil == ret)
+	{
+	    ret = UI::UserInput ();
+	    if (`edit == ret)
+	    {
+		ret = UI::QueryWidget (`id (`options), `CurrentItem);
+	    }
+/*	    if (`spooler == ret)
+	    {
+		symbol new_spooler_s = chooseSpooler (_("Choose new spooler"), _("&Use current"));
+		if (`exit != new_spooler)
+		{
+		    string tmpnew_spooler = new_spooler_s == `cups ? "cups" : "lprng";
+		    if (tmpnew_spooler != new_spooler)
+		    {
+			new_spooler = tmpnew_spooler;
+			symbol current_item  = UI::QueryWidget(`id(`options), `CurrentItem);
+			UI::ChangeWidget(`id(`options), `Item(current_item, 1), new_spooler == "cups" ? "CUPS" : new_spooler == "lprng" ? "LPRng" : _("unknown"));
+			if (new_spooler != "cups")
+			    UI::ChangeWidget(`id(`options), `Item(`spoolermode, 1), _("unavailable"));
+			else
+			    UI::ChangeWidget(`id(`options), `Item(`spoolermode, 1),
+				new_cups_i == 0 ? _("Full server installation") : _("Network client only installation"));
+                    }
+		}
+	    }*/
+/*	    else if (`spoolermode == ret)
+	    {
+		if ("cups" != new_spooler)
+		{
+		    UI::MessagePopup (_("Selected spooler has only one installation type"));
+		    ret = nil;
+		    continue;
+		}
+		if (UI::AnyQuestionPopup ("", _("Do you wish network client only \n or full server installation of CUPS"), _("Client only"), _("Full server"), `focus_no))
+		    new_cups_i = 1;
+		else
+		    new_cups_i = 0;
+		symbol current_item  = UI::QueryWidget(`id(`options), `CurrentItem);
+		UI::ChangeWidget(`id(`options), `Item(current_item, 1),
+		    new_cups_i == 0 ? _("Full server installation") : _("Network client only installation"));
+	    }*/
+	    if (`scratch == ret)
+	    {
+		if (! UI::AnyQuestionPopup (_("Do you really want to discard all your configuration?"), _("Discard"), _("Don't do it"), `focus_no))
+		{
+		    ret = nil;
+		    continue;
+		}
+		Printer::Reset ();
+		ret = `next;
+		break;
+	    }
+	    else if (`reinstall == ret)
+	    {
+		if (! UI::AnyQuestionPopup("Warning", "Do you really want to completely reinstall \nyour printing system? \nAll your changes will be lost.",
+		    _("Reinstall"), _("Don't do it"), `focus_no))
+		{
+		    ret = nil;
+		    continue;
+		}
+		boolean success = reinstallAll ();
+		break;
+	    }
+	    else if (`back == ret)
+		break;
+	    else if (`next == ret)
+		break;
+	    else if (`abort == ret)
+		break;
+	    ret = nil;
+
+	}
+	if (`next == ret)
+	{
+	    Printer::save_all = UI::QueryWidget (`id (`save), `Value);
+	    symbol spooler = UI::QueryWidget (`id (`spooler), `CurrentButton);
+	    if (`cups_server == spooler)
+	    {
+                Printer::server_hostname = "";
+                if (Printerlib::getSpoolSystem () != 2)
+                {
+                    Printer::saveClientHostName ();
+                    Printerlib::switchTo ("cups");
+                    ret = `switch;
+                    Printer::cups_installation = -1;
+                }
+                else if (Printer::read_done == false)
+                {
+                    if (!Printer::Read ())
+                    {
+                        // message box
+                        UI::MessagePopup (_("ERROR: Unable to read
+the current configuration.
+"));
+                    }
+                }
+		Printer::cups_installation = 0;
+		ret = `cups;
+		new_spooler = "cups";
+	    }
+	    else if (`cups_client == spooler)
+	    {
+		 Printer::cups_installation = 1;
+		 ret = `cups;
+		 new_spooler = "cups";
+	    }
+	    else if (`lprng == spooler)
+	    {
+		new_spooler = "lprng";
+	    }
+	    else
+	    {
+		new_spooler = Printer::spooler;
+	    }
+	    if (Printer::spooler != new_spooler)
+	    {
+		Printerlib::switchTo (new_spooler);
+		return `switch;
+	    }
+	}
+	return ret;
     }
     /**
      * Confirmation of an autodetected parallel/USB printer. User can skip it or
@@ -1682,7 +1948,7 @@ and if you do not like the result, just press Back.")
 	    }
 	}
 	//if no spooler installed, disable quick
-	if (Printer::spooler == "")
+	if (Printer::spooler != "cups" && Printer::spooler != "lprng")
 	{
 	    UI::ChangeWidget (`id (`quick), `Enabled, false);
 	    UI::ChangeWidget (`id (`action), `CurrentButton, `auto);
@@ -1717,14 +1983,19 @@ and if you do not like the result, just press Back.")
 		all_lprng = false;
 	    }
 	});
+	if (! (all_cups && all_lprng))
+	{
+	    UI::ChangeWidget (`id (`quick), `Enabled, false);
+	    UI::ChangeWidget (`id (`action), `CurrentButton, `auto);
+	}
 	if (Printer::spooler == "cups")
 	{
-	    if (!all_cups)
+/*	    if (!all_cups)
 	    {
 		UI::ChangeWidget (`id (`quick), `Enabled, false);
 		UI::ChangeWidget (`id (`action), `CurrentButton, `auto);
 	    }
-	    if (!any_cups)
+*/	    if (!any_cups)
 	    {
 		UI::ChangeWidget (`id (`auto), `Enabled, false);
 		UI::ChangeWidget (`id (`action), `CurrentButton, `manual);
@@ -1732,12 +2003,12 @@ and if you do not like the result, just press Back.")
 	}
 	else if (Printer::spooler == "lprng")
 	{
-	    if (!all_lprng)
+/*	    if (!all_lprng)
 	    {
 		UI::ChangeWidget (`id (`quick), `Enabled, false);
 		UI::ChangeWidget (`id (`action), `CurrentButton, `auto);
 	    }
-	    if (!any_lprng)
+*/	    if (!any_lprng)
 	    {
 		UI::ChangeWidget (`id (`auto), `Enabled, false);
 		UI::ChangeWidget (`id (`action), `CurrentButton, `manual);
@@ -1867,7 +2138,7 @@ and if you do not like the result, just press Back.")
 		string i = UI::QueryWidget (`id (`table), `CurrentItem);
 		foreach (`e, new_queues, ``{
 		    if (lookup (e, "name", "") == i)
-			testPrinter (e, 0);
+			testPrinter (e, -1);
 		});
 	    }
 	    else
@@ -1940,7 +2211,7 @@ and if you do not like the result, just press Back.")
 	    {
 		// request for testing printer...
 		Printer::selectPrinterByName (ret);
-		testPrinter (Printer::printer, 0);
+		testPrinter (Printer::printer, -1);
 		continue ;
 	    }
 	    if (`abort == ret)// || `back == ret || `cancel == ret)
@@ -2010,29 +2281,12 @@ and if you do not like the result, just press Back.")
 		nil, nil,
 		`HBox (
 		    `HStretch (),
-//		    `HWeight (30, `PushButton (`id (`setdefault), _("&Set as default"))),
-//		    `HWeight (30, `PushButton (`id (`advanced), _("&Advanced"))),
 		`PushButton (`id (`setdefault), _("&Set as default")),
 		`PushButton (`id (`advanced), _("&Advanced")),
-		`PushButton (`id (`saveall), _("Save &all printers")),
-		`PushButton (`id (`spooler), _("&Change spooler")),
-		Printer::spooler == "cups" ? `PushButton (`id (`client), _("C&lient only")) : `HSpacing (0),
 
 		    `HStretch ()
 		),
-//		`VBox (
-//		    `PushButton (`id (`setdefault), _("&Set as default")),
-/*		    `HBox (
-			`PushButton (`id (`saveall), _("Save &all printers")),
-			`HStretch (),
-			`PushButton (`id (`spooler), _("&Change spooler")),
-			Printer::spooler == "cups" ? `HStretch () : `HSpacing (0),
-			Printer::spooler == "cups" ? `PushButton (`id (`client), _("C&lient only")) : `HSpacing (0),
-			`HStretch (),
-			`PushButton (`id (`scratch), _("&Start from scratch"))
-		    )
-		),
-*/		nil //`PushButton (`id (`setdefault), _("&Set as default"))
+		nil
 	    ),
 	    getComplexHelp (),
 	    BackButtonLabel (),
@@ -2056,7 +2310,8 @@ and if you do not like the result, just press Back.")
 		    {
 			if (ret == `edit_button)
 			{
-			    if ("yast2" == lookup (Printer::printer, "type", "yast2"))
+			    return `edit;
+/*			    if ("yast2" == lookup (Printer::printer, "type", "yast2"))
 				return `edit;
 			    else
 			    {
@@ -2065,7 +2320,7 @@ prefilled name?")))
 				{
 				    return `add;
 				}
-			    }
+			    }*/
 			}
 			else if (`delete_button == ret)
 			{
@@ -2088,7 +2343,11 @@ prefilled name?")))
 			UI::MessagePopup (_("You must choose some printer."));
 		    }
 		}
-		else if (`spooler == ret)
+		else if (`advanced == ret)
+		{
+		    break;
+		}
+/*		else if (`spooler == ret)
 		{
 		    symbol newspooler = chooseSpooler (_("Choose new spooler"), _("&Use current"));
 		    if (`exit != newspooler) {
@@ -2102,11 +2361,11 @@ prefilled name?")))
 			Printer::spooler = newspoolerstring;
 			break;
 		    }
-		}
-		else if (`client == ret)
+		}*/
+/*		else if (`client == ret)
 		{
 		    break;
-		}
+		}*/
 		else if (`cancel == ret || `abort == ret)
 		{
 		    ret = `abort;
@@ -2129,7 +2388,7 @@ prefilled name?")))
 			break;
 		    }
 		}
-		if (`saveall == ret)
+/*		if (`saveall == ret)
 		{
 		    if (!Printer::warn_finish || UI::YesNoPopup (_("Do you wish all printers \nto be saved when exiting?")))
                     {
@@ -2139,11 +2398,11 @@ prefilled name?")))
 		    {
 			Printer::save_all = false;
 		    }
-		}
+		}*/
 		if (`scratch == ret)
 		{
 		    if (! UI::AnyQuestionPopup("Warning", "Do you really want to completely reinstall \nyour printing system? \nAll your changes will be lost.", 
-			"Reinstall", "Don't do it", `focus_no))
+			_("Reinstall"), _("Don't do it"), `focus_no))
 			    continue;
 		    boolean success = reinstallAll ();
 			break;
@@ -2278,12 +2537,6 @@ prefilled name?")))
 		`edit_button : "main_wz",
 		`add : "add_printer_wz",
 		],
-/*	    "cups_client" : $[
-		`next : `next,
-		`abort : `abort,
-		`switch : `switch,
-		`server : "detected",
-		],*/
 	    "configdetected" : $[
 		`abort : `abort,
 		`quick : "quick",
@@ -2306,6 +2559,7 @@ prefilled name?")))
 		`next : `next,
 		`abort : `abort,
 		`switch : `switch,
+		`reinstall : `reinstall,
 		],
 	    "add_printer_wz" : $[
 		`next : "detected",
@@ -2321,13 +2575,16 @@ prefilled name?")))
 		`add  : "add_printer_wz",
 		`edit : "edit_printer_wz",
 		`abort : `abort,
-		`switch : `switch,
 		`client : "cups_client",
-		`scratch : `scratch,
 		`advanced : "advanced",
 		],
 	    "advanced" : $[
-		`next : "complex",
+		`next : "type",
+		`this : "advanced",
+		`cups : "type",
+		`reinstall : `reinstall,
+		`switch : `switch,
+		`abort : `abort,
 		],
 	    "add_printer_wz" : $[
 		`next: "complex",
@@ -2340,8 +2597,10 @@ prefilled name?")))
 	    "cups_client" : $[
 		`next : `next,
 		`abort : `abort,
+		`advanced : "advanced",
 		`switch : `switch,
-		`server : "complex",
+		`advanced : "advanced",
+//		`server : "complex",
 		],
 	    ];
 	map add_printer_sequence = $[
@@ -2434,9 +2693,11 @@ prefilled name?")))
 		`cups: "cups_wz",
 		`class_members : "members",
 		`class : "cups_wz",
+		`add : "add_printer_wz",
 		`next : "storeprinter",
 		`abort : `abort,
 		],
+	    "add_printer_wz" : $[ `next : "edit", `abort : `abort ],
 	    "samba" : $[ `next : "edit", `abort : `abort, ],
 	    "novell" : $[ `next : "edit", `abort : `abort, ],
 	    "chooseremote" : $[ `next : "edit", `abort : `abort, ],

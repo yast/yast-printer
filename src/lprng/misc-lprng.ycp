@@ -23,1049 +23,259 @@
     import "Printerlib";
 
     /**
-     * Get list of available banners from /usr/share/cups/banners, adds
-     * "none" and sorts.
-     * I think it isn't worth to have it in separate agent.
-     * @return list of strings -- banners
+     * Add a remote printer to the printcap.
+     * @param entry Entry for printer to save.
+     * @return boolean true if successful
      */
-    global define boolean reinstallAll () ``{
-	Printer::printcap = [];
-	Printer::default = "";
-	Printer::save_all = false;
+    global define boolean createRemoteEntry (map entry) ``{
+        string uri = lookup (entry, "uri", "");
+        string hostname = Printerlib::getUriHost (uri);
+        string queue = Printerlib::getUriRemoteQueue (uri);
+        string name = lookup (entry, "name", "");
+        string tail = "";
+        if (!lookup (entry, "ff", false))
+            tail = " -sf";
 
-	Printerlib::stopServices();
-	list to_delete = ["plp", "lprold", "lprng", "cups", "cups-client", "cups-drivers", "cups-drivers-cs", "cups-drivers-de",
-	    "cups-libs", "cups-devel", "lpdfilter", "filters", "ghostscript-fonts-other", "ghostscript-x11", "ghostscript-fonts-std", "ghostscript-library",
-	    "ghostscript-fonts-kanji", "ghostscript-serv", "ghostscript-fonts-rus", "ghostscript-library", "a2ps"];
-	to_delete = filter (`e, to_delete, ``(SCR::Read (.targetpkg.installed, e) == true));
-	list to_install = ["ghostscript-library", "ghostscript-x11", "ghostscript-fonts-std", "ghostscript-fonts-other", "a2ps"];
-	map script = $["userInput" : false];
-	script = add (script, "delete", to_delete);
-	script = add (script, "install", to_install);
-	string fn = SCR::Read (.target.tmpdir);
-	fn = fn + "/script.sw_single";
-	SCR::Write (.target.ycp, fn, script);
-
-	SCR::Execute (.target.bash, "rm -rf /etc/cups/");
-	SCR::Execute (.target.bash, "rm -rf /etc/lpdfilter/");
-	SCR::Execute (.target.bash, "rm -r /etc/printcap");
-	SCR::Execute (.target.bash, "rm -r /etc/printcap.rpm*");
-	SCR::Execute (.target.bash, "rm -r /etc/printcap-2*");
-	SCR::Execute (.target.bash, "rm -r /etc/printcap.y2*");
-	SCR::Execute (.target.bash, "rm -rf /var/spool/lpd/");
-	SCR::Execute (.target.bash, "rm -rf /var/spool/cups/");
-	SCR::Execute (.target.bash, "rm -rf /var/lib/YaST2/printers/");
-
-	CallFunction (`sw_single (fn));
-
-	return true;
-
-    }
-    /**
-     * Get hosts available on local network. Reads from .net.hostnames. Shows popup window: Wait please.
-     * @param type "ipp", "samba", "lpd" or ""
-     * @return list Sorted list of hosts.
-     */
-    global define list getHostnames (string type) ``{
-        UI::OpenDialog (`opt (`decorated),
-                         // text in dialog box
-                         `Label (_("Scanning for hosts on this LAN...")));
-        list hosts = [];
-        if ("samba" == type)
-            hosts = SCR::Read (.net.hostnames.samba);
-        else if ("ipp" == type)
-            hosts = SCR::Read (.net.hostnames, 631);
-        else if ("lpd" == type)
-            hosts = SCR::Read (.net.hostnames, 515);
-        else if ("socket" == type)
-            hosts = SCR::Read (.net.hostnames, 9100);
-        else
-            hosts = SCR::Read (.net.hostnames);
-        if (nil == hosts)
-            hosts = [];
-        UI::CloseDialog ();
-        return sort (hosts);
-    }
-
-
-    global define list getBannerList () ``{
-        map out = SCR::Execute (.target.bash_output, "/bin/ls -1 /usr/share/cups/banners");
-        list ban = splitstring (lookup (out, "stdout", ""), "\n");
-        ban = toset (add (ban, "none"));
-        return filter (`i, ban, ``("" != i));
-    }
-    /**
-     * Return list without item.
-     * @param source source list
-     * @param item item to delete
-     * @return list List without item. If item was not present in list, list is unchanged.
-     */
-    global define list DeleteItem (list source, any item) ``{
-        return filter (`i, source, ``{
-            return i != item;
-        });
-    }
-
-    global define boolean testSupportedQueueBySpooler (string queue, string spooler) ``{
-	map supported = $[ "cups" : [ "parallel", "usb", "serial", "filtering", "ipp", "samba", "socket", "irda", "file", ],
-			   "lprng" : [ "parallel", "usb", "serial", "lpd", "prefilter", "samba", "novell", "irda", "filtering", "socket", "pipe", "ipp", "file", ]];
-	list l = lookup (supported, spooler, []);
-/*	boolean res = contains (l, queue);
-	if (! res)
-	{
-	    UI::ErrorPopup (_("You sellected unsupported printer type. You must change your spooler or choose another printertype"));
-	}
-*/	return contains (l, queue);
-    }
-
-    global define boolean testSupportedQueue (string queue) ``{
-	return testSupportedQueueBySpooler (queue, Printer::spooler);
-    }
-
-    /**
-     * Displays message when baud rate is 0.
-     * @param brate Baud rate.
-     * @return boolean Is baud rate ok?
-     */
-    global define boolean testBaudRate (integer brate) ``{
-	if (brate == 0)
-	    {
-		// message box
-		UI::MessagePopup (_("The baud rate should not be 0!"));
-		return false;
-	    }
-	return true;
-    }
-    /**
-     * Is the hostname correct? Check it for allowed characters. Display message if bad hostname.
-     * @param name Hostname to check
-     * @return boolean true if hostname is correct.
-     */
-    global define boolean checkHostName (string name) ``{
-	return true;
-	if (size (name) > 0 &&
-	    size (name) < 50 &&
-	    name == filterchars (name,
-				"-_.0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"))
-	    {
-		return true;
-	    }
-	else
-	    {
-		// message box
-		UI::MessagePopup (_("You entered a wrong host name. It must be
-shorter than 50 characters and you can only use
-0..9, A..Z, a..z, dots, - and _."));
-	    }
-	return false;
-    };
-
-
-    /**
-     * Check if remote_printer is not nil. Display message otherwise.
-     * @param remote_printer Printer name to check
-     * @return boolean true if name is OK
-     */
-    global define boolean checkRemotePrinter (string remote_printer) ``{
-	if ("" != remote_printer)
-	    {
-		return true;
-	    }
-	// message box
-	UI::MessagePopup ( _("Please choose which forwarding
-queue you want to use."));
-	return false;
-    };
-
-    /**
-      * generate class name
-      * @param forbidden names
-      * @return new class name
-      */
-    global define string generateClassName (list forbidden_names) ``{
-	string name = "class1";
-	integer i = 2;
-	while (contains (forbidden_names, name))
-	{
-	    name = sformat ("class%1", i);
-	    i = i + 1;
-	}
-	return name;
-    }
-
-    /**
-     * FIXME: create test case
-     * @param name printer name
-     * @param forbidden_names forbidden names
-     * @return new queue name
-     */
-    global define string generateQueueName (string name, list forbidden_names) ``{
-	integer i = 1;
-	while (contains (forbidden_names, name))
-	{
-	    name = sformat ("printer%1", i);
-	    i = i + 1;
-	}
-	return name;
-    }
-    /**
-     * clean up after test print
-     * @param names printers to wipe
-     */
-    global define void wipePrinters (list names) ``{
-	//
-	// wipe printer and possibly prefilter
-	//
-	Printer::wipePrinter (select (names, 0, ""));
-	string n2 = select (names, 1, "");
-	if (nil != n2 && "" != n2)
-	    Printer::wipePrinter (n2);
-	//
-	// Restore printcap
-	//
-	if (Printer::spooler != "cups")
-	    SCR::Execute (.target.bash, "/bin/mv /etc/printcap.y2bak /etc/printcap");
-    }
-    /**
-     * Saves printer under some new name and tests it.
-     * It can also create NEW prefilter queue for it.
-     * @param printer printer to test
-     * @param type type of page. Now supports only (0==ps, 1==ascii)
-     * @return success?
-     */
-    global define boolean testPrinter (map printer, integer testpage_type) ``{
-	// message box
-	if (!UI::AnyQuestionPopup ("", _("YaST2 is ready to print a sample page.
-
-Please make sure that the printer is turned
-on and ONLINE, then press the 'OK' button."),
-		    OKButtonLabel (), CancelButtonLabel (), `focus_yes))
-	{
-	    return ;
-	}
-
-	// create new name for the printer
-	list forbidden_names = union (Printer::getForbiddenNames (), Printer::DeletedNames ());
-	string virtual_name = lookup (printer, "name", "");
-	string name = Printer::adjustQueueName ("y2test", forbidden_names);
-	string uri = lookup (printer, "uri", "");
-	string printer_type = uri == "class" ? "class" : "printer";
-	printer = add (printer, "name", name);
-	printer = add (printer, "recreate", true);
-	// is it pre-filter queue?
-	map prefilter = $[];
-	string prefilter_name = "";
-
-	if ("prefilter" == Printerlib::getUriType (uri) && "cups" != Printer::spooler)
-	{
-	    prefilter_name = Printer::adjustQueueName ("y2test", add (forbidden_names, name));
-	    if (lookup (printer, "create_remote_queue", false))
-	    {
-		prefilter = $[
-		    "name" : prefilter_name,
-		    "uri" : "lpd://" + lookup (printer, "remote_host", "") + "/" + lookup (printer, "remote_printer", ""),
-		    ];
-	    }
-	    else
-	    {
-		string use_prefilter = Printerlib::getUriRemoteQueue (uri);
-		foreach (`i, Printer::printcap, ``{
-			if (use_prefilter == lookup (i, "name", ""))
-			{
-			    prefilter = i;
-			}
-		    });
-		prefilter = add (prefilter, "name", prefilter_name);
-	    }
-	    prefilter = add (prefilter, "recreate", true);
-	    printer = add (printer, "uri", "prefilter://" + prefilter_name);
-	}
-
-	printer = Printer::fixPrinter (printer);
-
-	if (Printer::spooler == "cups")
-	{
-	    Printer::writeCupsPrinter (printer);
-	}
-	else
-	{
-	    //
-	    // backup printcap
-	    //
-	    SCR::Execute (.target.bash, "/bin/cp /etc/printcap /etc/printcap.y2bak");
-
-	    //
-	    // write printer and possibly prefilter
-	    //
-	    if (!Printer::writeLpdPrinter (printer))
-		return false;
-	    if ($[] != prefilter)
-	    {
-		if (!Printer::writeLpdPrinter (prefilter))
-		    return false;
-	    }
-
-	    //
-	    // restart lpd
-	    //
-	    SCR::Execute (.target.bash, "/etc/init.d/lpd restart");
-	}
-	//
-	// print test page
-	// to queue: name
-	// but tell user it is queue: virtual_name
-	string switch = " -P" + name;
-	string test_page = "";
-	if (0 == testpage_type)
-	{
-	    map consolefonts = SCR::Read (.target.yast2, "consolefonts.ycp");
-	    string ce = select (lookup (consolefonts, UI::GetLanguage (false), []), 4, "X");
-	    string p = sformat (".printerdb.testpg_options.\"%1\".\"%2\".\"%3\".\"%4\".\"%5\".\"%6\"",
-		    lookup (printer, "vendor", ""),
-		    lookup (printer, "device", ""),
-		    lookup (printer, "config", ""),
-		    lookup (printer, "vendor_ieee", ""),
-		    lookup (printer, "device_ieee", ""),
-		    ce
-		    );
-	    string opts = SCR::Read (.target.tmpdir) + "/testpg.options";
-	    SCR::Write (topath (p), opts, lookup (printer, "options", $[]));
-	    string upp_file = SCR::Write (add (.printerdb.upp, lookup (printer, "config", "")), lookup (printer, "options", $[]));
-
-	    test_page = Printerlib::preparePsTestPage (virtual_name, opts, -1 != find (upp_file, "-sDEVICE=PS"));
-	}
-	else
-	{
-	    test_page = Printerlib::prepareAsciiTestPage ();
-	}
-	string lpr_command = sformat ("/usr/bin/lpr -P%1 %2", name, test_page);
-	map out = SCR::Execute (.target.bash_output, lpr_command);
-	if (lookup (out, "exit", 0) != 0)
-	{
-	    // message box
-	    UI::MessagePopup (
-		sformat (_("I was unable to print the testpage.\n\nOutput from lpr:\n"), test_page) +
-		lookup (out, "stderr", ""));
-	    Printer::deletePrinters ([$["name": name, "type": printer_type ], $["name" : prefilter_name, "type": printer_type]]);
-//	    wipePrinters ([name, prefilter_name]);
-	    return false;
-	}
-
-	if (false == OkOrStopPrinting (sformat ("lpr -P%1 %2", virtual_name, test_page)))
-	{ // Problems, stop the printing!
-	    if (Printer::spooler != "cups")
-		SCR::Execute (.target.bash, "/etc/init.d/lpd stop");
-
-	    string contype = Printerlib::getUriType (uri);
-	    if (contype == "parallel" || contype == "serial" || contype == "usb")
-	    {
-		string device = Printerlib::getUriDevice (uri);
-		if (device != "")
-		{
-		    SCR::Execute (.target.bash, sformat ("/bin/fuser -k %1", device));  // kill currently printing processes
-		}
-		if (contype == "parallel" && "/dev/lp" == substring (device, 0, 7))
-		{
-		    //
-		    // do printer_reset only if we are sure that the device is /dev/lp, because
-		    // now user may add anything as parallel device and we should send this ioctl
-		    // only to parallel port
-		    //
-		    SCR::Execute (.target.control.printer_reset, device);
-		}
-	    }
-
-	    SCR::Execute (.target.bash, "/bin/rm `/usr/bin/find /var/spool/lpd -name \"[cd]f*\" -type f`"); // remove all jobs
-	    if (Printer::spooler != "cups")
-		SCR::Execute (.target.bash, "/etc/init.d/lpd start"); // restart lpd
-
-	    // message box
-	    UI::MessagePopup (_("Printing was stopped.
-
-If the printer is still printing, push the reset button
-on the printer or remove all the paper from its tray.
-After it stops printing, switch off the printer power,
-wait 10 seconds and switch it on again.
-
-Again, check the manufacturer and printer model entries
-you made previously."));
-	}
-	Printer::deletePrinters ([$["name": name, "type": printer_type], $["name" : prefilter_name, "type": printer_type]]);
-//	wipePrinters ([name, prefilter_name]);
-	SCR::Execute (.target.bash, sformat ("/bin/rm /var/lib/YaST2/printers/y2test; \n"));
-	return true;
-    }
-    /**
-     * We need this wrapper because of wizard sequencer.
-     * @return `next for wizard sequencer
-     */
-    global define symbol storePrinter () ``{
-	Printer::storePrinter ();
-	return `next; // because of wizard sequencer
-    }
-
-    /**
-     * Get items for selection box of all fwd queues.
-     * @param queue queue to pre-select in selection box
-     * @return list list of items
-     */
-    global define list getForwardingQueues (string queue) ``{
-	list q = Printer::ForwardingQueues ();
-	return maplist (`i, q, ``((i == queue) ?
-		    `item (`id (i), i, true) :
-		    `item (`id (i), i)));
-    }
-
-    /**
-     * Shows dialog box that allows user to stop printing.
-     * @param pr_command Command that was used to start printing. Showed in text field.
-     * @return boolean true if printing has to be stopped
-     */
-    global define boolean OkOrStopPrinting (string pr_command) ``{
-	// message box with [OK] [Stop]
-	string text = sformat (_("The test page was sent to the printer using
-the command '%1'.
-Printing should start in a few seconds.
-
-If the printer is not producing the appropriate
-output, use the 'Stop!' button.
-
-When the whole page is printed, press
-'Printout finished'."), pr_command);
-	return UI::AnyQuestionPopup (NoHeadline (), text, _("Printout &finished"), StopButtonLabel (), `focus_yes);
-    }
-
-    /**
-     * Ask if really abort. Uses boolean Printer::dirty. Sets boolean do_abort_now.
-     * @return boolean true if user really wants to abort
-     */
-    global define boolean reallyAbort ()``{
-	if (do_abort_now || !Printer::dirty)
-	    {
-		do_abort_now = true;
-		return true;
-	    }
-	do_abort_now = UI::ReallyAbortPopup (true);
-	return do_abort_now;
-    }
-
-    /**
-     * Ask if really exit. Uses boolean Printer::dirty. Sets boolean do_abort_now.
-     * @return boolean true if user really wants to abort
-     */
-    global define boolean reallyExit ()``{
-        if (!Printer::dirty)
-            {
+        y2milestone ("%1", uri);
+        y2milestone ("%1", entry);
+        if (hostname != "" && queue != "" && name != "")
+        {
+            if (callLprsetup (sformat ("/usr/lib/lpdfilter/bin/lprsetup -lprng -overwrite %1 -host %2 -rp %3 -raw -color", name, hostname, queue) + tail))
                 return true;
-            }
-	return UI::AnyQuestionPopup( NoHeadline(),
-"Really leave Printers configuration without saving?
-All changes will be lost!",
-                                      YesButtonLabel(),
-                                      NoButtonLabel(),
-                                      `focus_no );
+        }
+        // message box
+        Report::Error (_("I cannot configure a remote
+queue. The internal structure
+is not filled properly."));
 
-    }
-
-    /**
-     * FIXME: remove this function
-     * Is it known connection?
-     * @param con connection
-     * @return boolean true if it is known connection
-     */
-    global define boolean knowConnection (string con) ``{
-        return (
-            (contains (["file", "parallel", "usb", "serial", "ipp", "lpd", "samba", "socket", "filtering", "irda", "prefilter", "novell", "pipe" ], con)) ?
-            con : ""
-            );
+        return false;
     }
 
-    /**
-     * Create the content of the selection box with all connections
-     * @param type type of connection to pre-select.
-     * @param all show all possible connections (true) or only local connections (false)?
-     * @return List of items. Item of Id is its name.
-     */
-    global define list connectionsRadioButtons (string type, boolean all) ``{
-	return all ?
-	    Printer::spooler == "cups" ?
-		`VBox (
-		    `Label (`opt (`hstretch), _("Local printing:")),
-		    `RadioButton (`id (`parallel), `opt (`hstretch), _("&Parallel printer"), type == "parallel"),
-		    `RadioButton (`id (`usb), `opt (`hstretch),      _("&USB printer"), type == "usb"),
-		    `RadioButton (`id (`serial), `opt (`hstretch),   _("&Serial printer"), type == "serial"),
-		    `RadioButton (`id (`irda), `opt (`hstretch),     _("&IrDA printer"), type == "irda"),
-		    `RadioButton (`id (`file), `opt (`hstretch),     _("&Disk file"), type == "file"),
-		    `Label (`opt (`hstretch), _("LPD and IPP network printing:")),
-                    `RadioButton (`id (`filtering),`opt (`hstretch), _("LPD fi&ltering and forwarding queue"), type == "filtering"),
-		    `RadioButton (`id (`ipp), `opt (`hstretch),    _("&IPP filtering and forwarding queue"), type == "ipp"),
-		    `Label (`opt (`hstretch), _("Other network printing:")),
-		    `RadioButton (`id (`samba), `opt (`hstretch),    _("SMB Printing (Samba/&Windows printer)"), type == "samba"),
-		    `RadioButton (`id (`socket), `opt (`hstretch),    _("Direct TCP port printing (network printer)"), type == "socket"),
-		    `Label (`opt (`hstretch), _("Unsupported network printing in CUPS:")),
-                    `RadioButton (`id (`remote), `opt (`hstretch),      _("LPD &forwarding queue"), type == "lpd"),
-                    `RadioButton (`id (`prefilter),`opt (`hstretch), _("P&refilter queue for a LPD forwarding queue"), type == "prefilter"),
-		    `RadioButton (`id (`novell), `opt (`hstretch),   _("IPX printing (Nove&ll printer)"), type == "novell"),
-		    `Label (`opt (`hstretch), _("Other:")),
-		    `RadioButton (`id (`other), `opt (`hstretch),  _("&Other Printer (set URI)"), "" == knowConnection (type) && type != "class"),
-		    `RadioButton (`id (`pipe), `opt (`hstretch),     _("&Pipe printing"), type == "pipe"),
-		    `RadioButton (`id (`class), `opt (`hstretch),  _("CUPS &class"), type == "class")
-		    )
-		: Printer::spooler == "lprng" ?
-                `VBox (
-                    `Label (`opt (`hstretch), _("Local printing:")),
-                    `RadioButton (`id (`parallel), `opt (`hstretch), _("&Parallel printer"), type == "parallel"),
-                    `RadioButton (`id (`usb), `opt (`hstretch),      _("&USB printer"), type == "usb"),
-                    `RadioButton (`id (`serial), `opt (`hstretch),   _("&Serial printer"), type == "serial"),
-		    `RadioButton (`id (`irda), `opt (`hstretch),     _("&IrDA printer"), type == "irda"),
-                    `RadioButton (`id (`file), `opt (`hstretch),     _("&Disk file"), type == "file"),
-                    `Label (`opt (`hstretch), _("LPD and IPP network printers:")),
-                    `RadioButton (`id (`remote), `opt (`hstretch),      _("LPD &forwarding queue"), type == "lpd"),
-                    `RadioButton (`id (`prefilter),`opt (`hstretch), _("P&refilter queue for a LPD forwarding queue"), type == "prefilter"),
-                    `RadioButton (`id (`filtering),`opt (`hstretch), _("LPD fi&ltering forwarding queue"), type == "filtering"),
-		    `RadioButton (`id (`ipp), `opt (`hstretch),    _("&IPP filtering and forwarding queue"), type == "ipp"),
-		    `Label (`opt (`hstretch), _("Other network printing:")),
-                    `RadioButton (`id (`samba), `opt (`hstretch),    _("SMB Printing (Samba/&Windows printer)"), type == "samba"),
-                    `RadioButton (`id (`novell), `opt (`hstretch),   _("IPX printing (Nove&ll printer)"), type == "novell"),
-		    `RadioButton (`id (`socket), `opt (`hstretch),    _("Direct TCP port printing (network printer)"), type == "socket"),
-//                    `Label (`opt (`hstretch), _("Unsupported network printing in LPRng:")),
-//                    `RadioButton (`id (`ipp), `opt (`hstretch),    _("&IPP filtering and forwarding queue"), type == "ipp"),
-		    `Label (`opt (`hstretch), _("Other:")),
-                    `RadioButton (`id (`other), `opt (`hstretch),   _("&Other Printer (set URI)"), "" == knowConnection (type) && type != "class"),
-		    `RadioButton (`id (`pipe), `opt (`hstretch),     _("&Pipe printing"), type == "pipe"),
-		    `RadioButton (`id (`class), `opt (`hstretch),  _("CUPS &class"), type == "class")
-                    )
-		: //unknown spooler
-		`VBox (
-                    `Label (`opt (`hstretch), _("Local printing:")),
-                    `RadioButton (`id (`parallel), `opt (`hstretch), _("&Parallel printer"), type == "parallel"),
-                    `RadioButton (`id (`usb), `opt (`hstretch),      _("&USB printer"), type == "usb"),
-                    `RadioButton (`id (`serial), `opt (`hstretch),   _("&Serial printer"), type == "serial"),
-                    `RadioButton (`id (`irda), `opt (`hstretch),     _("&IrDA printer"), type == "irda"),
-                    `RadioButton (`id (`file), `opt (`hstretch),     _("&Disk file"), type == "file"),
-                    `Label (`opt (`hstretch), _("LPD and IPP network printing:")),
-                    `RadioButton (`id (`remote), `opt (`hstretch),      _("LPD &forwarding queue"), type == "lpd"),
-                    `RadioButton (`id (`prefilter),`opt (`hstretch), _("P&refilter queue for a LPD forwarding queue"), type == "prefilter"),
-                    `RadioButton (`id (`filtering),`opt (`hstretch), _("LPD fi&ltering and forwarding queue"), type == "filtering"),
-                    `RadioButton (`id (`ipp), `opt (`hstretch),    _("&IPP filtering and forwarding queue"), type == "ipp"),
-                    `Label (`opt (`hstretch), _("Other network printing:")),
-                    `RadioButton (`id (`samba), `opt (`hstretch),    _("SMB Printing (Samba/&Windows printer)"), type == "samba"),
-                    `RadioButton (`id (`novell), `opt (`hstretch),   _("IPX printing (Nove&ll printer)"), type == "novell"),
-                    `RadioButton (`id (`socket), `opt (`hstretch),    _("Direct TCP port printing (network printer)"), type == "socket"),
-                    `Label (`opt (`hstretch), _("Other:")),
-                    `RadioButton (`id (`other), `opt (`hstretch),  _("&Other Printer (set URI)"), "" == knowConnection (type) && type != "class"),
-                    `RadioButton (`id (`pipe), `opt (`hstretch),     _("&Pipe printing"), type == "pipe"),
-                    `RadioButton (`id (`class), `opt (`hstretch),  _("CUPS &class"), type == "class")
-		)
-	    :
-	    `VBox (
-		`Label (`opt (`hstretch), _("Local printing:")),
-		`RadioButton (`id (`parallel), `opt (`hstretch), _("&Parallel printer"), type == "parallel"),
-		`RadioButton (`id (`usb), `opt (`hstretch),      _("&USB printer"), type == "usb"),
-		`RadioButton (`id (`serial), `opt (`hstretch),   _("&Serial printer"), type == "serial"),
-		`RadioButton (`id (`irda), `opt (`hstretch),     _("&IrDA printer"), type == "irda"),
-		`RadioButton (`id (`file), `opt (`hstretch),     _("&Disk file"), type == "file")
-		);
-    }
 
     /**
-     * Get list of available devices in nice-names.
-     * @param dev list of devices to show
-     * @param device device that should be selected. If "" then first device will be selected.
-     * @return list Items for selection box. One of the items is selected.
+     * Add a yast2 printer to the printcap
+     * @param entry Entry for printer to save.
+     * @return boolean true if successful
      */
-    global define list getDevicesItems (list dev, string device) ``{
-	list device_val = [];
-	boolean default_selected = false;
-	foreach (`dev, devices, ``{
-	    boolean this_is_selected = (("" != device && dev == device) ||
-					("" == device && (dev == "/dev/lp0" ||
-							  dev == "/dev/usblp0" ||
-							  dev == "/dev/usb/lp0" ||
-							  dev == "/dev/ttyS0")));
-	    if (this_is_selected)
-		default_selected = true;
-	    device_val = add (device_val, `item (`id (dev), Printerlib::getDeviceNiceName (dev), this_is_selected));
-	});
-	if (!default_selected)
-	    device_val = add (device_val, `item (`id (device), device, true));
-	return device_val;
-    }
-    /**
-     * Create the content of table of all entries in the printcap.
-     * @return List of items. Item id is index of printer in printcap.
-     */
-    global define list printcapTable () ``{
-	integer count = 0;
-	Printer::sortPrinters ();
-	return maplist (`ent, Printer::printcap, ``{
-		string name = lookup (ent, "name", "???");
-		term ret =
-		    `item (
-			`id (count),
-			name == Printer::default ? UI::Glyph (`BulletArrowRight) : " ",
-			lookup (ent, "name", ""));
+    global define boolean createEntry (map entry) ``{
+        string uri = lookup (entry, "uri", "");
+        string name = lookup (entry, "name", "");
+        string device = "/dev/null";
+        string baudrate_str = "";
+        string tail = " -driver upp -own -color";
+        if (lookup (entry, "raw", false))
+            tail = " -raw";
+        else if (lookup (entry, "ascii", false)) //Queue mustn't be ascii AND raw
+            tail = tail + " -ascii";
+        if (!lookup (entry, "ff", false))
+            tail = tail + " -sf";
 
-		if ("yast2" == lookup (ent, "type", "yast2"))
-		{
-		    string description = Printerlib::getUriNiceName (lookup (ent, "uri", ""));
-		    if ("void" == Printer::getPrinterState (ent, Printer::spooler))
-			description = _("- invalid for selected spooler -");
-		    ret = add (ret, description);
-		}
-		else
-		    // This printer was not configured using YaST2. Item in table. SHORT!
-		    ret = add (ret, _("- not YaST2 -"));
-		count = count+1;
-		return ret;
-	});
-    }
-
-    /**
-      * Is the name of local queue correct? If not, display message.
-      * @return boolean true if correct
-      */
-    global define boolean checkLocalQueueName (string name) ``{
-	if (size (name) > 0 && size (name) < 127 &&
-	    size (filterchars (substring (name, 0, 1),
-		"abcdefghijklmnopqrstuvwxyz")) > 0 &&
-	    name == filterchars (name,
-		"_0123456789abcdefghijklmnopqrstuvwxyz"))
-	    {
-		return true;
-	    }
-	    else
-	    {
-		 UI::MessagePopup (_("You entered a wrong queue name. It must be
-shorter than 127 characters, start with a letter
-and you can only use 0..9, a..z and _."));
-		return false;
-	    }
-    }
-
-    /**
-     * Is the name of the remote printer correct? If not, display message.
-     * @param name Hostname to check
-     * @return boolean true if hostname is correct.
-     */
-    global define boolean checkQueueName (string name) ``{
-	return true;
-	if (size (name) > 0 && size (name) < 30 &&
-	    size (filterchars (substring (name, 0, 1),
-		    "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz")) > 0 &&
-	    name == filterchars (name,
-				"/_-0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"))
-	    {
-		return true;
-	    }
-	else
-	    {
-		// message box
-		UI::MessagePopup (_("You entered a wrong remote name. It must be
-shorter than 30 characters and you can only use
-0..9, A..Z, a..z, /, - and _."));
-	    }
-	return false;
-    }
-
-    /**
-     * Check first and optionally 3rd name. 2nd name is 1st name+"-ascii" so it does not bother us,
-     * but is checked because of length. Do not allow '-' in names. Do not allow name lp<number>.
-     * In names are not OK, show dialog
-     *
-     * @param forbidden_names list of names that were already used
-     * @param name name for current printer
-     * @return boolean true if names are OK.
-     */
-    global define boolean checkName (list forbidden_names, string name) ``{
-	boolean ok = true;
-	if (size (name)<=0 ||
-		size (name)>=20 ||
-		name != filterchars (name, "_0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz-") ||
-		contains (forbidden_names, name) ||
-		substring (name, 0, 1) == "-" ||
-		"all" == name
-		)
-	{
-	    // message box
-	    UI::MessagePopup (_("Invalid name! The name should be less than 20 characters long
-and can only use the characters 0..9, a..z, - and _. It must
-not start with -. Additionally, you cannot use the name 'all' 
-because of its special function.
-
-The name must not be used for another printer."));
-	    return false;
-	}
-	if (contains (Printer::getSystemForbiddenNames (), name))
-	{
-	    // message box
-	    UI::MessagePopup (_("Invalid name! The name must not be used
-for any file in directory /etc/lpdfilter"));
-	    return false;
-	}
-	return true;
-    }
-    /**
-     * Get value from UI
-     * @param vals values
-     * @return selected value
-     */
-    global define any grabValueUI (any vals) ``{
-	if (is (vals, list))
-	{
-	    return UI::QueryWidget (`id (`vals), `CurrentItem);
-	}
-	if (is (vals, term))
-	{
-	    if (`text == symbolof (vals))
-	    {
-		string c = UI::QueryWidget (`id (`vals), `Value);
-		return regexpsub (c, "(" + select (vals, 0, ".*") + ")", "\\1");
-	    }
-	    if (true == UI::QueryWidget (`id (`vals2), `Value))
-	    {
-		UI::ChangeWidget (`id (`vals), `Enabled, false);
-		return nil;
-	    }
-	    UI::ChangeWidget (`id (`vals), `Enabled, true);
-	    if (`int == symbolof (vals))
-	    {
-		integer i = UI::QueryWidget (`id (`vals), `Value);
-		if (0 != select (vals, 2, 0))
-		{
-		    i = i - select (vals, 0, 0);
-		    i = i / select (vals, 2, 1);
-		    i = i * select (vals, 2, 1);
-		    i = i + select (vals, 0, 0);
-		    if (i < select (vals, 0, 0))
-			i = select (vals, 0, 0);
-		    if (i > select (vals, 1, select (vals, 0, 0) + 1))
-			i = select (vals, 1, select (vals, 0, 0) + 1);
-		}
-		return i;
-	    }
-	    if (`float == symbolof (vals))
-	    {
-		float i = tofloat (UI::QueryWidget (`id (`vals), `Value));
-		if (0 != select (vals, 2, 0))
-		{
-		    i = i - select (vals, 0, 0);
-		    i = i / select (vals, 2, 1);
-		    i = i * select (vals, 2, 1);
-		    i = i + select (vals, 0, 0);
-		    if (i < select (vals, 0, 0))
-			i = select (vals, 0, 0);
-		    if (i > select (vals, 1, select (vals, 0, 0) + 1))
-			i = select (vals, 1, select (vals, 0, 0) + 1);
-		}
-		return i;
-	    }
-	}
-	return nil;
-    }
-    /**
-     * Creates UI widgets from values.
-     * @param vals values
-     * @return UI representation of vals
-     */
-    global define term getValuesUI (any vals) ``{
-	if (is (vals,list))
-	{
-	    return `SelectionBox (`id (`vals), `opt (`notify), _("&Values"), vals);
-	}
-	if (!is (vals, term))
-	    return `VStretch ();
-	if (`text == symbolof (vals))
-	{
-	    term out = `TextEntry (`id (`vals), `opt (`notify), _("Value:"), select (vals, 1, ""));
-	    return `VBox (
-		    `VStretch (),
-		    out,
-		    `Right (`Label (sformat (_("Allowed characters: %1"), select (vals, 0, "")))),
-		    `VStretch ());
-	}
-	if (`int == symbolof (vals))
-	{
-	    boolean not_used = (nil == select (vals, 4, nil) && nil == select (vals, 3, nil));
-	    integer initial = select (vals, 4, nil);
-	    if (nil == initial)
-	    {
-		initial = select (vals, 3, nil);
-	    }
-	    if (nil == initial)
-	    {
-		initial = select (vals, 0, nil);
-	    }
-	    term out = UI::HasSpecialWidget (`Slider) ?
-		`Slider (`id (`vals), not_used ? `opt (`notify, `disabled) : `opt (`notify), _("&Values")) :
-		`IntField (`id (`vals), not_used ? `opt (`hstretch, `notify, `disabled) : `opt (`notify), _("&Values"));
-	    out = add (out, select (vals, 0, 0));
-	    out = add (out, select (vals, 1, 0));
-	    out = add (out, initial);
-	    if (nil == select (vals, 3, nil))
-	    {
-		out = `VBox (
-			`VStretch (),
-			`CheckBox (`id (`vals2), `opt (`hstretch, `notify), _("Not &set (use the driver default)"), not_used),
-			out,
-			`Label (`opt (`hstretch), sformat (_("Minimal value: %1\nMaximal value: %2\nStep: %3"),
-				select (vals, 0, 0), select (vals, 1, 0), select (vals, 2, 0))),
-			`VStretch ()
-			);
-	    }
-	    else
-	    {
-		out = `VBox (
-			`VStretch (),
-			out,
-			`Label (`opt (`hstretch), sformat (_("Minimal value: %1\nMaximal value: %2\nStep: %3"),
-				select (vals, 0, 0), select (vals, 1, 0), select (vals, 2, 0))),
-			`VStretch ()
-			);
-	    }
-	    return out;
-	}
-	if (`float == symbolof (vals))
-	{
-	    boolean not_used = (nil == select (vals, 4, nil) && nil == select (vals, 3, nil));
-	    float initial = select (vals, 4, nil);
-	    if (nil == initial)
-	    {
-		initial = select (vals, 3, nil);
-	    }
-	    if (nil == initial)
-	    {
-		initial = select (vals, 0, nil);
-	    }
-	    term out = `TextEntry (`id (`vals),
-		    not_used ? `opt (`disabled, `hstretch, `notify) :
-		    `opt (`hstretch, `notify), _("&Values"), sformat ("%1", initial));
-	    if (nil == select (vals, 3, nil))
-	    {
-		out = `VBox (
-			`VStretch (),
-			`CheckBox (`id (`vals2), `opt (`hstretch, `notify), _("Not &set (use the driver default)"), not_used),
-			out,
-			`Label (`opt (`hstretch), sformat (_("Minimal value: %1\nMaximal value: %2\nStep: %3"),
-				select (vals, 0, 0), select (vals, 1, 0), select (vals, 2, 0))),
-			`VStretch ()
-			);
-	    }
-	    else
-	    {
-		out = `VBox (
-			`VStretch (),
-			out,
-			`Label (`opt (`hstretch), sformat (_("Minimal value: %1\nMaximal value: %2\nStep: %3"),
-				select (vals, 0, 0), select (vals, 1, 0), select (vals, 2, 0))),
-			`VStretch ()
-			);
-	    }
-	    return out;
-	}
-	return `VStretch ();
-    }
-    /**
-     * Remove characters that are not allowed by ieee1284.
-     * @param id string to check
-     * @return string updated string
-     */
-    global define string filter1284 (string id) ``{
-	return filterchars (tolower (id), "abcdefghijklmnopqrstuvwxyz0123456789_+/");
-    }
-
-    /**
-     * Compare saved gs_upp file with the generated one.
-     * @param file1 contents of one upp file
-     * @param file2 contents of the other upp file
-     * @return boolean true if files are the same
-     */
-    global define boolean diffUppFiles (string file1, string file2) ``{
-	// save files
-	string tmpdir = SCR::Read (.target.tmpdir);
-	SCR::Write (.target.string, tmpdir + "/options1.upp", file1);
-	SCR::Write (.target.string, tmpdir + "/options2.upp", file2);
-	// diff files
-	boolean changed = (0 == SCR::Execute (.target.bash, sformat ("/usr/bin/diff -w -B %1/options1.upp %1/options2.upp", tmpdir)));
-	// delete files
-	SCR::Execute (.target.bash, sformat ("/bin/rm %1/options1.upp %1/options2.upp", tmpdir));
-	return changed;
-    }
-    /**
-     * Looks if selected options contain paper size.
-     * @param selected currently selected options
-     * @return true if they contain paper size
-     */
-    global define boolean havePaperSize (map selected) ``{
-	boolean found = false;
-	foreach (`k, `v, selected, ``{
-	    if (substring (k, 0, 10) == "papersize-")
-		found = true;
-	});
-	return found;
-    }
-    /**
-     * Tries to find paper size between selected options. If there is any,
-     * doesn't touch anything. Otherwise finds the first paper-size option
-     * in opts and sets it to 0(a4) or 1(letter) according to local
-     * settings.
-     * @param selected currently selected options
-     * @param opts option list
-     * @return modified settings
-     */
-    global define map solvePaperSize (map selected, list opts) ``{
-	integer len = size (opts);
-	integer i = 0;
-	while (i < len)
-	{
-	    string s = select (select (select (select (opts, i, `i ()), 0, `id ([])), 0, []), 1, "");
-	    if (substring (s, 0, 10) == "papersize-")
-	    {
-		selected = add (selected, s, Printerlib::getDefaultPaperSize ());
-		break;
-	    }
-	    i = i + 1;
-	}
-	return selected;
-    }
-
-    /**
-      * Shows a question to a user whether he wants the LPRng or CUPS spooler.
-      * @param Text to be displayed
-      * @return term specifying users selecion (lprng, cups, exit)
-      */
-    global define symbol chooseSpooler(string msg, string abort_msg)
-    ``{
-	symbol ret = `none_symbol;
-	y2error (-1, "%1", msg);
-	UI::OpenDialog (
-            `VBox (
-		`Label (msg),
-		`HBox (
-		    `PushButton (`id (`lprng), "&LPRng"),
-		    `PushButton (`id (`cups), "&CUPS"),
-		    `PushButton (`id (`exit), abort_msg)))
-	);
-	ret = UI::UserInput ();
-	UI::CloseDialog();
-	return ret;
-    }
-    /**
-     * Check what spool system is installed. Don't ask user.
-     * @return string spooler
-     */
-    global define string checkSpoolSystemNoDialog () ``{
-	integer spool_sys = Printerlib::getSpoolSystem ();
-	spool_sys = spool_sys & 0xFF;
-	if (1 == spool_sys) //lpd is installed
-	{
-	    return "lprng";
-	}
-	else if (2 == spool_sys) //cups is installed
-	{
-	    return "cups";
-	}
-	return "unknown";
-    }
-    /**
-     * Check what spool system is installed. Ask user if needed and install spooler if wanted.
-     * @return string spooler
-     */
-    global define string checkSpoolSystem () ``{
-	integer spool_sys = Printerlib::getSpoolSystem ();
-	if (1 == spool_sys) //lpd is installed
-	{
-	    return "lprng";
-	}
-	else if (2 == spool_sys) //cups is installed
-	{
-	    return "cups";
-	}
-	else if (0 == spool_sys) //none installed
-	{
-	    symbol result = chooseSpooler (_("No printing system is installed. 
-You have to choose if you want to configure 
-the LPRng spooler or the CUPS spooler"), _("&Abort setup"));
-	    if (`lprng == result)
-	    {
-		Printerlib::switchTo ("lprng");
-		return "switched";
-	    }
-	    else if (`cups == result)
-	    {
-		Printerlib::switchTo ("cups");
-		return "switched";
-	    }
-	    else
-		return "";
-	}
-	else if (3 == spool_sys) //both spoolers are installed
-	{
-            symbol result = chooseSpooler (_("Both LPRng and CUPS are installed.
-You have to choose if you want to configure
-the LPRng spooler or the CUPS spooler"), _("&Abort setup"));
-            if (`lprng == result)
+        string con_type = Printerlib::getUriType (uri);
+        if (con_type == "parallel" ||
+            con_type == "serial" ||
+            con_type == "usb" ||
+            con_type == "irda")
+        {
+            device = Printerlib::getUriDevice (uri);
+            if (con_type == "serial")
             {
-                Printerlib::switchTo ("lprng");
-                return "switched";
+                integer baudrate = Printerlib::getUriBaudrate (uri);
+                if (baudrate != 0)
+                {
+                    baudrate_str = sformat ("-br %1", baudrate);
+                }
             }
-            else if (`cups == result)
+            if (con_type == "serial")
             {
-                Printerlib::switchTo ("cups");
-                return "switched";
+                string ser_opt = Printerlib::getUriValue (uri, "ty");
+                if (filterchars (ser_opt, "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890-") == "")
+                    ser_opt = "ixon -imaxbel -ixany -ixoff -crtscts";
+                tail = tail + sformat (" -ty \"%1\"", ser_opt);;
             }
-            else
-                return "";
-	}
-	else if (256 + 1 == spool_sys) //lpd is installed, but seems to be not complete
-	{
-	    symbol result = chooseSpooler (
-_("You have installed some LPD compatible spooler,
-probably LPRng but the instalation doesn't seem 
-to be complete. You can choose to install new spooler, 
-or let current status.
-If you want to only repair current configuration, select LPRng.
-If you leave current status, your spooler doesn't have
-to run properly"), _("&Leave current"));
-	    if (`cups == result)
-	    {
-		Printerlib::switchTo ("cups");
-		return "switched";
-	    }
-	    else if (`lprng == result)
-	    {
-		Printerlib::switchTo ("lprng");
-		return "switched";
-	    }
-	    else
-		return "lprng";
-	}
-	else if (256 + 2 == spool_sys) //cups is installed, but seems to be not complete
-	{
-	    symbol result = chooseSpooler (
-_("You have installed CUPS spooler, but the instalation 
-doesn't seem to be complete. You can choose to reinstall
-CUPS, install LPRng, or leave current status. 
-If you want to only repair current configuration, select CUPS.
-If you leave current status, your spooler doesn't have
-to run properly"), _("&Leave current"));
-	    if (`cups == result)
-	    {
-		Printerlib::switchTo ("cups");
-		return "switched";
-	    }
-	    else if (`lprng == result)
-	    {
-		Printerlib::switchTo ("lprng");
-		return "switched";
-	    }
-	    else
-		return "cups";
-	}
-	else if (512 + 2 == spool_sys) //only client installation of cups is installed
-	{
-	    return "cups";
-	}
-	return ""; //should be never reached
+            if (callLprsetup (sformat ("/usr/lib/lpdfilter/bin/lprsetup -lprng -overwrite %1 -device %2 %3", name, device, baudrate_str) + tail)
+)
+                return true;
+        }
+        else if (con_type == "prefilter")
+        {
+            if (callLprsetup (sformat ("/usr/lib/lpdfilter/bin/lprsetup -lprng -overwrite %1 -device /dev/null -redirect %2", name, Printerlib::
+getUriRemoteQueue (uri)) + tail))
+                return true;
+        }
+        else if (con_type == "samba" || con_type == "novell")
+        {
+            // create file redirect
+            string ret = getRemoteEntry (uri);
+            string fn = "/etc/lpdfilter/" + name + "/redirect";
+            SCR::Write (.target.string, fn, ret);
+            SCR::Execute (.target.bash, sformat ("chmod 0750 %1 ; chown lp:lp %1", fn));
+            if (callLprsetup (sformat ("/usr/lib/lpdfilter/bin/lprsetup -lprng -overwrite %1 -device /dev/null", name) + tail))
+                return true;
+        }
+        else if (con_type == "file")
+        {
+            if (callLprsetup (sformat ("/usr/lib/lpdfilter/bin/lprsetup -lprng -overwrite %1 -device '| -$ /bin/cat > %2'", name, Printerlib::getUriDevice (uri)) + tail))
+                return true;
+        }
+        else if (con_type == "pipe")
+        {
+            if (callLprsetup (sformat ("/usr/lib/lpdfilter/bin/lprsetup -lprng -overwrite %1 -redirect '%2' -device /dev/null", name, Printerlib::getUriDevice (uri)) + tail))
+                return true;
+        }
+        else if (con_type == "ipp")
+        {
+            string queue = Printerlib::getUriRemoteQueue (uri);
+            if ("printers/" == substring (queue, 0, 9))
+                queue = substring (queue, 9);
+            if (callLprsetup (sformat ("/usr/lib/lpdfilter/bin/lprsetup -lprng -overwrite %1 -device '| -$ /usr/bin/lp.cups -d %3 -h %2'", name, Printerlib::getUriHost (uri), queue) + tail))
+                return true;
+        }
+        else if (con_type == "filtering")
+        {
+            if (callLprsetup (sformat ("/usr/lib/lpdfilter/bin/lprsetup -lprng -overwrite %1 -host %2 -rp %3", name, Printerlib::getUriHost (uri), Printerlib::getUriRemoteQueue (uri)) + tail))
+                return true;
+        }
+        else if (con_type == "socket")
+        {
+            if (callLprsetup (sformat ("/usr/lib/lpdfilter/bin/lprsetup -lprng -overwrite %1 -host %2 -port %3", name, Printerlib::getUriHost (uri), Printerlib::getUriPort (uri)) + tail))
+//Printerlib::getUriRemoteQueue (uri)) + tail))
+                return true;
+        }
+        // message box
+        Report::Error (_("I cannot configure a printer
+queue. The internal structure
+is not filled properly."));
+        return false;
     }
+    /**
+     * Call lprsetup
+     * @param command command to call
+     * @return boolean true if successful
+     */
+    global define boolean callLprsetup (string command) ``{
+        integer succ = SCR::Execute (.target.bash, command);
+        if (succ != 0 || (-1 == SCR::Read(.target.size, "/etc/printcap")))
+            {
+                // message box
+                Report::Error (sformat (_("Running lprsetup (%1) was not successful."), command));
+                return false;
+            }
+        return true;
+    }
+
+    /**
+     * Write one printer.
+     * Only for LPRng
+     * @param entry printer to write.
+     * @return boolean success?
+     */
+    global define boolean writeLpdPrinter (map entry) ``{
+        map saved = lookup (entry, "saved", $[]);
+        string printcap_part =     lookup (saved, "printcap_part", "");
+        map conf = lookup (entry, "conf", $[]);
+        string upp_fname = lookup (saved, "upp_fname", "");
+        string upp_orig =  lookup (saved, "upp", "");
+        string uri = lookup (entry, "uri", "");
+        string name = lookup (entry, "name", "");
+        string uri_type = Printerlib::getUriType (uri);
+
+        if (lookup (entry, "type", "yast2") != "yast2")
+            return false;
+        if (lookup (entry, "uri", "class") == "class")
+        {
+            UI::MessagePopup (_("LPRng doesn't support CUPS classes.\n Class %1 will not be saved"), name);
+            return false;
+        }
+        if ("void" == lookup (entry, "lprng-state", "changed"))
+        {
+            UI::MessagePopup (_("Queue %1 cannot be saved, because\n selected spooler doesn't support it"), name);
+            return false;
+        }
+
+        //
+        // new or renamed printer?
+        //
+        if (printcap_part != "" && !lookup (entry, "recreate", false))
+        {
+            // We have a part of the printcap from previous configuration...
+            if (lookup (entry, "type", "yast2") == "yast2" && Printerlib::getUriType (uri) != "lpd")
+            {
+                if ("" != upp_fname && "" != upp_orig)
+                {
+                    // We have saved upp file. Save it.
+                    // Why do we save it when it was already saved? Because printer could be renamed.
+                    SCR::Write (.target.string, upp_fname, upp_orig);
+                }
+                else
+                {
+                    // upp file changed (or did not exist). Save it again.
+                    if (!createUppFile (entry))
+                    {
+                        UI::MessagePopup (_("Error occured while saving queue %1"), name);
+                        return false;
+                    }
+                }
+            }
+            SCR::Execute (.target.bash, sformat ("/bin/echo -n '%1' >> /etc/printcap", printcap_part));
+        }
+        else
+        {
+            // New entry - we must do everything
+            if (lookup (entry, "type", "yast2") == "yast2")
+            {
+                SCR::Execute (.target.mkdir, "/etc/lpdfilter/" + name);
+                if (Printerlib::getUriType (uri) == "lpd")
+                {
+                    if (!createRemoteEntry (entry))
+                    {
+                        UI::MessagePopup (_("Error occured while saving queue %1"), name);
+                        return false;
+                    }
+                }
+                else
+                {
+                    if (!createEntry (entry))
+                    {
+                        UI::MessagePopup (_("Error occured while saving queue %1"), name);
+                        return false;
+                    }
+                    if ("" != upp_orig)
+                    {
+                        // create rc file name
+                        upp_fname = sformat ("/etc/lpdfilter/%1/upp", name);
+                        // We have saved upp file. Save it.
+                        // Why do we save it when it was already saved? Because printer could be renamed.
+                        SCR::Write (.target.string, upp_fname, upp_orig);
+                    }
+                    else
+                    {
+                        // upp file changed (or did not exist). Save it again.
+                        if (!createUppFile (entry))
+                        {
+                            UI::MessagePopup (_("Error occured while saving queue %1"), name);
+                            return false;
+                        }
+                    }
+                }
+            }
+        }
+
+        // conf file...
+        if (lookup (entry, "type", "yast2") == "yast2" && Printerlib::getUriType (uri) != "lpd" || lookup (entry, "type", "") == "aps")
+        {
+            // create rc file name
+            string conf_fname = sformat ("/etc/lpdfilter/%1/conf", name);
+            // Is it Epson Stylus on USB? Add magic sequence to be printed before each job.
+            if ("usb" == Printerlib::getUriType (uri) && issubstring (tolower (lookup (entry,"vendor","")),"epson"))
+            {
+                conf = add (conf, "reset_before",
+                                  "\\x0\\x0\\x0\\x1b\\x01\\x40\\x45\\x4a\\x4c\\x20\\x31\\x32\\x38\\x34\\x2e\\x34\\x0a\\x40\\x45\\x4a\\x4c\\x20\\
+x20\\x20\\x20\\x20\\x0a");
+            }
+            writeConf (conf_fname, conf);
+        }
+        return true;
+    }
+
+
 }
