@@ -1,38 +1,4 @@
-<?xml version="1.0" encoding='ISO-8859-1'?>
-<!DOCTYPE article PUBLIC "-//OASIS//DTD DocBook XML V4.1.2//EN"
-          "/usr/share/sgml/db41xml/docbookx.dtd"
-[
-<!ENTITY version "0.01">
-<!ENTITY dx "DocBook-XML">
-]>
-
-<article>
-<title>PPD agent</title>
-<section>
-    <title>Tasks</title>
-	<para>
-The tasks of the PPD agent will be following:
-<itemizedlist>
-<listitem><para>Maintain list of all supported Printer models and their vendors and their PPD files</para></listitem> 
-<listitem><para>Maintain list of mapping from Model names mentioned in PPD files and IEEE names because of detection</para></listitem>
-<listitem><para>Create list of options in PPD file and their values</para></listitem>
-<listitem><para>Examine and set default value of each option</para></listitem>
-<listitem><para>Create options list for test page -- low priority</para></listitem>
-<listitem><para>Generate parameters for LPDfilter -- low priority</para></listitem>
-</itemizedlist>
-</para>
-<para>
-All of these functions must be provided without requiring any spooler runing, because the agent may be used
-without any concrete spooler running. Using of library functions of spoolers is possible, if required packages
-can't conflict.
-</para>
-<para>
-Much time wasting functions should be able to be done asynchronous, because of need to show any progress. The only
-currently known function, which will take a lot of time, is generating database of PPD files when running first
-time, ot when some PPD file changes, is added or removed. Checking of these situations should be fast enough.
-</para>
-</section>
-<section>
+<section id="iface">
     <title>SCR agent interface</title>
 
 <section><title>Write paths</title>
@@ -50,6 +16,9 @@ $[
 	`label : "READABLE_VENDOR",
         "MODEL" : $[
 	    `label : "READABLE_MODEL",
+	    `support : SUPPORT_STATUS,
+	    `vcomment : "VENDOR_COMMENT",
+	    `mcomment : "MODEL_COMMENT",
 	    "DESCRIPTION1" : ["FILENAME", "VENDOR_IEEE", "MODEL_IEEE"],
 	    "DESCRIPTION2" : ["FILENAME2", "VENDOR_IEEE", "MODEL_IEEE"],
         ],
@@ -67,6 +36,16 @@ $[
 </para>
 <para>
 When creating database, because of detection equivalence lists for vendors and models will be used.
+</para>
+<para>
+Support status is integer, which can be 0 (supported), 1 (partially) or 2 (unsupported).
+</para>
+</section>
+
+<section>
+<title>Write (.db.create_ot) -> boolean</title>
+<para>
+makes the same job as .db.create, but doesn't create any new thread and all work makes sybchronous. Returns true if database was successfully rebuilt.
 </para>
 </section>
 
@@ -90,7 +69,22 @@ checks whether some PPD file was changed/added/removed and database needs to get
 <title>Read (.db.creation_status) -> integer</title>
 <para>
 returns current status of database of printers initialization. Returned number is in interval 0 -- 100 (where 100 means already finished)
-If returned nil, creation failed.
+If returned -1, creation failed.
+</para>
+</section>
+
+<section>
+<title>Read (.db.vendorname, string vendorname ) -> string</title>
+<para>
+returns the database key for specified vendor. Shifts to uppercase, removes meaningless characters and applies rules from equivalence list.
+</para>
+</section>
+
+<section>
+<title>Read (.db.modelname [string vendorname, string modelname]) -> string</title>
+<para>
+returns the database key for specified model of specified vendor. Vendor must be in form of database key. Shifts model name to uppercase, removed meaningless characters
+and applies rules from vendor-specific and common equivalence lists.
 </para>
 </section>
 
@@ -119,7 +113,6 @@ $[
 </para>
 </section>
 
-
 <section>
 <title>Read (.file.options, [list (string filename, string group]) -> map</title>
 <para>
@@ -133,6 +126,7 @@ $[
 	    "gui"		: "READABLE_OPTION_NAME",
 	    "current"		: "CURRENT_VALUE",
 	    "type"		: "boolean" | "pickone" | "pickmany",
+	    "valorder"		: [ "LIST", "OF", "VALUES" ],
 	    "values"	: $[
 	        "VALUENAME"		: "READABLE_VALUE_NAME",
 	        "VALUENAME"		: "READABLE_VALUE_NAME",
@@ -169,6 +163,5 @@ $[
 
 </section>
 </section>
-</article>
       
 	    

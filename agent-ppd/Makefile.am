@@ -1,3 +1,1 @@
-SUBDIRS = src conf
-#doc
-#testsuite
+SUBDIRS = src conf doc testsuite
