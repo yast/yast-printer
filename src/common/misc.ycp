@@ -24,6 +24,22 @@
 
 
     /**
+      * Check if paper size is set and if not, then set the defaul
+      * Don't change if already set
+      * @param p map of printer to adjust paper size
+      * @retirn map of printer with adjusted paper size
+      */
+    global define map adjustPaperSize (map p) ``{
+	map options = p["options"]:$[];
+	if (haskey (options, "PageSize"))
+	    return p;
+	options["PageSize"] = Printerlib::getDefaultPaperSize () == 0 ? "A4" : "Letter";
+	p["options"] = options;
+	return p;
+    }
+
+
+    /**
       * Inform user that function isn't available during preparatino of AI
       * via a popup
       */
@@ -301,6 +317,7 @@ preparation of autoinstallation"));
                     string optname = composite["name"]:"";
                     map new_options = $[
                         optname : v,
+			"PageSize" : Printerlib::getDefaultPaperSize () == 0 ? "A4" : "Letter",
                     ];
                     new_queues = add (new_queues, $[
                         "config" : config,

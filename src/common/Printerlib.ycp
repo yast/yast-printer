@@ -739,15 +739,16 @@
     global define string getUriDevice (string uri) ``{
 	if ("" == uri || nil == uri || nil == findfirstof (uri, ":"))
 	    return "";
+	string uri_type = getUriType (uri);
 	integer i = findfirstof (uri, ":");
 	if (nil == i)
 	    return "";
 	uri = substring (uri, i + 1);
-	if (getUriType (uri) != "usb")
+	if (uri_type != "usb")
 	    while ("//" == substring (uri, 0, 2))
 		uri = substring (uri, 1);
 	i = findfirstof (uri, "?");
-	if (nil != i)
+	if (nil != i && uri_type != "usb")
 	    uri = substring (uri, 0, i);
 	return uri;
     }
@@ -961,6 +962,12 @@
 	{
 	    y2milestone ("USB printer %1", dev);
 	    setCupsUsbDevicesInfo ();
+/*	    string serial = regexpsub (dev, ".*?(serial=.*)", "\\1");
+	    y2milestone ("Serial: %1", serial);
+	    if (serial != nil && serial != "")
+	    {
+		return sformat (_("USB port (%1)"), serial);
+	    }*/
 	    string ret = "";
 	    foreach (`e, cups_usb_devices, ``{
 		if (e[0]:"" == dev)
