@@ -174,6 +174,11 @@
       */
     global integer runAutoprobedListDialog__current = 0;
 
+    /**
+     * Driver (backend) for HP all-in-one devices, one of "ptal" and "hp"
+     */
+    global string hp_driver = nil;
+
 
 // local functions
 
@@ -304,21 +309,28 @@ $["bus":"USB", "bus_hwcfg":"usb", "class_id":265, "dev_name":"/dev/usb/lp0", "de
 	    {
 		boolean ptal_failed = false;
 		if (contains (i["requires"]:[], "hp-officeJet")
+		    || contains (i["requires"]:[], "hplip")
 		    ||(p["vendor_db"]:"" == "HP"
 			&& contains (
 			    Printerlib::GetHPAllInOneModels (),
 			    p["device_db"]:"")))
 		{
-		    y2milestone ("PTAL device found: %1", p);
+		    y2milestone ("PTAL/HPLIP device found: %1", p);
 		    if (substring (p["uri"]:"", 0, 9) == "parallel:")
 		    {
 			y2warning ("PTAL must be set manually for parallel devices");
 			ptal_failed = true;
 		    }
 		    boolean req_ret = true;
-		    if (! Package::Installed ("hp-officeJet"))
+		    if (! Package::InstalledAny (["hp-officeJet", "hplip"]))
 		    {
-			req_ret = Package::InstallMsg ("hp-officeJet",
+			// FIXME if default should be PTAL
+			if (hp_driver == nil)
+			    hp_driver = "hp";
+			string package = hp_driver == "ptal"
+			    ? "hp-officejet"
+			    : "hplip";
+			req_ret = Package::InstallMsg (package,
 			    // question, %1 is package name
 			    _("An HP all-in-one device has been detected. To
 use it as both printer and scanner,
@@ -326,21 +338,31 @@ package %1 must be installed.
 
 Install it now?"));
 		    }
+		    // FIXME order if default should be PTAL
+		    else if (Package::Installed ("hplip") && hp_driver == nil)
+		    {
+			hp_driver = "hp";
+		    }
+		    else if (hp_driver == nil)
+		    {
+			hp_driver = "ptal";
+		    }
 		    if (! req_ret && ! Package::LastOperationCanceled ())
 		    {
 			Report::Error (Message::FailedToInstallPackages ());
 			ptal_failed = true;
 		    }
 		    restart_cups = true;
-		    string ptal_uri
-			= Printerlib::getPtalUri (p["device_db"]:"");
+		    string ptal_uri = (hp_driver == "hp")
+			? Printerlib::getHplipUri (p["device_db"]:"")
+			: Printerlib::getPtalUri (p["device_db"]:"");
 		    if (ptal_uri != nil && ! ptal_failed)
 		    {
 			p["uri"] = ptal_uri;
 		    }
 		    else
 		    {
-			y2warning ("Cannot detect PTAL URI");
+			y2warning ("Cannot detect PTAL/HP URI");
 			ptal_failed = true;
 		    }
 		}
@@ -1013,6 +1035,21 @@ Detect your printers?"));
 	{
 	    Report::Error (Message::CannotReadCurrentSettings ());
 	}
+	foreach (map<string,any> p, printcap, {
+	    string uri_type = Printerlib::getUriType (p["uri"]:"");
+	    if (uri_type == "ptal")
+	    {
+		y2milestone ("Ptal queue fonud");
+		hp_driver = "ptal";
+		return;
+	    }
+	    else if (uri_type == "hp")
+	    {
+		y2milestone ("HPLIP queue fonud");
+		hp_driver = "hp";
+		return;
+	    }
+	});
 	y2milestone ("Queues reading finished");
         return ret;
      }

@@ -216,7 +216,7 @@ string PPD::getVendorId (string vendor) {
     }
     else
     {
-	vendor = filternotchars (vendor, "/. -<>");
+	vendor = filternotchars (vendor, "/. -<>_");
     }
     return vendor;
 }
@@ -260,7 +260,7 @@ string PPD::getModelId (string vendor, string model) {
     string modres = "";
     model = strupper (model);
     model = removeVendorFromModel (vendor, model);
-    model = filternotchars (model, "/. -<>");
+    model = filternotchars (model, "/. -<>_");
 
     if (models_map.find (vendor) != models_map.end ())
     {

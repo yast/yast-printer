@@ -40,12 +40,29 @@
         }
         string uri = lookup (entry, "uri", "");
         string uri_type = Printerlib::getUriType (uri);
-	if (uri_type == "ptal")
+	if (uri_type == "hp")
 	{
 	    y2milestone ("Enabling PTAL service");
 	    // for being sure, enable also hotplug
 	    Service::Enable ("hotplug");
+	    Service::Disable ("ptal");
+	    if (Service::Status ("ptal") == 0)
+		Service::Stop ("ptal");
+	    Service::Enable ("hplip");
+	    if (Service::Status ("hplip") != 0)
+		Service::Start ("hplip");
+	}
+	else if (uri_type == "ptal")
+	{
+	    y2milestone ("Enabling PTAL service");
+	    // for being sure, enable also hotplug
+	    Service::Enable ("hotplug");
+	    Service::Disable ("hplip");
+	    if (Service::Status ("hplip") == 0)
+		Service::Stop ("hplip");
 	    Service::Enable ("ptal");
+	    if (Service::Status ("ptal") != 0)
+		Service::Start ("ptal");
 	}
         if (! entry["valid"]:true)
         {

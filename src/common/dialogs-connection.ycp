@@ -1294,6 +1294,19 @@ actually selected.
 		// get the file name
                 string uri = (string)UI::QueryWidget (`id (`name), `Value);
 		string uri_type = Printerlib::getUriType (uri);
+		if ((uri_type == "hp" || uri_type == "ptal")
+		    && hp_driver != uri_type)
+		{
+		    if (hp_driver == nil)
+			hp_driver = uri_type;
+		    else
+			Report::Message (
+_("It is not possible to use both HPLIP
+and PTAL drivers simulateously.
+Check that you use only one of them
+before writing the settings to the
+system.");
+		}
 		if (! Spooler::testSupportedQueueBySpooler (uri_type, "cups"))
 		{
 		    if (! Popup::YesNo (
