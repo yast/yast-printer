@@ -48,7 +48,7 @@ bool setPrinter(const char*name,const char*info,const char*loc,const char*state,
   bool ret = true;
   
 
-  if(!(http = httpConnect(cupsServer(), ippPort())))
+  if(!(http = httpConnect("localhost"/*cupsServer()*/, ippPort())))
     {
       Y2_ERROR("httpConnect error.");
       return false;
@@ -171,7 +171,7 @@ bool setClass(const char*name,const char*info,const char*loc,const char*state,co
   bool ret = true;
   
 
-  if(!(http = httpConnect(cupsServer(), ippPort())))
+  if(!(http = httpConnect("localhost"/*cupsServer()*/, ippPort())))
     {
       Y2_ERROR("httpConnect error.");
       return false;
@@ -299,7 +299,7 @@ bool deletePrinter(const char*name)
   char		uri[HTTP_MAX_URI];	/* URI for printer/class */
 
 
-  if(!(http = httpConnect(cupsServer(), ippPort())))
+  if(!(http = httpConnect("localhost"/*cupsServer()*/, ippPort())))
     {
       Y2_ERROR("httpConnect error %s",ippErrorString(cupsLastError()));
       return false;
@@ -356,7 +356,7 @@ bool deleteClass(const char*name)
   char		uri[HTTP_MAX_URI];	/* URI for printer/class */
 
 
-  if(!(http = httpConnect(cupsServer(), ippPort())))
+  if(!(http = httpConnect("localhost"/*cupsServer()*/, ippPort())))
     {
       Y2_ERROR("httpConnect error %s",ippErrorString(cupsLastError()));
       return false;
@@ -447,7 +447,7 @@ bool setDefaultDest(const char*d)
   cups_lang_t	*language;		/* Default language */
   char		uri[HTTP_MAX_URI];	/* URI for printer/class */
 
-  if(!(http = httpConnect(cupsServer(), ippPort())))
+  if(!(http = httpConnect("localhost"/*cupsServer()*/, ippPort())))
     {
       Y2_ERROR("httpConnect error %s",ippErrorString(cupsLastError()));
       return false;
@@ -494,7 +494,7 @@ bool setDefaultDest(const char*d)
  */
 bool getClasses ()
 {
-    http_t*http = httpConnect(cupsServer(), ippPort());
+    http_t*http = httpConnect("localhost"/*cupsServer()*/, ippPort());
 //    int		i;		/* Looping var */
     ipp_t		*request,	/* IPP Request */
         *response;	/* IPP Response */
