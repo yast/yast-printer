@@ -39,7 +39,7 @@
       * @param config string choosen ppd file, nil = auto
       * @return list of PPD files
       */
-    global define list getFoomaticAutoQueues (string vendor, string model,
+     define list getFoomaticAutoQueues (string vendor, string model,
         string config)
     ``{
         list forbidden_names = Printer::getForbiddenNames ();
@@ -128,7 +128,7 @@
       * @param items map items (item key -> item label)
       * @return list of items to be used for selectionbox
       */
-    global define list sortitems (map items) ``{
+    define list sortitems (map items) ``{
 	string enc = Encoding::console;
 	items = mapmap (string k, string v, items, ``(
 	    $[k: (string)UI::Recode ("UTF-8", enc, v)]));
@@ -149,7 +149,7 @@
       * @param p map of printer to adjust paper size
       * @return map of printer with adjusted paper size
       */
-    global define map adjustPaperSize (map p) ``{
+    define map adjustPaperSize (map p) ``{
 	map options = p["ppd_options"]:$[];
 	if (haskey (options, "PageSize"))
 	    return p;
@@ -170,7 +170,7 @@
       * @param to string to be replaced by
       * @return string modified string
       */
-    global define string replaceAll(string src, string from, string to) ``{
+    define string replaceAll(string src, string from, string to) ``{
         if (from == "")
         {
             return src;
@@ -193,7 +193,7 @@
       * Get printers (physical devices), which are configured
       * @return a list of printers maps (one queue of each printer)
       */
-    global define list<map> getConfiguredPrinters () ``{
+    define list<map> getConfiguredPrinters () ``{
         list<string> ukeys = [];
         list<string> uris = [];
 	list<string> models = [];
@@ -235,7 +235,7 @@
       * @param unique_key string unique_key of the printer
       * @return boolean true if already configured
       */
-    global define boolean isPrinterConfigured (string manuf, string model,
+    define boolean isPrinterConfigured (string manuf, string model,
 	string uri, string unique_key)
     ``{
 	string manuf_db = (string)SCR::Read (.ppd.db.vendorname, manuf);
@@ -263,7 +263,7 @@
      * Reinstall all printing related packages using package-manager
      * @return boolean true if success
      */
-    global define boolean reinstallAll () ``{
+    define boolean reinstallAll () ``{
 	if (Mode::config)
 	{
 	    Printerlib::DisplayUnavailableAIPopup ();
@@ -310,7 +310,7 @@
      * @param type "ipp", "samba", "lpd" or ""
      * @return list Sorted list of hosts.
      */
-    global define list getHostnames (string type) ``{
+    define list getHostnames (string type) ``{
         UI::OpenDialog (`opt (`decorated),
                          // text in dialog box
                          `Label (_("Scanning for hosts on this LAN...")));
@@ -345,7 +345,7 @@
      * @param item item to delete
      * @return list List without item. If item was not present in list, list is unchanged.
      */
-    global define list DeleteItem (list source, any item) ``{
+    define list DeleteItem (list source, any item) ``{
         return filter (`i, source, ``{
             return i != item;
         });
@@ -355,7 +355,7 @@
      * @param brate Baud rate.
      * @return boolean Is baud rate ok?
      */
-    global define boolean testBaudRate (integer brate) ``{
+    define boolean testBaudRate (integer brate) ``{
 	if (brate == 0)
 	    {
 		// message box
@@ -369,7 +369,7 @@
      * @param name Hostname to check
      * @return boolean true if hostname is correct.
      */
-    global define boolean checkHostName (string name) ``{
+    define boolean checkHostName (string name) ``{
 	if (size (name) > 0 &&
 	    /*size (name) < 50 &&*/
 	    "" == filterchars (name,
@@ -395,7 +395,7 @@ shorter than fifty characters and cannot contain
      * @param name Username to check
      * @return boolean true if username is correct.
      */
-    global define boolean checkUserName (string name) ``{
+    define boolean checkUserName (string name) ``{
         if (/*size (name) > 0 &&
             size (name) < 50 &&*/
             "" == filterchars (name,
@@ -420,7 +420,7 @@ contain the characters : , / @.
      * @param name password to check
      * @return boolean true if hostname is correct.
      */
-    global define boolean checkPassword (string name) ``{
+    define boolean checkPassword (string name) ``{
         if (/*size (name) > 0 &&
             size (name) < 50 &&*/
             "" == filterchars (name,
@@ -447,7 +447,7 @@ contain the characters : , / @.
      * @param remote_printer Printer name to check
      * @return boolean true if name is OK
      */
-    global define boolean checkRemotePrinter (string remote_printer) ``{
+    define boolean checkRemotePrinter (string remote_printer) ``{
 	if ("" != remote_printer)
 	    {
 		return true;
@@ -463,7 +463,7 @@ queue you want to use."));
       * @param forbidden_names list of forbidden names
       * @return new class name
       */
-    global define string generateClassName (list forbidden_names) ``{
+    define string generateClassName (list forbidden_names) ``{
 	string name = "class1";
 	integer i = 2;
 	while (contains (forbidden_names, name))
@@ -478,7 +478,7 @@ queue you want to use."));
      * Ask if really abort. Uses boolean Printer::dirty. Sets boolean do_abort_now.
      * @return boolean true if user really wants to abort
      */
-    global define boolean reallyAbort ()``{
+    define boolean reallyAbort ()``{
 	boolean abort_now = false;
 	if (abort_now || !Printer::dirty)
 	    {
@@ -492,7 +492,7 @@ queue you want to use."));
      * Ask if really exit. Uses boolean Printer::dirty. Sets boolean do_abort_now.
      * @return boolean true if user really wants to abort
      */
-    global define boolean reallyExit ()``{
+    define boolean reallyExit ()``{
         if (!Printer::dirty)
             {
                 return true;
@@ -514,7 +514,7 @@ All changes will be lost.
      * @param device device that should be selected. If "" then first device will be selected.
      * @return list Items for selection box. One of the items is selected.
      */
-    global define list getDevicesItems (list devices, string device) ``{
+    define list getDevicesItems (list devices, string device) ``{
 	list device_val = [];
 	boolean default_selected = false;
 	foreach (string dev, devices, ``{
@@ -536,7 +536,7 @@ All changes will be lost.
      * Create the content of table of all entries in the printcap.
      * @return List of items. Item id is index of printer in printcap.
      */
-    global define list printcapTable () ``{
+    define list printcapTable () ``{
 	integer count = 0;
 	Printer::sortPrinters ();
 	return maplist (map ent, Printer::printcap, ``{
@@ -578,7 +578,7 @@ All changes will be lost.
       * @param forbidden_names list of forbidden names
       * @return boolean true if correct
       */
-    global define boolean checkLocalQueueName (string name, list forbidden_names) ``{
+    define boolean checkLocalQueueName (string name, list forbidden_names) ``{
 	if (size (name) > 0 && size (name) < 32 &&
 	    size (filterchars (substring (name, 0, 1),
 		"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")) > 0 &&
@@ -610,7 +610,7 @@ and only contain 0...9, A...Z, a...z, and _."));
      * @param name Hostname to check
      * @return boolean true if hostname is correct.
      */
-    global define boolean checkQueueName (string name) ``{
+    define boolean checkQueueName (string name) ``{
 	if (size (name) > 0 && /*size (name) < 30 &&
 	    size (filterchars (substring (name, 0, 1),
 		    "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz")) > 0 &&*/
@@ -636,7 +636,7 @@ It cannot contain the characters @ and :.
       * @param values list values
       * @return UI representation of vals
       */
-    global define term getWidgetForOption (string option_type, list values) ``{
+    define term getWidgetForOption (string option_type, list values) ``{
 	if (option_type == "Boolean")
 	{
 	    list vals = (list) values;
@@ -699,7 +699,7 @@ It cannot contain the characters @ and :.
      * @param id string to check
      * @return string updated string
      */
-    global define string filter1284 (string id) ``{
+    define string filter1284 (string id) ``{
 	return filterchars (tolower (id), "abcdefghijklmnopqrstuvwxyz0123456789_+/");
     }
 
@@ -709,7 +709,7 @@ It cannot contain the characters @ and :.
      * @param file2 contents of the other upp file
      * @return boolean true if files are the same
      */
-    global define boolean diffUppFiles (string file1, string file2) ``{
+    define boolean diffUppFiles (string file1, string file2) ``{
 	// save files
 	string tmpdir = (string)SCR::Read (.target.tmpdir);
 	SCR::Write (.target.string, tmpdir + "/options1.upp", file1);
@@ -725,7 +725,7 @@ It cannot contain the characters @ and :.
      * @param selected currently selected options
      * @return true if they contain paper size
      */
-    global define boolean havePaperSize (map selected) ``{
+    define boolean havePaperSize (map selected) ``{
 	boolean found = false;
 	foreach (string k, any v, selected, ``{
 	    if (substring (k, 0, 10) == "papersize-")

@@ -17,7 +17,7 @@
 
 {
     include "testsuite.ycp";
-    map I_READ = $[
+    map READ = $[
 	"target" : $[
 	    "size" : -1,
 	    "tmpdir" : "/tmp/",
@@ -41,6 +41,13 @@
 		"Cmdline" : "",
 		"InstMode" : nil,
 	    ],
+	    "cups" : $[
+		"client_conf" : $[
+		    "value" : $[
+			"ServerName" : "",
+		    ],
+		],
+	    ],
 	],
 	"probe" : $[
 	    "architecture" : "i386",
@@ -58,31 +65,23 @@
 	    ],
 	],
     ];
-    map I_WRITE = $[];
-    map I_EXEC = $[
+    map WRITE = $[];
+    map EXEC = $[
 	"target" : $[
 	    "bash_output" : $[],
 	],
     ];
-    TESTSUITE_INIT ([I_READ, I_WRITE, I_EXEC], 0);
+    TESTSUITE_INIT ([READ, WRITE, EXEC], 0);
     import "Pkg";
     import "Printer";
     import "Progress";
     import "Mode";
     import "Spooler";
-    TESTSUITE_CLEAN ();
 
     Mode::test = true;
 
     Progress::off ();
-    Pkg::FAKE (`IsProvided, false);
 
-    map READ = $[];
-    map WRITE = $[];
-    map EXEC = $[];
-
-    WRITE = $[
-	];
     EXEC = $[
 	"target" : $[
 	    "mkdir" : true,
@@ -116,9 +115,18 @@
                 "changed" : false,
             ],
         ],
+	"etc" : $[
+	    "cups" : $[
+		"client_conf" : $[
+		    "value" : $[
+			"ServerName" : "",
+		    ],
+		],
+	    ],
+	],
     ];
 
-    Spooler::Set ("lprng");
+    TEST (``(Spooler::Set ("lprng")), [READ, WRITE, EXEC], 0);
 
     TEST (``(Printer::Write ()), [READ, WRITE, EXEC], 0);
     DUMP ("====================================================");
@@ -135,7 +143,7 @@
 	]
 	];
     Printer::index = 1;
-    Printer::deletePrinter ();
+    TEST (``(Printer::deletePrinter ()), [READ, WRITE, EXEC], 0);
     TEST (``(Printer::Write ()), [READ, WRITE, EXEC], 0);
     DUMP ("====================================================");
 }

@@ -16,12 +16,16 @@ module_DATA =			\
 EXTRA_DIST =				\
 	$(module_DATA)
 
-symlinks:
+lprng:
 	test -d lprng || mkdir lprng && ln -sf ../../lprng lprng/printer
+
+cups:
 	test -d cups || mkdir cups && ln -sf ../../cups cups/printer
+
+common:
 	test -d common || mkdir common && ln -sf ../../common common/printer
 
-ycpchook = symlinks
+ycpchook = lprng cups common
 
 
 
