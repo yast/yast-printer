@@ -9,7 +9,7 @@ ydata_DATA = \
 	suse_testpg.ascii	\
 	models.equiv		\
 	ppd_preference_list	\
-	printers.susedb
+	printers_support
 
 #       ul_testpg.ps            
 #       ul_testpg.ascii         

@@ -76,12 +76,12 @@ class PPD {
 	class ModelInfo {
 	    public:
 		string label;
-		int support;
+		string support;
 		string mcomment;
 		Drivers drivers;
 		bool fuzzy_label;
 	    ModelInfo () {
-		support = -1;
+		support = "";
 		label = "";
 		mcomment = "";
 		fuzzy_label = false;
