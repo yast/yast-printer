@@ -1,0 +1,140 @@
+/**
+ * File:
+ *   modules/CUPS.ycp
+ *
+ * Package:
+ *   Printer configuration
+ *
+ * Summary:
+ *   Data and functions related only to CUPS
+ *
+ * Authors:
+ *   Jiri Srain <jsrain@suse.cz>
+ *
+ * $Id$
+ *
+ * Printer library exported functions. What else?!?
+ */
+
+{
+    module "CUPS";
+
+    textdomain "printer";
+
+// local variables
+
+
+
+
+// global variables
+
+    /**
+      * Use CUPS-like USB devices names
+      * `always, `never, `serial
+      */
+    global symbol usb_dev_names = `always;
+
+    /**
+      * Type of cups installation.
+      * nil: unknown
+      * `server:  server
+      * `client: client
+      */
+    global symbol cups_installation = nil;
+
+    /**
+     * If this is only cups client station,
+     * server host name is here.
+     */
+    global string server_hostname = "";
+
+    /**
+      * Settings of CUPS server
+      */
+    global map cups_server_settings = $[];
+
+// local functions
+
+// global functions
+
+    /**
+      * If only client is installed or remote server to use is set,
+      * returns 1, if this is real server installation, returns 0
+      * Also sets server_hostname and cups_installation
+      * @return symbol `client or `server
+      */
+    global define symbol InstallationType () ``{
+        if (nil != cups_installation)
+            return cups_installation;
+
+        if (Pkg::IsProvided ("cups-libs") &&
+            !Pkg::IsProvided ("cups"))
+        {
+            loadClientHostName ();
+            cups_installation = `client;
+            return `client;
+        }
+        loadClientHostName ();
+        cups_installation = (("" != server_hostname) ? `client : `server);
+        return cups_installation;
+    }
+
+    /**
+     * Read client.conf host name to server_hostname
+     */
+    global define void loadClientHostName () ``{
+        // grep /etc/cups/client.conf for ServerName
+        server_hostname = "";
+        map e = SCR::Execute (.target.bash_output, "/usr/bin/awk '/^ServerName/ { print $2 }' /etc/cups/client.conf");
+        if (0 == lookup (e, "exit", 1))
+        {
+            server_hostname = select (splitstring (lookup (e, "stdout", ""), "\n"), 0, "");
+            if (nil == server_hostname || "" == server_hostname || "nil" == server_hostname ||
+                "localhost" == server_hostname || "127.0.0.1" == server_hostname)
+                server_hostname = "";
+        }
+    }
+
+    /**
+     * Save client.conf host name host name
+     */
+    global define void saveClientHostName () ``{
+    // added check for nil value (bug #19226)
+	if (server_hostname == "" || server_hostname == nil)
+	{
+	     SCR::Execute (.target.bash, "test -f /etc/cups/client.conf && (/usr/bin/awk '
+BEGIN { used = 0 }
+/^ServerName/ { next }
+{ print $0; }
+' /etc/cups/client.conf > /etc/cups/client.conf.yast2; mv /etc/cups/client.conf.yast2 /etc/cups/client.conf)");
+	}
+	else
+	{
+            SCR::Execute (.target.bash,
+                      sformat ("test -f /etc/cups/client.conf && (/usr/bin/awk '
+BEGIN { used = 0 }
+/^ServerName/ { print \"ServerName %1\"; used = 1; next }
+{ print $0; }
+END { if (!used) print \"ServerName %1\" }
+' /etc/cups/client.conf > /etc/cups/client.conf.yast2; /bin/mv /etc/cups/client.conf.yast2 /etc/cups/client.conf)", server_hostname));
+	}
+	if (server_hostname == "")
+	    server_hostname = nil;
+    }
+
+    /**
+      * Save CUPS client-only configuration
+      * @return boolean true on success
+      */
+    global define boolean saveCupsClient () ``{
+	saveClientHostName ();
+	if (server_default)
+	{
+	    default = "";
+	}
+	SCR::Write (.cups.default_dest, default, "local");
+	return true;
+    }
+
+
+}

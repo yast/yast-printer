@@ -14,11 +14,11 @@
 {
     textdomain "printer";
 
-    import "Wizard_hw";
     import "Printerlib";
     import "Printer";
     import "Wizard";
     import "Mode";
+    import "CUPS";
 
     include "printer/misc.ycp";
     include "printer/misc-cups.ycp";
@@ -27,7 +27,6 @@
     import "Popup";
     include "ui/file_popups.ycp";
     include "wizard/sequencer.ycp";
-    include "printer/testpage.ycp";
 
 
     /**
@@ -57,7 +56,7 @@
 	    `Left (`CheckBox (`id (`listen),
 		// check box
 		_("Listen to IPP &Broadcast Packets"),
-		Printer::cups_server_settings["Browsing"]:"On" == "On")),
+		CUPS::cups_server_settings["Browsing"]:"On" == "On")),
 	    `VStretch ()
 	), `HStretch ());
 	// dialog caption
@@ -74,8 +73,8 @@
 	if (ret == `next)
 	{
 	    boolean listen = UI::QueryWidget (`id (`listen), `Value);
-	    Printer::cups_server_settings["Browsing"] = listen ? "On" : "Off";
-y2error ("CSS: %1", Printer::cups_server_settings);
+	    CUPS::cups_server_settings["Browsing"] = listen ? "On" : "Off";
+y2error ("CSS: %1", CUPS::cups_server_settings);
 	}
 
 	return ret;
@@ -102,7 +101,7 @@ y2error ("CSS: %1", Printer::cups_server_settings);
 		    `id (`hostent_replace),
 		    `ComboBox (`id (`hostnameent), `opt (`editable, `hstretch),
 			// Combobox label
-			_("&Server name"), [ Printer::server_hostname ] )
+			_("&Server name"), [ CUPS::server_hostname ] )
 		),
 		`VBox (
 		    `Label (" "),
@@ -182,13 +181,13 @@ y2error ("CSS: %1", Printer::cups_server_settings);
             {
                 string n = UI::QueryWidget (`id(`hostnameent), `Value);
                 Printer::dirty = true;
-                Printer::server_hostname = n;
+                CUPS::server_hostname = n;
                 if (nil == n || "" == n)
 		    // popup
 		    Popup::Message (_("Enter a valid server name."));
 		else
 		{
-		    Printer::cups_installation = `client;
+		    CUPS::cups_installation = `client;
 		    Printer::server_default
 			= UI::QueryWidget (`id (`server), `Value);
 		    if (! Printer::server_default)
@@ -201,7 +200,7 @@ y2error ("CSS: %1", Printer::cups_server_settings);
 	    {
 		if (main)
 		{
-		    Printer::server_hostname
+		    CUPS::server_hostname
 			= UI::QueryWidget (`id(`hostnameent), `Value);
 		    Printer::server_default
 			= UI::QueryWidget (`id (`server), `Value);
@@ -722,7 +721,7 @@ y2error ("CSS: %1", Printer::cups_server_settings);
 
 	// dialog caption
         Wizard::SetContentsButtons (sformat (_("CUPS permissions settings for %1"), pth), contents, getCupsAclHelp (show_ignore), Label::BackButton (), Label::NextButton ());
-	map settings = lookup (Printer::cups_server_settings, pth, $[]);
+	map settings = lookup (CUPS::cups_server_settings, pth, $[]);
 	if (lookup (settings, "Order", "Deny,Allow") == "Allow,Deny")
 	    UI::ChangeWidget (`id (`ad), `Value, true);
 	else
@@ -825,11 +824,11 @@ y2error ("CSS: %1", Printer::cups_server_settings);
 	settings = add (settings, "DenyFrom", deny);
 	if (`next == ret)
 	{
-	    Printer::cups_server_settings = add (Printer::cups_server_settings, pth, settings);
+	    CUPS::cups_server_settings = add (Printer::cups_server_settings, pth, settings);
 	}
 	else if (`ignore == ret)
 	{
-	    Printer::cups_server_settings = add (Printer::cups_server_settings, pth, $[]);
+	    CUPS::cups_server_settings = add (Printer::cups_server_settings, pth, $[]);
 	    ret = `next;
 	}
         return ret;
@@ -883,9 +882,9 @@ y2error ("CSS: %1", Printer::cups_server_settings);
 	// dialog caption
 	Wizard::SetContentsButtons (_("CUPS server settings"), contents, getCupsServerHelp (), Label::BackButton (), Label::NextButton ());
 
-	list addresses = lookup (Printer::cups_server_settings, "BrowseAddress", []);
+	list addresses = lookup (CUPS::cups_server_settings, "BrowseAddress", []);
 
-	UI::ChangeWidget (`id (`browsing), `CurrentButton, lookup (Printer::cups_server_settings, "Browsing", "On") == "On" ? `on : `off);
+	UI::ChangeWidget (`id (`browsing), `CurrentButton, lookup (CUPS::cups_server_settings, "Browsing", "On") == "On" ? `on : `off);
 	// selectionbox
 	UI::ReplaceWidget (`id (`replace_addr), `SelectionBox (`id (`addr), _("Browse Addre&sses"), addresses));
 
@@ -957,8 +956,8 @@ y2error ("CSS: %1", Printer::cups_server_settings);
 	    }
 	}
 	if (ret == `next)
-	    Printer::cups_server_settings = add(Printer::cups_server_settings, "Browsing", UI::QueryWidget (`id (`browsing), `CurrentButton) == `on ? "On" : "Off");
-	    Printer::cups_server_settings = add(Printer::cups_server_settings, "BrowseAddress", addresses);
+	    CUPS::cups_server_settings = add(Printer::cups_server_settings, "Browsing", UI::QueryWidget (`id (`browsing), `CurrentButton) == `on ? "On" : "Off");
+	    CUPS::cups_server_settings = add(Printer::cups_server_settings, "BrowseAddress", addresses);
 	return ret;
     }
 }

@@ -25,22 +25,96 @@
     import "Popup";
     import "Mode";
     import "Label";
-
-    include "printer/ppds.ycp";
-    include "printer/misc-cups.ycp";
-
+    import "Spooler";
+    import "Wizard";
+    import "CUPS";
+    import "Printerdb";
 
     /**
-     * Test for abort.
-     * @return true if abort was pressed
-     */
-    global define boolean testAbort () ``{
-	if (`abort == UI::PollInput ())
-	{
-	    UI::CloseDialog ();
-	    return true;
-	}
-	return false;
+      * Get auto queues for printer when using foomatic database
+      * @param vendor string vendor db key
+      * @param model string model db key
+      * @param config string choosen ppd file, nil = auto
+      * @return list of PPD files
+      */
+    global define list getFoomaticAutoQueues (string vendor, string model,
+        string config)
+    ``{
+        list forbidden_names = Printer::getForbiddenNames ();
+        y2debug ("Getting auto queues for >>%1<< >>%2<<", vendor, model);
+        loadFoomaticIfNeeded ();
+        list new_queues = [];
+        map ppds = Printerdb::getPpdFiles (vendor, model);
+        string ppdfile_orig = "";
+        if (vendor == "__ownppd__")
+            ppdfile_orig = model;
+        else if (config == nil || config == "")
+            ppdfile_orig = getAutoPpdFile (ppds, vendor, model);
+        else
+            ppdfile_orig = Printerdb::foomatic[vendor, model, config, "filename"]:"";
+        y2debug ("Choosen PPD file: %1", ppdfile_orig);
+        string config = ppds[ppdfile_orig]:"";
+        string ppdfile = SCR::Read (.ppd.file.open,
+            [ppdfile_orig, SCR::Read (.target.tmpdir)]);
+        map options = SCR::Read (.ppd.file.options, [ppdfile, ""]);
+        list opts = options["data"]:[];
+            integer ind = -1;
+            boolean found = true;
+            find (`i, opts, ``{
+                ind = ind + 1;
+                found = i["name"]:"" == "PrintoutMode";
+                return found;
+            });
+            map composite = $[];
+            if (found)
+                composite = opts[ind]:$[];
+            if (composite != $[])
+            {
+                foreach (`v, composite["valorder"]:[], ``{
+                    string optname = composite["name"]:"";
+                    string pagesize = Printerlib::getDefaultPaperSize () == `a4 ? "A4" : "Letter";
+                    map new_options = $[
+                        optname : v,
+                        "PageSize" : pagesize,
+                        "PageRegion" : pagesize,
+                        "ImageableArea" : pagesize,
+                        "PaperDimension" : pagesize,
+                    ];
+                    new_queues = add (new_queues, $[
+                        "config" : config,
+                        "name" : mergestring (splitstring
+                            (tolower (v), "."), "_"),
+                        "info" : composite["values", v]:v,
+                        "options" : new_options,
+                        "composite" : composite["name"]:"",
+                    ]);
+
+                });
+            }
+            else
+            {
+                new_queues = [ $[
+                    "config" : config,
+                    "name" : "lp",
+                        // table cell
+                    "info" : _("default configuration"),
+// TODO FIXME: page size
+                ]];
+            }
+            string suffix = Printer::getQueueSuffix (new_queues);
+
+            new_queues = maplist (`v, new_queues, ``{
+                v = add (v, "name", Printer::adjustQueueName (lookup (v, "name", "lp") + suffix, forbidden_names));
+                if (nil == first_queue)
+                {
+                    first_queue = lookup (v, "name", "");
+                }
+                forbidden_names = add (forbidden_names, lookup (v, "name", ""));
+                return union (Printer::printer, v);
+        });
+        y2debug ("Proposing queues %1", maplist (`q, new_queues, ``(q["name"]:"")));
+        y2debug ("Proposed queues: %1", new_queues);
+        return new_queues;
     }
 
 
@@ -83,17 +157,6 @@
 	return p;
     }
 
-
-    /**
-      * Inform user that function isn't available during preparatino of AI
-      * via a popup
-      */
-    global define void DisplayUnavailableAIPopup () ``{
-	// popup message
-	Popup::Message (_("This function is not available during
-preparation for autoinstallation.
-"));
-    }
 
     /**
       * replaces all occurences of 'from' to 'to' in src
@@ -207,68 +270,6 @@ preparation for autoinstallation.
 	return exists;
     }
 
-    /**
-      * check whether spooler (if needed to be running) runns, if not start it
-      * @param showPopup boolean true if shall show a popup if needed
-      */
-    global define void restartSpoolerIfNeeded (boolean showPopup) ``{
-	if (Mode::config)
-	    return;
-        if (Printer::spooler == "cups")
-        {
-            if (`server == Printer::cupsInstallationType ())
-            {
-		boolean close_dialog = false;
-		integer status = SCR::Execute (.target.bash, "/usr/bin/lpq 2>/dev/null");
-                if (status == 0)
-                    return;
-		if (SCR::Read (.target.size, "/etc/cups/ppds.dat") <= 0)
-		{
-		    close_dialog = true;
-		    showCupsInitPopup ();
-		}
-                status = SCR::Execute (.target.bash, "/etc/init.d/cups status");
-                if (0 != status)
-		{
-                    SCR::Execute (.target.bash_background, "/etc/init.d/cups start");
-		    sleep (1000);
-		}
-                status = 1;
-		integer attempts = 0;
-                while (true)
-                {
-                    status = SCR::Execute (.target.bash, "/usr/bin/lpq 2>/dev/null");
-                    if (status == 0)
-                        break;
-		    attempts = attempts + 1;
-		    if (attempts > 5 && ! close_dialog)
-		    {
-			close_dialog = true;
-			showCupsInitPopup ();
-		    }
-		    if (attempts>60*10)
-		    {
-			break;
-		    }
-                    if (close_dialog)
-                        UI::ChangeWidget (`id (`cups_prog), `Value, attempts);
-                    sleep (1000);
-                    status = SCR::Execute (.target.bash, "/etc/init.d/cups status");
-                    if (0 != status)
-                    {
-                        Popup::Error (
-                            // error popup
-                            _("CUPS daemon died during initialization"));
-			break;
-                    }
-                }
-		if (close_dialog)
-		{
-		    UI::CloseDialog ();
-		}
-            }
-        }
-    }
 
     /**
      * Reinstall all printing related packages using package-manager
@@ -277,15 +278,15 @@ preparation for autoinstallation.
     global define boolean reinstallAll () ``{
 	if (Mode::config)
 	{
-	    DisplayUnavailableAIPopup ();
+	    Printerlib::DisplayUnavailableAIPopup ();
 	    return true;
 	}
 	import "PackageCallbacks";
 	Printer::printcap = [];
 	Printer::default = "";
-	Printer::save_all = false;
+	Spooler::save_all = false;
 
-	Printerlib::stopServices();
+	Spooler::StopServices();
 	list to_delete = ["plp", "lprold", "lprng", "cups", "cups-client", "cups-drivers", "cups-drivers-cs", "cups-drivers-de", "cups-drivers-stp",
 	    "cups-libs", "cups-devel", "lpdfilter", "filters", "ghostscript-fonts-other", "ghostscript-x11", "ghostscript-fonts-std", "ghostscript-library",
 	    "ghostscript-fonts-kanji", "ghostscript-serv", "ghostscript-fonts-rus", "ghostscript-library", "a2ps", "foomatic-filters"];
@@ -442,39 +443,6 @@ preparation for autoinstallation.
         });
     }
     /**
-      * Test whether spooler supports queue type
-      * @param queue string queue type (eg. parallel)
-      * @param spooler string "cups" or "lprng"
-      * @return boolean true if supports
-      */
-    global define boolean testSupportedQueueBySpooler
-	(string queue, string spooler)
-    ``{
-	map supported = $[ "cups" : [ "parallel", "usb", "serial", "lpd", "ipp", "samba", "socket", "irda", "class", "novell", "pipe", ],
-			   "lprng" : [ "parallel", "usb", "serial", "lpd", "samba", "novell", "irda", "socket", "pipe", ]];
-	list l = lookup (supported, spooler, []);
-	if (l == [])
-	    return true;
-	if (contains (l, queue))
-	    return true;
-	if (spooler == "cups")
-	{
-	    list(string) backends
-		= SCR::Read (.target.dir, "/usr/lib/cups/backend");
-	    if (backends != nil)
-		return contains (backends, queue);
-	}
-	return false;
-    }
-    /**
-      * Test whether currently used spooler supports queue type
-      * @param queue string queue type (eg. parallel)
-      * @return boolean true if supports
-      */
-    global define boolean testSupportedQueue (string queue) ``{
-	return testSupportedQueueBySpooler (queue, Printer::spooler);
-    }
-    /**
      * Displays message when baud rate is 0.
      * @param brate Baud rate.
      * @return boolean Is baud rate ok?
@@ -599,69 +567,6 @@ queue you want to use."));
     }
 
     /**
-     * TODO: create test case
-     * @param name printer name
-     * @param uri string queue uri
-     * @param vendor_name string name of the printer vendor
-     * @param device_name string name of the printer device
-     * @param forbidden_names list of forbidden names
-     * @return new queue name
-     */
-    global define string generateQueueName (string name, string uri,
-	string vendor_name, string device_name, list forbidden_names)
-    ``{
-	if (name == nil)
-	{
-	    name = "";
-	    if (isRemote (uri) && Printerlib::getUriRemoteQueue (uri) != "")
-	    {
-	        name = Printerlib::getUriRemoteQueue (uri);
-	        integer i = findlastof (name, "/");
-	            if (i != nil)
-		    name = substring (name, i);
-	        name = filterchars (name,
-		    "_0123456789abcdefghijklmnopqrstuvwxyz");
-		if (size (name) >= 20)
-		    name = substring (name, 0, 20);
-	    }
-	    if (name == "" && device_name != "")
-	    {
-	        name = filterchars (
-		    tolower (vendor_name + "_" + device_name),
-		    "_0123456789abcdefghijklmnopqrstuvwxyz");
-		if (size (name) >= 20)
-		{
-		    name = filterchars (
-			tolower (device_name),
-			"_0123456789abcdefghijklmnopqrstuvwxyz");
-		}
-		if (size (name) >= 20)
-		    name = substring (name, 0, 20);
-	    }
-	if (name == "")
-	    name = "printer";
-	}
-
-	integer i = 1;
-	while (contains (forbidden_names, name))
-	{
-	    name = sformat ("printer%1", i);
-	    i = i + 1;
-	}
-	return name;
-    }
-
-    /**
-      * Check if queue is remote
-      * @param uri string queue uri
-      * @return boolean true if is remote
-      */
-    global define boolean isRemote (string uri) ``{
-	string uri_type = Printerlib::getUriType (uri);
-	return contains (["lpd", "ipp", "samba", "novell"], uri_type);
-    }
-
-    /**
      * We need this wrapper because of wizard sequencer.
      * @return `next for wizard sequencer
      */
@@ -765,7 +670,7 @@ All changes will be lost.
 		if ("yast2" == lookup (ent, "type", "yast2"))
 		{
 		    string description = Printerlib::getUriNiceName (lookup (ent, "uri", ""));
-		    if ("void" == Printer::getPrinterState (ent, Printer::spooler))
+		    if ("void" == Printer::getPrinterState (ent, Spooler::Get ()))
 			// table item. SHORT!
 			description = _("- invalid for selected spooler -");
 		    ret = add (ret, description);
@@ -773,11 +678,11 @@ All changes will be lost.
 		else
 		    // This printer was not configured using YaST2. Item in table. SHORT!
 		    ret = add (ret, _("- not YaST2 -"));
-		if (Printer::spooler == "cups" || Printer::spooler == "lprng")
+		if (Spooler::Get () == "cups" || Printer::spooler == "lprng")
 		{
 		    if ("yast2" == lookup (ent, "type", "yast2"))
 			// table item. SHORT
-			ret = add (ret, "commited" == Printer::getPrinterState (ent, Printer::spooler) ? _("OK") : "");
+			ret = add (ret, "commited" == Printer::getPrinterState (ent, Spooler::Get ()) ? _("OK") : "");
 		    else
 			// table item. SHORT
 			ret = add (ret, _("unknown"));
@@ -1132,112 +1037,14 @@ It cannot contain the characters @ and :.
 	UI::CloseDialog();
 	return ret;
     }
-    /**
-     * Check what spool system is installed. Don't ask user.
-     * @return string spooler
-     */
-    global define string checkSpoolSystemNoDialog () ``{
-	integer spool_sys = Printerlib::getSpoolSystem ();
-	spool_sys = spool_sys & 0xFF;
-	if (1 == spool_sys) //lpd is installed
-	{
-	    return "lprng";
-	}
-	else if (2 == spool_sys) //cups is installed
-	{
-	    return "cups";
-	}
-	return "unknown";
-    }
-    /**
-     * Check what spool system is installed. Ask user if needed and install spooler if wanted.
-     * @return string spooler
-     */
-    global define string checkSpoolSystem () ``{
-	integer spool_sys = Printerlib::getSpoolSystem ();
-	if (1 == spool_sys) //lpd is installed
-	{
-	    return "lprng";
-	}
-	else if (2 == spool_sys) //cups is installed
-	{
-	    return "cups";
-	}
-	else if (0 == spool_sys || 3 == spool_sys || 256 + 1 == spool_sys
-	    || 256 + 2 == spool_sys)
-	{
-	    string message = "";
-	    if (0 == spool_sys) //none installed
-	    {
-		// popup message
-		message = _("No printing system installed. 
-Select the spooler to 
-install and configure.
-");
-	    }
-	    else if (3 == spool_sys) //both spoolers are installed
-	    {
-		// popup message
-		message = _("Both LPRng and CUPS are installed.
-Select the spooler  
-to leave installed and configure.");
-	    }
-	    else if (256 + 1 == spool_sys) // lpd is installed, but seems
-					   // to be not complete
-	    {
-		// popup message
-		message = _("An LPD-compatible spooler, probably LPRng,
-is installed, but the installation does not seem 
-complete. Choose to reinstall 
-LPRng, install CUPS, or leave the current status.
-To repair the current configuration, select LPRng.
-If you leave the current status, your spooler may not
-run properly.
-");
-	    }
-	    else if (256 + 2 == spool_sys) // cups is installed, but seems
-					   // to be not complete
-	    {
-		// popup message
-		message =_("The CUPS spooler is installed, but the installation 
-does not seem complete. Choose to reinstall
-CUPS, install LPRng, or leave the current status. 
-To repair the current configuration, select the 
-CUPS full server installation.
-If you leave the current status, your spooler 
-may not run properly.");
-	    }
-	    symbol result = chooseSpooler (message,
-		// pushbutton
-		_("Abo&rt setup"));
-	    if (`cups_server == result)
-	    {
-		Printerlib::switchTo ("cups");
-		Printer::assignAllQueuesChanged ();
-		return "cups";
-	    }
-	    else if (`cups_client == result)
-            {
-                Printerlib::switchTo ("cups_client");
-		Printer::assignAllQueuesChanged ();
-                return "cups";
-            }
-	    else if (`lprng == result)
-	    {
-		Printerlib::switchTo ("lprng");
-		Printer::assignAllQueuesChanged ();
-		return "lprng";
-	    }
-            else if (`cancel == result)
-                return "exit";
-	    else
-		return "unknown";
-	}
-	else if (512 + 2 == spool_sys) // only client installation of cups
-				       // is installed
-	{
-	    return "cups";
-	}
-	return ""; //should be never reached
-    }
+
+
+
+
+
+
+
+
+
+
 }
