@@ -292,7 +292,7 @@ public:
   /**
    * Write classes...
    */
-  YCPValue Write(const YCPPath &path, const YCPValue& value, const YCPValue& arg = YCPNull());
+  YCPBoolean Write(const YCPPath &path, const YCPValue& value, const YCPValue& arg = YCPNull());
 
 };
 

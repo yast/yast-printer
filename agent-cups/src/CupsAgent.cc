@@ -35,7 +35,7 @@ CupsAgent::~CupsAgent() {
 /**
  * Dir
  */
-YCPValue CupsAgent::Dir(const YCPPath& path) 
+YCPList CupsAgent::Dir(const YCPPath& path) 
 {
     if (path->length() == 2)
     {
@@ -48,13 +48,14 @@ YCPValue CupsAgent::Dir(const YCPPath& path)
             return getClasses (path->component_str (1));
 	}
     }
-    return YCPError (string ("Wrong path '") + path->toString() + string ("' in Dir()."));
+    ycp2error (string (string ("Wrong path '") + path->toString() + string ("' in Dir().")).c_str());
+    return YCPNull ();
 }
 
 /**
  * Read
  */
-YCPValue CupsAgent::Read(const YCPPath &path, const YCPValue& arg)
+YCPValue CupsAgent::Read(const YCPPath &path, const YCPValue& arg, const YCPValue& opt)
 {
     if (path->component_str (0) == "last_error")
 	return YCPString (last_error);
@@ -86,7 +87,7 @@ YCPValue CupsAgent::Read(const YCPPath &path, const YCPValue& arg)
 /**
  * Write
  */
-YCPValue CupsAgent::Write(const YCPPath &path, const YCPValue& value, const YCPValue& arg)
+YCPBoolean CupsAgent::Write(const YCPPath &path, const YCPValue& value, const YCPValue& arg)
 {
     if(path->length()>=1) {
         if(path->component_str(0)=="printers")
@@ -97,14 +98,15 @@ YCPValue CupsAgent::Write(const YCPPath &path, const YCPValue& value, const YCPV
             return defaultdest.Write(path,value,arg);
     }
 
-    return YCPError(string ("Wrong path '%s' in Write().") + path->toString());
+    ycp2error(string (string ("Wrong path '%s' in Write().") + path->toString()).c_str());
+    return YCPBoolean (false);
 }
 
 /**
  * otherCommand
  */
 YCPValue CupsAgent::otherCommand(const YCPTerm& term) {
-    string sym = term->symbol()->symbol();
+    string sym = term->name();
 
     if (sym == "CupsAgent") {
         /* Your initialization */

@@ -341,7 +341,6 @@ press 'OK'.
 	string config = ppd_info["nick"]:"";
 	if (findfirstof (config, "(") != nil)
 	    config = substring (config, 0, findfirstof (config, "("));
-y2error ("testpage type: %1", testpage_type);
 	if (`postscript == testpage_type || `photo == testpage_type)
 	{
 	    map consolefonts = (map)SCR::Read (.target.yast2,
@@ -365,8 +364,8 @@ y2error ("testpage type: %1", testpage_type);
 
 	    string enc = "ISO-8859-2" == ce ? "h02" : "h01";
 
-	    list optlist =  Printerdb::getPpdFileOptions (ppd_file);
-	    optlist = maplist (map i, optlist, ``{
+	    list<map> optlist_map =  Printerdb::getPpdFileOptions (ppd_file);
+	    list<string> optlist = maplist (map i, optlist_map, ``{
 		    string name = i["name"]:"";
 		    string label = i["gui"]:"";
 		    string value = printer["ppd_options", name]:"";

@@ -107,7 +107,7 @@
 	map ret = listmap (map m, options, ``{
 	    string key = m["key"]:"";
 	    any value = m["value"]:"";
-	    return [key, value];
+	    return $[key: value];
 	});
 	return filter (any k, any v, ret, ``(k != ""));
     }
@@ -134,9 +134,10 @@
 		map ppd_file_options = (map)
 		    SCR::Read (.ppd.file.options, [p["ppd"]:"", ""]);
 		list<map>optlist = ppd_file_options["data"]:[];
-		map ppd_options = listmap (map i, optlist, ``(
-		    [i["name"]:"", i["current"]:""]
-		));
+		map ppd_options = listmap (map i, optlist, ``{
+		    string key = i["name"]:"";
+		    return $[key : i["current"]:""];
+		});
 		ppd_options = filter (any k, any v, ppd_options, ``(
 		    k != "" && v != ""
 		));
@@ -160,8 +161,8 @@
       * @param ai map the autoinstallation map
       * @return map the export map
       */
-    define map AI2Export (map ai) ``{
-	map exp = $[
+    define map<string, any> AI2Export (map ai) ``{
+	map<string, any> exp = $[
 	    "spooler" : ai["spooler"]:"",
 	    "cups_installation" : ai["cups_installation"]:`server,
 	    "server_default" : ai["default"]:"" == "",

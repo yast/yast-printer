@@ -84,9 +84,9 @@
      * @param filename string file name of the PPD file
      * @return list of all options of the PPD file (in UTF-8)
      */
-    global define list getPpdFileOptions (string filename) ``{
+    global define list<map> getPpdFileOptions (string filename) ``{
 	map options = (map)SCR::Read (.ppd.file.options, [filename, ""]);
-	list<map>optlist = options["data"]:[];
+	list<map> optlist = options["data"]:[];
 	y2debug ("First option: %1", optlist[0]:$[]);
 	optlist = filter (map o, optlist, ``(
 	    o["name"]:"" != "PageRegion"
@@ -125,8 +125,8 @@
       * @param queues list of queues
       * @return proposed default queue name
       */
-    global define string getFoomaticDefaultQueue (list queues) ``{
-        string default_queue = queues[0, "name"]:nil;
+    global define string getFoomaticDefaultQueue (list<any> queues) ``{
+        string default_queue = (string) (queues[0, "name"]:nil);
         foreach (map q, queues, ``{
             if (regexpmatch (q["name"]:"", "normal[0-9]")
                  || q["name"]:"" == "normal")
@@ -243,7 +243,7 @@ of printers.
 	    ppds = filter (`k, `v, foomatic[vendor_db, device_db]:$[],
 		``(is (k, string)));
 	else
-	    ppds = listmap (string k, ppd_nicks, ``([k, $[]]));
+	    ppds = listmap (string k, ppd_nicks, ``($[k: $[]]));
 
         foreach (string k, map v, ppds, ``{
             boolean found = false;
@@ -352,7 +352,7 @@ of printers.
 	if (size (ppds) == 0)
 	    return nil;
 	if (Spooler::Get () == "cups")
-	    return ppds[0]:nil;
+	    return (string) (ppds[0]:nil);
 	// for LPRng find first with foomatic-rip as filter
 	return (string)find (string s, ppds, ``(
 	    foomatic[vendor_db, device_db, s, "filter"]:""

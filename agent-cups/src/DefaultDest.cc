@@ -7,7 +7,7 @@ YCPValue DefaultDest::Read()
   return YCPString(s);
 }
 
-YCPValue DefaultDest::Write(const YCPPath &path, const YCPValue& value, const YCPValue& arg)
+YCPBoolean DefaultDest::Write(const YCPPath &path, const YCPValue& value, const YCPValue& arg)
 {
   //
   // value must be string

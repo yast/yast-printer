@@ -16,7 +16,6 @@
 //#define y2log_component "ag_ppd"
 #include <Y2.h>
 #include <scr/SCRAgent.h>
-#include <scr/SCRInterpreter.h>
 
 #include "PPDdb.h"
 #include "PPDfile.h"
@@ -47,17 +46,17 @@ public:
 	 * @param path Path that should be read.
 	 * @param arg Additional parameter.
 	 */
-    virtual YCPValue Read(const YCPPath &path, const YCPValue& arg = YCPNull());
+    virtual YCPValue Read(const YCPPath &path, const YCPValue& arg = YCPNull(), const YCPValue& opt = YCPNull());
 
 	/**
 	 * Provides SCR Write ().
 	 */
-    virtual YCPValue Write(const YCPPath &path, const YCPValue& value, const YCPValue& arg = YCPNull());
+    virtual YCPBoolean Write(const YCPPath &path, const YCPValue& value, const YCPValue& arg = YCPNull());
 
 	/**
 	 * Provides SCR Write ().
 	 */
-    virtual YCPValue Dir(const YCPPath& path);
+    virtual YCPList Dir(const YCPPath& path);
 
 	/**
 	 * Used for mounting the agent.

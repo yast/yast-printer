@@ -27,10 +27,11 @@ liby2ag_cups_la_LDFLAGS = -version-info 2:0
 
 libpy2ag_cups_la_SOURCES =		\
 	$(liby2ag_cups_la_SOURCES)	\
-	Y2CCCupsAgent.h			\
-	Y2CCCupsAgent.cc		\
-	Y2CupsAgentComponent.h		\
-	Y2CupsAgentComponent.cc
+	Y2CCCupsAgent.cc
+#	Y2CCCupsAgent.h			\
+#		\
+#	Y2CupsAgentComponent.h		\
+#	Y2CupsAgentComponent.cc
 libpy2ag_cups_la_LDFLAGS = -version-info 2:0
 
 INCLUDES = -I$(includedir)
