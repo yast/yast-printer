@@ -433,7 +433,9 @@ bool setDefaultDest(const char*d)
   cups_dest_t *dests;
   int num_dests = cupsGetDests(&dests);
   for(int i = 0;i<num_dests;i++)
-    if(dests[i].is_default)
+    if (! strcmp (dests[i].name, d))
+      dests[i].is_default = 1;
+    else if(dests[i].is_default)
       dests[i].is_default = 0;
   cupsSetDests(num_dests,dests);
 
