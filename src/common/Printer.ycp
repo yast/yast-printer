@@ -1187,18 +1187,18 @@ Detect your printers?"));
 
 	boolean ret = true;
 
+	if (with_daemon && spooler == "cups")
+	{
+	    server_hostname = "";
+	    saveClientHostName ();
+	    writeCupsSettings ();
+	}
+
 	Progress::NextStage (); // adjst services
 	ret = adjustServices () && ret;
 
 	if (with_daemon)
 	{
-	    if (spooler == "cups")
-	    {
-		writeCupsSettings ();
-		server_hostname = "";
-		saveClientHostName ();
-	    }
-
 	    Progress::NextStage (); // delete old printers
 	    ret = deleteDeletedPrinters () && ret;
 
