@@ -100,7 +100,6 @@ bool newPrinter(const YCPValue&value)
   
   if(!(v = m->value(YCPString("ppd"))).isNull())        if(v->isString())       xppd = v->asString()->value_cstr();
   ret = ::setPrinter(xPrinter,xInfo,xLoc,xState,xStateMsg,xBannerStart,xBannerEnd,xUri,xAllowUsers,xDenyUsers,xppd,xAccepting);
-  Y2_ERROR("setPrinter %s",ret ? "OK" : "Error");
 
   if(!(v = m->value(YCPString("options"))).isNull())
     if(v->isMap())

@@ -619,6 +619,7 @@ END { if (!used) print \"ServerName %1\" }
 	list tmplist = [];
 	list tmpdellist = [];
 	boolean ret = true;
+	boolean update = false;
 	list nonyast = [];
 	string old_default = default;
 
@@ -649,11 +650,18 @@ END { if (!used) print \"ServerName %1\" }
 	    printcap = [];
 	    SCR::Execute (.target.bash, "/bin/touch /var/lib/YaST2/printers");
 	    map state = SCR::Read (.target.ycp, "/var/lib/YaST2/printers");
+	    if (nil == state)
+	    {
+		state = $[];
+		if (is (nonyast, list) && size (nonyast) > 0)
+		{
+		    y2error ("Update");
+		    update = true;
+		}
+	    }
 	    printcap = lookup (state, "printers", []);
 	    deleted = lookup (state, "deleted", []);
 	    default = lookup (state, "default", "");
-	    if (nil == printcap)
-		printcap = [];
 	    printcap = maplist (`e, printcap, ``(
 		add (e, "type", "yast2")
 	    ));
@@ -887,6 +895,7 @@ the selected spooler does not support it.
 	});
 	if (spooler == "cups")
 	{
+	    SCR::Execute (.target.bash, "/usr/sbin/rccups reload");
 	    SCR::Write (.sysconfig.printer.DEFAULT_PRINTER, default_printer_found ? default : "none");
 	    SCR::Write (.sysconfig.printer, nil);
 	    SCR::Write (.cups.default_dest, default_printer_found ? default : "");

@@ -37,7 +37,7 @@ struct List
 #define PRG_TEXTDOMAIN		"printer"
 
 
-#define	TRANSLATE_OPTIONS	1
+//#define	TRANSLATE_OPTIONS	1
 
 struct ValueText
 {

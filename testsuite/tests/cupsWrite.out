@@ -2,13 +2,13 @@ Read	.targetpkg.installed "cups-client" true
 Read	.targetpkg.installed "cups" true
 Execute	.target.bash_output "/usr/bin/awk '/^ServerName/ { print $2 }' /etc/cups/client.conf" $[]
 Execute	.target.bash_output "/bin/awk 'function write_browsing(x){\n}\n\nfunction write_browse_addr(x){\n}\n\nfunction write_deny(x){\n}\n\nfunction write_allow(x){\n}\n\nfunction write_order(x){\n}\n\nBEGIN {\n    label = \"\"; browsing = 0; browseaddress = 0; order = false; allowfrom = false; denyfrom = false; \nopen = 0;\ndone[\"\"] = 1;\ndone[\"/>\"] = 1;\ndone[\"/admin>\"] = 1;\ndone[\"/printers>\"] = 1;\ndone[\"/classes>\"] = 1;\n}\n/^Browsing/ {\n    if (browsing == 0) {write_browsing(label); browsing = 1;} next;\n}\n/^BrowseAddress/ {\n    if (browseaddress == 0) {write_browse_addr(label); browseaddress = 1;} next;\n}\n/^<Location/ {\n    label = $2;\n    if (! done[$2] != 1) {next;}\n    open = 1;\n    if (browsing == 0) {write_browsing(\"\");} \n    if (browseaddress == 0) {write_browse_addr(\"\");}\n    browsing = 1;\n    browseaddress = 1;\n    print $0\n    deny = 0;\n    allow = 0;\n    order = 0;\n    next;\n}\n/^<\\/Location/ {\n    if (! done[label] != 1) {next;}\n    done[label] = 1;\n    if (open == 0) {next;}\n    if (deny == 0) {write_deny(label);}\n    if (allow == 0) {write_allow(label);}\n    if (order == 0) {write_order(label);}\n    print $0;\n    label = \"\";\n    next;\n}\n/^Order/ {\n    if (order == 0 ) {write_order(label);}\n    order = 1;\n    next;\n}\n/^Allow From/ {\n    if (allow == 0) {write_allow(label);}\n    allow = 1;\n    next;\n}\n/^Deny From/ {\n    if (deny == 0) {write_deny(label);}\n    deny = 1;\n    next;\n}\n// {print $0; next;}\n#// {next;}\n\nEND {\n\n}\n' </etc/cups/cupsd.conf.y2 >/etc/cups/cupsd.conf" $[]
-Execute	.target.bash "/usr/sbin/rccups reload" 0
 Execute	.target.bash "test -f /etc/cups/client.conf && (/usr/bin/awk '\nBEGIN { used = 0 }\n/^ServerName/ { next }\n{ print $0; }\n' /etc/cups/client.conf > /etc/cups/client.conf.yast2; mv /etc/cups/client.conf.yast2 /etc/cups/client.conf)" 0
 Write	.sysconfig.printer.CUPS_SERVER nil true
 Write	.sysconfig.printer nil true
 Execute	.target.bash "/sbin/SuSEconfig --module profiles" 0
 Write	.target.ycp "/var/lib/YaST2/printers" $["default":"", "deleted":[], "printers":[]] true
 Execute	.target.bash "/bin/chmod 600 /var/lib/YaST2/printers" 0
+Execute	.target.bash "/usr/sbin/rccups reload" 0
 Write	.sysconfig.printer.DEFAULT_PRINTER "none" true
 Write	.sysconfig.printer nil true
 Write	.cups.default_dest "" true
@@ -20,7 +20,6 @@ Execute	.target.bash "/sbin/insserv -d cups" 0
 Return	true
 Dump	====================================================
 Execute	.target.bash_output "/bin/awk 'function write_browsing(x){\n}\n\nfunction write_browse_addr(x){\n}\n\nfunction write_deny(x){\n}\n\nfunction write_allow(x){\n}\n\nfunction write_order(x){\n}\n\nBEGIN {\n    label = \"\"; browsing = 0; browseaddress = 0; order = false; allowfrom = false; denyfrom = false; \nopen = 0;\ndone[\"\"] = 1;\ndone[\"/>\"] = 1;\ndone[\"/admin>\"] = 1;\ndone[\"/printers>\"] = 1;\ndone[\"/classes>\"] = 1;\n}\n/^Browsing/ {\n    if (browsing == 0) {write_browsing(label); browsing = 1;} next;\n}\n/^BrowseAddress/ {\n    if (browseaddress == 0) {write_browse_addr(label); browseaddress = 1;} next;\n}\n/^<Location/ {\n    label = $2;\n    if (! done[$2] != 1) {next;}\n    open = 1;\n    if (browsing == 0) {write_browsing(\"\");} \n    if (browseaddress == 0) {write_browse_addr(\"\");}\n    browsing = 1;\n    browseaddress = 1;\n    print $0\n    deny = 0;\n    allow = 0;\n    order = 0;\n    next;\n}\n/^<\\/Location/ {\n    if (! done[label] != 1) {next;}\n    done[label] = 1;\n    if (open == 0) {next;}\n    if (deny == 0) {write_deny(label);}\n    if (allow == 0) {write_allow(label);}\n    if (order == 0) {write_order(label);}\n    print $0;\n    label = \"\";\n    next;\n}\n/^Order/ {\n    if (order == 0 ) {write_order(label);}\n    order = 1;\n    next;\n}\n/^Allow From/ {\n    if (allow == 0) {write_allow(label);}\n    allow = 1;\n    next;\n}\n/^Deny From/ {\n    if (deny == 0) {write_deny(label);}\n    deny = 1;\n    next;\n}\n// {print $0; next;}\n#// {next;}\n\nEND {\n\n}\n' </etc/cups/cupsd.conf.y2 >/etc/cups/cupsd.conf" $[]
-Execute	.target.bash "/usr/sbin/rccups reload" 0
 Execute	.target.bash "test -f /etc/cups/client.conf && (/usr/bin/awk '\nBEGIN { used = 0 }\n/^ServerName/ { next }\n{ print $0; }\n' /etc/cups/client.conf > /etc/cups/client.conf.yast2; mv /etc/cups/client.conf.yast2 /etc/cups/client.conf)" 0
 Write	.sysconfig.printer.CUPS_SERVER nil true
 Write	.sysconfig.printer nil true
@@ -32,6 +31,7 @@ Write	.target.string "/tmp/ppdfile" "*#PPDFile" true
 Write	.cups.printers.add $["accepting":true, "bannerend":"none", "bannerstart":"none", "changed":true, "name":"lp", "ppd":"/tmp/ppdfile", "state":"idle", "uri":"parallel://dev/lp0"] true
 Write	.target.ycp "/var/lib/YaST2/printers" $["default":"lp", "deleted":[$["name":"lpx", "states":$["cups-state":"commited", "lprng-state":"changed"], "type":"printer"]], "printers":[$["accepting":true, "bannerend":"none", "bannerstart":"none", "cups-state":"commited", "name":"lp", "state":"idle", "uri":"parallel://dev/lp0"]]] true
 Execute	.target.bash "/bin/chmod 600 /var/lib/YaST2/printers" 0
+Execute	.target.bash "/usr/sbin/rccups reload" 0
 Write	.sysconfig.printer.DEFAULT_PRINTER "lp" true
 Write	.sysconfig.printer nil true
 Write	.cups.default_dest "lp" true
