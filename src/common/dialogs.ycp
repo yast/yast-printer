@@ -181,8 +181,8 @@ Install them now?"), mergestring (packages, ", "));
 	else
 	    devices = [];
 
-//	if (type == "usb")
-//	    devices = merge (Printerlib::getCupsUsbDevices (), devices);
+	if (type == "usb" && Printer::spooler == "cups")
+	    devices = Printerlib::getCupsUsbDevices ();
 
 	if (size (devices) == 0)
 	{
@@ -1013,43 +1013,14 @@ with SuSE database of printers only</B></P>") + info_text;
                 (Printer::db == `foomatic &&(model_db == "" || model_db == nil))
                 || (Printer::db != `foomatic && (model == "" || model == nil))
                 )
-//		if (model == "" || model == nil)
 	        {
 	            // popup
 	            UI::MessagePopup (_("You must select a printer model."));
+		    UI::SetFocus (`id (`modelsel));
 	        }
 		else
 		{
 		    DisplayPrinterPopup (info, manuf_db, model_db);
-/*		    // richtext
-		    string manuf_info = lookup (info, "vendor",
-		        _("<P>No information available.</P>"));
-		    // richtext
-		    string model_info = lookup (info, "printer",
-		        lookup (info, "config",
-		        _("<P>No information available.</P>")));
-		    // Manufacturer: ...info... Model: ...info...  1/2
-		    string info_text = _("<P><B>Manufacturer:</B></P>")
-		       + manuf_info +
-			// Manufacturer: ...info... Model: ...info...  2/2
-			_("<P><B>Model:</B></P>") + model_info;
-		    integer type = Printer::foomatic[manuf_db,model_db, `support]:1;
-		    if (type != 2 && Printer::db == `foomatic
-                        && size (filter (`k, `v,
-                            Printer::foomatic[manuf_db, model_db]:$[],
-                            ``(is (k, string)))) == 0)
-		    {
-			// part of richtext
-		        info_text = _("<p><B>This printer can be configured
-with SuSE database of printers only</B></P>") + info_text;
-		    }
-		    else if (type == 2)
-			// part of richtext
-		        info_text = _("<p><B>This printer isn't supported by SuSE Linux</B></P>") + info_text;
-
-		    // message box caption
-		    UI::LongTextPopup (_("Printer information"),
-		        `RichText (info_text), 50, 18);*/
 		}
 	    }
 	    if (ret == `manufsel)
@@ -1100,34 +1071,15 @@ with SuSE database of printers only</B></P>") + info_text;
 		    Printer::db == `foomatic
 
 			? maplist (`k, `v, modnames, ``(`item (`id (v), k)))
-
-//			    maplist (`kk, `vv, filter (
-//				`k, `v, Printer::foomatic[manuf_db]:$[],
-//				``(is (k, string))),
-//				``(`item (`id (kk), vv[`label]:kk)))
-
 			: SCR::Read (add (.printerdb.models, manuf),
 			    [ model, model_ieee ]));
 		UI::ReplaceWidget (`id (`modelsel_rep), modelsel);
 		if (Printer::db == `foomatic)
 		{
-//		    model_db = "";
-/*		    if (model_db == "" || model_db == nil)
-		    {
-			foreach (`k, `v, Printer::foomatic[manuf_db]:$[], ``{
-			    if (model_db == "" || model_db == nil)
-				model_db = k;
-			});
-		    }*/
 		    if (model_db != "")
 			UI::ChangeWidget (`id (`modelsel), `CurrentItem, model_db);
 		}
-		else
-		{
-//		    model = "";
-//		    model_ieee = "";
-		}
-		ret = nil;//`modelsel;
+		ret = nil;
 	    }
 	    if (`modelsel == ret)
 	    {
@@ -1149,10 +1101,6 @@ with SuSE database of printers only</B></P>") + info_text;
 			info["printer"] = mc;
 		    if (0 != type && info["printer"]:"" != "")
 			DisplayPrinterPopup (info, manuf_db, model_db);
-/*		    {
-			UI::LongTextPopup (_("Printer information"), `RichText (
-			    info["printer"]:""), 50, 10);
-		    }*/
 		    info_instead_next = ! (2 != type
 			&& size (filter (`k, `v,
 			    Printer::foomatic[manuf_db, model_db]:$[],
@@ -2099,15 +2047,41 @@ with SuSE database of printers only</B></P>") + info_text;
 	map selected = lookup (Printer::printer, "options", $[]);
 
 	list opts = [];
+	list optlist = []; // used only for foomatic;
         if (foomatic)
         {
             map options = SCR::Read (.ppd.file.options, [filename, ""]);
-            list tmp = options["data"]:[];
-	    tmp = filter (`o, tmp, ``(
+            optlist = options["data"]:[];
+	    y2error ("First option: %1", optlist[0]:$[]);
+	    optlist = filter (`o, optlist, ``(
 		o["name"]:"" != "PageRegion"
 		&& o["name"]:"" != "ImageableArea"
 		&& o["mame"]:"" != "PaperDimension"));
-            opts = maplist (`i, tmp, ``(
+	    optlist = add (optlist, $[
+		"current" : "3",
+		"gui" : _("Orientation"),
+		"name" : "orientation-requested",
+		"type" : "PickOne",
+		"valorder" : ["3", "4", "5", "6"],
+		"values" : $["3" : _("Portrait"),
+			"4" : _("Landscape"),
+			"5" : _("Reverse"),
+			"6" : _("Reverse portrait"),
+		],
+	    ]);
+	    optlist = add (optlist, $[
+		"current" : "1",
+		"gui" : _("Pages per sheet"),
+		"name" : "number-up",
+		"type" : "pick_one",
+		"valorder" : ["1", "2", "4"],
+		"values" : $[
+			"1" : "1",
+			"2" : "2",
+			"4" : "4",
+		],
+	    ]);
+            opts = maplist (`i, optlist, ``(
                 `item (`id (i["name"]:""), i["gui"]:"")
             ));
 	}
@@ -2144,12 +2118,15 @@ with SuSE database of printers only</B></P>") + info_text;
 		if (foomatic)
 		{
 		    string option = UI::QueryWidget (`id (`opts), `CurrentItem);
-		    map options = SCR::Read (.ppd.file.options, [filename, ""]);
-		    list optlist = options["data"]:[];
+//		    map options = SCR::Read (.ppd.file.options, [filename, ""]);
+//		    list optlist = options["data"]:[];
 		    string ppd_default = "";
+y2error ("Switched to %1", option);
 		    foreach (`i, optlist, ``{
+y2error ("Checking against %1", i["name"]:"");
 			if (i["name"]:"" == option)
 			{
+y2error ("Test passed");
 			    vals = maplist (`k, i["valorder"]:$[], ``(
 				`item (`id (k), i["values", k]:k)
 			    ));
@@ -3078,11 +3055,11 @@ the current configuration.
     /**
       * Backup list of print queues. See description of map printer
       */
-    global list printcap_backup = [];
+    global list printcap_backup = nil;
     /**
       * Backup detected printer map
       */
-    global map printer_backup = $[];
+    global map printer_backup = nil;
     /**
       * Newely created queue
       */
@@ -3174,7 +3151,7 @@ the current configuration.
 
 	Printer::additional_forbidden_names = [];
 
-	if (size (printcap_backup) == 0)
+	if (printcap_backup == nil)
 	{
 	    queues = getQueuesOfPrinter (uri, vendor, device);
 	    new_queues = maplist (`q, new_queues, ``{
@@ -3191,13 +3168,13 @@ the current configuration.
 		y2error ("New queues: %1", Printer::printcap);
 	    queues = Printer::printcap;
 	    Printer::printcap = printcap_backup;
-	    printcap_backup = [];
+	    printcap_backup = nil;
 	}
 
-	if (size (printer_backup) > 0)
+	if (printer_backup != nil)
 	{
 	    Printer::printer = printer_backup;
-	    printer_backup = $[];
+	    printer_backup = nil;
 	}
 
 	if (new_added_queue != $[])
