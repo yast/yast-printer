@@ -625,25 +625,16 @@ that your serial ports are not properly configured."));
                 devices = ["/dev/irlpt0", "/dev/irlpt1", "/dev/irlpt2",
 		    "/dev/irlpt3"];
             }
-/*	    else if (type == "bluetooth")
-	    {
-		if (device != "")
-		    devices = [device];
-		else
-		    Wizard::DisableNextButton ();
-	    }*/
         }
-        if (type != Printerlib::getUriType (device))
+        if (type != Printerlib::getUriType (uri))
             device = "";
         if (device == "")
             device = devices[0]:"";
         list device_val = getDevicesItems (devices, device);
-y2error ("DV: %1", device_val);
-	if (size (device_val) == 0)
+/*	if (size (device_val) == 0)
 	{
-y2error ("disabling NB");
 	    Wizard::DisableNextButton ();
-	}
+	}*/
         term details = `VBox (
             // PushButton
             `HBox (`HStretch (), `PushButton (`id (`details), _("&Other...")))
@@ -766,7 +757,7 @@ actually selected.
 			// Unix device /dev/(lp|usb/lp|ttyS)*
 			_("Select the d&evice:"),
 			device_val));
-		Wizard::EnableNextButton ();
+//		Wizard::EnableNextButton ();
 	    }
             else if (ret == `test)
             {
@@ -793,6 +784,15 @@ actually selected.
                         );
                 }
             }
+	    else if (ret == `next)
+	    {
+		if (device == "" || device == nil)
+		{
+		    // message report (user forgot to select a device)
+		    Report::Message (_("Select a device!"));
+		    ret = nil;
+		}
+	    }
         } until (ret == `abort || ret == `back || ret == `next
 	    || `ppdetails == ret || `spdetails == ret);
         if (`spdetails == ret)
