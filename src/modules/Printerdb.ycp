@@ -33,7 +33,87 @@
       */
     global map foomatic = nil;
 
+// local functions
+
+    /**
+      * Get the default encoding of the PPD file according to the language
+      * @param language string language in the form it is present in PPD file
+      * @return encoding in the form it is present in PPD file
+      */
+    global define string Language2Encoding (string language) ``{
+	map mapping = $[
+	    "English" : "ISOLatin1",
+	    "Danish" : "ISOLatin1",
+	    "Dutch" : "ISOLatin1",
+	    "Finnish" : "ISOLatin1",
+	    "French" : "ISOLatin1",
+	    "German" : "ISOLatin1",
+	    "Italian" : "ISOLatin1",
+	    "Japanese" : "JIS83-RKSJ,",
+	    "Norwegian" : "ISOLatin1",
+	    "Portuguese" : "ISOLatin1",
+	    "Spanish" : "ISOLatin1",
+	    "Swedish" : "ISOLatin1",
+	    "Czech" : "ISOLatin2",
+	];
+	return mapping[language]:"None";
+    }
+
+    /**
+      * Get the characters encoding from the form in it is present in PPD file
+      * to the form that can be passed to iconv
+      * @param ppd_enc string encoding in the form for PPD file
+      * @return string encoding in the form for iconv
+      */
+    global define string PPDenc2UIenc (string ppd_enc) ``{
+	map mapping = $[
+	    "ISOLatin1" : "ISO-8859-1",
+	    "ISOLatin2" : "ISO-8859-2",
+	    "ISOLatin5" : "ISO-8859-5",
+	    "JIS83-RKSJ" : "SHIFT-JIS",
+	    "MacStandard" : "MAC",
+	    "WindowsANSI" : "MS_ANSI",
+	];
+	return mapping[ppd_enc]:"";
+    }
+
 // global functions
+
+    global define list getPpdFileOptions (string filename) ``{
+	map options = (map)SCR::Read (.ppd.file.options, [filename, ""]);
+	list<map>optlist = options["data"]:[];
+	y2debug ("First option: %1", optlist[0]:$[]);
+	optlist = filter (map o, optlist, ``(
+	    o["name"]:"" != "PageRegion"
+	    && o["name"]:"" != "ImageableArea"
+	    && o["mame"]:"" != "PaperDimension"));
+
+	// change the encoding of printable strings
+	map ppdinfo = (map)SCR::Read (.ppd.file.ppdinfo, filename);
+	string encoding = ppdinfo["lang_encoding"]:"";
+	if (encoding == "")
+	    encoding = Language2Encoding (ppdinfo["lang_version"]:"");
+	encoding = PPDenc2UIenc (encoding);
+	if (encoding != "")
+	{
+	    optlist = maplist (map o, optlist, ``{
+		if (o["name"]:"" != "PageSize"
+		    && o["name"]:"" != "InputSlot")
+		{
+		    o["gui"] = UI::Recode (encoding, "UTF-8", o["gui"]:"");
+		}
+		o["values"] = mapmap (string k, string v, o["values"]:$[], ``{
+		    if (k != "Custom" && o["name"]:"" != "PageSize")
+		    {
+			v = (string)UI::Recode (encoding, "UTF-8", v);
+		    }
+		    return $[k: v];
+		});
+		return o;
+	    });
+	}
+	return optlist;
+    }
 
     /**
       * Get proposed default queue when using foomatic db
@@ -309,9 +389,9 @@ printer model again.
 	}
 
 	SCR::Write (.ppd.file.modify,
-	    [src_ppd, dst_ppd, entry["options"]:$[]]);
-	SCR::Execute (.target.remove, src_ppd);
+	    [src_ppd, dst_ppd, entry["ppd_options"]:$[]]);
 	entry["ppd"] = dst_ppd;
+//	SCR::Execute (.target.remove, src_ppd);
         return entry;
     }
 
@@ -326,7 +406,10 @@ printer model again.
 	loadFoomaticIfNeeded ();
 	map ppd_db = foomatic[vendor_db, device_db]:$[];
 	ppd_db = filter (`k, `v, ppd_db, ``(is (k, string)));
-	map ret = mapmap (string k, map v, ppd_db, ``( $[(v["filename"]:"") : k]));
+	map ret = mapmap (string k, map v, ppd_db, ``{
+	    string filename = v["filename"]:"";
+	    return $["filename" : k];
+	});
 	ret = filter (`k, `v, ret, ``(k != "" && v != ""));
 	return ret;
     }

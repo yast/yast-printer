@@ -1061,41 +1061,7 @@ and test the queue after the printer model is selected."));
 	map ppd_selected = Printer::printer["ppd_options"]:$[];
 
 	list opts = [];
-	list optlist = [];
-
-	map options = (map)SCR::Read (.ppd.file.options, [filename, ""]);
-	optlist = options["data"]:[];
-	y2debug ("First option: %1", optlist[0]:$[]);
-	optlist = filter (map o, optlist, ``(
-	    o["name"]:"" != "PageRegion"
-	    && o["name"]:"" != "ImageableArea"
-	    && o["mame"]:"" != "PaperDimension"));
-
-	// change the encoding of printable strings
-	map ppdinfo = (map)SCR::Read (.ppd.file.ppdinfo, filename);
-	string encoding = ppdinfo["lang_encoding"]:"";
-	if (encoding == "")
-	    encoding = Language2Encoding (ppdinfo["lang_version"]:"");
-	encoding = PPDenc2UIenc (encoding);
-
-	if (encoding != "")
-	{
-	    optlist = maplist (map o, optlist, ``{
-		if (o["name"]:"" != "PageSize"
-		    && o["name"]:"" != "InputSlot")
-		{
-		    o["gui"] = UI::Recode (encoding, "UTF-8", o["gui"]:"");
-		}
-		o["values"] = mapmap (string k, string v, o["values"]:$[], ``{
-		    if (k != "Custom" && o["name"]:"" != "PageSize")
-		    {
-			v = (string)UI::Recode (encoding, "UTF-8", v);
-		    }
-		    return $[k: v];
-		});
-		return o;
-	    });
-	}
+	list optlist = Printerdb::getPpdFileOptions (filename);
 
 	// and now add options without their location in PPD file
 	optlist = add (optlist, $[
@@ -1137,7 +1103,7 @@ and test the queue after the printer model is selected."));
 
 	symbol ret = `opts;
 	// selection box label
-	UI::ReplaceWidget (`id (`upper), `SelectionBox (`id (`opts), `opt (`notify), _("&Options"), opts));
+	UI::ReplaceWidget (`id (`upper), `SelectionBox (`id (`opts), `opt (`notify, `immediate), _("&Options"), opts));
 
 	UI::ChangeWidget (`id (`opts), `CurrentItem,
 	    lookup ((map)select ((list)lookup ((map)SCR::Read (
@@ -1167,7 +1133,7 @@ and test the queue after the printer model is selected."));
 			option_loc = i["location"]:`ppd;
 			option_type = i["type"]:"PickOne";
 			vals = maplist (string k, i["valorder"]:[], ``(
-			    $[k: i["values", k]:k]
+			    [k, i["values", k]:k]
 			));
 			ppd_default = i["current"]:"";
 			if (ppd_default == "")
@@ -1175,7 +1141,7 @@ and test the queue after the printer model is selected."));
 		    }
 		});
 		UI::ReplaceWidget (`id (`lower),
-		    getWidgetForOption (option_type, vals));
+		    getWidgetForOption (option_type, (list)vals));
 		string current = "";
 		if (option_loc == `lpoptions)
 		    current = selected[option]:"";
@@ -1244,7 +1210,7 @@ and test the queue after the printer model is selected."));
 		foreach (map o, optlist, ``{
 		    string opt_key = o["name"]:"";
 		    string opt_gui = o["gui"]:opt_key;
-		    string val_key = selected[opt_key]:"";
+		    string val_key = ppd_selected[opt_key]:"";
 		    if (val_key == "")
 		    {
 			val_key = o["current"]:"";
@@ -1262,8 +1228,9 @@ and test the queue after the printer model is selected."));
 		    if (opt2val[c["option1"]:""]:"" == c["value1"]:" "
 			&& opt2val[c["option2"]:""]:"" == c["value2"]:" ")
 		    {
-			y2debug ("Constraint found between %1 and %2",
-			    c["option1"]:"", c["option2"]:"");
+			y2milestone ("Constraint found between %1 and %2, values %3 and %4",
+			    c["option1"]:"", c["option2"]:"",
+			    c["value1"]:"", c["value2"]:"");
 			return c;
 		    }
 		    else
