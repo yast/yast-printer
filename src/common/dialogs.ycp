@@ -2998,6 +2998,10 @@ the current configuration.
      * @return symbol for ws
      */
     global define symbol runProbedPrinterDialog () ``{
+	if (queue_for_printer)
+	{
+	    return `installed_printer;
+	}
 	y2milestone ("Configuring printer %1", Printer::printer);
 	if (Printer::confmode == `adm)
 	{
@@ -3611,16 +3615,23 @@ for proposing new queues.");
 	    {
 		selected = true;
 	    }
-	    return `item (`id (current),
-		isPrinterConfigured (i)
-			// table entry, eg. Queue for Epson Stylus Photo on First parallel port (/dev/lp0)
-			? sformat (_("Queue for %1 %2 on %3"), lookup (i, "vendor", ""), lookup (i, "device", ""),
-				Printerlib::getDeviceNiceName (lookup (i, "dev_name", ""), true))
-			  // Translators: "... on ...": will be st. like: Canon BJC-6100 on first parallel port.
-			: sformat (_("%1 %2 on %3"), lookup (i, "vendor", ""), lookup (i, "device", ""),
-			      Printerlib::getDeviceNiceName (lookup (i, "dev_name", ""), true)),
+	    if (isPrinterConfigured (i))
+	    {
+		return nil;
+	    }
+	    else
+		return `item (`id (current), sformat (_("%1 %2 on %3"),
+		    i["vendor"]:"", i["device"]:"",
+		    Printerlib::getDeviceNiceName (i["dev_name"]:"", true)),
 			  current == current_sel);
 	});
+	items = filter (`i, items, ``(i != nil));
+	if (size (getConfiguredPrinters ()) > 0)
+	{
+	    items = add (items, `item (`id (-2),
+		// selection box entry
+		_("Queue for already configured printer")));
+	}
 	// selection box entry
 	return add (items, `item (`id (-1), _("Other (not detected)"), !selected));
     }
@@ -3633,6 +3644,12 @@ for proposing new queues.");
 	Printer::Detect ();
 	return `next;
     }
+
+    /**
+      * True when configuring queue for already configured printer
+      */
+    global boolean queue_for_printer = false;
+
     /**
      * Common detected hardware dialog.
      * @return symbol for ws
@@ -3705,6 +3722,14 @@ system will be saved.
 //		    Printer::selectPrinter (-1);
 //		    ret = `add;
 //		}
+		if (runAutoprobedListDialog__current == -2)
+		{
+		    queue_for_printer = true;
+		}
+		else
+		{
+		    queue_for_printer = false;
+		}
 	    }
 	    break;
 	}
@@ -4117,7 +4142,6 @@ All your changes will be lost.
 	    "add_printer_wz" :	``(WizardSequencer (getAliases (), add_printer_sequence)),
 	    "edit_printer_wz" :	``(WizardSequencer (getAliases (), edit_printer_sequence)),
 	    "cups_wz" :		``(WizardSequencer (getAliases (), cups_sequence)),
-//	    "detected_wz" :	``(WizardSequencer (getAliases (), detected_sequence)),
 	    "add_queue_wz":	``(WizardSequencer (getAliases (), add_queue_sequence)),
 	    "add_queue_wz_1":	[ ``(WizardSequencer (getAliases (), add_queue_sequence)), true],
 	    "single_printer_wz":``(WizardSequencer (getAliases (), single_printer_sequence)),
@@ -4280,6 +4304,7 @@ All your changes will be lost.
                 `model : "model",
 		`connection : "connection",
 		`queue : "add_queue_wz",
+		`installed_printer : "inst_printer",
 	    ],
 	    "connection" : $[
 		`parallel : "parallel",
