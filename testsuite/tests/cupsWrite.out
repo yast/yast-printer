@@ -16,9 +16,9 @@ Write	.sysconfig.printer.CUPS_SERVER nil true
 Write	.sysconfig.printer nil true
 Execute	.target.bash "/sbin/SuSEconfig --module profiles" 0
 Execute	.target.bash "/usr/bin/lpq 2>/dev/null" 0
-Write	.target.ycp "/var/lib/YaST2/printers" $["cups_usb_devices":`always, "default":"", "deleted":[], "printers":[], "version":520] true
+Write	.target.ycp "/var/lib/YaST2/printers" $["cups_usb_devices":`always, "default":"", "deleted":[], "printers":[], "server_default":true, "version":520] true
 Execute	.target.bash "/bin/chmod 600 /var/lib/YaST2/printers" 0
-Write	.sysconfig.printer.DEFAULT_PRINTER "none" true
+Write	.sysconfig.printer.DEFAULT_PRINTER nil true
 Write	.sysconfig.printer nil true
 Write	.cups.default_dest "" true
 Execute	.target.bash "/usr/sbin/rccups restart" 0
@@ -56,9 +56,9 @@ Read	.target.tmpdir "/tmp"
 Write	.ppd.file.modify ["filename", "/tmp/ppdfile", $[]] true
 Read	.target.size "/tmp/ppdfile" 555
 Write	.cups.printers.add $["accepting":true, "bannerend":"none", "bannerstart":"none", "changed":true, "database":"foomatic", "name":"lp", "ppd":"/tmp/ppdfile", "state":"idle", "uri":"parallel://dev/lp0"] true
-Write	.target.ycp "/var/lib/YaST2/printers" $["cups_usb_devices":`always, "default":"lp", "deleted":[$["name":"lpx", "states":$["cups-state":"commited", "lprng-state":"changed"], "type":"printer"]], "printers":[$["accepting":true, "bannerend":"none", "bannerstart":"none", "cups-state":"commited", "name":"lp", "state":"idle", "uri":"parallel://dev/lp0"]], "version":520] true
+Write	.target.ycp "/var/lib/YaST2/printers" $["cups_usb_devices":`always, "default":"lp", "deleted":[$["name":"lpx", "states":$["cups-state":"commited", "lprng-state":"changed"], "type":"printer"]], "printers":[$["accepting":true, "bannerend":"none", "bannerstart":"none", "cups-state":"commited", "name":"lp", "state":"idle", "uri":"parallel://dev/lp0"]], "server_default":true, "version":520] true
 Execute	.target.bash "/bin/chmod 600 /var/lib/YaST2/printers" 0
-Write	.sysconfig.printer.DEFAULT_PRINTER "lp" true
+Write	.sysconfig.printer.DEFAULT_PRINTER nil true
 Write	.sysconfig.printer nil true
 Write	.cups.default_dest "lp" true
 Execute	.target.bash "/usr/sbin/rccups restart" 0

@@ -65,6 +65,13 @@ void setPrinterOptions(const char*name,YCPMap&options,bool deflt = false);
 string getDefaultDest();
 
 /**
+ * Set default destination for client-only.
+ * @param d Name of default destination.
+ * @return Success state.
+ */
+bool setDefaultDestLocal(const char*d);
+
+/**
  * Set default destination.
  * @param d Name of default destination.
  * @return Success state.

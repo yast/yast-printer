@@ -424,6 +424,25 @@ string getDefaultDest()
 }
 
 /**
+ * Set default destination for client-only.
+ * @param d Name of default destination.
+ * @return Success state.
+ */
+bool setDefaultDestLocal(const char*d)
+{
+  cups_dest_t *dests;
+  int num_dests = cupsGetDests(&dests);
+  y2error ("Dests: %d", num_dests);
+  for(int i = 0;i<num_dests;i++)
+    if (! strcmp (dests[i].name, d))
+      dests[i].is_default = 1;
+    else if(dests[i].is_default)
+      dests[i].is_default = 0;
+  cupsSetDests(num_dests,dests);
+  return true;
+}
+
+/**
  * Set default destination.
  * @param d Name of default destination.
  * @return Success state.
@@ -713,8 +732,8 @@ void* remoteDestinationsThread(void *rdt_v)
                     int printer_type = -1;
                     while (attr != NULL && attr->group_tag == IPP_TAG_PRINTER)
                         {
-//                            if (!strcmp(attr->name, "printer-name") && attr->value_tag == IPP_TAG_NAME)
-                            if (!strcmp(attr->name, "printer-uri-supported") && attr->value_tag == IPP_TAG_URI)
+                            if (!strcmp(attr->name, "printer-name") && attr->value_tag == IPP_TAG_NAME)
+//                            if (!strcmp(attr->name, "printer-uri-supported") && attr->value_tag == IPP_TAG_URI)
                                 {
                                     name = YCPString(attr->values[0].string.text);
                                 }
