@@ -23,6 +23,30 @@
     import "Printerlib";
 
     /**
+     * Write the .upp file and the configuration.
+     * @param entry Entry for printer to save.
+     * @return boolean true if successful
+     */
+    define boolean createUppFile (map entry) ``{
+        string upp_file = SCR::Write (add (.printerdb.upp, lookup (entry, "config", "")), lookup (entry, "options", $[]));
+        string name = lookup (entry, "name", "");
+
+        // Save the .upp file
+        SCR::Execute (.target.mkdir, sformat ("/etc/lpdfilter/%1", name));
+        string fname = sformat ("/etc/lpdfilter/%1/upp", name);
+        if (!SCR::Write (.target.string, fname, upp_file))
+        {
+            // message box %1 is filename
+            Report::Error (sformat (_("Cannot write %1."), fname));
+            return false;
+        }
+
+        SCR::Execute (.target.bash, sformat ("/bin/chmod 644 %1", fname));
+        return true;
+    }
+
+
+    /**
      * Add a remote printer to the printcap.
      * @param entry Entry for printer to save.
      * @return boolean true if successful

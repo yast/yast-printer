@@ -113,7 +113,7 @@
     /**
       * Used database type, `suse or `foomatic
       */
-    global symbol db = nil;
+    global symbol db = `foomatic;
     /**
       * map of foomatic printers database
       */
@@ -584,7 +584,6 @@
 	return $[
 	    "printcap" : printcap,
 	    "default"  : default,
-            "database" : db,
 	    "spooler" : spooler,
 	    "cups_installation" : cups_installation,
 	    "server_hostname" : server_hostname,
@@ -601,7 +600,6 @@
 	server_hostname = lookup (settings, "server_hostname", "");
 	default = lookup (settings, "default", "");
 	printcap = lookup (settings, "printcap", []);
-        db = settings["database"]:`foomatic;//nil;
 	cups_usb_dev_names = `always;
 	index = -1;
 	deleted = [];
@@ -803,19 +801,11 @@ END { if (!used) print \"ServerName %1\" }
 	    if (nil == state)
 	    {
 		state = $[];
-/*		if (is (nonyast, list) && size (nonyast) > 0)
-		{
-		    y2milestone ("First run after update from older version");
-		    update = true;
-		}*/
 	    }
 	    printcap = lookup (state, "printers", []);
 	    deleted = lookup (state, "deleted", []);
 	    default = lookup (state, "default", "");
-	    db = state["database"]:nil;
 	    cups_usb_dev_names = state["cups_usb_devices"]:`always;
-	    if (spooler == "cups" && db == nil)
-		db = `foomatic;
 	    printcap = maplist (`e, printcap, ``(
 		add (e, "type", "yast2")
 	    ));
@@ -1063,11 +1053,6 @@ Remove them?
 		original_unique_keys = add (original_unique_keys, unique_key, false);
 	    }
 	    entry = fixPrinter(entry);
-	    if (! Printer::changeDb (lookup (entry, "database", nil)))
-	    {
-		y2error ("Error selecting database, using default");
-		continue;
-	    }
 	    if (spooler == "cups")
 	    {
 		if ((lookup (entry, "cups-state", "changed") == "changed" || Printer::save_all) && (lookup (entry, "type", "yast2") == "yast2"))
@@ -1170,7 +1155,7 @@ the selected spooler does not support it.
 	l = maplist (`e, l, ``(filter (`k, `v, e, ``(k != "changed" && k != "ppd"))));
 	cleanDeletedPrinters ();
 	map save = $["printers" : l, "deleted" : deleted, "default" : default,
-	    "database" : db, "cups_usb_devices" : cups_usb_dev_names ];
+	    "cups_usb_devices" : cups_usb_dev_names ];
 	if (! SCR::Write (.target.ycp, "/var/lib/YaST2/printers", save))
 	{
 	    // error report. %1 is filename
@@ -1201,28 +1186,6 @@ the selected spooler does not support it.
 	return result;
     }
 
-    /**
-     * Write the .upp file and the configuration.
-     * @param entry Entry for printer to save.
-     * @return boolean true if successful
-     */
-    define boolean createUppFile (map entry) ``{
-	string upp_file = SCR::Write (add (.printerdb.upp, lookup (entry, "config", "")), lookup (entry, "options", $[]));
-	string name = lookup (entry, "name", "");
-
-	// Save the .upp file
-	SCR::Execute (.target.mkdir, sformat ("/etc/lpdfilter/%1", name));
-	string fname = sformat ("/etc/lpdfilter/%1/upp", name);
-	if (!SCR::Write (.target.string, fname, upp_file))
-	{
-	    // message box %1 is filename
-	    Report::Error (sformat (_("Cannot write %1."), fname));
-	    return false;
-	}
-
-	SCR::Execute (.target.bash, sformat ("/bin/chmod 644 %1", fname));
-	return true;
-    }
     /**
      * Write conf file onto disk.
      * @param fn filename
@@ -1362,18 +1325,7 @@ the selected spooler does not support it.
 		    }
 		    else
 		    {
-			string comment = "";
-			if (entry["database"]:"" == "foomatic")
-			{
-			    comment = entry["comment"]:"";
-			}
-			else
-			{
-			    comment = SCR::Read (.printerdb.configname,
-				[lookup (entry, "vendor",""),
-				lookup (entry,"device", ""),
-				lookup (entry, "config","")]);
-			}
+			string comment = entry["comment"]:"";
 			if (comment != "" && comment != nil)
 			    comment = "  -  " + comment;
 			else
@@ -1435,13 +1387,6 @@ the selected spooler does not support it.
 		    {
 			model = i["vendor"]:"" + " " + i["device"]:"";
 		    }
-		    else
-		    {
-	                model = SCR::Read (.printerdb.printername, [ lookup (i, "vendor", ""), lookup (i, "device", ""),
-                                lookup (i, "vendor_ieee", nil), lookup (i, "device_ieee", nil)]);
-		        if (model == "")
-			    model = lookup (i, "info", "");
-		    }
 		    string ppd = lookup (i, "ownppd", "");
 	            if (ppd != "" && ! isPpd (ppd))
 	                ppd = lookup (i, "ppd", "");
@@ -1471,14 +1416,6 @@ the selected spooler does not support it.
 		    }
 		    if (!contains (style, `short))
 		    {
-			if (i["database"]:"" == "foomatic")
-			{
-
-			}
-			else
-			{
-			    cfg = SCR::Read (.printerdb.configname, [lookup (i, "vendor", ""), lookup (i, "device", ""), lookup (i, "config", "")]);
-			}
 			if (nil != cfg && "" != cfg)
 			    cache = cache + "  -  " + cfg;
 
@@ -1562,51 +1499,9 @@ the selected spooler does not support it.
 	integer i = 0;
 	while (i < size (Args ()))
 	{
-	    if (is (Args (i), term) && `db == symbolof (Args (i)))
-	    {
-		string s = select (Args (i), 0, nil);
-		y2milestone ("Changing default database to %1", s);
-		if (nil != s && changeDb (s))
-		{
-		    default_database = s;
-		    current_database = s;
-		    y2milestone ("Default database changed to %1", s);
-		}
-	    }
 	    i = i + 1;
 	}
 	return ;
-    }
-    /**
-     * Change current database
-     * @param s database to use
-     * @return success state
-     */
-    global define boolean changeDb (string s) ``{
-	if (s == current_database)
-	    return true;
-	if (s == "foomatic")
-	    return true;
-	current_database = s;
-	if (nil == s)
-	    s = "/usr/share/YaST2/data/printerdb/suse.prdb";
-	string fn = SCR::Read (.target.tmpdir) + "/re-agent.scr";
-	SCR::Write (.target.string, fn, sformat (".printerdb\n`ag_printerdb(PrinterdbAgent(\"%1\"))\n", s));
-	SCR::UnregisterAgent (.printerdb);
-	SCR::RegisterAgent (.printerdb, fn);
-	list l = SCR::Read (.printerdb.vendors);
-	if (0 == size (l) && nil != current_database)
-	{
-	    changeDb (nil);
-	    return false;
-	}
-	return true;
-    }
-    /**
-     * Change database "back to" default db (passed on the command line)
-     */
-    global define void revertDb () ``{
-	changeDb (default_database);
     }
     /**
      * Prepare detected printer to be configured.
@@ -1672,10 +1567,6 @@ the selected spooler does not support it.
 			is_foomatic = true;
 		    }
 		}
-		if (! is_foomatic)
-		{
-		    detected = SCR::Read (.printerdb.detect, [ lookup (i, "vendor", ""), lookup (i, "device", "") ]);
-		}
 
 		if (Printer::spooler == "cups")
 		{
@@ -1688,8 +1579,6 @@ the selected spooler does not support it.
 		if (2 == size (detected))
 		{
 		    map info = $[];
-		    if (is_foomatic)
-		    {
 			string vdb = SCR::Read (.ppd.db.vendorname,
                             i["vendor"]:"");
 			string mdb = SCR::Read (.ppd.db.modelname,
@@ -1699,10 +1588,7 @@ the selected spooler does not support it.
 			if (! supp)
 			    type = 2;
 			info = $["supported":true, "type":type];// FIXME type
-		    }
-		    else
-			info = SCR::Read (.printerdb.info, detected);
-			y2milestone ("Detected: %1", i);
+		    y2milestone ("Detected: %1", i);
 		    if (0 == lookup (info, "type", 2))
 		    {
 			editDetected (i);
@@ -1722,16 +1608,8 @@ the selected spooler does not support it.
 			    "device" : select (detected, 1, ""),
 			]);
 			list new_queues = [];
-			if (is_foomatic)
-			{
-			    new_queues = getFoomaticAutoQueues
-				(i["vendor_db"]:"", i["device_db"]:"", nil);
-			}
-			else
-			{
-			    new_queues = SCR::Read (.printerdb.auto,
-				i["device"]:"");
-			}
+			new_queues = getFoomaticAutoQueues
+			    (i["vendor_db"]:"", i["device_db"]:"", nil);
 			string suffix = getQueueSuffix (new_queues);
 			foreach (`v, new_queues, ``{
 			    map paper = getQuickPaperSize (lookup (v, "config", ""));
@@ -1740,10 +1618,6 @@ the selected spooler does not support it.
 
 			    if (! (is_foomatic))
 			    {
-/*				map paper = getQuickPaperSize (lookup (v, "config", ""));
-				if (nil != paper)
-				    v = add (v, "options", paper);
-*/
 			        string k = adjustQueueName (lookup (v, "name", "lp") + suffix, forbidden_names);
 			        v = add (v, "name", k);
 			    }
@@ -1754,10 +1628,6 @@ the selected spooler does not support it.
 			    {
 // FIXME bellow - LPRng support
 //				info = $["lprng" : false];
-			    }
-			    else
-			    {
-			        info = SCR::Read (.printerdb.configinfo, lookup (v, "config", ""));
 			    }
 			    y2milestone ("Proposing queue %1", union (v, i));
 			    if ((lookup (info, "cups", true) && lookup (info, "lprng", true)))

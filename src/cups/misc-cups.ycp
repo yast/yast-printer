@@ -30,7 +30,14 @@
       */
     global define boolean writeCupsPrinter (map entry) ``{
 	if (entry["database"]:"" == "foomatic")
+	{
 	    loadFoomaticIfNeeded ();
+	}
+	else
+	{
+	    Report::Error (sformat (_("Only foomatic queues are supported: %1"),
+		entry["name"]:""));
+	}
         string name = lookup (entry, "name", "");
         if (lookup (entry, "type", "yast2") != "yast2")
             return false;
@@ -63,7 +70,7 @@
 	string ppdfile = "";
 	if (entry["ownppd"]:"" != "")
 	    ppdfile = entry["ownppd"]:"";
-	else if (entry["database"]:"" == "foomatic" && ! raw)
+	else if (! raw)
 	{
 	    ppdfile = Printer::foomatic[entry["vendor_db"]:"",
 		entry["device_db"]:"",
@@ -80,33 +87,12 @@ printer model again.
 		return false;
 	    }
 	}
-	else if (! raw)
-            ppdfile = SCR::Write (add (.printerdb.ppd, lookup (entry, "config", "")), lookup (entry, "options", $[]));
-
-        // --
-        // Just a hack to avoid strange ends of files
-        // see bug #19354
-	if (entry["database"]:"" != "foomatic" && ! raw)
-	{
-            list ppd_l = splitstring(ppdfile, "\n");
-	    list hacked = filter(`line, ppd_l, ``( substring(line, 0, 1) == "*" ));
-	    ppdfile = mergestring(hacked, "\n") + "\n";
-	    y2debug ("File after hacking: %1", ppdfile);
-	}
-        // --
 
         if ((ownppd == "" || isPpd (ownppd)) && ! raw)
         {
             if (ppdfilename != "")
             {
-		if (entry["database"]:"" == "foomatic")
-		{
-		    SCR::Write (.ppd.file.modify, [ppdfile, ppdfilename, entry["options"]:$[]]);
-		}
-		else
-		{
-                    SCR::Write (.target.string, ppdfilename, ppdfile);
-		}
+		SCR::Write (.ppd.file.modify, [ppdfile, ppdfilename, entry["options"]:$[]]);
                 entry = add (entry, "ppd", ppdfilename);
             }
         }

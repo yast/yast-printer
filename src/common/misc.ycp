@@ -389,8 +389,6 @@ preparation for autoinstallation.
       * load it
       */
     global define void loadFoomaticIfNeeded () ``{
-	if (Printer::db != `foomatic)
-	    return;
 	if (Printer::foomatic != nil)
 	    return;
         y2milestone ("Checking foomatic database");
@@ -437,72 +435,6 @@ of printers.
 	SCR::Execute (.target.bash, "test -f /var/lib/YaST2/ppd_db_list && rm -f /var/lib/YaST2/ppd_db_list");
 	Printer::foomatic= SCR::Read (.target.ycp, "/var/lib/YaST2/ppd_db.ycp");
     }
-
-    /**
-      * add entries to use SuSE database to current Printer::printer
-      * @param vdb string foomatic database vendor key
-      * @param mdb string foomatic database model key
-      */
-    global define void addSuSEdbEntries (string vdb, string mdb) ``{
-	string manuf_ieee = "";
-	string model_ieee = "";
-	string manuf = "";
-	string model = "";
-	list vendors = SCR::Read (.printerdb.vendors);
-	boolean found = false;
-        foreach (`v, vendors, ``{
-	    term t = select (v, 0, nil);
-            list l = select (t, 0, []);
-            string vid = select (l, 0, "");
-            string vieee = select (l, 1, "");
-            if ((vid != "" && vieee != "")
-             && (SCR::Read (.ppd.db.vendorname, vid) == manuf_db
-              || SCR::Read (.ppd.db.vendorname, vieee) == manuf_db))
-            {
-		manuf = vid;
-                manuf_ieee = vieee;
-                y2milestone ("Found vendor: %1, %2", manuf, manuf_ieee);
-		found = true;
-            }
-        });
-	if (! found)
-	    return;
-	found = false;
-        list models = SCR::Read (add (.printerdb.models, manuf));
-        foreach (`m, models, ``{
-            term t = select (m, 0, nil);
-            list l = select (t, 0, []);
-            string mid = select (l, 0, "");
-            string mieee = select (l, 1, "");
-            if ((mid != "" && mieee != "")
-              && (SCR::Read (.ppd.db.modelname, [manuf_db, mid]) == model_db
-               || SCR::Read (.ppd.db.modelname, [manuf_db, mieee]) == model_db))
-            {
-                model = mid;
-                model_ieee = mieee;
-                y2milestone ("Found model: %1, %2", model, model_ieee);
-		found = true;
-            }
-        });
-	if (! found)
-	    return;
-	if (manuf_ieee == "" || manuf_ieee == nil)
-	    manuf_ieee = Printer::printer["vendor_ieee"]:"";
-        if (model_ieee == "" || model_ieee == nil)
-            model_ieee = Printer::printer["device_ieee"]:"";
-        if (manuf == "" || manuf == nil)
-            manuf = Printer::printer["vendor"]:"";
-        if (model == "" || model == nil)
-            model = Printer::printer["device"]:"";
-        Printer::printer = union (Printer::printer, $[
-            "vendor_ieee" : manuf_ieee,
-            "device_ieee" : model_ieee,
-            "vendor" : manuf,
-            "device" : model,
-            "database" : nil,
-        ]);
-    }
-
 
     /**
       * Get the PPD file for automatic installation
@@ -567,28 +499,6 @@ of printers.
 	y2debug ("Possible PPDs: %1", ppds);
 	return ppds;
     }
-
-    /**
-      * Get auto queues for printer when using SuSE database
-      * @param model string model name
-      * @return list of PPD files
-      */
-    global define list getSuSEdbAutoQueues (string device) ``{
-	list forbidden_names = Printer::getForbiddenNames ();
-        list new_queues = SCR::Read (.printerdb.auto, device);
-        string suffix = Printer::getQueueSuffix (new_queues);
-        new_queues = maplist (`v, new_queues, ``{
-            map paper = Printer::getQuickPaperSize (lookup (v, "config", ""));
-            if (nil != paper)
-            {
-                v = add (v, "options", paper);
-            }
-            v = add (v, "name", Printer::adjustQueueName (lookup (v, "name", "lp") + suffix, forbidden_names));
-            return union (Printer::printer, v);
-        });
-	return new_queues;
-    }
-
 
     /**
       * display CUPS initialization popup
@@ -943,42 +853,27 @@ queue you want to use."));
      * @param testpage_type type of page. Now supports only (0==ps, 1==ascii)
      * @return boolean true if success
      */
-global define boolean testPrinter (map printer, integer testpage_type) ``{
-    if (Mode::config)
-    {
-	DisplayUnavailableAIPopup ();
-	return true;
-    }
+    global define boolean testPrinter (map printer, integer testpage_type) ``{
+	if (Mode::config)
+	{
+	    DisplayUnavailableAIPopup ();
+	    return true;
+	}
 
-    boolean do_not_test = false;
-    boolean foomatic = printer["database"]:"" == "foomatic";
+	boolean do_not_test = false;
+	boolean foomatic = printer["database"]:"" == "foomatic";
 
-    if (foomatic)
-	loadFoomaticIfNeeded ();
+	if (foomatic)
+	    loadFoomaticIfNeeded ();
 
-    if (Printer::getPrinterState(printer, Printer::spooler) == "void")
-        do_not_test = true;
+	if (Printer::getPrinterState(printer, Printer::spooler) == "void")
+	    do_not_test = true;
 
-    if (!foomatic && !do_not_test) {
-        // checking if printing is possible - could be done faster?
-        string model = lookup (printer, "device", "");
-        string config = lookup (printer, "config", "");
-        list cfgs = SCR::Read (add (.printerdb.configsrt,model), Printer::spooler);
-        foreach (`e, select (cfgs, 1, []), ``{
-            string conf = select (select (e, 0, `id("0")), 0, "");
-            if (conf == config) {
-                // other combinations? (CUPS only and lprng spooler)
-                if (issubstring(select(e, 1, ""), "LPRng") && Printer::spooler == "cups")
-                    do_not_test = true;
-            }
-        });
-    }
-
-    if (do_not_test) {
-		// message popup
+	if (do_not_test) {
+	    // message popup
 	    UI::MessagePopup (_("Unable to print a test page. You are using different spooler."));
-        return false;
-    }
+	    return false;
+	}
 
 	restartSpoolerIfNeeded (true);
 	if (Printer::spooler != "lprng" && Printer::spooler != "cups")
@@ -1130,52 +1025,56 @@ press 'OK'.
 	    map consolefonts = SCR::Read (.target.yast2, "consolefonts.ycp");
 	    string ce = select (lokup (consolefonts, UI::GetLanguage (false), []), 4, "X");
 	    string opts = SCR::Read (.target.tmpdir) + "/testpg.options";
-	    if (foomatic)
+	    string os = "";
+	    // encoding first
+	    ce = toupper (ce);
+	    if (ce != "ISO-8859-2" && ce != "ASCII" && ce != "ISO-8859-15"
+		&& ce != "ISO-8859-1")
 	    {
-		string os = "";
-		// encoding first
-		ce = toupper (ce);
-		if (ce != "ISO-8859-2" && ce != "ASCII" && ce != "ISO-8859-15" && ce != "ISO-8859-1")
-		    ce = toupper (_("!!!  YOUR  ENCODING  !!!"));
-		if (ce != "ISO-8859-2" && ce != "ASCII" && ce != "ISO-8859-15" && ce != "ISO-8859-1")
-		    ce = "ASCII";
+		ce = toupper (_("!!!  YOUR  ENCODING  !!!"));
+	    }
+	    if (ce != "ISO-8859-2" && ce != "ASCII" && ce != "ISO-8859-15"
+		&& ce != "ISO-8859-1")
+	    {
+		ce = "ASCII";
+	    }
 
-		string enc = "ISO-8859-2" == ce ? "h02" : "h01";
-		os = os + sformat ("----X-ENCODING: %1\n", enc);
+	    string enc = "ISO-8859-2" == ce ? "h02" : "h01";
+	    os = os + sformat ("----X-ENCODING: %1\n", enc);
 
-		os = os + sformat ("----X-VENDOR: (%1 %2)\n",
-		    printer["vendor"]:"",
-		    printer["device"]:"");
-		os = os + sformat ("----X-CONFIG: (%1)\n",
-		    printer["config"]:"");
-		// TRANSLATORS: keep this short! Only translations in languages
+	    os = os + sformat ("----X-VENDOR: (%1 %2)\n",
+		printer["vendor"]:"",
+		printer["device"]:"");
+	    os = os + sformat ("----X-CONFIG: (%1)\n",
+		printer["config"]:"");
+	    // TRANSLATORS: keep this short! Only translations in languages
+	    // with encodings ISO-8859-[1|2|15] will be used.
+	    os = os + sformat ("----X-QUEUE-L: (%1)\n", _("Print queue:"));
+            // TRANSLATORS: keep this short! Only translations in languages
+            // with encodings ISO-8859-[1|2|15] will be used.
+	    os = os + sformat ("----X-PRINTER-L: (%1)\n", _("Printer:"));
+	    os = os + sformat ("----X-CONFIG-L: (%1)\n",
+		// TRANSLATORS: keep this short! Only
+		// translations in languages
 		// with encodings ISO-8859-[1|2|15] will be used.
-		os = os + sformat ("----X-QUEUE-L: (%1)\n", _("Print queue:"));
-                // TRANSLATORS: keep this short! Only translations in languages
-                // with encodings ISO-8859-[1|2|15] will be used.
-		os = os + sformat ("----X-PRINTER-L: (%1)\n", _("Printer:"));
-		os = os + sformat ("----X-CONFIG-L: (%1)\n",
-		    // TRANSLATORS: keep this short! Only
-		    // translations in languages
-		    // with encodings ISO-8859-[1|2|15] will be used.
-		    _("Configuration:"));
-                // TRANSLATORS: keep this short! Only translations in languages
-                // with encodings ISO-8859-[1|2|15] will be used.
-		os = os + sformat ("----X-OPTION-L: (%1)\n", _("Options:"));
-                // TRANSLATORS: keep this short! Only translations in languages
-                // with encodings ISO-8859-[1|2|15] will be used.
-		os = os + sformat ("----X-HEAD: (%1)\n", _("YaST2 test page"));
+		_("Configuration:"));
+            // TRANSLATORS: keep this short! Only translations in languages
+            // with encodings ISO-8859-[1|2|15] will be used.
+	    os = os + sformat ("----X-OPTION-L: (%1)\n", _("Options:"));
+            // TRANSLATORS: keep this short! Only translations in languages
+            // with encodings ISO-8859-[1|2|15] will be used.
+	    os = os + sformat ("----X-HEAD: (%1)\n", _("YaST2 test page"));
 
-		// options
-		string filename = SCR::Read (.ppd.file.open,
-		    [Printer::foomatic[
-			printer["vendor_db"]:"",
-			printer["device_db"]:"",
-			printer["config"]:"", 0]:"",
-		    SCR::Read (.target.tmpdir)]);
-		map options = SCR::Read (.ppd.file.options, [filename, ""]);
-		list optlist = options["data"]:[];
-		optlist = maplist (`i, optlist, ``{
+	    // options
+	    string filename = SCR::Read (.ppd.file.open,
+		[Printer::foomatic[
+		    printer["vendor_db"]:"",
+		    printer["device_db"]:"",
+		    printer["config"]:"", 0]:"",
+		SCR::Read (.target.tmpdir)]);
+	    map options = SCR::Read (.ppd.file.options, [filename, ""]);
+	    list optlist = options["data"]:[];
+	    optlist = maplist (`i, optlist, ``{
 		    string name = i["name"]:"";
 		    string label = i["gui"]:"";
 		    string value = printer["options", name]:"";
@@ -1190,33 +1089,17 @@ press 'OK'.
 			return sformat ("(%1: %2) mm", label, valuelabel);
 		    else
 			return "";
-		});
-		optlist = filter (`o, optlist, ``(o != "" && o != nil));
-		os = os + mergestring (optlist, "\n");
+	    });
+	    optlist = filter (`o, optlist, ``(o != "" && o != nil));
+	    os = os + mergestring (optlist, "\n");
 
-		if (ce != "X")
-		{
-		    os = UI::Recode ("UTF-8", ce, os);
-		}
-		SCR::Write (.target.string, opts, os);
-		test_page = Printerlib::preparePsTestPage
-		    (virtual_name, opts, true);
-	    }
-	    else
+	    if (ce != "X")
 	    {
-	        string p = sformat (".printerdb.testpg_options.\"%1\".\"%2\".\"%3\".\"%4\".\"%5\".\"%6\"",
-		    lookup (printer, "vendor", ""),
-		    lookup (printer, "device", ""),
-		    lookup (printer, "raw", false) ? "raw" : lookup (printer, "config", ""),
-		    lookup (printer, "vendor_ieee", ""),
-		    lookup (printer, "device_ieee", ""),
-		    ce
-		    );
-	        SCR::Write (topath (p), opts, lookup (printer, "options", $[]));
-	        string upp_file = SCR::Write (add (.printerdb.upp, lookup (printer, "config", "")), lookup (printer, "options", $[]));
-
-	        test_page = Printerlib::preparePsTestPage (virtual_name, opts, -1 != find (upp_file, "-sDEVICE=PS") || "" != lookup (printer, "ownppd", ""));
+		    os = UI::Recode ("UTF-8", ce, os);
 	    }
+	    SCR::Write (.target.string, opts, os);
+	    test_page = Printerlib::preparePsTestPage
+		(virtual_name, opts, true);
 	}
 	else
 	{
@@ -1932,31 +1815,38 @@ for any file in directory /etc/lpdfilter"));
       * @param none boolean show leaving current status
       * @return term RadioButtonGroup widget
       */
-    global define term getSpoolerItems (string spooler, boolean none, symbol db) ``{
-        return `RadioButtonGroup (
-                        `id (`spooler),
-                        `HBox (`HSpacing (1),
-                            `VBox (
-                                `VSpacing (1),
-				// radiobutton
-				`RadioButton (`id (`foomatic), `opt (`hstretch, `notify), _("CUPS with &Foomatic Database"), spooler == "cups" && db == `foomatic),
-				`VSpacing (0.5),
-				// radiobutton
-                                `RadioButton (`id (`cups_server), `opt (`hstretch, `notify), _("CUPS with &SuSE Printer Database"), spooler == "cups" && db != `foomatic),
-                                `VSpacing (0.5),
-				// radiobutton
-                                `RadioButton (`id (`cups_client), `opt (`hstretch, `notify), _("CUPS &client-only installation"), spooler == "cups-client"),
-                                `VSpacing (0.5),
-				// radiobutton
-                                `RadioButton (`id (`lprng), `opt (`hstretch, `notify), _("&LPRng"), spooler == "lprng"),
-				none ? `VSpacing (0.5) : `VSpacing (0),
-				// radiobutton
-				none ? `RadioButton (`id (`none), `opt (`hstretch, `notify), _("L&eave current status"), spooler == "current") : `VSpacing (0),
-                                `VSpacing (1)
-                            ),
-                            `HSpacing (1)
-                        )
-                    );
+    global define term getSpoolerItems (string spooler, boolean none) ``{
+	return `RadioButtonGroup (
+	    `id (`spooler),
+	    `HBox (`HSpacing (1), `VBox (
+		`VSpacing (1),
+		// radiobutton
+		`RadioButton (`id (`cups_server),
+		    `opt (`hstretch, `notify),
+		    _("CUPS full &server installation"),
+		    spooler == "cups"),
+		`VSpacing (0.5),
+		// radiobutton
+		`RadioButton (`id (`cups_client),
+		    `opt (`hstretch, `notify),
+		    _("CUPS &client-only installation"),
+		    spooler == "cups-client"),
+		`VSpacing (0.5),
+		// radiobutton
+		`RadioButton (`id (`lprng),
+		    `opt (`hstretch, `notify),
+		    _("&LPRng"),
+		    spooler == "lprng"),
+		none ? `VSpacing (0.5) : `VSpacing (0),
+		// radiobutton
+		none ? `RadioButton (`id (`none),
+		    `opt (`hstretch, `notify),
+		    _("L&eave current status"),
+		    spooler == "current")
+		    : `VSpacing (0),
+		`VSpacing (1)
+	     ), `HSpacing (1)
+	));
     }
 
     /**
@@ -1971,7 +1861,7 @@ for any file in directory /etc/lpdfilter"));
 	UI::OpenDialog (
             `VBox (
 		`Label (msg),
-		getSpoolerItems ("current", true, Printer::db),
+		getSpoolerItems ("current", true),
 		`HBox (
 		    `HWeight (1, `PushButton (`id (`ok), `opt (`key_F10), OKButtonLabel ())),
 		    `HWeight (1, `PushButton (`id (`cancel), `opt (`key_F9), abort_msg))))
@@ -2020,148 +1910,56 @@ for any file in directory /etc/lpdfilter"));
 	{
 	    return "cups";
 	}
-	else if (0 == spool_sys) //none installed
+	else if (0 == spool_sys || 3 == spool_sys || 256 + 1 == spool_sys
+	    || 256 + 2 == spool_sys)
 	{
-	    // popup message
-	    symbol result = chooseSpooler (_("No printing system installed. 
+	    string message = "";
+	    if (0 == spool_sys) //none installed
+	    {
+		// popup message
+		message = _("No printing system installed. 
 Select the spooler to 
-to install and configure.
-"),
-	    // pushbutton
-	    _("Abo&rt setup"));
-	    if (`lprng == result)
-	    {
-		Printerlib::switchTo ("lprng");
-		Printer::db = `suse;
-		return "switched";
+to install and configure.");
 	    }
-	    else if (`cups_server == result)
+	    else if (3 == spool_sys) //both spoolers are installed
 	    {
-		Printerlib::switchTo ("cups");
-		Printer::db = `suse;
-		return "switched";
-	    }
-            else if (`foomatic == result)
-            {
-                Printerlib::switchTo ("cups");
-		Printer::db = `foomatic;
-                return "switched";
-            }
-	    else if (`cups_client == result)
-	    {
-		Printerlib::switchTo ("cups_client");
-		return "switched";
-	    }
-	    else if (`cancel == result)
-		return "exit";
-	    else
-		return "";
-	}
-	else if (3 == spool_sys) //both spoolers are installed
-	{
-	    // popup message
-            symbol result = chooseSpooler (_("Both LPRng and CUPS are installed.
+		// popup message
+		message = _("Both LPRng and CUPS are installed.
 Select the spooler  
-to leave installed and configure.
-"),
-	    // pushbutton
-	    _("Abo&rt setup"));
-            if (`lprng == result)
-            {
-                Printerlib::switchTo ("lprng");
-		Printer::db = `suse;
-                return "switched";
-            }
-            else if (`foomatic == result)
-            {
-                Printerlib::switchTo ("cups");
-		Printer::db = `foomatic;
-                return "switched";
-            }
-            else if (`cups_server == result)
-            {
-                Printerlib::switchTo ("cups");
-		Printer::db = `suse;
-                return "switched";
-            }
-	    else if (`cups_client == result)
-	    {
-		Printerlib::switchTo ("cups_client");
-		return "switched";
+to leave installed and configure.");
 	    }
-            else if (`cancel == result)
-                return "exit";
-            else
-                return "";
-	}
-	else if (256 + 1 == spool_sys) //lpd is installed, but seems to be not complete
-	{
-	    symbol result = chooseSpooler (
-	    // popup message
-_("An LPD-compatible spooler, probably LPRng,
+	    else if (256 + 1 == spool_sys) // lpd is installed, but seems
+					   // to be not complete
+	    {
+		// popup message
+		message = _("An LPD-compatible spooler, probably LPRng,
 is installed, but the installation does not seem 
 complete. Choose to reinstall 
 LPRng, install CUPS, or leave the current status.
 To repair current configuration, select LPRng.
 If you leave the current status, your spooler may not
-run properly.
-"),
-	    // pushbutton
-	    _("Abo&rt setup"));
-	    if (`cups_server == result)
-	    {
-		Printerlib::switchTo ("cups");
-		Printer::db = `suse;
-		return "switched";
+run properly.");
 	    }
-            else if (`foomatic == result)
-            {
-                Printerlib::switchTo ("cups");
-		Printer::db = `foomatic;
-                return "switched";
-            }
-	    else if (`cups_client == result)
+	    else if (256 + 2 == spool_sys) // cups is installed, but seems
+					   // to be not complete
 	    {
-                Printerlib::switchTo ("cups_client");
-                return "switched";
-	    }
-	    else if (`lprng == result)
-	    {
-		Printer::db = `suse;
-		Printerlib::switchTo ("lprng");
-		return "switched";
-	    }
-            else if (`cancel == result)
-                return "exit";
-	    else
-		return "lprng";
-	}
-	else if (256 + 2 == spool_sys) //cups is installed, but seems to be not complete
-	{
-	    symbol result = chooseSpooler (
-	    // popup message
-_("The CUPS spooler is installed, but the installation 
+		// popup message
+		message =_("The CUPS spooler is installed, but the installation 
 does not seem complete. Choose to reinstall
 CUPS, install LPRng, or leave the current status. 
 To repair the current configuration, select the 
 CUPS full server installation.
 If you leave the current status, your spooler 
-may not run properly.
-"),
-	    // pushbutton
-	    _("Abo&rt setup"));
+may not run properly.");
+	    }
+	    symbol result = chooseSpooler (message,
+		// pushbutton
+		_("Abo&rt setup"));
 	    if (`cups_server == result)
 	    {
 		Printerlib::switchTo ("cups");
-		Printer::db = `suse;
 		return "switched";
 	    }
-            else if (`foomatic == result)
-            {
-                Printerlib::switchTo ("cups");
-		Printer::db = `foomatic;
-                return "switched";
-            }
 	    else if (`cups_client == result)
             {
                 Printerlib::switchTo ("cups_client");
@@ -2170,7 +1968,6 @@ may not run properly.
 	    else if (`lprng == result)
 	    {
 		Printerlib::switchTo ("lprng");
-		Printer::db = `suse;
 		return "switched";
 	    }
             else if (`cancel == result)
@@ -2178,7 +1975,8 @@ may not run properly.
 	    else
 		return "cups";
 	}
-	else if (512 + 2 == spool_sys) //only client installation of cups is installed
+	else if (512 + 2 == spool_sys) // only client installation of cups
+				       // is installed
 	{
 	    return "cups";
 	}
