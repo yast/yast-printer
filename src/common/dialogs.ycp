@@ -3533,6 +3533,8 @@ for proposing new queues.");
 	    {
 		Printer::index = -1;
 		Printer::printer["new"] = true;
+		if (haskey (Printer::printer, "name"))
+		    Printer::printer = remove (Printer::printer, "name");
 		return `add;
 	    }
 	    else // edit
@@ -3876,7 +3878,7 @@ All your changes will be lost.
 	    y2debug ("Prefilter queue, going single");
 	    return `single;
 	}
-	// FIXME if will be needed
+
 	symbol ret = `all;//Printer::confmode == `adm ? `all : `single;
 	return ret;
     }
@@ -3888,6 +3890,51 @@ All your changes will be lost.
     global define symbol storeQueue () ``{
 	new_added_queue = Printer::printer;
 	return `next;
+    }
+
+    /**
+      * Test whether at least one queue will be proposed
+      * Get data from internal structures
+      * @return symbol `yes or `no
+      */
+    global define symbol wasProposedQueue () ``{
+        boolean foomatic = false;
+        if (Printer::printer["database"]:"unknown" != "unknown")
+            foomatic = Printer::printer["database"]:"" == "foomatic";
+        else
+            foomatic = Printer::db == `foomatic;
+
+        string uri = Printer::printer["uri"]:"";
+        string vendor = Printer::printer["vendor"]:"";
+        string device = Printer::printer["device"]:"";
+
+	list new_queues = [];
+        if (foomatic)
+        {
+            string vendor = Printer::printer["vendor_db"]:"";
+            string model = Printer::printer["device_db"]:"";
+            string config = Printer::printer["config"]:nil;
+            y2debug ("Gettinq queues for %1", Printer::printer);
+            if (Printer::printer["ownppd"]:"" != "")
+            {
+                model = Printer::printer["ownppd"]:"";
+                vendor = "__ownppd__";
+            }
+            new_queues = getFoomaticAutoQueues (vendor, model, config);
+        }
+        else
+        {
+            string device = lookup (Printer::printer, "device", "");
+            new_queues = getSuSEdbAutoQueues (device);
+        }
+
+	list old_queues = getQueuesOfPrinter (uri, vendor, device);
+
+	if (size (new_queues) > 0 || size (old_queues) > 0)
+	{
+	    return `yes;
+	}
+	return `no;
     }
 
     /**
@@ -3940,6 +3987,7 @@ All your changes will be lost.
 	    "detected" :	``(runDetectedDialog ()),
 	    "conftype" :	[ ``(runProbedPrinterDialog ()), true],
 	    "single" :		``(runSinglePrinterDialog ()),
+	    "is_proposed" :	[ ``(wasProposedQueue ()), true ],
 	    "redetect" :	[ ``(runProbeDialog ()), true ],
 	    "storeprinter" :	[ ``(storePrinter ()) , true ],
 	    "storequeue" :	[ ``(storeQueue ()), true ],
@@ -3953,6 +4001,7 @@ All your changes will be lost.
 	    "cups_wz" :		``(WizardSequencer (getAliases (), cups_sequence)),
 //	    "detected_wz" :	``(WizardSequencer (getAliases (), detected_sequence)),
 	    "add_queue_wz":	``(WizardSequencer (getAliases (), add_queue_sequence)),
+	    "add_queue_wz_1":	[ ``(WizardSequencer (getAliases (), add_queue_sequence)), true],
 	    "single_printer_wz":``(WizardSequencer (getAliases (), single_printer_sequence)),
 	    "cups_usb" :	``(runCupsUsbDeviceTypeDialog ()),
 	    ];
@@ -4085,7 +4134,8 @@ All your changes will be lost.
 		],
 	    ];
 	map single_printer_sequence = $[
-	    "ws_start" : "single",
+	    "ws_start" : "is_proposed",
+	    "is_proposed" : $[`yes : "single", `no : "add_queue_wz_1"],
 	    "single" : $[
 		`abort : `abort,
 		`next : `next,
@@ -4097,6 +4147,7 @@ All your changes will be lost.
 	    ],
 	    "edit_printer_wz" : $[ `abort : `abort, `next : "single"],
 	    "add_queue_wz" : $[ `abort : `abort, `next : "single"],
+	    "add_queue_wz_1" : $[ `abort : `abort, `next : "single"],
 	    "ppdselect" : $[ `abort : `abort, `next : "single", ],
 	    "model" : $[ `abort : `abort, `next : "ppdselect", `useppd : "useppd", ],
             "useppd" : $[ `abort : `abort, `db : "model", `next: "ppdselect" ],
