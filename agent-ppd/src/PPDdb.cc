@@ -343,14 +343,14 @@ bool PPD::createdb () {
 }
 
 void* PPD::startCreatedbThread (void* instance) {
-    return ((PPD*)instance) -> createdbThread ();
+    return ((PPD*)instance) -> createdbThread (NULL);
 }
 
 /**
  * Create a database of all ppd files in the /var/lib/YaST2/ppd_db.ycp
  * @return operation succeeded
  */
-void* PPD::createdbThread() {
+void* PPD::createdbThread(const char* filename) {
     bool f1 = false;
     bool f2 = false;
     bool f3 = false;
@@ -362,7 +362,11 @@ void* PPD::createdbThread() {
     done_files = 0;
 
     FILE *file;
-    file = fopen(ppd_db,"w");
+    if (filename)
+	file = fopen (filename, "w");
+    else
+	file = fopen(ppd_db,"w");
+
     if(!file) {
         y2error("Error opening ppd db (%s)", strerror(errno));
 	creation_status = -1; //FIXME UNLOCK

@@ -65,7 +65,7 @@ class PPD {
 
         bool createdb();
 	static void* startCreatedbThread (void* instance);
-	void* createdbThread ();
+	void* createdbThread (const char* filename);
 	int  creationStatus ();
         bool changed(int *count);
 	string getVendorId (string vendor);

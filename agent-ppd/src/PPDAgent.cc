@@ -100,7 +100,14 @@ YCPValue PPDAgent::Write(const YCPPath &path, const YCPValue& value, const YCPVa
 
     if(path->length()==2 && path->component_str(0)=="db") {
         if(path->component_str(1)=="create")
+	{
             return YCPBoolean(database.createdb());
+	}
+        else if(path->component_str(1)=="create_ot")
+	{
+            database.createdbThread(value->asString()->value_cstr());
+	    return YCPBoolean (database.creationStatus () == 100);
+	}
 
     }
     // CHANGES handled via special PERL agent
