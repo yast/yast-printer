@@ -444,9 +444,14 @@ ECHO_PID=$!
 	boolean cups_complete = Pkg::IsProvided ("cups-drivers")
 	    && Pkg::IsProvided ("cups-libs")
 	    && Pkg::IsProvided ("cups")
-	    && Pkg::IsProvided ("cups-client");
+	    && Pkg::IsProvided ("cups-client")
+	    && Pkg::IsProvided ("filters")
+	    && Pkg::IsProvided ("foomatic-filters");
 	boolean lpd_complete = Pkg::IsProvided ("lpdfilter")
-            && Pkg::IsProvided ("filters");
+            && Pkg::IsProvided ("filters")
+	    && Pkg::IsProvided ("cups-drivers")
+	    && Pkg::IsProvided ("foomatic-filters");
+
 
 	if (cups_exists && !lpd_exists)
 	    {
@@ -498,13 +503,13 @@ ECHO_PID=$!
     global define void switchTo (string to) ``{
 	list del = ["plp", "lprold", "lprng", "cups", "cups-client",
             "cups-drivers", "cups-drivers-cs", "cups-drivers-de",
-            "cups-drivers-stp", "lpdfilter", "filters"];
+            "cups-drivers-stp", "lpdfilter", "filters", "foomatic-filters"];
 	list inst = [];
 
         if ("cups" == to)
         {
             inst = [ "cups", "cups-drivers", "cups-client", "cups-drivers-stp",
-		"filters"];
+		"filters", "foomatic-filters"];
         }
         else if ("cups_client" == to)
         {
@@ -512,7 +517,8 @@ ECHO_PID=$!
         }
         else
         {
-            inst = [ to, "filters", "lpdfilter"];
+            inst = [ to, "filters", "lpdfilter", "foomatic-filters",
+		"cups-drivers"];
         }
 	del = filter (`e, del, ``(! contains (inst, e)));
 
