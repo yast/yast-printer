@@ -14,6 +14,7 @@
 #include "ClassesConf.h"
 #include "Y2Logger.h"
 #include "CupsCalls.h"
+#include <ycp/YCPVoid.h>
 
 void setClassOptions(const char*name,YCPMap&options,bool deflt = false);
 bool newClass(const YCPValue&value);

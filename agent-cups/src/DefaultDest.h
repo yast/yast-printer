@@ -11,6 +11,8 @@
 
 #include <string>
 #include <Y2.h>
+#include <ycp/YCPString.h>
+#include <ycp/YCPBoolean.h>
 
 class DefaultDest
 {

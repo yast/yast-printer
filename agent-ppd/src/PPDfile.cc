@@ -33,6 +33,7 @@
 #ifndef _DEVEL_
 
 #include "ycp/y2log.h"
+#include <ycp/YCPInteger.h>
 #include "PPDfile.h"
 #include "PPDdb.h"
 
