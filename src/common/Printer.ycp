@@ -1590,14 +1590,29 @@ the selected spooler does not support it.
 	    if (!alreadyConfigured (lookup (i, "unique_key", "")))
 	    {
 		list detected = [];
+		boolean is_foomatic = false;
 		if (Printer::db == `foomatic)
 		{
 		    loadFoomaticIfNeeded ();
 		    detected = [i["vendor"]:"", i["device"]:""];
 		    detected = filter (`d, detected, ``(d != ""));
+
+                    string vdb = SCR::Read (.ppd.db.vendorname,
+                        i["vendor"]:"");
+                    string mdb = SCR::Read (.ppd.db.modelname,
+                        [vdb, i["device"]:""]);
+
+		    map ppd_files = getPpdFiles (vdb, mdb);
+		    integer queues_num = size (ppd_files);
+		    if (queues_num > 0)
+		    {
+			is_foomatic = true;
+		    }
 		}
-		else
+		if (! is_foomatic)
+		{
 		    detected = SCR::Read (.printerdb.detect, [ lookup (i, "vendor", ""), lookup (i, "device", "") ]);
+		}
 
 		if (Printer::spooler == "cups")
 		{
@@ -1610,7 +1625,7 @@ the selected spooler does not support it.
 		if (2 == size (detected))
 		{
 		    map info = $[];
-		    if (Printer::db == `foomatic)
+		    if (is_foomatic)
 		    {
 			string vdb = SCR::Read (.ppd.db.vendorname,
                             i["vendor"]:"");
@@ -1629,7 +1644,7 @@ the selected spooler does not support it.
 		    {
 			editDetected (i);
 			i = printer;
-			if (Printer::db == `foomatic)
+			if (is_foomatic)
 			{
 			    string v_db = SCR::Read (.ppd.db.vendorname,
 				i["vendor_ieee"]:"");
@@ -1644,7 +1659,7 @@ the selected spooler does not support it.
 			    "device" : select (detected, 1, ""),
 			]);
 			list new_queues = [];
-			if (Printer::db == `foomatic)
+			if (is_foomatic)
 			{
 			    new_queues = getFoomaticAutoQueues
 				(i["vendor_db"]:"", i["device_db"]:"", nil);
@@ -1660,7 +1675,7 @@ the selected spooler does not support it.
                             if (nil != paper)
                                 v = add (v, "options", paper);
 
-			    if (! (Printer::db == `foomatic))
+			    if (! (is_foomatic))
 			    {
 /*				map paper = getQuickPaperSize (lookup (v, "config", ""));
 				if (nil != paper)
@@ -1672,7 +1687,7 @@ the selected spooler does not support it.
 			    forbidden_names = add (forbidden_names, lookup (v, "name", ""));
 
 			    map info = $[];
-			    if (Printer::db == `foomatic)
+			    if (is_foomatic)
 			    {
 // FIXME bellow - LPRng support
 //				info = $["lprng" : false];

@@ -1170,7 +1170,7 @@ with the SuSE database of printers only.</B></P>
                                 == "Stylus COLOR")
                             {
                                 cur_label
-                                    = "Stylus Photo"
+                                    = "Stylus Color"
 					+ substring (cur_label, 12);
                             }
 
@@ -1303,7 +1303,12 @@ with the SuSE database of printers only.</B></P>
 	    if (Printer::db == `foomatic && ! model_foomatic)
 	    {
 		y2milestone ("Using model not in Foomatic db, but current db is foomatic");
-		list vendors = SCR::Read (.printerdb.vendors);
+		addSuSEdbEntries (manuf_db, model_db);
+		manuf = Printer::printer["vendor"]:"";
+		manuf_ieee = Printer::printer["vendor_ieee"]:"";
+		model = Printer::printer["device"]:"";
+		model_ieee = Printer::printer["device_ieee"]:"";
+/*		list vendors = SCR::Read (.printerdb.vendors);
 		foreach (`v, vendors, ``{
 		    term t = select (v, 0, nil);
 		    list l = select (t, 0, []);
@@ -1339,9 +1344,9 @@ with the SuSE database of printers only.</B></P>
 		    "vendor" : manuf,
 		    "device" : model,
 		    "database" : nil,
-		]);
-		y2milestone ("Set printer %1", Printer::printer);
+		]);*/
 	    }
+	    y2milestone ("Set printer %1", Printer::printer);
 	}
 	else if (ret == `back || ret == `abort)
 	{
@@ -1566,6 +1571,39 @@ with the SuSE database of printers only.</B></P>
                 });
 
 	    });
+	    addSuSEdbEntries (manuf_db, model_db);
+	    Printer::printer["database"] = "foomatic";
+	    model = Printer::printer["device"]:"";
+	    list suse_cfgs = SCR::Read (add (.printerdb.configscups, model));
+//	    list suse_cfgs = SCR::Read (add (.printerdb.configsrt,model), Printer::spooler);
+	    list tmp_suse_items = suse_cfgs;//[1]:[];
+	    list suse_items = [];
+	    if (ppd_only)
+	    {
+		if (size (tmp_suse_items) > 0)
+		{
+		    string label = _("SuSE PPD file");
+		    cfgs = add (cfgs, `item (`id ("___SuSEdb___"), label));
+		    cfgsmap["___SuSEdb___"] = label;
+		}
+	    }
+	    else
+	    {
+		foreach (`i, tmp_suse_items, ``{
+		    term t_id = select (i, 0, nil);
+		    string label = select (i, 1, "");
+		    string id = select (t_id, 0, "");
+		    if (id != "" && label != "")
+		    {
+			string key = sformat ("SuSE___%1", id);
+			// listbox item - %1 is printer configuration
+			// description, eg. color 720 DPI
+			label = sformat (_("SuSE database: %1"), label);
+			cfgs = add (cfgs, `item (`id (key), label));
+			cfgsmap[key] = label;
+		    }
+		});
+	    }
 	}
 	else
 	    cfgs = SCR::Read (add (.printerdb.configsrt,model), Printer::spooler);
@@ -1716,6 +1754,12 @@ with the SuSE database of printers only.</B></P>
 	            opts[key] = val;
 	            tmpPrinter["options"] = opts;
 		}
+		else if (foomatic && regexpmatch (config, "SuSE___.*"))
+		{
+		    tmpPrinter["database"] = nil;
+		    tmpPrinter["composite"] = "";
+		    config = regexpsub (config, "SuSE___(.*)", "\\1");
+		}
 		else
 		{
 		    tmpPrinter["composite"] = "";
@@ -1748,6 +1792,12 @@ with the SuSE database of printers only.</B></P>
 		Printer::printer = adjustPaperSize (Printer::printer);
 //		Printer::printer["composite_label"] = composite["values", val]:"";
             }
+            else if (foomatic && regexpmatch (config, "SuSE___.*"))
+            {
+                Printer::printer["database"] = nil;
+                Printer::printer["composite"] = "";
+                config = regexpsub (config, "SuSE___(.*)", "\\1");
+            }
 	    else
 	    {
 		Printer::printer["composite"] = "";
@@ -1776,6 +1826,18 @@ with the SuSE database of printers only.</B></P>
 	        Printer::printer["options"] = opts;
 		Printer::printer = adjustPaperSize (Printer::printer);
             }
+            else if (foomatic && regexpmatch (config, "SuSE___.*"))
+            {
+                Printer::printer["database"] = nil;
+                Printer::printer["composite"] = "";
+                config = regexpsub (config, "SuSE___(.*)", "\\1");
+            }
+	    else if (config == "___SuSEdb___")
+	    {
+		Printer::printer["database"] = nil;
+		Printer::printer["composite"] = "";
+		config = "";
+	    }
             else
             {
                 Printer::printer["composite"] = "";
@@ -3021,7 +3083,7 @@ the current configuration.
      * @return symbol for ws
      */
     global define symbol runProbedPrinterDialog () ``{
-	y2debug ("Configuring printer %1", Printer::printer);
+	y2milestone ("Configuring printer %1", Printer::printer);
 	if (Printer::confmode == `adm)
 	{
 	    y2debug ("adm mode, going connection setting");
@@ -3269,6 +3331,10 @@ the current configuration.
       * The dialog is running again for repropose
       */
     global boolean running_again = false;
+    /**
+      * Just to store the foomatici variable between two runs
+      */
+    global boolean foomatic_save = nil;
 
     /**
      * Show printer details in one window
@@ -3298,6 +3364,13 @@ the current configuration.
 	    foomatic = Printer::printer["database"]:"" == "foomatic";
 	else
 	    foomatic = Printer::db == `foomatic;
+	if (foomatic_save != nil)
+	{
+	    foomatic = foomatic_save;
+	    foomatic_save = nil;
+	}
+	y2milestone ("Single printer dialog: foomatic: %1", foomatic);
+
 	if (foomatic)
 	{
 	    mb_items = add (mb_items, `item (`id (`choose_ppd),
@@ -3565,6 +3638,7 @@ for proposing new queues.");
 	}
 	else if (ret == `add || ret == `edit)
 	{
+	    foomatic_save = foomatic;
 	    Printer::additional_forbidden_names = Printer::getForbiddenNames ();
 	    printer_backup = Printer::printer;
 	    printcap_backup = Printer::printcap;
@@ -3588,6 +3662,8 @@ for proposing new queues.");
 	}
 	else if (ret == `choose_ppd || ret == `again || ret == `choose_model)
 	{
+	    if (ret != `choose_model && ret != `choose_ppd)
+		foomatic_save = foomatic;
 	    list tmp_printcap = Printer::printcap;
 	    list deleted_queues = maplist (`q, queues, ``(q["name"]:""));
 	    Printer::printcap = filter (`p, Printer::printcap, ``(
@@ -3623,10 +3699,10 @@ for proposing new queues.");
 		isPrinterConfigured (i)
 			// table entry, eg. Queue for Epson Stylus Photo on First parallel port (/dev/lp0)
 			? sformat (_("Queue for %1 %2 on %3"), lookup (i, "vendor", ""), lookup (i, "device", ""),
-				Printerlib::getDeviceNiceName (lookup (i, "dev_name", "")))
+				Printerlib::getDeviceNiceName (lookup (i, "dev_name", ""), true))
 			  // Translators: "... on ...": will be st. like: Canon BJC-6100 on first parallel port.
 			: sformat (_("%1 %2 on %3"), lookup (i, "vendor", ""), lookup (i, "device", ""),
-			      Printerlib::getDeviceNiceName (lookup (i, "dev_name", ""))),
+			      Printerlib::getDeviceNiceName (lookup (i, "dev_name", ""), true)),
 			  current == current_sel);
 	});
 	// selection box entry

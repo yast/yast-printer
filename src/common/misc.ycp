@@ -153,7 +153,7 @@ preparation of autoinstallation"));
 	boolean exists = false;
 
 	foreach (`p, Printer::printcap, ``{
-	    if (p["unique_key"]:"..." == ukey
+	    if ((p["unique_key"]:"" == ukey && ukey != "")
 		|| (p["uri"]:"" == uri && uri != ""
 		    && ((p["vendor"]:".." == vendor
 			    && p["device"]:".." == device)
@@ -439,6 +439,56 @@ of printers.
 	});
 	SCR::Write (.target.string, "/tmp/ppdfiles", res);*/
     }
+
+    /**
+      * add entries to use SuSE database to current Printer::printer
+      * @param vdb string foomatic database vendor key
+      * @param mdb string foomatic database model key
+      */
+    global define void addSuSEdbEntries (string vdb, string mdb) ``{
+	string manuf_ieee = "";
+	string model_ieee = "";
+	string manuf = "";
+	string model = "";
+	list vendors = SCR::Read (.printerdb.vendors);
+        foreach (`v, vendors, ``{
+	    term t = select (v, 0, nil);
+            list l = select (t, 0, []);
+            string vid = select (l, 0, "");
+            string vieee = select (l, 1, "");
+            if ((vid != "" && vieee != "")
+             && (SCR::Read (.ppd.db.vendorname, vid) == manuf_db
+              || SCR::Read (.ppd.db.vendorname, vieee) == manuf_db))
+            {
+		manuf = vid;
+                manuf_ieee = vieee;
+                y2milestone ("Found vendor: %1, %2", manuf, manuf_ieee);
+            }
+        });
+        list models = SCR::Read (add (.printerdb.models, manuf));
+        foreach (`m, models, ``{
+            term t = select (m, 0, nil);
+            list l = select (t, 0, []);
+            string mid = select (l, 0, "");
+            string mieee = select (l, 1, "");
+            if ((mid != "" && mieee != "")
+              && (SCR::Read (.ppd.db.modelname, [manuf_db, mid]) == model_db
+               || SCR::Read (.ppd.db.modelname, [manuf_db, mieee]) == model_db))
+            {
+                model = mid;
+                model_ieee = mieee;
+                y2milestone ("Found model: %1, %2", model, model_ieee);
+            }
+        });
+        Printer::printer = union (Printer::printer, $[
+            "vendor_ieee" : manuf_ieee,
+            "device_ieee" : model_ieee,
+            "vendor" : manuf,
+            "device" : model,
+            "database" : nil,
+        ]);
+    }
+
 
     /**
       * Get the PPD file for automatic installation
@@ -1539,7 +1589,7 @@ All changes will be lost.
 							  dev == "/dev/ttyS0")));
 	    if (this_is_selected)
 		default_selected = true;
-	    device_val = add (device_val, `item (`id (dev), Printerlib::getDeviceNiceName (dev), this_is_selected));
+	    device_val = add (device_val, `item (`id (dev), Printerlib::getDeviceNiceName (dev, false), this_is_selected));
 	});
 	if (!default_selected)
 	    device_val = add (device_val, `item (`id (device), device, true));

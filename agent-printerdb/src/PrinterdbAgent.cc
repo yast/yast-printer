@@ -237,7 +237,8 @@ string PrinterdbAgent::getConfigRichText (List*cfgs, string spooler)
     }
     return s;
 }
-void PrinterdbAgent::getConfigCombo (List*cfgs, YCPList&l, string pre)
+void PrinterdbAgent::getConfigCombo (List*cfgs, YCPList&l, string pre,
+    string spooler, bool show_sup_pref, bool filter)
 {
     List*walk = cfgs;
     while (walk) {
@@ -246,15 +247,29 @@ void PrinterdbAgent::getConfigCombo (List*cfgs, YCPList&l, string pre)
 	if (c) {
 	    c->queue = u->queue;
 	    if (!c->type)
-		getConfigCombo (c->use, l, pre);// + _(u->text) + ": ");
+		getConfigCombo (c->use, l, pre, spooler, show_sup_pref, filter);// + _(u->text) + ": ");
 	    else {
 		string text = getSupportPrefix (c) + pre;
+		if (! show_sup_pref)
+		    text = pre;
+		bool add = true;
+		if (getSupportPrefix (c) != "")
+		{
+		    add = false;
+		    string sp = getSupportPrefix (c);
+		    if ((sp == __(CUPS_ONLY_STRING) && spooler == "cups")
+			|| (sp == __(LPRNG_ONLY_STRING) && spooler == "lprng"))
+		    {
+			add = true;
+		    }
+		}
 		YCPTerm t ("item", true);
 		YCPTerm id ("id", true);
 		id->add (YCPString (u->ident));
 		t->add (id);
 		t->add (YCPString (text + _(u->text)));
-		l->add (t);
+		if (add)
+		    l->add (t);
 	    }
 	}
 	walk = walk->next;
@@ -666,9 +681,21 @@ YCPValue PrinterdbAgent::Read(const YCPPath &path, const YCPValue& arg)
 	YCPList ret;
 	ret->add (YCPString (s));
 	l = YCPList ();
-	getConfigCombo ((*p)->use, l, "");
+	getConfigCombo ((*p)->use, l, "", spooler, true, false);
 	ret->add (l);
 	return ret;
+    }
+    else if (path->length () == 2 && path->component_str (0) == "configscups") {
+        string ident = path->component_str (1);
+        string spooler = "cups";
+        Printer**p = (Printer**)findinset (printerset, printersize, (char*)ident.c_str());
+        YCPList l;
+        if (!p)
+            return YCPError (ident + ": Config not found.", l);
+        YCPList ret;
+        ret = YCPList ();
+        getConfigCombo ((*p)->use, ret, "", spooler, false, true);
+        return ret;
     }
     else if (path->length () == 2 && path->component_str (0) == "optionstree") {
 	/**
