@@ -654,7 +654,7 @@ void* timebombThread (void*)
 
 struct rdt_struct {
     const char*host;
-    YCPList ret;
+    YCPList &ret;
     ipp_op_t what_to_get;
     bool get_remote;
 };
@@ -794,11 +794,7 @@ bool getRemoteDestinations(const char*host,YCPList&ret, ipp_op_t what_to_get,
     pthread_mutex_init (&operation, NULL);
     pthread_mutex_lock (&operation);
     detect_status = 0;
-    struct rdt_struct rdt;
-    rdt.host = host;
-    rdt.ret = ret;
-    rdt.what_to_get = what_to_get;
-    rdt.get_remote = get_remote;
+    struct rdt_struct rdt = {host, ret, what_to_get, get_remote};
     pthread_create (&checker, NULL, remoteDestinationsThread, (void*)&rdt);
     pthread_create (&timebomb, NULL, timebombThread, NULL);
     while (detect_status == 0)
