@@ -108,6 +108,11 @@ YCPValue PPDAgent::Write(const YCPPath &path, const YCPValue& value, const YCPVa
             database.createdbThread(value->asString()->value_cstr());
 	    return YCPBoolean (database.creationStatus () == 100);
 	}
+	else if (path->component_str(1) == "check_method" && value->isSymbol ())
+	{
+	    return YCPBoolean (database.setCheckMethod (value->asSymbol ()));
+
+	}
 
     }
     // CHANGES handled via special PERL agent

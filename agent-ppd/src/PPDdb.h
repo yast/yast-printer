@@ -44,6 +44,7 @@ class PPD {
                 string pnp_vendor;
                 string pnp_printer;
 		string checksum;
+		off_t size;
         };
 
         typedef string VendorKey;
@@ -57,11 +58,13 @@ class PPD {
                 string pnp_vendor;
                 string pnp_printer;
 		string checksum;
+		off_t size;
 	    DriverInfo () {
 		filename = "";
 		pnp_vendor = "";
 		pnp_printer = "";
 		checksum = "";
+		size = 0;
 	    }
         };
 
@@ -73,10 +76,12 @@ class PPD {
 		int support;
 		string mcomment;
 		Drivers drivers;
+		bool fuzzy_label;
 	    ModelInfo () {
 		support = -1;
 		label = "";
 		mcomment = "";
+		fuzzy_label = false;
 	    }
 	};
 
@@ -110,6 +115,9 @@ class PPD {
 
 	typedef map<string, PpdFileInfo> PpdFiles;
 
+	typedef map<VendorKey, set<string> > ModelLabels;
+	typedef set<string> VendorLabels;
+
         PPD(const char *ppddir = PPD_DIR, const char *ppddb = PPD_DB);
         ~PPD();
 
@@ -121,10 +129,13 @@ class PPD {
 	string getVendorId (string vendor);
 	string getModelId (string vendor, string model);
 	bool fileinfo(const char *file, PPDInfo *info);
+	bool setCheckMethod (YCPSymbol method);
 
     private:
         Vendors db;
 	PpdFiles ppdfiles;
+	ModelLabels modellabels;
+	VendorLabels vendorlabels;
 
 	string datadir;
 	string var_datadir;
@@ -147,6 +158,7 @@ class PPD {
 	volatile int creation_status;
 	volatile int total_files;
 	volatile int done_files;
+	bool fast_check;
 
 	bool loadPrebuiltDatabase ();
 	bool createFileList(const char *dirname, time_t mtime);
@@ -154,6 +166,7 @@ class PPD {
 	bool processNewFiles ();
 	bool cleanupEmptyEntries ();
 	string fileChecksum (const string &filename);
+	off_t fileSize (const string &filename);
 
     protected:
         string strupper(const string s);
