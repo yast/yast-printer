@@ -194,12 +194,12 @@ only if using CUPS spooler"));
 			UI::QueryWidget (`id (`manufsel), `CurrentItem);
 		    model_db = "";
 		}
-		map modelsmap = mapmap (string kk, map vv,
-		    filter (any k, map v,
+		map<string,string> modelsmap = mapmap (string kk, map vv,
+		    (map<string,map>)filter (any k, any v,
 			Printerdb::foomatic[manuf_db]:$[],
-			``(is (k, string))),
+			``(is (k, string) && is (v, map))),
 		    ``($[kk: vv[`label]:kk]));
-		list modelsel_items = sortitems (modelsmap);
+		list<term> modelsel_items = sortitems (modelsmap);
 		modelsel = `SelectionBox (`id (`modelsel), `opt (`notify,
 		    `immediate),
 		    // selection box caption
@@ -208,7 +208,7 @@ only if using CUPS spooler"));
 		UI::ReplaceWidget (`id (`modelsel_rep), modelsel);
 		if (! haskey (Printerdb::foomatic[manuf_db]:$[], model_db))
 		{
-		    foreach (any k, map v, Printerdb::foomatic[manuf_db]:$[],``{
+		    foreach (any k, any v, Printerdb::foomatic[manuf_db]:$[],``{
 			if ((model_db == "" || model_db == nil)
 			    && is (k, string) && k != "" && k != nil)
 			{
@@ -242,7 +242,7 @@ only if using CUPS spooler"));
 		UI::SetFocus (`id (`modelsel));
 		ret = nil;
 	    }
-	    else if (ret == `next && size (filter (`k, `v,
+	    else if (ret == `next && size (filter (any k, any v,
 		Printerdb::foomatic[manuf_db, model_db]:$[],
 		``(is (k, string)))) <= 0)
 	    {
@@ -296,7 +296,7 @@ additional PostScript module).
 	    ppd_file = (string)SCR::Read (.ppd.file.open,
 		[ppd_file, SCR::Read (.target.tmpdir)]);
 
-	    Printer::printer = union (Printer::printer, $[
+	    Printer::printer = (map<string,any>)union (Printer::printer, $[
 		"ppd" : ppd_file,
 		"ppd_info" : Printer::ppdInfo (ppd_file),
 	    ]);
@@ -444,7 +444,7 @@ user name, and password.
 	    {
 		integer ind = (integer)
 		    UI::QueryWidget (`id (`printers), `CurrentItem);
-		Printer::printer = (map)(eval (printers[ind]:$[]));
+		Printer::printer = (map<string,any>)(eval (printers[ind]:$[]));
 		y2milestone ("Selected printer %1", Printer::printer);
 		Printer::index = -1;
 		map ppd_info = Printer::printer["ppd_info"]:$[];
@@ -495,28 +495,23 @@ Select the model first.
 	}
 	Printerdb::loadFoomaticIfNeeded ();
 
-	list ppds = maplist (`k, `v,
-	    filter (`kk, `vv, Printerdb::foomatic[manuf_db, model_db]:$[],
-		``(is (kk, string))), ``(k));
+	list<string> ppds = maplist (any k, any v,
+	    filter (any kk, any vv, Printerdb::foomatic[manuf_db, model_db]:$[],
+		``(is (kk, string))), ``((string)k));
 
 	ppds = Printerdb::sortPpds (manuf_db, model_db, ppds);
 
 	cfgs = [];
-	foreach (any k, ppds, ``{
+	foreach (string k, ppds, ``{
 	    string ppdfile_orig = "";
 
-	    if (is (k, string))
-	    {
-		y2debug ("V: %1, M: %2, K: %3", manuf_db, model_db, k);
-		ppdfile_orig = Printerdb::foomatic[manuf_db, model_db, k,
-		    "filename"]:"";
-	    }
-	    else
-		return;
+	    y2debug ("V: %1, M: %2, K: %3", manuf_db, model_db, k);
+	    ppdfile_orig = Printerdb::foomatic[manuf_db, model_db, k,
+		"filename"]:"";
 
-	    string label = (string)k;
+	    string label = k;
 	    string filename = Printerdb::foomatic[manuf_db, model_db,
-		config, "filename"]:"";
+		label, "filename"]:""; // config was here, don't know why
 	    if (filename != "")
 	    {
 		if (substring (filename, 0, 22) == "/usr/share/cups/model/")
@@ -584,7 +579,7 @@ Select the model first.
 	    }
 	    if (`test == ret)
 	    {
-		map tmpPrinter = Printer::printer;
+		map<string,any> tmpPrinter = Printer::printer;
 		config = (string)
 		    UI::QueryWidget (`id (`selection), `CurrentItem);
         // Why this? The new selected configuration cannot be tested
@@ -642,7 +637,7 @@ Select the model first.
      */
     define symbol runNameDialog (boolean allow_auto) ``{
 	y2milestone ("Running name dialog for %1", Printer::printer);
-	list forbidden_names = Printer::getForbiddenNames ();
+	list<string> forbidden_names = Printer::getForbiddenNames ();
 	string name = Printer::printer["name"]:"";
 	string old_name = name;
 	string info = Printer::printer["info"]:"";
@@ -667,7 +662,7 @@ Select the model first.
 	if (-1 != Printer::index)
 	{
 	    // remove me from forbidden names
-	    forbidden_names = filter (`i, forbidden_names, ``(i != name));
+	    forbidden_names = filter (string i, forbidden_names, ``(i != name));
 	}
 
 	if (is_class)
@@ -812,7 +807,7 @@ and test the queue after the printer model is selected."));
 		}
 		else
 		{
-		    map p = Printer::printer;
+		    map<string,any> p = Printer::printer;
 		    if (Spooler::Get () != "cups")
 			p["ff"] = UI::QueryWidget (`id (`ff), `Value);
 		    p["name"] = UI::QueryWidget (`id (`name), `Value);
@@ -878,8 +873,8 @@ and test the queue after the printer model is selected."));
     define string choosePrinterOrClass () ``{
 	list onlyprinters = filter (map e, Printer::printcap,
 	    ``(lookup (e, "uri", "class") != "class"));
-	list printers =
-	    flatten ([
+	list<string> printers =
+	    (list<string>)flatten ([
 		toset (
 		    maplist (map i, filter (
 			map e, Printer::printcap, ``(
@@ -899,7 +894,7 @@ and test the queue after the printer model is selected."));
 			`VSpacing (0.5),
 			`HSpacing (16),
 			// selection box label
-			`SelectionBox ( `id (`printers), _("Choose &printer:"), maplist (`i, printers, ``{return `item (`id(i),i);})),
+			`SelectionBox ( `id (`printers), _("Choose &printer:"), maplist (string i, printers, ``{return `item (`id(i),i);})),
 			`HBox (
 			    `PushButton (`id (`ok), `opt (`key_F10), Label::OKButton ()),
 			    `PushButton (`id (`cancel), `opt (`key_F9), Label::CancelButton ())
@@ -934,7 +929,7 @@ and test the queue after the printer model is selected."));
      * @return symbol `next or `back
      */
     define symbol runMembersDialog () ``{
-	list printers = toset (lookup (Printer::printer, "printers", []));
+	list<string> printers = (list<string>)toset (lookup (Printer::printer, "printers", []));
 	term contents =
 	    `VBox (
 		`ReplacePoint (
@@ -943,7 +938,7 @@ and test the queue after the printer model is selected."));
 			`id (`printers),
 			// selection box label
 			_("&Following printers and classes are members of this class"),
-			maplist (`i, printers, ``{
+			maplist (string i, printers, ``{
 			    return `item (`id (i), i);
 			})
 			)
@@ -968,14 +963,14 @@ and test the queue after the printer model is selected."));
 			UI::QueryWidget (`id (`printers), `CurrentItem);
 		    if (nil != member_to_delete)
 			{
-			    printers = DeleteItem (printers, member_to_delete);
+			    printers = (list<string>)DeleteItem (printers, member_to_delete);
 			    UI::ReplaceWidget (
 				`id (`replace_members),
 				`SelectionBox(
 				    `id (`printers),
 				    // selection box label
 				    _("&Following printers and classes are members of this class"),
-				    maplist (`i, printers, ``{
+				    maplist (string i, printers, ``{
 					return `item (`id (i), i);
 				    })));
 			}
@@ -997,7 +992,7 @@ and test the queue after the printer model is selected."));
 				`id (`printers),
 				// selection box label
 				_("&Following printers and classes are members of this class"),
-				maplist (`i, printers, ``{
+				maplist (string i, printers, ``{
 				    return `item (`id (i), i);
 				})));
 		    }
@@ -1063,7 +1058,7 @@ and test the queue after the printer model is selected."));
 	map ppd_selected = Printer::printer["ppd_options"]:$[];
 
 	list opts = [];
-	list optlist = Printerdb::getPpdFileOptions (filename);
+	list<map> optlist = Printerdb::getPpdFileOptions (filename);
 
 	// and now add options without their location in PPD file
 	optlist = add (optlist, $[
@@ -1205,7 +1200,7 @@ and test the queue after the printer model is selected."));
 		    = (list<map>)SCR::Read (.ppd.file.constraints, filename);
 		map options = (map)
 		    SCR::Read (.ppd.file.options, [filename, ""]);
-		list optlist = options["data"]:[];
+		list<map> optlist = options["data"]:[];
 		map opt2val = $[];
 		map opt2gui = $[];
 		map opt2val_gui = $[];
@@ -1835,7 +1830,7 @@ y2error ("CIT: %1", CUPS::InstallationType ());
 	map PPDs = Printerdb::foomatic[
 	    Printer::printer["detected", "vendor_db"]:"",
 	    Printer::printer["detected", "device_db"]:""]:$[];
-	PPDs = filter (`k, `v, PPDs, ``(is (k, string)));
+	PPDs = filter (any k, any v, PPDs, ``(is (k, string)));
 	if (size (PPDs) < 1)
 	{
 	    y2milestone ("No PPD file available");
@@ -1881,7 +1876,7 @@ y2error ("CIT: %1", CUPS::InstallationType ());
 	string vendor = ppd_info["manufacturer_db"]:"";
 	string model = ppd_info["model_db"]:"";
 	string config = ppd_info["nick"]:"";
-	list queues = getFoomaticAutoQueues (vendor, model, config);
+	list<map<string,any> > queues = getFoomaticAutoQueues (vendor, model, config);
 	string default_queue = Printerdb::getFoomaticDefaultQueue (queues);
 
 	term contents = `VBox (
@@ -1951,7 +1946,7 @@ y2error ("CIT: %1", CUPS::InstallationType ());
 		}
 		else
 		{
-		    foreach (map e, queues, ``{
+		    foreach (map<string,any> e, queues, ``{
 			if (lookup (e, "name", "") == i)
 			    PrinterTest::testPrinter (e, `ask);
 		    });
@@ -1969,8 +1964,8 @@ y2error ("CIT: %1", CUPS::InstallationType ());
 		|| Printer::default == nil;
 	    // add queues...
 	    map p = Printer::printer;
-	    foreach (map v, queues, ``{
-		Printer::printer = union (p, v);
+	    foreach (map<string,any> v, queues, ``{
+		Printer::printer = (map<string,any>)union (p, v);
 		Printer::index = -1;
 		Printer::storePrinter ();
 	    });
@@ -2012,7 +2007,7 @@ y2error ("CIT: %1", CUPS::InstallationType ());
 			    current == current_sel);
 	});
 
-	items = filter (`i, items, ``(i != nil));
+	items = filter (any i, items, ``(i != nil));
 	if (size (getConfiguredPrinters ()) > 0)
 	{
 	    items = add (items, `item (`id (-2),

@@ -386,11 +386,11 @@ END { if (!used) print \"ServerName %1\" }
       * Get list of possible banners for CUPS server
       * @return list banners names
       */
-    global define list getBannerList () ``{
+    global define list<string> getBannerList () ``{
         map out = (map)SCR::Execute (.target.bash_output, "/bin/ls -1 /usr/share/cups/banners");
-        list ban = splitstring (lookup (out, "stdout", ""), "\n");
+        list<string> ban = splitstring (lookup (out, "stdout", ""), "\n");
         ban = toset (add (ban, "none"));
-        return filter (`i, ban, ``("" != i));
+        return filter (string i, ban, ``("" != i));
     }
 
 

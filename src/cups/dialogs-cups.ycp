@@ -55,7 +55,7 @@
 	    `Left (`CheckBox (`id (`listen),
 		// check box
 		_("Listen to IPP &Broadcast Packets"),
-		CUPS::cups_server_settings["Browsing"]:"On" == "On")),
+		contains (CUPS::cups_server_settings["Browsing"]:["On"],"On"))),
 	    `VStretch ()
 	), `HStretch ());
 	// dialog caption
@@ -331,7 +331,7 @@
      * Choose an user.
      * @return list list of selected users
      */
-    define list chooseUser () ``{
+    define list<string> chooseUser () ``{
             list<map> users_maps = (list<map>) SCR::Read (.etc.passwd);
             list<string>users_names = maplist (map i, users_maps, ``{
                 return lookup (i, "username", "");
@@ -401,7 +401,7 @@
         // parse settings...
         //
         symbol style = `all;
-        list users = lookup (Printer::printer, "allowusers", []);
+        list<string> users = lookup (Printer::printer, "allowusers", []);
         if ([] == users)
         {
             users = lookup (Printer::printer, "denyusers", []);
@@ -433,7 +433,7 @@
         term contents = `VBox (
 		`ComboBox (`id (`type), `opt (`notify),  "", items),
 		// selectionbox label
-		`ReplacePoint (`id( `replace_users), `SelectionBox (`id (`users), _("&Users"), maplist (`i, users, ``{return `item (`id (i), i);}))),
+		`ReplacePoint (`id( `replace_users), `SelectionBox (`id (`users), _("&Users"), maplist (string i, users, ``{return `item (`id (i), i);}))),
 		`HBox (`PushButton (`id (`add), `opt (`key_F3), Label::AddButton ()), `PushButton (`id (`delete), `opt (`key_F4), Label::DeleteButton ()))
 	    );
 
@@ -461,8 +461,8 @@
             }
             if (`add == ret)
             {
-                list users_to_add = chooseUser ();
-                users = toset (flatten ( [users, users_to_add]));
+                list<string> users_to_add = chooseUser ();
+                users = (list<string>)toset (flatten ( [users, users_to_add]));
 		// selectionbox label
                 UI::ReplaceWidget (`id (`replace_users), `SelectionBox (`id (`users), _("&Users"),maplist (string i, users, ``{return `item (`id (i), i);})));
             }
@@ -470,9 +470,9 @@
             {
                 string user_to_delete = (string)
 		    UI::QueryWidget (`id (`users), `CurrentItem);
-                users = DeleteItem (users, user_to_delete);
+                users = (list<string>)DeleteItem (users, user_to_delete);
 		// selectionbox label
-                UI::ReplaceWidget (`id (`replace_users), `SelectionBox (`id (`users), _("&Users"),maplist (`i, users, ``{return `item (`id (i), i);})));
+                UI::ReplaceWidget (`id (`replace_users), `SelectionBox (`id (`users), _("&Users"),maplist (string i, users, ``{return `item (`id (i), i);})));
             }
             if (`back == ret)
             {
@@ -563,7 +563,7 @@
 	 : _("Banners of the class"));
 
         // read list of banners
-        list banners = CUPS::getBannerList ();
+        list<string> banners = CUPS::getBannerList ();
         banners = sort (banners);
         // read current settings
         string banner_start = lookup (Printer::printer, "bannerstart", "none");
@@ -598,14 +598,14 @@
                     `ComboBox ( `id (`banner_start),
                         // combo box label
                         _("&Starting banner"),
-                        maplist (`i, banners, ``{
+                        maplist (string i, banners, ``{
                             return `item (`id (i), i, i == banner_start);
                         })
                     ),
                     `ComboBox( `id (`banner_end),
                         // combo box label
                         _("&Ending banner"),
-                        maplist (`i, banners, ``{
+                        maplist (string i, banners, ``{
                             return `item (`id (i), i, i == banner_end);
                        })
                     )
@@ -732,12 +732,12 @@
 	    UI::ChangeWidget (`id (`ad), `Value, true);
 	else
 	    UI::ChangeWidget (`id (`da), `Value, true);
-	list cont = union (maplist (any e, lookup (settings, "Allow", []), ``{return `i (`allow, e);}),
+	list<term> cont = (list<term>)union (maplist (any e, lookup (settings, "Allow", []), ``{return `i (`allow, e);}),
 			maplist (any e, lookup (settings, "Deny", []), ``{return `i (`deny, e);}));
 	// selectionbox label
 	UI::ReplaceWidget (`id (`replace_acl), `SelectionBox (`id (`acl), _("&Permissions"),
 	   // listbox entry, %1 is IP address
-	   maplist (list e, cont, ``(`item (`id (e), select (e, 0, nil) == `allow ? sformat (_("Allow From %1"), select (e, 1, ""))
+	   maplist (term e, cont, ``(`item (`id (e), select (e, 0, nil) == `allow ? sformat (_("Allow From %1"), select (e, 1, ""))
 		// listbox entry, %1 is IP address
 		: sformat (_("Deny From %1"), select (e, 1, "")))))));
         symbol ret = nil;
@@ -780,7 +780,7 @@
 		// selectionbox label
 		UI::ReplaceWidget (`id (`replace_acl), `SelectionBox (`id (`acl), _("&Permissions"),
 		    // listbox entry, %1 is IP address
-	            maplist (list e, cont, ``(`item (`id (e), select (e, 0, nil) == `allow ? sformat (_("Allow From %1"), select (e, 1, ""))
+	            maplist (term e, cont, ``(`item (`id (e), select (e, 0, nil) == `allow ? sformat (_("Allow From %1"), select (e, 1, ""))
 			// listbox entry, %1 is IP address
 			: sformat (_("Deny From %1"), select (e, 1, "")))))));
 	    }
@@ -802,23 +802,23 @@
                     continue;
                 if (ad != "")
                 {
-		    cont = DeleteItem (cont, item);
+		    cont = (list<term>)DeleteItem (cont, item);
                     cont = toset (add (cont, `i (acc, ad)));
                 }
 		// selectionbox label
                 UI::ReplaceWidget (`id (`replace_acl), `SelectionBox (`id (`acl), _("&Permissions"),
 		    // listbox entry, %1 is IP address
-                    maplist (list e, cont, ``(`item (`id (e), select (e, 0, nil) == `allow ? sformat (_("Allow From %1"), select (e, 1, ""))
+                    maplist (term e, cont, ``(`item (`id (e), select (e, 0, nil) == `allow ? sformat (_("Allow From %1"), select (e, 1, ""))
 			// listbox entry, %1 is IP address
                         : sformat (_("Deny From %1"), select (e, 1, "")))))));
             }
 	    else if (`del == ret)
 	    {
-		cont = DeleteItem (cont, UI::QueryWidget (`id (`acl), `CurrentItem));
+		cont = (list<term>)DeleteItem (cont, UI::QueryWidget (`id (`acl), `CurrentItem));
 		// selectionbox label
                 UI::ReplaceWidget (`id (`replace_acl), `SelectionBox (`id (`acl), _("&Permissions"),
 		    // listbox entry, %1 is IP address
-                    maplist (list e, cont, ``(`item (`id (e), select (e, 0, nil) == `allow ? sformat (_("Allow From %1"), select (e, 1, ""))
+                    maplist (term e, cont, ``(`item (`id (e), select (e, 0, nil) == `allow ? sformat (_("Allow From %1"), select (e, 1, ""))
 			// listbox entry, %1 is IP address
                         : sformat (_("Deny From %1"), select (e, 1, "")))))));
 	    }
@@ -827,8 +827,8 @@
 	    == `ad
 		? ["Allow,Deny"]
 		: ["Deny,Allow"];
-	list allow = filter (string z, maplist (list x, filter (list e, cont, ``(select (e, 0, nil) == `allow)), ``{return select (x, 1, nil);}), ``(z != ""));
-	list deny = filter (string z, maplist (list x, filter (list e, cont, ``(select (e, 0, nil) == `deny)), ``{return select (x, 1, nil);}), ``(z != ""));
+	list allow = filter (string z, (list<string>)maplist (term x, filter (term e, cont, ``(select (e, 0, nil) == `allow)), ``{return select (x, 1, "");}), ``(z != ""));
+	list deny = filter (string z, (list<string>)maplist (term x, filter (term e, cont, ``(select (e, 0, nil) == `deny)), ``{return select (x, 1, "");}), ``(z != ""));
 	settings = add (settings, "Allow", allow);
 	settings = add (settings, "Deny", deny);
 	if (`next == ret)
@@ -840,7 +840,8 @@
 	    if (haskey (CUPS::cups_server_permissions, pth))
 	    {
 		CUPS::cups_server_permissions
-		    = (map<string,any>)remove (CUPS::cups_server_permissions, pth);
+		    = (map <string, map <string, list <string> > >)
+			remove (CUPS::cups_server_permissions, pth);
 	    }
 	    ret = `next;
 	}

@@ -33,7 +33,7 @@
       * @param p map queue description map with old SuSE database info
       * @return map queue description map with updated info to Foomatic database
       */
-    define map OldQueue2NewQueue (map p) ``{
+    define map<string,any> OldQueue2NewQueue (map<string,any> p) ``{
 	integer papersize = 0;
 	foreach (string k, any v, p["options"]:$[], ``{
 	    if (substring (k, 0, 9) == "papersize")
@@ -80,7 +80,7 @@
       * @param p map export or autoinstallation map
       * @return map the map with filtered some keys
       */
-    define map FilterQueueMap (map p) ``{
+    define map<string,any> FilterQueueMap (map<string,any> p) ``{
 	list just_copy = ["name", "uri", "raw", "ff", "info", "location",
 	    "bannerstart", "bannerend", "accepting", "state", "allowusers",
 	    "denyusers"];
@@ -92,7 +92,7 @@
       * @param options map of options option_name -> option_value
       * @return a list of maps with keys "key" and "value"
       */
-    define list<map> OptMap2OptList (map options) ``{
+    define list<map> OptMap2OptList (map<string,any> options) ``{
 	return (list<map>)maplist (string k, any v, options, ``(
 	    $["key" : k, "value" : v]
 	));
@@ -103,13 +103,13 @@
       * @param options a list of maps with keys "key" and "value"
       * @return map of options option_name -> option_value
       */
-    define map OptList2OptMap (list<map> options) ``{
-	map ret = listmap (map m, options, ``{
+    define map<string,any> OptList2OptMap (list<map> options) ``{
+	map<string,any> ret = listmap (map m, options, ``{
 	    string key = m["key"]:"";
 	    any value = m["value"]:"";
 	    return $[key: value];
 	});
-	return filter (any k, any v, ret, ``(k != ""));
+	return filter (string k, any v, ret, ``(k != ""));
     }
 
     /**
@@ -128,21 +128,21 @@
 		? ""
 		: exp["default"]:"",
 	];
-	ai["printcap"] = maplist (map p, exp["printcap"]:[], ``{
+	ai["printcap"] = maplist (map<string,any> p, exp["printcap"]:[], ``{
 	    map q = FilterQueueMap (p);
 	    if (! q["raw"]:false)
 	    {
 		map ppd_file_options = (map)
 		    SCR::Read (.ppd.file.options, [p["ppd"]:"", ""]);
 		list<map>optlist = ppd_file_options["data"]:[];
-		map ppd_options = listmap (map i, optlist, ``{
+		map<string,any> ppd_options = listmap (map i, optlist, ``{
 		    string key = i["name"]:"";
 		    return $[key : i["current"]:""];
 		});
-		ppd_options = filter (any k, any v, ppd_options, ``(
+		ppd_options = (map<string,any>)filter (string k, any v, ppd_options, ``(
 		    k != "" && v != ""
 		));
-		ppd_options = union (ppd_options, p["ppd_options"]:$[]);
+		ppd_options = (map<string,any>)union (ppd_options, p["ppd_options"]:$[]);
 		q = union (q, $[
 		    "manufacturer" : p["ppd_info", "manufacturer"]:"",
 		    "model" : p["ppd_info", "model"]:"",
@@ -170,7 +170,7 @@
 	    "server_default" : ai["default"]:"" == "",
 	    "default" : ai["default"]:"",
 	];
-	exp["printcap"] = maplist (map p, ai["printcap"]:[], ``{
+	exp["printcap"] = maplist (map<string,any> p, ai["printcap"]:[], ``{
 	    map q = FilterQueueMap (p);
 	    if (p["uri"]:"" != "class" && ! p["raw"]:false)
 	    {

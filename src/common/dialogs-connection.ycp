@@ -529,7 +529,7 @@ only if a CUPS spooler is used
             type = Printerlib::getUriType ("uri");
         }
         string device = Printerlib::getUriDevice (uri);
-        list devices = [];
+        list<string> devices = [];
         path read_devs = "parallel" == type
 	    ? .proc.parport.devices
 	    : "usb" == type
@@ -545,7 +545,7 @@ only if a CUPS spooler is used
         if (nil != i)
             device = substring (device, 0, i);
         if ("irda" != type)
-            devices = (list)SCR::Read (read_devs);
+            devices = (list<string>)SCR::Read (read_devs);
         else
             devices = [];
 
@@ -738,8 +738,8 @@ actually selected.
         }
         else
         {
-            Printer::printer = filter (`k, `v, Printer::printer,
-		``(k != "tmpuri"));
+            Printer::printer = (map<string,any>)
+		filter (string k, any v, Printer::printer, ``(k != "tmpuri"));
         }
         if (`next == ret)
         {
@@ -1015,14 +1015,14 @@ actually selected.
             }
             if (`get_printers == ret && checkHostName (hostname))
             {
-                list queues = [];
+                list<string> queues = [];
                 if ("samba" == type)
                 {
-                    queues = (list)SCR::Read (.smb.queues, hostname);
+                    queues = (list<string>)SCR::Read (.smb.queues, hostname);
                 }
                 else if ("ipp" == type)
                 {
-		    queues = (list)SCR::Read (.cups.remote, hostname);
+		    queues = (list<string>)SCR::Read (.cups.remote, hostname);
                     queues = maplist (string i, queues, ``{
                         return "printers/" + i;
                     });
@@ -1260,7 +1260,7 @@ actually selected.
             string s = (string)UI::QueryWidget (`id (`io), `Value);
             if (nil == s || "" == s)
             {
-                params = filter (`k, `v, params, ``("io" != k));
+                params = filter (any k, any v, params, ``("io" != k));
             }
             else
             {

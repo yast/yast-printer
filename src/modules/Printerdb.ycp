@@ -31,7 +31,7 @@
     /**
       * map of foomatic printers database
       */
-    global map foomatic = nil;
+    global map<string,map> foomatic = nil;
 
 // local functions
 
@@ -186,7 +186,7 @@ of printers.
                 SCR::Write (.ppd.db.check_method, `checksum);
             }
         }
-        foomatic= (map)SCR::Read (.target.ycp, "/var/lib/YaST2/ppd_db.ycp");
+        foomatic= (map<string,map>)SCR::Read (.target.ycp, "/var/lib/YaST2/ppd_db.ycp");
     }
 
     /**
@@ -197,21 +197,23 @@ of printers.
       *   are taken from foomatic database
       * @return list of sorted PPD nicknames
       */
-    global define list sortPpds (string vendor_db, string device_db,
-	list ppd_nicks)
+    global define list<string> sortPpds (string vendor_db, string device_db,
+	list<string> ppd_nicks)
     ``{
 	vendor_db = (string)SCR::Read (.ppd.db.vendorname, vendor_db);
 	device_db = (string)SCR::Read (.ppd.db.modelname, [vendor_db, device_db]);
         SCR::Execute (.target.bash, sformat (
 	    "/usr/bin/touch %1/ppd_preference_list",
 	    Printerlib::baseDataDir));
-        map<string,map> order = (map<string,map>)SCR::Read (.target.ycp,
+        map<string,any> order = (map<string,map>)SCR::Read (.target.ycp,
 	    sformat ("%1/ppd_preference_list", Printerlib::baseDataDir));
         if (order == nil)
             order = $[];
 
         list<string> preferred = [];
-        foreach (string k, map v, order, ``{
+	map<string,map> order_vend = (map<string,map>)
+	    filter (string k, any v, order, ``(is (v, map)));
+        foreach (string k, map v, order_vend, ``{
             if (regexpmatch (vendor_db, k))
             {
                 foreach (string kk, list vv, (map<string,list>)v, ``{
@@ -234,14 +236,17 @@ of printers.
 
         map recom = $[];
         map other = $[];
-	map downrec = $[];
-	map downoth = $[];
+	map<string,list<string> > downrec = $[];
+	map<string,list<string> > downoth = $[];
 	loadFoomaticIfNeeded ();
-	map ppds = $[];
+	map<string,map> ppds = $[];
 
 	if (ppd_nicks == nil)
-	    ppds = filter (any k, any v, foomatic[vendor_db, device_db]:$[],
-		``(is (k, string)));
+	{
+	    ppds = (map<string,map>)
+		filter (any k, any v, foomatic[vendor_db, device_db]:$[],
+		    ``(is (k, string) && is (v, map)));
+	}
 	else
 	    ppds = listmap (string k, ppd_nicks, ``($[k: $[]]));
 
@@ -305,31 +310,31 @@ of printers.
             }
         });
 
-        list result = [];
+        list<string> result = [];
 
         y2debug ("Recom: %1, other: %2", recom, other);
 	y2debug ("Downloaded: Recom: %1, other: %2", downrec, downoth);
 
-        foreach (`i, preferred, ``{
-            result = merge (result, downrec[i]:[]);
+        foreach (string i, preferred, ``{
+            result = (list<string>)merge (result, downrec[i]:[]);
         });
-        result = merge (result, downrec["other"]:[]);
+        result = (list<string>)merge (result, downrec["other"]:[]);
 
-        foreach (`i, preferred, ``{
-            result = merge (result, downoth[i]:[]);
+        foreach (string i, preferred, ``{
+            result = (list<string>)merge (result, downoth[i]:[]);
         });
-        result = merge (result, downoth["other"]:[]);
+        result = (list<string>)merge (result, downoth["other"]:[]);
 
 
-        foreach (`i, preferred, ``{
-            result = merge (result, recom[i]:[]);
+        foreach (string i, preferred, ``{
+            result = (list<string>)merge (result, recom[i]:[]);
         });
-        result = merge (result, recom["other"]:[]);
+        result = (list<string>)merge (result, recom["other"]:[]);
 
-        foreach (`i, preferred, ``{
-            result = merge (result, other[i]:[]);
+        foreach (string i, preferred, ``{
+            result = (list<string>)merge (result, other[i]:[]);
         });
-        result = merge (result, other["other"]:[]);
+        result = (list<string>)merge (result, other["other"]:[]);
 
         y2debug ("Sorted PPD files: %1", result);
         return result;
@@ -346,9 +351,9 @@ of printers.
       *   nil if no is usable
       */
     global define string getAutoPpdFile (string vendor_db, string device_db,
-	list ppd_nicks)
+	list<string> ppd_nicks)
     ``{
-	list ppds = sortPpds (vendor_db, device_db, ppd_nicks);
+	list<string> ppds = sortPpds (vendor_db, device_db, ppd_nicks);
 	if (size (ppds) == 0)
 	    return nil;
 	if (Spooler::Get () == "cups")
@@ -410,12 +415,14 @@ printer model again.
     global define map getPpdFiles (string vendor_db, string device_db) ``{
 	loadFoomaticIfNeeded ();
 	map ppd_db = foomatic[vendor_db, device_db]:$[];
-	ppd_db = filter (`k, `v, ppd_db, ``(is (k, string)));
-	map ret = mapmap (string k, map v, ppd_db, ``{
+	map<string,map> ppd_db_f = (map<string,map>)
+	    filter (any k, any v, ppd_db,
+		``(is (k, string) && is (v, map)));
+	map<string,string> ret = mapmap (string k, map v, ppd_db_f, ``{
 	    string filename = v["filename"]:"";
 	    return $["filename" : k];
 	});
-	ret = filter (`k, `v, ret, ``(k != "" && v != ""));
+	ret = filter (string k, string v, ret, ``(k != "" && v != ""));
 	return ret;
     }
 

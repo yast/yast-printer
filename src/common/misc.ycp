@@ -39,13 +39,13 @@
       * @param config string choosen ppd file, nil = auto
       * @return list of PPD files
       */
-     define list getFoomaticAutoQueues (string vendor, string model,
-        string config)
+     define list<map<string,any> > getFoomaticAutoQueues (string vendor,
+	string model, string config)
     ``{
         list forbidden_names = Printer::getForbiddenNames ();
         y2debug ("Getting auto queues for >>%1<< >>%2<<", vendor, model);
         Printerdb::loadFoomaticIfNeeded ();
-        list new_queues = [];
+        list<map<string,any> > new_queues = [];
         map ppds = Printerdb::getPpdFiles (vendor, model);
         string ppdfile_orig = "";
         if (vendor == "__spec_ppd__")
@@ -61,7 +61,7 @@
 	Printer::printer["ppd"] = ppdfile;
 	Printer::printer["ppd_info"] = Printer::ppdInfo (ppdfile);
         map options = (map)SCR::Read (.ppd.file.options, [ppdfile, ""]);
-        list opts = options["data"]:[];
+        list<map> opts = options["data"]:[];
             integer ind = -1;
             boolean found = true;
             find (map i, opts, ``{
@@ -111,10 +111,10 @@
             }
             string suffix = Printer::getQueueSuffix (new_queues);
 
-            new_queues = maplist (map v, new_queues, ``{
+            new_queues = maplist (map<string,any> v, new_queues, ``{
                 v = add (v, "name", Printer::adjustQueueName (lookup (v, "name", "lp") + suffix, forbidden_names));
                 forbidden_names = add (forbidden_names, lookup (v, "name", ""));
-                return union (Printer::printer, v);
+                return (map<string,any>)union (Printer::printer, v);
         });
         y2debug ("Proposing queues %1", maplist (map q, new_queues, ``(
 	    q["name"]:"")));
@@ -128,11 +128,11 @@
       * @param items map items (item key -> item label)
       * @return list of items to be used for selectionbox
       */
-    define list sortitems (map items) ``{
+    define list<term> sortitems (map<string,string> items) ``{
 	string enc = Encoding::console;
 	items = mapmap (string k, string v, items, ``(
 	    $[k: (string)UI::Recode ("UTF-8", enc, v)]));
-	list l = (list)SCR::Read (.ppd.sort_items, items);
+	list<term> l = (list<term>)SCR::Read (.ppd.sort_items, items);
 	l = maplist (term i, l, ``{
 	    string label = select (i, 1, "");
 	    label = (string)UI::Recode (enc, "UTF-8", label);
@@ -149,7 +149,7 @@
       * @param p map of printer to adjust paper size
       * @return map of printer with adjusted paper size
       */
-    define map adjustPaperSize (map p) ``{
+    define map<string,any> adjustPaperSize (map<string,any> p) ``{
 	map options = p["ppd_options"]:$[];
 	if (haskey (options, "PageSize"))
 	    return p;
@@ -275,13 +275,13 @@
 	Printer::default = "";
 
 	Spooler::StopServices();
-	list to_delete = ["plp", "lprold", "lprng", "cups", "cups-client", "cups-drivers", "cups-drivers-cs", "cups-drivers-de", "cups-drivers-stp",
+	list<string> to_delete = ["plp", "lprold", "lprng", "cups", "cups-client", "cups-drivers", "cups-drivers-cs", "cups-drivers-de", "cups-drivers-stp",
 	    "cups-libs", "cups-devel", "lpdfilter", "filters", "ghostscript-fonts-other", "ghostscript-x11", "ghostscript-fonts-std", "ghostscript-library",
 	    "ghostscript-fonts-kanji", "ghostscript-serv", "ghostscript-fonts-rus", "ghostscript-library", "a2ps", "foomatic-filters"];
 	to_delete = filter (string e, to_delete,
 	    ``(Pkg::IsProvided (e) == true));
 
-	list to_install = ["ghostscript-library", "ghostscript-x11", "ghostscript-fonts-std", "ghostscript-fonts-other", "a2ps", "cups-libs"];
+	list<string> to_install = ["ghostscript-library", "ghostscript-x11", "ghostscript-fonts-std", "ghostscript-fonts-other", "a2ps", "cups-libs"];
 
 	y2milestone("deleting: %1", to_delete);
 	foreach (string e, to_delete, ``{Pkg::PkgDelete (e);});
@@ -310,33 +310,33 @@
      * @param type "ipp", "samba", "lpd" or ""
      * @return list Sorted list of hosts.
      */
-    define list getHostnames (string type) ``{
+    define list<string> getHostnames (string type) ``{
         UI::OpenDialog (`opt (`decorated),
                          // text in dialog box
                          `Label (_("Scanning for hosts on this LAN...")));
-        list hosts = [];
+        list<string> hosts = [];
         if ("samba" == type)
-            hosts = (list)SCR::Read (.net.hostnames.samba);
+            hosts = (list<string>)SCR::Read (.net.hostnames.samba);
         else if ("ipp" == type)
 	{
-            hosts = (list)SCR::Read (.net.hostnames, 631);
-	    hosts = filter (`h, hosts, ``{
-		list queues = (list)SCR::Read (.cups.remote, h);
+            hosts = (list<string>)SCR::Read (.net.hostnames, 631);
+	    hosts = (list<string>)filter (string h, hosts, ``{
+		list queues = (list<string>)SCR::Read (.cups.remote, h);
 		return size (queues) > 0;
 	    });
 	}
         else if ("lpd" == type)
-            hosts = (list)SCR::Read (.net.hostnames, 515);
+            hosts = (list<string>)SCR::Read (.net.hostnames, 515);
         else if ("socket" == type)
-            hosts = (list)SCR::Read (.net.hostnames, 9100);
+            hosts = (list<string>)SCR::Read (.net.hostnames, 9100);
         else if ("" != type)
-	    hosts = (list)SCR::Read (.net.hostnames, tointeger (type));
+	    hosts = (list<string>)SCR::Read (.net.hostnames, tointeger (type));
 	else
-            hosts = (list)SCR::Read (.net.hostnames);
+            hosts = (list<string>)SCR::Read (.net.hostnames);
         if (nil == hosts)
             hosts = [];
         UI::CloseDialog ();
-        return sort (hosts);
+        return (list<string>)sort (hosts);
     }
 
     /**
@@ -346,7 +346,7 @@
      * @return list List without item. If item was not present in list, list is unchanged.
      */
     define list DeleteItem (list source, any item) ``{
-        return filter (`i, source, ``{
+        return filter (any i, source, ``{
             return i != item;
         });
     }
@@ -514,7 +514,7 @@ All changes will be lost.
      * @param device device that should be selected. If "" then first device will be selected.
      * @return list Items for selection box. One of the items is selected.
      */
-    define list getDevicesItems (list devices, string device) ``{
+    define list getDevicesItems (list<string> devices, string device) ``{
 	list device_val = [];
 	boolean default_selected = false;
 	foreach (string dev, devices, ``{
@@ -639,14 +639,14 @@ It cannot contain the characters @ and :.
     define term getWidgetForOption (string option_type, list values) ``{
 	if (option_type == "Boolean")
 	{
-	    list vals = (list) values;
+	    list<list> vals = (list<list>) values;
 	    if (size (vals) != 2)
 	    {
 		y2error (
 		    "Incorrect size of possible values for boolean option: %1",
 		    vals);
 	    }
-	    list r_buttons = maplist (list entry, vals, ``(
+	    list<term> r_buttons = maplist (list entry, vals, ``(
 		`Left (`RadioButton (`id (entry[0]:""), entry[1]:""))
 	    ));
 	    term ret = `VBox (`VSpacing (1));
@@ -674,7 +674,7 @@ It cannot contain the characters @ and :.
 	}
 	if (option_type == "PickMany")
 	{
-	    list vals = (list) values;
+	    list<list> vals = (list<list>) values;
 	    // multiselectionbox label
 	    return `MultiSelectionBox(`id (`vals), `opt (`notify, `immediate),
 		_("Val&ues"),
@@ -683,7 +683,7 @@ It cannot contain the characters @ and :.
 		))
 	    );
 	}
-	list vals = (list) values;
+	list<list> vals = (list<list>) values;
 	y2debug ("value: %1", values);
 	// selectionbox label
 	return `SelectionBox (`id (`vals), `opt (`notify, `immediate),
@@ -725,7 +725,7 @@ It cannot contain the characters @ and :.
      * @param selected currently selected options
      * @return true if they contain paper size
      */
-    define boolean havePaperSize (map selected) ``{
+    define boolean havePaperSize (map<string,any> selected) ``{
 	boolean found = false;
 	foreach (string k, any v, selected, ``{
 	    if (substring (k, 0, 10) == "papersize-")

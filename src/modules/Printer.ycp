@@ -61,12 +61,12 @@
      * List of print queues. See description of map printer
      * for members structure.
      */
-    global list<map> printcap = [];
+    global list<map<string,any> > printcap = [];
     /**
       *Backup list of print queues. See description of map printer
       * for members structure.
       */
-    global list printcap_backup = [];
+    global list<map<string,any> > printcap_backup = [];
     /**
      * Default queue name
      */
@@ -98,7 +98,7 @@
      * "raw": boolean, // raw queue, present only for raw queues
      * ]
      */
-    global map printer = $[];
+    global map<string,any> printer = $[];
     /**
      * Index of printer we are working with.
      */
@@ -107,12 +107,12 @@
      * List of printers that were deleted during this configuration
      * session.
      */
-    global list deleted = [];
+    global list<map<string,string> > deleted = [];
     /**
      * List of autodetected printers. For documentation see
      * yast2-lib-printer.
      */
-    global list autodetected = [];
+    global list<map<string,any> > autodetected = [];
 
 
     /**
@@ -122,7 +122,7 @@
      * It is map of $[ unique_key : true ]. When saving, unique keys that
      * are still configured are replaced by $[ unique_key : false ]
      */
-    map original_unique_keys = $[];
+    map<string,boolean> original_unique_keys = $[];
 
 
     /**
@@ -196,7 +196,7 @@
       * @param p map of printer
       * @return modified map
       */
-    global define map fixPrinter (map p) ``{
+    global define map<string,any> fixPrinter (map<string,any> p) ``{
 	if (p["accepting"]:true == true)
 	    p["accepting"] = true;
 	if (p["state"]:"idle" == "idle")
@@ -251,7 +251,7 @@
 
 	dirty = true;
 	autodetected = Printerlib::Detect (false);
-	autodetected = maplist (map i, autodetected, ``{
+	autodetected = maplist (map<string,any> i, autodetected, ``{
 	    i["info"] = i["vendor"]:"" + " " + i["device"]:"";
             i["location"] = Printerlib::getUriNiceName (i["uri"]:"");
 	    i["vendor_db"] = SCR::Read (.ppd.db.vendorname, i["vendor"]:"");
@@ -263,7 +263,7 @@
 	if (Spooler::Get () == "cups")
 	{
 	    Printerlib::setCupsUsbDevicesInfo ();
-	    autodetected = filter (map a, autodetected, ``(
+	    autodetected = filter (map<string,any> a, autodetected, ``(
 		! contains (Printerlib::getProblematicCupsUsbDevices (),
 		    Printerlib::getUriDevice (a["uri"]:""))
 	    ));
@@ -285,7 +285,7 @@
 	    return ;
 	}
 	index = i;
-	printer = (map)select (printcap, index, $[]);
+	printer = printcap[index]:$[];
     }
 
     /**
@@ -346,7 +346,7 @@
 	});
 	if (found_default)
 	{
-
+	    y2debug ("Default queue found");
 	}
 	else if (found_lp)
 	{
@@ -421,7 +421,7 @@
      * @return a list of already used names
      */
     global define list<string> getForbiddenNames() ``{
-	list l = toset (
+	list<string> l = (list<string>)toset (
 	    add (
 		flatten (
 		    maplist (map entry, printcap, ``(
@@ -442,7 +442,9 @@
       *   (to assign correct state)
       * @return map printer with assigned states
       */
-    global define map assignState (map p, boolean changed) ``{
+    global define map<string,any> assignState (map<string,any> p,
+	boolean changed)
+    ``{
 	if (lookup (p, "type", "yast2") != "yast2")
 	    return p;
 	boolean supported = true;
@@ -484,10 +486,10 @@
 	CUPS::cups_installation = `server;
 	if (printer["uri"]:"" == "listen_ipp")
 	{
-	    if (CUPS::cups_server_settings["Browsing"]:"On" == "On")
+	    if (contains (CUPS::cups_server_settings["Browsing"]:["On"], "On"))
 	    {
+		y2debug ("TODO");
 		// TODO make sure CUPS server will be running
-
 	    }
 	    return;
 	}
@@ -511,7 +513,7 @@
 	    // we do not need care about creating new remote queue, it is
 	    // impossible in this situation
 	    integer c = -1;
-	    printcap = maplist (map i, printcap, ``{
+	    printcap = maplist (map<string,any> i, printcap, ``{
 		c = c + 1;
 		if (c == index)
 		    return printer;
@@ -589,12 +591,15 @@
      * @param yast_printcap list of data read from YaST's configuration file
      * @return list of printers
      */
-    global define list<map> printcapRead (list yast_printcap) ``{
+    global define list<map<string,any> > printcapRead (list<map<string,any> > yast_printcap)
+    ``{
 	SCR::Execute (.target.bash,
 	    "test -d /etc/lpdfilter || /bin/mkdir /etc/lpdfilter");
 
 	// mark the queues that are managed by YaST proper way
-	map yast_queues_map = listmap (map p, yast_printcap, ``{
+	map<string,any> yast_queues_map = listmap (map<string,any> p,
+	    yast_printcap,
+	``{
 	    if (p["name"]:"" != "")
 	    {
 		SCR::Execute (.target.bash, sformat (
@@ -603,12 +608,12 @@
 	    string name = p["name"]:"";
 	    return $[name: p];
 	});
-	list<map> ret = (list<map>)SCR::Read (.etc.printcap);
+	list<map<string,any> > ret = (list<map<string,any> >)SCR::Read (.etc.printcap);
 	if (nil == ret)
 	    return [];
 
 	list<string> queue_names = [];
-	map qm = $[];
+	map<string,map<string,any> > qm = $[];
 	foreach (map p, ret, ``{
 	    string name = p["name"]:"";
 	    if (name != "")
@@ -616,9 +621,9 @@
 		qm[name] = union (qm[name]:$[], p);
 	    }
 	});
-	ret = (list<map>)maplist (string k, map v, qm, ``(v));
+	ret = (list<map<string,any> >)maplist (string k, map v, qm, ``(v));
 
-	ret = (list<map>)maplist (map p, ret, ``{
+	ret = (list<map<string,any> >)maplist (map<string,any> p, ret, ``{
 	    p["saved"] = $[];
 	    p["changed"] = false;
 	    p["valid"] = true;
@@ -647,7 +652,7 @@
 	    return p;
 	});
 
-	foreach (string k, map v, yast_queues_map, ``{
+	foreach (string k, any v, yast_queues_map, ``{
 	    SCR::Execute (.target.bash, sformat (
 		"test -f /etc/lpdfilter/%1/yast2 && /bin/rm /etc/lpdfilter/%1/yast2", k));
 	});
@@ -660,13 +665,13 @@
      * Read the CUPS settings.
      * @return list of printers
      */
-    global define list<map> cupsRead () ``{
+    global define list<map<string,any> > cupsRead () ``{
         if (`server == CUPS::InstallationType ())
         {
 	    Spooler::RestartIfNeeded (true);
-            list<map>  ret = (list<map>) SCR::Read (.cups.printers);
-	    ret = filter (map e, ret, ``(e["uri"]:"" != ""));
-	    ret = maplist (map e, ret, ``{
+            list<map<string,any> > ret = (list<map<string,any> >) SCR::Read (.cups.printers);
+	    ret = filter (map<string,any> e, ret, ``(e["uri"]:"" != ""));
+	    ret = maplist (map<string,any> e, ret, ``{
 		if (SCR::Read (.target.size, e["ppd"]:"") > 0)
 		{
 		    string orig_file = e["ppd"]:"";
@@ -705,8 +710,8 @@
 		}
 
 		// split options to those comming from PPD file and others
-		map options = e["options"]:$[];
-		map ppd_options = $[];
+		map<string,string> options = e["options"]:$[];
+		map<string,string> ppd_options = $[];
 
 		string filename = e["ppd"]:"";
 		map opts_ppd = (map)SCR::Read (.ppd.file.options,
@@ -722,7 +727,7 @@
 			options[k] = nil;
 		    }
 		});
-		options = filter (string k, any v, options, ``(v != nil));
+		options = filter (string k, string v, options, ``(v != nil));
 
 		// check options comming from PPD file for constraints
 		list<string> constraints = (list<string>)SCR::Read (
@@ -735,10 +740,12 @@
 		e["ppd_options"] = ppd_options;
 		return e;
 	    });
-            list classes = (list)SCR::Read (.cups.classes);
+            list<map<string,any> > classes = (list<map<string,any> >)
+		SCR::Read (.cups.classes);
 	    if (nil == ret) ret = [];
 	    if (nil == classes)  classes = [];
-	    classes = maplist (map e, classes, ``(add (e, "uri", "class")));
+	    classes = maplist (map<string,any> e, classes,
+		``(add (e, "uri", "class")));
 	    ret = ret + classes;
 	    default = (string)SCR::Read (.cups.default_dest);
 	    if (default == "" || default == nil)
@@ -752,37 +759,37 @@
       * Sorts entries of printcap
       */
     global define void sortPrinters () ``{
-	list yast = filter (map e, printcap, ``(lookup (e, "type", "yast2") == "yast2"));
-	list non_yast = filter (map e, printcap, ``(lookup (e, "type", "yast2") != "yast2"));
-	list classes = filter (map e, yast, ``(lookup (e, "uri", "class") == "class"));
-	list printers = filter (map e, yast, ``(lookup (e, "uri", "class") != "class"));
-	map sorted = $[];
-	list locals = filter (map e, printers, ``(contains (["parallel", "serial", "irda", "usb", "pipe"], Printerlib::getUriType (lookup (e, "uri", "")))));
-	list remote = filter (map e, printers, ``(! contains (["parallel", "serial", "irda", "usb", "pipe"], Printerlib::getUriType (lookup (e, "uri", "")))));
+	list<map<string,any> > yast = (list<map<string,any> >)filter (map<string,any> e, printcap, ``(lookup (e, "type", "yast2") == "yast2"));
+	list<map<string,any> > non_yast = (list<map<string,any> >)filter (map<string,any> e, printcap, ``(lookup (e, "type", "yast2") != "yast2"));
+	list<map<string,any> > classes = (list<map<string,any> >)filter (map<string,any> e, yast, ``(lookup (e, "uri", "class") == "class"));
+	list<map<string,any> > printers = (list<map<string,any> >)filter (map<string,any> e, yast, ``(lookup (e, "uri", "class") != "class"));
+	list<map<string,any> > locals = (list<map<string,any> >)filter (map<string,any> e, printers, ``(contains (["parallel", "serial", "irda", "usb", "pipe"], Printerlib::getUriType (lookup (e, "uri", "")))));
+	list<map<string,any> > remote = (list<map<string,any> >)filter (map<string,any> e, printers, ``(! contains (["parallel", "serial", "irda", "usb", "pipe"], Printerlib::getUriType (lookup (e, "uri", "")))));
+	map<string,list> sorted = $[];
 
-	foreach (map e, locals, ``{
+	foreach (map<string,any> e, locals, ``{
 	    string uri = lookup (e, "uri", "");
 	    list s = lookup (sorted, uri, []);
 	    s = add (s, e);
 	    sorted = add (sorted, uri, s);
 	});
 	locals = [];
-	foreach (string k, list v, sorted, ``{locals = merge (locals, v);});
+	foreach (string k, list v, sorted, ``{locals = (list<map<string,any> >)merge (locals, v);});
 	sorted = $[];
-	foreach (map e, remote, ``{
+	foreach (map<string,any> e, remote, ``{
 	    string uri = lookup (e, "uri", "");
 	    list s = lookup (sorted, uri, []);
 	    s = add (s, e);
 	    sorted = add (sorted, uri, s);
 	});
         remote = [];
-        foreach (string k, list v, sorted, ``{remote = merge (remote, v);});
+        foreach (string k, list v, sorted, ``{remote = (list<map<string,any> >)merge (remote, v);});
 
-	printcap = (list<map>)merge (locals, remote);
-	classes = sort (map x, map y, classes, ``(lookup (x, "name", "") < lookup (y, "name", "")));
-	printcap = (list<map>)merge (printcap, classes);
-	non_yast = sort (map x, map y, non_yast, ``(lookup (x, "name", "") < lookup (y, "name", "")));
-	printcap = (list<map>)merge (printcap, non_yast);
+	printcap = (list<map<string,any> >)merge (locals, remote);
+	classes = sort (map<string,any> x, map<string,any> y, classes, ``(lookup (x, "name", "") < lookup (y, "name", "")));
+	printcap = (list<map<string,any> >)merge (printcap, classes);
+	non_yast = sort (map<string,any> x, map<string,any> y, non_yast, ``(lookup (x, "name", "") < lookup (y, "name", "")));
+	printcap = (list<map<string,any> >)merge (printcap, non_yast);
     }
 
 
@@ -845,7 +852,7 @@ to print."));
     global define void updateConfig (integer read_version) ``{
 	if (read_version < 520)
 	{
-	    printcap = maplist (map p, printcap, ``{
+	    printcap = maplist (map<string,any> p, printcap, ``{
 		if (substring (p["uri"]:"", 0, 12) == "prefilter://")
 		    p["uri"] = "filtering://localhost/"
 			+ substring (p["uri"]:"", 12);
@@ -858,7 +865,7 @@ to print."));
 	}
 	if (read_version < 521)
 	{
-	    printcap = maplist (map p, printcap, ``{
+	    printcap = maplist (map<string,any> p, printcap, ``{
 		p["options"] = $[];
 		if (p["raw"]:false)
 		    return p;
@@ -928,7 +935,7 @@ Detect your printers?"));
       * Read queues set for spooler
       * @return list of queues
       */
-    global define list<map> spoolerSpecQueuesRead () ``{
+    global define list<map<string,any> > spoolerSpecQueuesRead () ``{
 	if (Spooler::Get () == "cups")
         {
             return cupsRead();
@@ -963,7 +970,7 @@ Detect your printers?"));
 
 	    deleted = [];
 	    CUPS::usb_dev_names = state["cups_usb_devices"]:`always;
-	    printcap = maplist (map e, printcap, ``(
+	    printcap = maplist (map<string,any> e, printcap, ``(
 		add (e, "type", "yast2")
 	    ));
 	return true;
@@ -1013,7 +1020,7 @@ Detect your printers?"));
     global define boolean Read () ``{
 	if (Arch::s390)
 	    skip_autodetection = true;
-	list stages = [
+	list<string> stages = [
 	    // progress stage, text in dialog (short) (infinitive)
 	    _("Check environment"),
 	    // progress stage, text in dialog (short) (infinitive)
@@ -1021,7 +1028,7 @@ Detect your printers?"));
 	    // progress stage, text in dialog (short) (infinitive)
 	    _("Load current settings"),
 	];
-	list titles = [
+	list<string> titles = [
 	    // progress stage, text in dialog (short)
 	    _("Checking environment..."),
 	    // progress stage, text in dialog (short)
@@ -1092,7 +1099,7 @@ Detect your printers?"));
 		return false;
 	}
 
-	printcap = maplist (map e, printcap,``{return assignState (e, false);});
+	printcap = maplist (map<string,any> e, printcap,``{return assignState (e, false);});
 
 	Progress::NextStageStep (12); // step 12-15 - autodetection
 	if (testAbort ()) return false;
@@ -1173,7 +1180,7 @@ Detect your printers?"));
 	// printer to "".
 	//
 	boolean default_printer_found = false;
-	foreach (map entry, printcap, ``{
+	foreach (map<string,any> entry, printcap, ``{
 	    string uri = lookup (entry, "uri", "");
 	    string name = lookup (entry, "name", "");
 	    entry["default"] = (name == default);
@@ -1270,11 +1277,11 @@ the selected spooler does not support it."), name));
      */
 
     define boolean saveTheConfiguration () ``{
-	list l = [];
-	l = filter (map e, printcap, ``(e["type"]:"yast2" == "yast2"));
+	list<map<string,any> > l = [];
+	l = filter (map<string,any> e, printcap, ``(e["type"]:"yast2" == "yast2"));
 	list allowed_keys = [ "name", "raw", "uri", "ff", "ascii",
 	    "unique_key" ];
-	l = maplist (map e, l, ``(filter (string k, any v, e,
+	l = maplist (map<string,any> e, l, ``(filter (string k, any v, e,
 	    ``(contains (allowed_keys, k)))));
 	map save = $[
 	    "printers" : l,
@@ -1416,7 +1423,7 @@ the selected spooler does not support it."), name));
     global define map getArgsOfType (map config, string type) ``{
 	map result = $[];
 
-	foreach (`k, `v, config, ``{
+	foreach (any k, any v, config, ``{
 	    map valmap = lookup (config, k, $[]);
 	    string value = lookup (valmap,type,"");
 	    if (value != "") {
@@ -1465,12 +1472,12 @@ the selected spooler does not support it."), name));
 	list used = [];
 	// autodetected printer
 //	y2milestone ("Listing autodetected");
-	foreach (map i, autodetected, ``{
+	foreach (map<string,any> i, autodetected, ``{
 	    string found = "";
 	    string vendor = i["vendor"]:"";
 	    string model = i["device"]:"";
 	    string dev = sformat ("%1 %2: %3", vendor, model, Printerlib::getUriNiceName (i["uri"]:""));
-	    foreach (map entry, printcap, ``{
+	    foreach (map<string,any> entry, printcap, ``{
 		if (i["unique_key"]:"" == entry["unique_key"]:" ")
 		{
 		    entry = assignState (entry, false);
@@ -1526,8 +1533,8 @@ the selected spooler does not support it."), name));
 	});
 //	y2milestone ("Listing others");
 	// other than autodetected printers
-	map other_printers = $[];
-	foreach (map i, printcap, ``{
+	map<string,string> other_printers = $[];
+	foreach (map<string,any> i, printcap, ``{
 	    string cache = i["name"]:"";
 	    if (!contains (used, cache))
 	    {
@@ -1620,7 +1627,7 @@ the selected spooler does not support it."), name));
 	});
 	if (Spooler::Get () == "cups")
 	{
-	    if (CUPS::cups_server_settings["Browsing"]:"On" == "On")
+	    if (contains (CUPS::cups_server_settings["Browsing"]:["On"], "On"))
 	    {
 		// part of summary
 		summary = add (summary, _("<LI>Listen to remote CUPS servers to get comfortable access to remote queues.</LI>"));
@@ -1756,7 +1763,7 @@ the selected spooler does not support it."), name));
 	if (Spooler::Get () == "cups")
 	    Printerlib::setCupsUsbDevicesInfo ();
 	// settings are read and hw is detected
-	list forbidden_names = getForbiddenNames ();
+	list<string> forbidden_names = getForbiddenNames ();
 	symbol page_size = Printerlib::getDefaultPaperSize ();
 	foreach (map i, autodetected, ``{
 	    if (!alreadyConfigured (i["unique_key"]:""))
@@ -1816,12 +1823,12 @@ the selected spooler does not support it."), name));
      * @param queues list of new queues. Keys are the names of the queues.
      * @return suffix
      */
-    global define string getQueueSuffix (list queues) ``{
+    global define string getQueueSuffix (list<map<string,any> > queues) ``{
 	integer highest = 0;
 	integer work = 0;
-	foreach (map v, queues, ``{
+	foreach (map<string,any> v, queues, ``{
 	    integer end = size (v["name"]:"");
-	    foreach (map i, printcap, ``{
+	    foreach (map<string,any> i, printcap, ``{
 		if (substring (i["name"]:"", 0, end) == v["name"]:"")
 		{
 		    if (regexpmatch (substring (i["name"]:"", end),
