@@ -24,6 +24,32 @@
 
 
     /**
+      * replaces all occurences of 'from' to 'to' in src
+      * @param src input string
+      * @param from string to be replaced
+      * @param to string to be replaced by
+      * @return string modified string
+      */
+    global define string replaceAll(string src, string from, string to) ``{
+        if (from == "")
+        {
+            return src;
+        }
+
+        list tokens = [];
+
+        integer p = find(src, from);
+        while(p >= 0)
+        {
+            tokens = add(tokens, substring(src, 0, p));
+            src = substring(src, p + size(from), size(src) - (p+size(from)));
+            p = find(src, from);
+        }
+        tokens = add(tokens, src);
+        return mergestring(tokens, to);
+    }
+
+    /**
       * Get printers (physical devices), which are configured
       * @return list of printers maps (one queue of each printer)
       */
@@ -204,7 +230,7 @@
 
 	list result = [];
 
-	y2milestone ("Recom: %1, other: %2", recom, other);
+	y2debug ("Recom: %1, other: %2", recom, other);
 
 	foreach (`i, preferred, ``{
 	    result = merge (result, recom[i]:[]);
@@ -216,7 +242,7 @@
         });
         result = merge (result, other["other"]:[]);
 
-	y2milestone ("Sorteed PPD files: %1", result);
+	y2debug ("Sorteed PPD files: %1", result);
 	return result;
     }
 
@@ -231,7 +257,7 @@
 	string config)
     ``{
 	list forbidden_names = Printer::getForbiddenNames ();
-	y2milestone ("Getting auto queues for >>%1<< >>%2<<", vendor, model);
+	y2debug ("Getting auto queues for >>%1<< >>%2<<", vendor, model);
 	loadFoomaticIfNeeded ();
 	list new_queues = [];
         map ppds = getPpdFiles (vendor, model);
@@ -242,7 +268,7 @@
             ppdfile_orig = getAutoPpdFile (ppds, vendor, model);
 	else
 	    ppdfile_orig = Printer::foomatic[vendor, model, config, 0]:"";
-	y2milestone ("Choosen PPD file: %1", ppdfile_orig);
+	y2debug ("Choosen PPD file: %1", ppdfile_orig);
         string config = ppds[ppdfile_orig]:"";
         string ppdfile = SCR::Read (.ppd.file.open,
 	    [ppdfile_orig, SCR::Read (.target.tmpdir)]);
@@ -299,7 +325,7 @@
                 forbidden_names = add (forbidden_names, lookup (v, "name", ""));
                 return union (Printer::printer, v);
         });
-	y2milestone ("Proposing queues %1", maplist (`q, new_queues, ``(q["name"]:"")));
+	y2debug ("Proposing queues %1", maplist (`q, new_queues, ``(q["name"]:"")));
 	y2debug ("Proposed queues: %1", new_queues);
 	return new_queues;
     }
@@ -378,7 +404,7 @@ of printers"));
 		foreach (`kk, `vv, v, ``{
 		    if (regexpmatch (mod, kk))
 		    {
-			y2milestone ("Matched %1, %2", k, kk);
+			y2debug ("Matched %1, %2", k, kk);
 			preferred = order[k, kk]:[];
 		    }
 		});
@@ -391,7 +417,7 @@ of printers"));
 	});
 	if (preferred == [])
 	    preferred = order["__default__"]:[];
-	y2milestone ("Autoinst preferred list: %1", preferred);
+	y2debug ("Autoinst preferred list: %1", preferred);
 	boolean found = false;
 	string choosen = "";
 	string fallback = "";
@@ -401,17 +427,17 @@ of printers"));
 		foreach (`k, `v, ppds, ``{
 		    if (fallback == "")
 		    {
-			y2milestone ("Setting fallback to %1", k);
+			y2debug ("Setting fallback to %1", k);
 			fallback = k;
 		    }
 		    if (choosen == "" && regexpmatch (v, i))
 		    {
-			y2milestone ("Setting choosen to %1", k);
+			y2debug ("Setting choosen to %1", k);
 			choosen = k;
 		    }
 		    else if ((! have_recom)&&(issubstring (v, "(recommended)")))
 		    {
-			y2milestone ("Setting preferred to %1", k);
+			y2debug ("Setting preferred to %1", k);
 			found = true;
 			have_recom = true;
 			choosen = k;
@@ -419,11 +445,9 @@ of printers"));
 		});
 	    }
 	});
-	y2milestone ("Choosen PPD file: %1", choosen);
 	if (choosen == "")
 	    choosen = fallback;
-//	y2milestone ("Chose file %1, %2", choosen, ppds[choosen]:"");
-	y2milestone ("Choosen PPD file: %1", choosen);
+	y2debug ("Choosen PPD file: %1", choosen);
 	return choosen;
     }
 
@@ -842,7 +866,7 @@ queue you want to use."));
     if (Printer::getPrinterState(printer, Printer::spooler) == "void")
         do_not_test = true;
 
-    if (foomatic && !do_not_test) {
+    if (!foomatic && !do_not_test) {
         // checking if printing is possible - could be done faster?
         string model = lookup (printer, "device", "");
         string config = lookup (printer, "config", "");

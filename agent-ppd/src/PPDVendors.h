@@ -149,8 +149,15 @@ struct { char *key, *val; } array_map[] = {
     { "LEXMARK INTERNATIONAL", "LEXMARK" },
     { "OKI DATA CORP", "OKI" },
     { "OKIDATA", "OKI" },
-    { "GHOSTSCRIPT", "Ghostscript devices" },
-    { "GENERIC", "Generic printers" },
+    { "GHOSTSCRIPT", "UNKNOWN" },
+    { "GENERIC", "UNKNOWN" },
+    { "GENERIC PRINTERS", "UNKNOWN" },
+    { "GHOSTSCRIPT DEVICES", "UNKNOWN" },
+    { "SAMSUNG ELECTRONICS", "SAMSUNG" },
+    { "OTHER MANUFACTURERS", "UNKNOWN" },
+    { "KYOCERA MITA", "KYOCERA" },
+//    { "GHOSTSCRIPT", "Ghostscript devices" },
+//    { "GENERIC", "Generic printers" },
     { NULL, NULL }
 };
 

@@ -46,6 +46,11 @@
      */  // FIXME: ambigious definition. Changing it to symbols would be the best idea
     global integer cups_installation = -1;
     /**
+      * Use CUPS-like USB devices names
+      * `always, `never, `serial
+      */
+    global symbol cups_usb_dev_names = `always;
+    /**
      * If this is only cups client station,
      * server host name is here.
      */
@@ -234,6 +239,14 @@
 	    y2milestone ("Detected printer %1", i);
 	    return i;
 	});
+	if (Printer::spooler == "cups")
+	{
+	    Printerlib::setCupsUsbDevicesInfo ();
+	    autodetected = filter (`a, autodetected, ``(
+		! contains (Printerlib::getProblematicCupsUsbDevices (),
+			a["dev_name"]:"")
+	    ));
+	}
     }
 
     /**
@@ -474,7 +487,7 @@
     global define void storePrinter () ``{
 	printer = assignStates (printer, true);
 
-	y2milestone ("Storing printer %1", printer);
+	y2debug ("Storing printer %1", printer);
 
 // FIXME remove only if exists
 //	printer = remove (printer,"modelset_required");
@@ -570,6 +583,7 @@
 	default = lookup (settings, "default", "");
 	printcap = lookup (settings, "printcap", []);
         db = settings["database"]:nil;
+	cups_usb_dev_names = `always;
 	index = -1;
 	deleted = [];
     }
@@ -591,6 +605,7 @@
 	index = -1;
 	deleted = [];
 	autodetected = [];
+	cups_usb_dev_names = `always;
     }
     /**
      * read printers from /etc/printcap
@@ -779,6 +794,7 @@ END { if (!used) print \"ServerName %1\" }
 	    deleted = lookup (state, "deleted", []);
 	    default = lookup (state, "default", "");
 	    db = state["database"]:nil;
+	    cups_usb_dev_names = state["cups_usb_devices"]:`always;
 	    if (spooler == "cups" && db == nil)
 		db = `foomatic;
 	    printcap = maplist (`e, printcap, ``(
@@ -1131,7 +1147,7 @@ the selected spooler does not support it.
 	l = maplist (`e, l, ``(filter (`k, `v, e, ``(k != "changed" && k != "ppd"))));
 	cleanDeletedPrinters ();
 	map save = $["printers" : l, "deleted" : deleted, "default" : default,
-	    "database" : db ];
+	    "database" : db, "cups_usb_devices" : cups_usb_dev_names ];
 	if (! SCR::Write (.target.ycp, "/var/lib/YaST2/printers", save))
 	{
 	    // error report. %1 is filename
@@ -1528,6 +1544,8 @@ the selected spooler does not support it.
      * Autoconfigure all printers that haven't been configured yet.
      */
     global define void Propose () ``{
+	if (Printer::spooler == "cups")
+	    setCupsUsbDevicesInfo ();
 	// settings are read and hw is detected
 	list forbidden_names = getForbiddenNames ();
 	foreach (`i, autodetected, ``{
@@ -1542,6 +1560,15 @@ the selected spooler does not support it.
 		}
 		else
 		    detected = SCR::Read (.printerdb.detect, [ lookup (i, "vendor", ""), lookup (i, "device", "") ]);
+
+		if (Printer::spooler == "cups")
+		{
+		    if (contains (Printerlib::getProblematicCupsUsbDevices (),
+			i["dev_name"]:""))
+		    {
+			detected = [];
+		    }
+		}
 		if (2 == size (detected))
 		{
 		    map info = $[];
@@ -1559,6 +1586,7 @@ the selected spooler does not support it.
 		    }
 		    else
 			info = SCR::Read (.printerdb.info, detected);
+			y2error ("Detected: %1", i);
 		    if (0 == lookup (info, "type", 2))
 		    {
 			editDetected (i);
@@ -1595,7 +1623,7 @@ the selected spooler does not support it.
 				map paper = getQuickPaperSize (lookup (v, "config", ""));
 				if (nil != paper)
 				    v = add (v, "options", paper);
-		
+
 			        string k = adjustQueueName (lookup (v, "name", "lp") + suffix, forbidden_names);
 			        v = add (v, "name", k);
 			    }
@@ -1675,8 +1703,11 @@ the selected spooler does not support it.
 		    if (regexpmatch (substring (lookup (i, "name", ""), end),
 			"^[0-9]*$"))
 		    {
-			work = tointeger (substring (lookup (i, "name", ""),
-			    end));
+			string workstr = substring (i["name"]:"", end);
+			if (workstr != "")
+			    work = tointeger (workstr);
+			else
+			    work = 0;
 			if (work + 1 > highest)
 			    highest = work + 1;
 		    }
