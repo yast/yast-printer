@@ -1028,6 +1028,8 @@ bool PPD::process_file(const char *filename, PPDInfo *newinfo) {
     info.filename = filename;
     info.vendor = clean(vendor);
     info.printer = clean(printer);
+    info.vendor_db = info.vendor;
+    info.printer_db = info.printer;
     info.products = products;
     info.lang = clean(lang);
     info.nick = nick;
@@ -1173,10 +1175,12 @@ void PPD::preprocess(PPD::PPDInfo info, PPDInfo *newinfo) {
 
     /* prepare nick */
     if (nick == "")
+	nick = shortnick;
+    if (nick == "")
 	nick = filename;
     nick = addbrace(nick);
 
-    if(lang!="English")// return; // FIXME (not needed any more)
+    if(lang!="English")
         nick = nick+" ("+lang+")";
 
     /* Modify the model db key */
@@ -1209,10 +1213,6 @@ void PPD::preprocess(PPD::PPDInfo info, PPDInfo *newinfo) {
     /* differentiate drivers with same nick */
     bool space = true;
     printer = getModelId (vendor, printer);
-    string fn = filename;
-    if (fn.substr (0, 22) == "/usr/share/cups/model/")
-	fn = fn.erase (0,22);
-    nick = nick + " (" + fn + ")";
 // FIXME may not exist in the map
     Drivers nicks = db[vendor].models[printer].drivers;
     for(; nicks.find(nick)!=nicks.end(); nick+="I")
@@ -1319,8 +1319,10 @@ void PPD::preprocess(PPD::PPDInfo info, PPDInfo *newinfo) {
     
     if(newinfo) {
         newinfo->filename = filename;
-        newinfo->vendor = vendor;
-        newinfo->printer = printer;
+	newinfo->vendor = info.vendor;
+	newinfo->printer = info.printer;
+        newinfo->vendor_db = vendor;
+        newinfo->printer_db = printer;
         newinfo->products = fixed_products;
         newinfo->lang = lang;
         newinfo->nick = nick;

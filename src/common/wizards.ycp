@@ -35,8 +35,6 @@
 	    // switchers, no dialogs
 	    "detectconftype" :	[ ``(detectConfigType ()), true],
 	    "config_type" :	[ ``(getInstType ()), true, ],
-	    "queue_conf_type" :	[ ``(getQueueConfType ()), true, ],
-	    "has_auto_queue" :	[ ``(hasPrinterAutoQueue ()), true ],
 
 	    // sequences
 	    "main_wz" :		``(MainSequence ()),
@@ -113,19 +111,16 @@
      * Show all dialogs with some fake data...
      */
     global define void testDialogs () ``{
+	// FIXME if is really needed
 	Printer::printcap = [
-	    $["conf":$[], "config":"gs-stp-canon-bjc-6100-color-high", "device":"canon-bjc-6100", "device_ieee":"BJC-6100", "name":"best", "options":$["papersize-all-inkjet":1], "type":"yast2", "unique_key":"Kns9.VeHHAhw8MvA", "uri":"usb:/dev/usb/lp0", "vendor":"canon", "vendor_ieee":"Canon"],
-	    $["conf":$[], "config":"gs-stp-canon-bjc-6100-color-low", "device":"canon-bjc-6100", "device_ieee":"BJC-6100", "name":"color", "options":$["papersize-all-inkjet":1], "type":"yast2", "unique_key":"Kns9.VeHHAhw8MvA", "uri":"usb:/dev/usb/lp0", "vendor":"canon", "vendor_ieee":"Canon"],
-	    $["conf":$[], "config":"gs-stp-canon-bjc-6100-color-medium", "device":"canon-bjc-6100", "device_ieee":"BJC-6100", "name":"high", "options":$["papersize-all-inkjet":1], "type":"yast2", "unique_key":"Kns9.VeHHAhw8MvA", "uri":"usb:/dev/usb/lp0", "vendor":"canon", "vendor_ieee":"Canon"],
-	    $["conf":$[], "config":"gs-stp-canon-bjc-6100-mono-low", "device":"canon-bjc-6100", "device_ieee":"BJC-6100", "name":"lp", "options":$["papersize-all-inkjet":1], "type":"yast2", "unique_key":"Kns9.VeHHAhw8MvA", "uri":"usb:/dev/usb/lp0", "vendor":"canon", "vendor_ieee":"Canon"],
 	    $["conf":$[], "ff":false, "name":"rem", "raw":false, "type":"yast2", "uri":"lpd://printer.suse.de/lp"],
 	];
 	Printer::autodetected = [
-	    $["bus":"usb", "dev_name":"/dev/usb/lp0", "device":"BJC-6100", "unique_key":"Kns9.VeHHAhw8MvA", "uri":"usb:/dev/usb/lp0", "vendor":"Canon"],
+	    $["dev_name":"/dev/usb/lp0", "device":"BJC-6100", "unique_key":"Kns9.VeHHAhw8MvA", "uri":"usb:/dev/usb/lp0", "vendor":"Canon"],
 	];
 	Printer::default = "lp";
 	Printer::selectPrinter (3);
-	list seq = [ "detected", "configdetected", "quick", "complex", "connection_local", "usb", "name", "model", "config", "filter", "featues", "edit", ];
+	list seq = [ "detected", "configdetected", "quick", "complex", "connection_local", "usb", "name", "model", "filter", "featues", "edit", ];
 	foreach (`i, seq, ``{
 	    eval (lookup (getAliases (), i, nil));
 	});

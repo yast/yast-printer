@@ -88,11 +88,8 @@
      * "name" : string, //queue name
      * "uri" : string, //printer uri
      * "unique_key" : string,  // from libhd  -|
-     * "vendor_ieee" : string, // detected id -|- these are only present for autodetected printers
-     * "device_ieee" : string, // detected id -|
-     * "vendor_db" : string, // vendor from printer db -|
-     * "device_db" : string, // device from printer db -|
-     * "config" : string, // config from printer db -|-only for non-raw queues
+     * "ppd" : string // filename of used ppd file, non-raw queues only
+     * "ppd_info" : map // chached information about PPD file, non-raw only
      * "options": map,   // options from printer db -|
      * "ff" : boolean, // print formfeed between pages, present only for queues with formfeed
      * "raw": boolean, // raw queue, present only for raw queues
@@ -201,7 +198,6 @@
 	dirty = true;
 	autodetected = Printerlib::Detect (false);
 	autodetected = maplist (`i, autodetected, ``{
-	    i["uri"] = i["uri"]:(i["bus"]:"parallel" + ":" + i["dev_name"]:"");
 	    i["info"] = i["vendor"]:"" + " " + i["device"]:"";
             i["location"] = Printerlib::getUriNiceName (i["uri"]:"");
 	    i["vendor_db"] = SCR::Read (.ppd.db.vendorname, i["vendor"]:"");
@@ -215,7 +211,7 @@
 	    Printerlib::setCupsUsbDevicesInfo ();
 	    autodetected = filter (`a, autodetected, ``(
 		! contains (Printerlib::getProblematicCupsUsbDevices (),
-			a["dev_name"]:"")
+		    Printerlib::getUridevice (a["uri"]:""))
 	    ));
 	}
     }
@@ -397,26 +393,15 @@
 	list spoolers = ["cups", "lprng"];
 	string uri = lookup (p, "uri", "");
 	string q_type = Printerlib::getUriType (uri);
-	string config = lookup (p, "config", "");
 	string q_filter = "";
-	if (p["ownppd"]:"" == "")
+
+	string filename = p["ppd"]:"";
+	if (isPpd (filename))
 	{
-	    q_filter = Printerdb::foomatic [p["vendor_db"]:"",
-		p["device_db"]:"", config, "filter"]:nil;
+	    map info = p["ppd_info"]:$[];
+	    q_filter = info["filter"]:"";
 	}
-	else
-	{
-	    string filename = p["ownppd"]:"";
-	    if (SCR::Read (.target.size, filename) <= 0)
-	    {
-		filename = p["ppd"]:"";
-	    }
-	    if (isPpd (filename))
-	    {
-		map info = ppdInfo (filename);
-		q_filter = info["filter"]:"";
-	    }
-	}
+
 	if (q_filter == nil)
 	    supported = false;
 	boolean is_class = q_type == "class";
@@ -585,10 +570,25 @@
      * @return list of printers
      */
     global define list printcapRead () ``{
-	SCR::Execute (.target.bash, "test -d /etc/lpdfilter || /bin/mkdir /etc/lpdfilter");
+	SCR::Execute (.target.bash,
+	    "test -d /etc/lpdfilter || /bin/mkdir /etc/lpdfilter");
 	list ret = SCR::Read (.etc.printcap);
 	if (nil == ret)
 	    return [];
+
+	ret = maplist (map p, ret, ``{
+	    string ppd_filename
+		= sformat ("/etc/lpdfilter/%1/ppd", p["name"]:"");
+	    if (-1 != SCR::Read (.target.size, ppd_filename))
+	    {
+		string tmp_file = SCR::Read (.target.tmpdir);
+		SCR::Execute (.target.bash, "/bin/cp %1 %2", ppd_filename,
+		    tmp_file);
+		p["ppd"] = tmp_file;
+		p["ppd_info"] = Printer::ppdInfo (tmp_file);
+	    }
+	    return p;
+	});
 	default = ret[0, "name"]:nil;
 	return ret;
     }
@@ -603,6 +603,17 @@
 	    Spooler::RestartIfNeeded (true);
             list ret = SCR::Read (.cups.printers);
 	    ret = filter (`e, ret, ``(lookup (e, "uri", "") != ""));
+	    ret = maplist (map e, ret, ``{
+		if (SCR::Read (.target.size, e["ppd"]:"") > 0)
+		    e["ppd_info"] = Printer::ppdInfo (e["ppd"]:"");
+		    path p = .etc.cups.printers.value;
+		    p = add (p, e["name"]:"");
+		    p = add (p, "DeviceURI");
+		    string uri = SCR::Read (p);
+		    if (uri != nil)
+			e["uri"] = uri;
+		return e;
+	    });
             list classes = SCR::Read (.cups.classes);
 	    if (nil == ret) ret = [];
 	    if (nil == classes)  classes = [];
@@ -664,17 +675,17 @@
 	    // progress stage, text in dialog (short) (infinitive)
 	    _("Check environment"),
 	    // progress stage, text in dialog (short) (infinitive)
-	    _("Load current settings"),
-	    // progress stage, text in dialog (short) (infinitive)
 	    _("Check database of printers"),
+	    // progress stage, text in dialog (short) (infinitive)
+	    _("Load current settings"),
 	];
 	list titles = [
 	    // progress stage, text in dialog (short)
 	    _("Checking environment..."),
 	    // progress stage, text in dialog (short)
-	    _("Loading current settings..."),
-	    // progress stage, text in dialog (short)
 	    _("Checking database of printers..."),
+	    // progress stage, text in dialog (short)
+	    _("Loading current settings..."),
 	];
 	if (!skip_autodetection)
 	{
@@ -716,7 +727,16 @@
 	    spoolerInitialize ();
 	}
 
-	Progress::NextStageStep (4); // step 4-7 - read the settings
+	Progress::NextStageStep (4); // step 4-7 - check and load the database
+	if (testAbort ()) return false;
+
+	if (Spooler::Get () != "cups" || CUPS::InstallationType () == `server)
+	{
+	    Printerdb::foomatic = nil;
+	    Printerdb::loadFoomaticIfNeeded ();
+	}
+
+	Progress::NextStageStep (8); // step 8-11 - read the settings
 	if (testAbort ()) return false;
 
 	if (Spooler::Get () == "cups" && CUPS::InstallationType () == `client)
@@ -728,15 +748,6 @@
 	{
 	    if (! queuesRead ())
 		return false;
-	}
-
-	Progress::NextStageStep (8); // step 8-11 - check and load database
-	if (testAbort ()) return false;
-
-	if (Spooler::Get () != "cups" || CUPS::InstallationType () == `server)
-	{
-	    Printerdb::foomatic = nil;
-	    Printerdb::loadFoomaticIfNeeded ();
 	}
 
 	printcap = maplist (`e, printcap, ``{return assignStates (e, false);});
@@ -810,7 +821,7 @@ to print."));
       * @param read_version integere version written in cfg. file
       */
     global define void updateConfig (integer read_version) ``{
-	if (read_version < version)
+	if (read_version < 520)
 	{
 	    printcap = maplist (`p, printcap, ``{
 		if (substring (p["uri"]:"", 0, 12) == "prefilter://")
@@ -820,6 +831,15 @@ to print."));
 		    p["raw"] = true;
 		if (substring (p["uri"]:"", 0, 12) == "filtering://")
 		    p["uri"] = "lpd://" + substring (p["uri"]:"", 12);
+		return p;
+	    });
+	}
+	if (read_version < 521)
+	{
+	    printcap = maplist (map p, printcap, ``{
+		p["options"] = $[];
+		if (p["raw"]:false)
+		    return p;
 		return p;
 	    });
 	}
@@ -1007,6 +1027,14 @@ Detect your printers?"));
 	    maplist (map e, deleted, ``(e["name"]:"")),
 	    ``(f != ""));
 
+	if (Spooler::Get () == "cups")
+	{
+foreach (map e, nonyast, ``{y2error ("CR: %1", e);});
+
+	    printcap = nonyast;
+	    return;
+	}
+
         foreach (`e, nonyast, ``{
             string name = lookup (e, "name", "");
 	    if (! contains (marked_for_delete, name))
@@ -1022,18 +1050,30 @@ Detect your printers?"));
 		    printcap = maplist (`ye, printcap, ``{
 		        if (lookup (ye, "name", "") == name)
 			{
-			    if (lookup (e, "ppd", "") != "")
-			    {
-			        ye = add (ye, "ppd", lookup (e, "ppd", ""));
-			    }
+y2error ("CUPS record: %1", e);
 			    if (lookup (ye, "uri", "") == "")
 			    {
 				ye = add (ye, "uri", lookup (e, "uri", ""));
 			    }
+			    foreach (string key, [
+				"options", "ppd", "accepting", "bannerend",
+				"bannerstart", "state", "allowusers",
+				"denyusers", "ppd_info", "uri",
+			    ], ``{
+				if (e[key]:nil != nil)
+				    ye[key] = e[key]:nil;
+			    });
 		        }
 			return ye;
 		    });
 	        }
+		else if (Spooler::Get () == "lprng")
+		{
+		    if (e["ppd"]:"" != "")
+		        ye["ppd"] = e["ppd"]:"";
+		    if (e["ppd_info"]:$[] != $[])
+			ye["ppd_info"] = e["ppd_info"]:$[];
+		}
 	    }
         });
     }
@@ -1414,9 +1454,13 @@ the selected spooler does not support it."), name));
 
     define boolean saveTheConfiguration () ``{
 	list l = filter (`e, printcap, ``(lookup (e, "type", "yast2") == "yast2"));
-	list forbidden_keys = ["changed", "ppd", "auto_propose",
+	list forbidden_keys = ["changed", "ppd", "ppd_info", "auto_propose",
 	    "modelset_required", "composite", "comment", "saved",
-	    "newer_gs_upp", "database", ];
+	    "newer_gs_upp", "database", "options", "ownppd", "accepting",
+	    "bannerend", "bannerstart", "state", "allowusers", "denyusers",
+	    "ppd_options", "config", "detected", "vendor_ieee", "device_ieee",
+	    "vendor_db", "device_db", "info", "location", 
+	];
 	l = maplist (`e, l, ``(filter (`k, `v, e,
 	    ``(! contains (forbidden_keys, k)))));
 	removeDuplicatedDeletedPrinters ();
@@ -1639,17 +1683,19 @@ y2error ("Printer to sum: %1", entry);
 		if (type == "yast2")
 		{
 		    string model = "";
-		    model = i["vendor_ieee"]:"" + " " + i["device_ieee"]:"";
-		    string ppd = lookup (i, "ownppd", "");
-	            if (ppd != "" && ! isPpd (ppd))
-	                ppd = lookup (i, "ppd", "");
-		    if ("" != ppd)
-			model = "PPD file: ";
-	            if (isPpd (ppd))
-	            {
-	                map info = ppdInfo (lookup (i, "ownppd", ""));
-	                model = lookup (info, "manufacturer", "") + " " + lookup (info, "model", "");
-	            }
+		    model = i["ppd_info", "manufacturer"]:"" + " "
+			+ i["ppd_info", "model"]:"";
+
+		    if (model == " ")
+		    {
+			string ppd = i["ppd"]:"";
+			if (isPpd (ppd))
+			{
+			    map info = i["ppd_info"]:$[];
+			    model = info["manufacturer"]:"" + " "
+				+ info["model"]:"";
+			}
+		    }
 
 		    i = assignStates (i, false);
 		    boolean raw = i["raw"]:false;
@@ -1771,25 +1817,27 @@ y2error ("Printer to sum: %1", entry);
     global define void editDetected (map det) ``{
 	index = -1;
 	y2debug ("Editing printer %1", det);
+	string config = Printerdb::getAutoPpdFile (
+	    det["vendor_db"]:"", det["device_db"]:"", nil);
+	string filename = Printerdb::foomatic[det["vendor_db"]:"",
+	    det["device_db"]:"", config, "filename"]:"";
+	y2error ("Filename: %1", filename);
+	filename = SCR::Read (.ppd.file.open,
+	    [filename, SCR::Read (.target.tmpdir)]);
 	printer = $[
-	    "vendor_ieee" : det["vendor"]:"",
-	    "device_ieee" : det["device"]:"",
-	    "vendor_db" : det["vendor_db"]:"",
-	    "device_db" : det["device_db"]:"",
+	    "detected" : det,
 	    "unique_key" : det["unique_key"]:"",
 	    "uri" : det["uri"]:"",
 	    "info": det["info"]:"",
             "location": det["location"]:"",
-	    "vendor_id": det["vendor_id"]:0,
-	    "device_id": det["device_id"]:0,
             "accepting": true,
             "state": "idle",
 	    "options" : $[],
 	    "name" : generateQueueName (nil, det["uri"]:"",
 		det["vendor_db"]:"", det["device_db"]:"",
 		getForbiddenNames ()),
-	    "config" : Printerdb::getAutoPpdFile (
-		det["vendor_db"]:"", det["device_db"]:"", nil),
+	    "ppd" : filename,
+	    "ppd_info" : ppdInfo (filename),
 	];
 	y2milestone ("Detected printer after editation: %1", printer);
     }
@@ -1820,8 +1868,8 @@ y2error ("Printer to sum: %1", entry);
 	    if (!alreadyConfigured (i["unique_key"]:""))
 	    {
 		editDetected (i);
-		string vdb = printer["vendor_db"]:"";
-		string mdb = printer["device_db"]:"";
+		string vdb = printer["detected", "vendor_db"]:"";
+		string mdb = printer["detected", "device_db"]:"";
 		string ppd_file = Printerdb::getAutoPpdFile (vdb, mdb, nil);
 		string support = Printerdb::foomatic[vdb, mdb, `support]:"";
 		boolean configure = (support == "full" || support == "partially"
@@ -1830,9 +1878,8 @@ y2error ("Printer to sum: %1", entry);
 		{
 		    boolean ok = true;
 		    printer["name"] = generateQueueName (nil, printer["uri"]:"",
-			printer["vendor_ieee"]:"", printer["device_ieee"]:"",
+			printer["vendor"]:"", printer["device"]:"",
 			getForbiddenNames ());
-		    printer["config"] = ppd_file;
 		    foreach (string paperentry, ["ImageableArea",
 			"PageRegion", "PageSize", "PaperDimension"],
 		    ``{
@@ -1936,14 +1983,18 @@ y2error ("Printer to sum: %1", entry);
       * @return modified map
       */
     global define map fixPrinter (map p) ``{
-	if (lookup (p, "accepting", true) == true)
-	    p = add (p, "accepting", true);
-	if (lookup (p, "state", "idle") == "idle")
-	    p = add (p, "state", "idle");
-	if (lookup (p, "bannerstart", "") == "")
-	    p = add (p, "bannerstart", "none");
-	if (lookup (p, "bannerend", "") == "")
-	    p = add (p, "bannerend", "none");
+	if (p["accepting"]:true == true)
+	    p["accepting"] = true;
+	if (p["state"]:"idle" == "idle")
+	    p["state"] = "idle";
+	if (p["bannerstart"]:"" == "")
+	    p["bannerstart"] = "none";
+	if (p["bannerend"]:"" == "")
+	    p["bannerend"] = "none";
+	if (p["allowusers"]:[] == [])
+	    p["allowusers"] = [];
+	if (p["denyusers"]:[] == [])
+	    p["denyusers"] = [];
 	return p;
     }
 
@@ -1963,6 +2014,7 @@ y2error ("Printer to sum: %1", entry);
 	if (name == nil)
 	{
 	    name = "";
+	    string uri_type = Printerlib::getUriType (uri);
 	    if (contains (["lpd", "ipp", "samba", "novell"], uri_type) && Printerlib::getUriRemoteQueue (uri) != "")
 	    {
 	        name = Printerlib::getUriRemoteQueue (uri);

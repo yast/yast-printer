@@ -235,8 +235,7 @@ ECHO_PID=$!
      *           "vendor"       : "...",
      *           "device"       : "...",
      *           "unique_key"   : "...",
-     *           "dev_name"     : "...", // "/dev/lp0", "/dev/usblp0", ...
-     *           "bus"          : "...", // "usb", "parallel"
+     *           "uri"          : "...", // usb:/dev/usb/lp0, ...
      *       ], ...
      *   ]
      * FIXME this function must be merged with Printer::Detect
@@ -287,7 +286,7 @@ ECHO_PID=$!
 	    }
 	list ret = maplist (`pr, aprobe, ``{
 	    map record = $[];
-	    string bus = lookup (pr, "bus", "");
+	    string bus = pr["bus"]:"Parallel";
 	    string unique_key = "";
 
 	    if ("Parallel" == bus)
@@ -296,9 +295,8 @@ ECHO_PID=$!
 		    "vendor" : lookup (pr, "vendor", ""),
 		    "device" : lookup (pr, "device", ""),
 		    "unique_key": lookup (pr,"unique_key",""),
-		    "bus" : "parallel",
-		    "dev_name": lookup (pr, "dev_name", ""), // device <dev>
-		    ];
+		    "uri" : "parallel:" + pr["dev_name"]:""
+		];
 	    }
 	    else if  ("USB" == bus)
 	    {
@@ -327,10 +325,9 @@ ECHO_PID=$!
 		    "vendor" : lookup (pr, "sub_vendor", ""),
 		    "device" : lookup (pr, "sub_device", ""),
 		    "unique_key": lookup (pr,"unique_key",""),
-		    "bus" : "usb",
 		    "vendor_id": lookup (pr, "vendor_id",0),
 		    "device_id": lookup (pr, "device_id",0),
-		    "dev_name": dev_name,
+		    "uri": "usb:" + dev_name,
 		];
 		if (Spooler::Get () == "cups")
 		{
@@ -361,35 +358,12 @@ Install it now?
 			if (ptal_uri != nil)
 			{
 			    record["uri"] = ptal_uri;
-			    record["dev_name"] = substring (ptal_uri, 5);
 			}
 		    }
 		}
 	    }
 	    return record;
 	});
-	// FIXME is this really needed?
-	// if yes, hp-officeJet package should be installed
-	// as it isn't in default installation, skipping this part of
-	// detection and hoping hwinfo will make its job
-/*	if (Spooler::Get () == "cups")
-	{
-	    list uris = maplist (`r, ret, ``{
-		return r["uri"]:nil;
-	    });
-	    uris = filter (string u, uris, ``(u != nil));
-	    list(list(string)) ptal_devs = getPtalDevices ();
-	    ptal_devs = filter (map pd, ptal_devs, ``(
-		! contains (uris, sformat ("ptal:%1", pd[0]:""))
-	    ));
-	    foreach (map r, ptal_devs, ``{
-		ret = add (ret, $[
-		    "vendor" : "HP",
-		    "device" : "All-in-one device",
-		    "uri" : sformat ("ptal:%1", r[0]:""),
-		]);
-	    });
-	}*/
 	if (have_usb)
 	{
 	    if (0 !=  SCR::Execute (.target.bash, "grep '^printer ' /proc/modules"))

@@ -46,6 +46,8 @@ class PPD {
 		string checksum;
 		off_t size;
 		string filter;
+		string vendor_db;
+		string printer_db;
         };
 
         typedef string VendorKey;

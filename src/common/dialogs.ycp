@@ -69,30 +69,30 @@
       * @param mdb string database key of printer model
       */
     global define void DisplayPrinterPopup (map info, string vdb, string mdb)``{
+	string manuf_info = lookup (info, "vendor",
+	    // richtext
+	    _("<P>No information available.</P>"));
+	string model_info = lookup (info, "printer",
+	    // richtext
+	    _("<P>No information available.</P>"));
+	// Manufacturer: ...info... Model: ...info...  1/2
+	string info_text = _("<P><B>Manufacturer:</B></P>")
+	    + manuf_info +
+	    // Manufacturer: ...info... Model: ...info...  2/2
+	    _("<P><B>Model:</B></P>") + model_info;
+	string support = Printerdb::foomatic[vdb, mdb, `support]:"";
 
-                    string manuf_info = lookup (info, "vendor",
-			// richtext
-                        _("<P>No information available.</P>"));
-                    string model_info = lookup (info, "printer",
-                        lookup (info, "config",
-			// richtext
-                        _("<P>No information available.</P>")));
-                    // Manufacturer: ...info... Model: ...info...  1/2
-                    string info_text = _("<P><B>Manufacturer:</B></P>")
-                       + manuf_info +
-                        // Manufacturer: ...info... Model: ...info...  2/2
-                        _("<P><B>Model:</B></P>") + model_info;
-                    integer type = Printerdb::foomatic[vdb, mdb, `support]:1;
+	if (support == "not")
+	{
+	    info_text =
+		// part of richtext
+		_("<p><B>This printer is not supported by SuSE Linux.</B></P>")
+		+ info_text;
+	}
 
-		    if (type == 2)
-                        // part of richtext
-                        info_text = _("<p><B>This printer is not supported by SuSE Linux.</B></P>") + info_text;
-
-                    // message box caption
-                    Popup::LongText (_("Printer information"),
-                        `RichText (info_text), 50, 18);
-
-
+	Popup::LongText (_("Printer information"),
+	    // message box caption
+	    `RichText (info_text), 50, 18);
     }
 
     /**
@@ -102,8 +102,14 @@
      */
     global define symbol runManufModelDialog () ``{
 	y2milestone ("Manuf/model dialog started for %1", Printer::printer);
-	string manuf_db = lookup (Printer::printer, "vendor_db", "");
-	string model_db = lookup (Printer::printer, "device_db", "");
+	map ppd_info = Printer::printer["ppd_info"]:$[];
+	string manuf_db = ppd_info["manufacturer_db"]:"";
+	string model_db = ppd_info["model_db"]:"";
+	if (manuf_db == "")
+	    manuf_db = Printer::printer["detected", "vendor_db"]:"";
+	if (model_db == "")
+	    model_db = Printer::printer["detected", "device_db"]:"";
+
 	map info = $[];
 //	boolean info_instead_next = false;
 
@@ -274,20 +280,22 @@ additional PostScript module).");
 
 	if (ret == `next)
 	{
-	    string manuf_ieee = Printerdb::foomatic[manuf_db, `label]:manuf_db;
-	    string model_ieee
-		    = Printerdb::foomatic[manuf_db, model_db, `label]:model_db;
-	    string ppd_file = Printerdb::getAutoPpdFile (manuf_db, model_db, nil);
+	    string ppd_file
+		= Printerdb::getAutoPpdFile (manuf_db, model_db, nil);
+
 	    if (ppd_file == nil)
 		ppd_file = "";
+
+	    ppd_file = Printerdb::foomatic[manuf_db, model_db, ppd_file,
+		"filename"]:"";
+
+	    ppd_file = SCR::Read (.ppd.file.open,
+		[ppd_file, SCR::Read (.target.tmpdir)]);
+
 	    Printer::printer = union (Printer::printer, $[
-		    "vendor_db" : manuf_db,
-		    "device_db" : model_db,
-		    "vendor_ieee" : manuf_ieee,
-		    "device_ieee" : model_ieee,
-		    "ownppd" : "",
-		    "config" : ppd_file,
-		    ]);
+		"ppd" : ppd_file,
+		"ppd_info" : Printer::ppdInfo (ppd_file),
+	    ]);
 	    if (Printer::printer["auto_propose"]:false)
 	    {
 		ret = `next_propose_queues;
@@ -392,24 +400,15 @@ user name, and password.
 	integer counter = -1;
 	list sel_items= maplist (`p, printers, ``{
 	    counter = counter + 1;
-	    if (p["ownppd"]:"" != "")
-	    {
-		string filename = lookup (p, "ownppd", "");
-		if (filename != "" && Printer::isPpd (filename))
-		{
-		    map ppd = Printer::ppdInfo (filename);
-		    filename = lookup (ppd, "manufacturer", "") + " : " + lookup (ppd, "model", "");
-		}
-		y2milestone ("Has own ppd, %1, printer is %2", filename, p);
-		// selection box entry: <filename>, Parallel printer on /dev/lp0
-		return `item (`id (counter), sformat (_("%1, %2"),
-		    filename,
-		    Printerlib::getUriNiceName (lookup (p, "uri", ""))));
-	    }
-		// eg. Epson Stylus Photo 810, Parallel printer on /dev/lp0
+	    map ppd_info = p["ppd_info"]:$[];
+	    string manuf = ppd_info["manufacturer"]:"";
+	    string model = ppd_info["model"]:"";
+	    string uri = p["uri"]:"";
+	    uri = Printerlib::getUriNiceName (uri);
+
+	    // eg. Epson Stylus Photo 810, Parallel printer on /dev/lp0
 	    return `item (`id (counter), sformat (_("%1 %2, %3"),
-		lookup (p, "vendor_ieee", ""), lookup (p, "device_ieee", ""),
-		Printerlib::getUriNiceName (lookup (p, "uri", ""))));
+		manuf, model, uri));
 	});
 
 	term contents = `HBox (`HSpacing (2), `VBox (
@@ -443,11 +442,12 @@ user name, and password.
 		Printer::printer = eval (printers[ind]:$[]);
 		y2milestone ("Selected printer %1", Printer::printer);
 		Printer::index = -1;
+		map ppd_info = Printer::printer["ppd_info"]:$[];
 		Printer::printer["name"] = Printer::generateQueueName (
 		    Printer::printer["name"]:nil,
 		    Printer::printer["uri"]:"",
-                    Printer::printer["vendor_ieee"]:"",
-                    Printer::printer["device_ieee"]:"",
+                    ppd_info["manufacturer"]:"",
+                    ppd_info["model"]:"",
 		    Printer::getForbiddenNames ());
 		break;
 	    }
@@ -464,53 +464,56 @@ user name, and password.
      */
     global define symbol runPpdSelectDialog () ``{
 	y2milestone ("Running config dialog for %1", Printer::printer);
-	string manuf_db = lookup (Printer::printer, "vendor_db", "");
-	string model_db = lookup (Printer::printer, "device_db", "");
-	string config = lookup (Printer::printer, "config", "");
+	map ppd_info = Printer::printer["ppd_info"]:$[];
+	string manuf_db = ppd_info["manufacturer_db"]:"";
+	string model_db = ppd_info["model_db"]:"";
+	string config = ppd_info["nick"]:"";
+	string orig_config = config;
+
 	map info = $[];
 	list cfgs = [];
 	map cfgsmap = $[];
-	y2error ("V: %1, M: %2", manuf_db, model_db);
-//	    manuf_db == "" || model_db == "")
+	y2milestone ("Vendor: %1, Model: %2", manuf_db, model_db);
 	if (! ((manuf_db != "" && model_db != "")))
-//	    || Printer::printer["ownppd"]:"" != ""));
 	{
-	    Popup::Message ("This queue was configured using old SuSE
-database of printers. Select model first");
+	    // message popup
+	    Popup::Message (_("Cannot determine the model of the printer.
+Select model first"));
 	    return `back;
 	}
-	    Printerdb::loadFoomaticIfNeeded ();
+	Printerdb::loadFoomaticIfNeeded ();
 
-	    map opts = Printer::printer["options"]:$[];
+	list ppds = maplist (`k, `v,
+	    filter (`kk, `vv, Printerdb::foomatic[manuf_db, model_db]:$[],
+		``(is (kk, string))), ``(k));
 
-	    list ppds = maplist (`k, `v, filter (`kk, `vv, Printerdb::foomatic[manuf_db, model_db]:$[], ``(is (kk, string))), ``(k));
+	ppds = Printerdb::sortPpds (manuf_db, model_db, ppds);
 
-	    if (Printer::printer["ownppd"]:"" != "")
+	cfgs = [];
+	foreach (`k, ppds, ``{
+	    string ppdfile_orig = "";
+
+	    if (is (k, string))
 	    {
-		y2milestone ("proposing from custom PPD file");
-		ppds = [`ownppd];
+		y2debug ("V: %1, M: %2, K: %3", manuf_db, model_db, k);
+		ppdfile_orig = Printerdb::foomatic[manuf_db, model_db, k,
+		    "filename"]:"";
 	    }
 	    else
+		return;
+
+	    string label = k;
+	    string filename = Printerdb::foomatic[manuf_db, model_db,
+		config, "filename"]:"";
+	    if (filename != "")
 	    {
-		ppds = Printerdb::sortPpds (manuf_db, model_db, ppds);
+		if (substring (filename, 0, 22) == "/usr/share/cups/model/")
+		    filename = substring (filename, 22);
+		label = label + sformat (" (%1)", filename);
 	    }
-
-	    cfgs = [];
-	    foreach (`k, ppds, ``{
-		string ppdfile_orig = "";
-
-		if (is (k, string))
-		{
-		    y2debug ("V: %1, M: %2, K: %3", manuf_db, model_db, k);
-		    ppdfile_orig = Printerdb::foomatic[manuf_db, model_db, k, "filename"]:"";
-		}
-		else
-		    return;
-
-		string label = k;
-		cfgs = add (cfgs, `item (`id (k), label));
-		cfgsmap[k] = label;
-	    });
+	    cfgs = add (cfgs, `item (`id (k), label));
+	    cfgsmap[k] = label;
+	});
 
 	term contents = `HBox (
 	    `HSpacing (1),
@@ -552,6 +555,7 @@ database of printers. Select model first");
 	}
 
 	any ret = `config;
+	string ppd_file = "";
 	while (`abort != ret && ret != `back && ret != `next && `advanced != ret)
 	{
 	    if (`info == ret)
@@ -572,40 +576,48 @@ database of printers. Select model first");
 		config = UI::QueryWidget (`id (`selection), `CurrentItem);
         // Why this? The new selected configuration cannot be tested
         // before saving:
-		if (lookup (tmpPrinter, "config", "") != config)
-		    tmpPrinter = add (tmpPrinter, "options", $[]);
-		tmpPrinter = adjustPaperSize (tmpPrinter);
-		tmpPrinter = add (tmpPrinter, "config", config);
-
+		boolean new_file_created = false;
+		if (orig_config != config)
+		{
+		    tmpPrinter["options"] = $[];
+		    tmpPrinter = adjustPaperSize (tmpPrinter);
+		    string ppd_file_orig = Printerdb::foomatic[manuf_db,
+			model_db, config, "filename"]:"";
+		    string filename = SCR::Read (.ppd.file.open,
+			[ppd_file_orig, SCR::Read (.target.tmpdir)]);
+		    tmpPrinter["ppd"] = filename;
+		    tmpPrinter["ppd_info"] = Printer::ppdInfo (filename);
+		    new_file_created = true;
+		}
 		PrinterTest::testPrinter (tmpPrinter, `ask);
+		if (new_file_created)
+		    SCR::Execute (.target.remove, tmpPrinter["ppd"]:"");
 	    }
 	    ret = UI::UserInput ();
             if (ret == `cancel)
                 ret = `abort;
 	}
-	if (ret == `advanced)
+
+	if (ret == `advanced || ret == `next)
 	{
 	    config = UI::QueryWidget (`id (`selection), `CurrentItem);
-	    if (lookup (Printer::printer, "config", "") != config)
-		Printer::printer = add (Printer::printer, "options", $[]);
+	    if (orig_config != config)
+	    {
+		Printer::printer["options"] = $[];
+		string ppd_file_orig = Printerdb::foomatic[manuf_db, model_db,
+		    config, "filename"]:"";
 
-	    Printer::printer = add (Printer::printer, "config", config);
-	    return ret;
-	}
-	if (ret == `next || ret == `next_x)
-	{
-	    if (`next == ret)
-		config = UI::QueryWidget (`id (`selection), `CurrentItem);
-	    if (lookup (Printer::printer, "config", "") != config)
-		Printer::printer = add (Printer::printer, "options", $[]);
-	    string config_id = config;
+		string filename = SCR::Read (.ppd.file.open,
+		    [ppd_file_orig, SCR::Read (.target.tmpdir)]);
+
+		if (SCR::Read (.target.size, Printer::printer["ppd"]:"") != -1)
+		    SCR::Execute (.target.remove, Printer::printer["ppd"]:"");
+		Printer::printer["ppd"] = filename;
+		Printer::printer["ppd_info"] = Printer::ppdInfo (filename);
+	    }
 	    // add comment
 	    if (Printer::printer["info"]:"" == "")
 		Printer::printer["info"] = cfgsmap[config_id]:config_id;
-
-	    Printer::printer = add (Printer::printer, "config", config);
-	    // FIXME: check if it is not necessary to clean options.
-	    ret = `next;
 	}
 	return ret;
     }
@@ -719,8 +731,9 @@ database of printers. Select model first");
 		name = generateClassName (forbidden_names);
 	    else
 		name = Printer::generateQueueName (nil, uri,
-		    Printer::printer["vendor_ieee"]:"",
-		    Printer::printer["device_ieee"]:"", forbidden_names);
+		    Printer::printer["detected", "vendor"]:"",
+		    Printer::printer["detected", "device"]:"",
+		    forbidden_names);
 	    UI::ChangeWidget (`id (`name), `Value, name);
 	}
 
@@ -1005,37 +1018,15 @@ and test the queue after the printer model is selected."));
      * @return symbol for ws
      */
     global define symbol runOptionsDialog () ``{
-	if (Printer::printer["ownppd"]:"" == ""
-	    && Printer::printer["vendor_db"]:"" == "")
+	if (SCR::Read (.target.size, Printer::printer["ppd"]:"") <= 0)
 	{
-	    // TODO error report
+	    Report::Message (_("Unknown PPD file. Select printer model."));
 	    return `back;
 	}
-	Printerdb::loadFoomaticIfNeeded ();
-	string filename = "";
-	    string orig_name = Printerdb::foomatic[Printer::printer["vendor_db"]:"", Printer::printer["device_db"]:"", Printer::printer["config"]:"", "filename"]:"";
-	if (Printer::printer["ownppd"]:"" != "")
-	    orig_name = Printer::printer["ownppd"]:"";
-	if (orig_name == "")
-	{
-	    // error report
-	    Report::Error (_("Unknown PPD file. Select printer model."));
-	    return `back;
-	}
-	filename = SCR::Read (.ppd.file.open,
-	    [orig_name, SCR::Read (.target.tmpdir)]);
-	if (filename == "")
-	{
-	    Report::Error (sformat (
-		// error report
-		_("Error occurred while opening PPD file
-%1
-"),
-		orig_name));
-	    return `back;
-	}
+	filename = Printer::printer["ppd"]:"";
 
-	string config = lookup (Printer::printer, "config", "");
+	y2milestone ("Modifying PPD file %1", filename);
+
 	any vals = nil;
 
 	term test_button =`HWeight (1, `PushButton (`id (`test), `opt (`key_F6),
@@ -1049,7 +1040,8 @@ and test the queue after the printer model is selected."));
 		`HBox (`HStretch (), test_button, `HStretch ())
 		), getFilterHelp (), Label::BackButton (),Label::NextButton ());
 
-	map selected = lookup (Printer::printer, "options", $[]);
+	map selected = Printer::printer["options"]:$[];
+	map ppd_selected = Printer::printer["ppd_options"]:$[];
 
 	list opts = [];
 	list optlist = [];
@@ -1062,8 +1054,24 @@ and test the queue after the printer model is selected."));
 	    && o["name"]:"" != "ImageableArea"
 	    && o["mame"]:"" != "PaperDimension"));
 
+	list<string> ppd_options = maplist (map o, optlist, ``(o["name"]:nil));
+	ppd_options = filter (string o, ppd_options, ``(o != nil));
+
+	foreach (string k, any v, selected, ``{
+	    if (contains (ppd_options, k))
+	    {
+		ppd_selected[k] = v;
+		selected[k] = nil;
+	    }
+	});
+	selected = filter (string k, any v, selected, ``(v != nil));
+
+y2error ("Selected: %1", selected);
+y2error ("Selected from PPD: %1", ppd_selected);
+
 	// change the encoding of printable strings
 	map ppdinfo = SCR::Read (.ppd.file.ppdinfo, filename);
+y2error ("PPD file info: %1", ppdinfo);
 	string encoding = ppdinfo["lang_encoding"]:"";
 	if (encoding == "")
 	    encoding = Language2Encoding (ppdinfo["lang_version"]:"");
@@ -1078,7 +1086,7 @@ and test the queue after the printer model is selected."));
 		    o["gui"] = UI::Recode (encoding, "UTF-8", o["gui"]:"");
 		}
 		o["values"] = mapmap (string k, string v, o["values"]:$[], ``{
-		    if (k != "Custom" && i["name"]:"" != "PageSize")
+		    if (k != "Custom" && o["name"]:"" != "PageSize")
 		    {
 			v = UI::Recode (encoding, "UTF-8", v);
 		    }
@@ -1088,7 +1096,9 @@ and test the queue after the printer model is selected."));
 	    });
 	}
 
+	// and now add options without their location in PPD file
 	optlist = add (optlist, $[
+	    "location" : `lpoptions,
 	    "current" : "3",
 	    // list item
 	    "gui" : _("Orientation"),
@@ -1107,6 +1117,7 @@ and test the queue after the printer model is selected."));
 	    ],
 	]);
 	optlist = add (optlist, $[
+	    "location" : `lpoptions,
 	    "current" : "1",
 	    // list item
 	    "gui" : _("Pages per sheet"),
@@ -1134,6 +1145,8 @@ and test the queue after the printer model is selected."));
 
 	string option_type = "";
 	string option = "";
+	symbol option_loc = nil;
+
 	while (`next != ret && `back != ret && `abort != ret)
 	{
 	    if (`test == ret)
@@ -1146,9 +1159,10 @@ and test the queue after the printer model is selected."));
 	    {
 		option = UI::QueryWidget (`id (`opts), `CurrentItem);
 		string ppd_default = "";
-		foreach (`i, optlist, ``{
+		foreach (map i, optlist, ``{
 		    if (i["name"]:"" == option)
 		    {
+			option_loc = i["location"]:`ppd;
 			option_type = i["type"]:"PickOne";
 			vals = maplist (`k, i["valorder"]:$[], ``(
 			    [k, i["values", k]:k]
@@ -1160,7 +1174,11 @@ and test the queue after the printer model is selected."));
 		});
 		UI::ReplaceWidget (`id (`lower),
 		    getWidgetForOption (option_type, vals));
-		string current = selected[option]:"";
+		string current = "";
+		if (option_loc == `lpoptions)
+		    current = selected[option]:"";
+		else
+		    current = ppd_selected[option]:"";
 		if (current == "")
 		    current = ppd_default;
 		if (option_type == "Boolean")
@@ -1200,7 +1218,10 @@ and test the queue after the printer model is selected."));
 		{
 		    current = UI::QueryWidget (`id (`vals), `CurrentItem);
 		}
-		selected[option] = current;
+		if (option_loc == `lpoptions)
+		    selected[option] = current;
+		else
+		    ppd_selected[option] = current;
 	    }
 	    ret = UI::UserInput ();
 	    if (ret == `cancel)
@@ -1269,14 +1290,15 @@ and test the queue after the printer model is selected."));
 	}
 	if (`next == ret)
 	{
-	    string ps = selected["PageSize"]:nil;
+	    string ps = ppd_selected["PageSize"]:nil;
 	    if (ps != nil)
 	    {
-		selected["PageRegion"] = ps;
-		selected["ImageableArea"] = ps;
-		selected["PaperDimension"] = ps;
+		ppd_selected["PageRegion"] = ps;
+		ppd_selected["ImageableArea"] = ps;
+		ppd_selected["PaperDimension"] = ps;
 	    }
-	    Printer::printer = add (Printer::printer, "options", selected);
+	    Printer::printer["options"] = selected;
+	    Printer::printer["ppd_options"] = ppd_selected;
 	}
 	return ret;
     }
@@ -1285,6 +1307,10 @@ and test the queue after the printer model is selected."));
      * Create contents for edit dialog. Calls Setwizardcontents at the end.
      */
     global define void createEditDialog () ``{
+	map ppd_info = Printer::printer["ppd_info"]:$[];
+	string manuf_db = ppd_info["manufacturer_db"]:"";
+	string model_db = ppd_info["model_db"]:"";
+	string config = ppd_info["nick"]:"";
 	string help_text = "";
 	// determine printer type ...
 	//
@@ -1298,10 +1324,19 @@ and test the queue after the printer model is selected."));
 	//
 	// texts
 	//
-	string model_text = sformat ("%1 %2", Printer::printer["vendor_ieee"]:"",
-		Printer::printer["device_ieee"]:"");
-	string config_text = "";
-	    config_text = Printer::printer["config"]:"";
+	string model_text = sformat ("%1 %2", ppd_info["manufacturer"]:"",
+	    ppd_info["model"]:"");
+	string config_text = ppd_info["nick"]:"";
+
+	string filename = Printerdb::foomatic[manuf_db, model_db,
+	    config, "filename"]:"";
+	if (filename != "")
+	{
+	    if (substring (filename, 0, 22) == "/usr/share/cups/model/")
+		filename = substring (filename, 22);
+	    config_text = config_text + sformat (" (%1)", filename);
+	}
+
 	string name_text = lookup (Printer::printer, "name", "");
 	string connection_text = "";
 	list items = [];
@@ -1313,29 +1348,10 @@ and test the queue after the printer model is selected."));
 	{
 	    if (! lookup (Printer::printer, "raw", false))
 	    {
-		if (lookup (Printer::printer, "ownppd", "") != "")
-		{
-		   string filename = lookup (Printer::printer, "ownppd", "");
-		    if (filename != "" && Printer::isPpd (filename))
-		    {
-			map ppd = Printer::ppdInfo (filename);
-			filename = lookup (ppd, "manufacturer", "") + " : " + lookup (ppd, "model", "");
-		    }
-		    else
-		    {
-			filename = "";
-		    }
-			// table entry
-		    items = add (items, `item (`id (`ppd), _("PPD file"), know ? filename : _("unknown")));
-
-		}
-		else
-		{
-			// table entry
-		    items = add (items, `item (`id (`model), _("Printer model"), know ? model_text : _("unknown")));
-			// table entry
-		    items = add (items, `item (`id (`ppd), _("PPD file"), config_text));
-		}
+		// table entry
+		items = add (items, `item (`id (`model), _("Printer model"), know ? model_text : _("unknown")));
+		// table entry
+		items = add (items, `item (`id (`ppd), _("PPD file"), config_text));
 	    }
 		// table entry
 	    items = add (items, `item (`id (`connection), _("Connection"), know ? Printerlib::getUriNiceName (uri) : _("unknown")));
@@ -1402,7 +1418,7 @@ and test the queue after the printer model is selected."));
 	);
 
 	// dialog caption
-	Wizard::SetContentsButtons (_("Edit configuration"), contents, getEditHelp (uri_type, raw, Printer::printer["ownppd"]:"" != "", Printer::index >= 0),
+	Wizard::SetContentsButtons (_("Edit configuration"), contents, getEditHelp (uri_type, raw, Printer::index >= 0),
 	    Label::BackButton (), Label::OKButton ());
 	Wizard::RestoreBackButton ();
     }
@@ -1787,10 +1803,8 @@ the current configuration.
 	    ret = `connection;
 	}
 	// improperly set device/uri
-	else if ((Printer::printer["bus"]:"" == ""
-		|| Printer::printer["dev_name"]:"" == "")
-	    && (Printer::printer["uri"]:"" == ""
-		|| Printer::printer["uri"]:"" == "parallel:"))
+	else if (Printer::printer["uri"]:"" == ""
+		|| Printer::printer["uri"]:"" == "parallel:")
 	{
 	    y2milestone ("Printer device not known");
 	    ret = `connection;
@@ -1811,13 +1825,13 @@ the current configuration.
 	    return `connection;
 
 	string support
-	    = Printerdb::foomatic[Printer::printer["vendor_db"]:"",
-		Printer::printer["device_db"]:"", `support]:"full";
+	    = Printerdb::foomatic[Printer::printer["detected", "vendor_db"]:"",
+		Printer::printer["detected", "device_db"]:"", `support]:"full";
 
 	// check for existence of at least one PPD file
 	map PPDs = Printerdb::foomatic[
-	    Printer::printer["vendor_db"]:"",
-	    Printer::printer["device_db"]:""]:$[];
+	    Printer::printer["detected", "vendor_db"]:"",
+	    Printer::printer["detected", "device_db"]:""]:$[];
 	PPDs = filter (`k, `v, PPDs, ``(is (k, string)));
 	if (size (PPDs) < 1)
 	{
@@ -1889,10 +1903,10 @@ the current configuration.
      */
     global define symbol runQueuesProposalDialog () ``{
 	y2milestone ("Started queues proposal dialog for %1", Printer::printer);
-	string vendor = Printer::printer["vendor_db"]:"";
-	string model = Printer::printer["device_db"]:"";
-	string config = Printer::printer["config"]:nil;
-
+	map ppd_info = Printer::printer["ppd_info"]:$[];
+	string vendor = ppd_info["manufacturer_db"]:"";
+	string model = ppd_info["model_db"]:"";
+	string config = ppd_info["nick"]:"";
 	list queues = getFoomaticAutoQueues (vendor, model, config);
 	string default_queue = getFoomaticDefaultQueue (queues);
 
@@ -2008,7 +2022,11 @@ the current configuration.
 	    {
 		selected = true;
 	    }
-	    if (isPrinterConfigured (i))
+
+y2error ("detected printer: %1", i);
+
+	    if (isPrinterConfigured (i["manuf"]:"", i["model"]:"", i["uri"]:"",
+		i["unique_key"]:""))
 	    {
 		return nil;
 	    }
@@ -2017,8 +2035,9 @@ the current configuration.
 		// %3 device, eg. EPSON Stylus Photo 810 on /dev/usb/lp0
 		return `item (`id (current), sformat (_("%1 %2 on %3"),
 		    i["vendor"]:"", i["device"]:"",
-		    Printerlib::getDeviceNiceName (i["dev_name"]:"", true)),
-			  current == current_sel);
+		    Printerlib::getDeviceNiceName (
+			Printerlib::getUriDevice (i["uri"]:""), true)),
+			    current == current_sel);
 	});
 	items = filter (`i, items, ``(i != nil));
 	if (size (getConfiguredPrinters ()) > 0)
@@ -2298,17 +2317,6 @@ All your changes will be lost.
 	    return `server;
 	return CUPS::InstallationType ();
     }
-    /**
-      * Detect current queue configuration type (class/database/ppd)
-      * @return symbol `class or `db or `ppd
-      */
-    global define symbol getQueueConfType () ``{
-	if (Printer::printer["ownppd"]:"" != "")
-	    return `ppd;
-	if (Printer::printer["uri"]:"" == "class")
-	    return `class;
-	return `db;
-    }
 
     /**
      * We need this wrapper because of wizard sequencer.
@@ -2319,27 +2327,4 @@ All your changes will be lost.
 	return `next; // because of wizard sequencer
     }
 
-    /**
-      * Test whether at least one queue will be proposed
-      * Get data from internal structures
-      * @return symbol `yes or `no
-      */
-    global define symbol hasPrinterAutoQueue () ``{
-	string uri = Printer::printer["uri"]:"";
-	string vendor = Printer::printer["vendor_db"]:"";
-	string model = Printer::printer["device_db"]:"";
-	string config = Printer::printer["config"]:nil;
-	y2debug ("Gettinq queues for %1", Printer::printer);
-	if (Printer::printer["ownppd"]:"" != "")
-	{
-	    model = Printer::printer["ownppd"]:"";
-	    vendor = "__ownppd__";
-	}
-	list new_queues = getFoomaticAutoQueues (vendor, model, config);
-	if (size (new_queues) > 0)
-	{
-	    return `yes;
-	}
-	return `no;
-    }
 }

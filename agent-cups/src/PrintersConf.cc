@@ -557,6 +557,35 @@ bool PrinterEntry::changePrinter(const YCPValue&value)
 }
 
 /**
+  * Get printer options in cups system
+  * @param name Name of the printer.
+  * @return YCPMap of options.
+  */
+YCPMap getPrinterOptions(const char *name) {
+    int         num_dests;
+    cups_dest_t *dests;
+    cups_dest_t *dest;
+  
+    num_dests = cupsGetDests(&dests);
+    dest = cupsGetDest(name,NULL,num_dests,dests);
+    if(NULL==dest)
+    { // request to change options to non-existing printer
+	cupsFreeDests(num_dests,dests);
+	return YCPMap ();
+    }
+
+    YCPMap m;
+    for (int i = 0 ; i < dest->num_options; i++)
+    {
+	m->add (YCPString (dest->options[i].name),
+	    YCPString (dest->options[i].value));
+    }
+
+    cupsFreeDests(num_dests,dests);
+    return m;  
+}
+
+/**
  * Set printer options in cups system.
  * @param name Name of the printer.
  * @param opt YCPMap of options.
