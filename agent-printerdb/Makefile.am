@@ -1,1 +1,1 @@
-SUBDIRS = conf src db doc testsuite
+SUBDIRS = conf src doc testsuite

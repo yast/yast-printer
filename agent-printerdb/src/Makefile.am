@@ -9,7 +9,7 @@ libpy2ag_printerdb_la_LIBADD = -lz
 
 plugin_LTLIBRARIES = libpy2ag_printerdb.la
 lib_LTLIBRARIES = liby2ag_printerdb.la
-ybin_SCRIPTS = test_printerdb test_printerdb_params
+ybin_PROGRAMS = yhgen
 
 liby2ag_printerdb_la_SOURCES =                    \
 	PrinterdbAgent.cc		\
@@ -41,15 +41,33 @@ BUILT_SOURCES = parser.cc scanner.cc parser.hh
 
 client_DATA = printerdb.ycp
 
-EXTRA_DIST = parser.yy scanner.ll $(client_DATA) $(ybin_SCRIPTS)
+agent.ycp : yhgenlocal
+	./yhgenlocal
+	rm -f database.ycp
 
-noinst_PROGRAMS = yhgen
+
+EXTRA_DIST = parser.yy scanner.ll $(client_DATA) $(ybin_PROGRAMS)
+
+noinst_PROGRAMS = yhgenlocal
+noinst_DATA = agent.ycp
+
 yhgen_SOURCES = yhgen.cc		
 
 yhgen_LDADD = -lscr -ly2 -lycp 
 yhgen_LDFLAGS = -L$(libdir)   \
-        -Xlinker --whole-archive        \
-        $(plugindir)/libpy2stdio.la     \
-        $(plugindir)/libpy2script.la    \
-        ../src/libpy2ag_printerdb.la    \
-        -Xlinker --no-whole-archive
+	-Xlinker --whole-archive        \
+	$(plugindir)/libpy2stdio.la     \
+	$(plugindir)/libpy2script.la    \
+	libpy2ag_printerdb.la    \
+	-Xlinker --no-whole-archive
+
+yhgenlocal_SOURCES = yhgen.cc
+
+yhgenlocal_LDADD = -lscr -ly2 -lycp
+yhgenlocal_LDFLAGS = -L$(libdir)   \
+	-Xlinker --whole-archive        \
+	$(plugindir)/libpy2stdio.la     \
+	$(plugindir)/libpy2script.la    \
+	libpy2ag_printerdb.la    \
+	-Xlinker --no-whole-archive
+
