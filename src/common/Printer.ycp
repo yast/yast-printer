@@ -428,39 +428,37 @@
 	{
 	    supported = false;
 	}
-//	y2error ("Name: %1", lookup (p, "name", ""));
 	list spoolers = ["cups", "lprng"];
 	string uri = lookup (p, "uri", "");
-//	y2error ("uri: %1", uri);
 	string q_type = Printerlib::getUriType (uri);
-//	y2error ("Q_Type: %1", q_type);
 	string config = lookup (p, "config", "");
-
-
-	string q_filter = Printer::foomatic [p["vendor_db"]:"",
-	    p["model_db"]:"", config, "filter"]:"";
+	string q_filter = "";
+	if (p["ownppd"]:"" == "")
+	{
+	    q_filter = Printer::foomatic [p["vendor_db"]:"",
+		p["device_db"]:"", config, "filter"]:"";
+	}
+	else
+	{
+	    string filename = p["ownppd"]:"";
+	    if (SCR::Read (.target.size, filename) <= 0)
+	    {
+		filename = p["ppd"]:"";
+	    }
+	    if (isPpd (filename))
+	    {
+		map info = ppdInfo (filename);
+		q_filter = info["filter"]:"";
+	    }
+	}
+	boolean is_class = q_type == "class";
 	foreach (`s, spoolers, ``{
-	    boolean spool_sup = supported;
+	    boolean filt_sup = ((s == "cups" || ! is_class)
+		&& (s == "cups" || q_filter == "foomatic-rip"));
+	    boolean spool_sup = testSupportedQueueBySpooler (q_type, s);
 	    string key = s + "-state";
-	    boolean s_spool = testSupportedQueueBySpooler (q_type, s);
-//	y2error ("s_spool: %1", s_spool);
-	    boolean s_is_ppd = p["ownppd"]:"" != "";
-//	y2error ("s_is_ppd: %1", s_is_ppd);
-	    boolean s_is_class = q_type == "class" && s == "cups";
-//	y2error ("s_is_class: %1", s_is_class);
-	    boolean s_conf = (s == "cups" || q_filter == "foomatic-rip");
-//	y2error ("s_conf: %1", s_conf);
-	    boolean s_is_raw = (p["raw"]:false || q_type == "lpd");
-//	y2error ("s_is_raw: %1", s_is_raw);
-	    boolean s_pri = s_is_raw
-		|| (s_is_class)
-		|| (! p["raw"]:false
-		    && (s_is_ppd
-			|| (p["ownppd"]:"" == "" && s_conf)));
-//	y2error ("s_pri: %1", s_pri);
-	    boolean sup = s_spool && s_pri && spool_sup;
-//	y2error ("sup: %1", sup);
-	    p = add (p, key, sup
+	    boolean sup = supported && filt_sup && spool_sup;
+	    p[key] = sup
 		    ?
 			(changed ?
 			    "changed"
@@ -471,7 +469,7 @@
 			    :
 				lookup (p, key, "changed")))
 		    :
-			"void");
+			"void";
 	});
 	return p;
     }
@@ -483,7 +481,7 @@
       */
     global define string getPrinterState (map p, string spooler) ``{
 	string s = spooler + "-state";
-	return lookup (p, s, "changed");
+	return p[s]:"changed";
     }
     /**
       * Adds a queue to the deleted list
@@ -506,16 +504,6 @@
 
 	if (-1 == index)
 	{
-	    if (lookup (printer, "create_remote_queue", false))
-	    {
-		printer = add (printer, "create_remote_queue", false);
-		map r_printer = $[
-		    "name" : Printerlib::getUriRemoteQueue (lookup (printer, "uri", "")),
-		    "uri" : "lpd://" + lookup (printer, "remote_host", "") + "/" + lookup (printer, "remote_printer", ""),
-		];
-		r_printer = assignStates (r_printer, true);
-		printcap = add (printcap, r_printer);
-	    }
 	    printcap = add (printcap, printer);
 	    index = size (printcap) - 1;
 	}
@@ -826,7 +814,7 @@ END { if (!used) print \"ServerName %1\" }
 	    boolean ready = contains (nyl, lookup (e, "name", ""));
 	    string state = Printer::spooler + "-state";
         // changed due to bug #19224, but I'm not sure, if it is really OK!
-	    e = add (e, state, ready ? lookup (e, state, "changed") : "changed");
+	    e[state] = ready ? e[state]:"changed" : "changed";
 	    return e;
 	});
 	printcap = maplist (`e, printcap, ``{return assignStates (e, false);});
@@ -861,23 +849,6 @@ END { if (!used) print \"ServerName %1\" }
 	        }
 	    }
         });
-/*	if (update)
-	{
-	    list tmp = printcap;
-	    printcap = [];
-	    foreach (`e, tmp, ``{
-		e = add (e, "type", "yast2");
-		if (Printer::spooler == "cups")
-		{
-		    e = add (e, "ownppd", lookup (e, "ppd", ""));
-		}
-		else if (Printer::spooler == "lprng")
-		{
-
-		}
-		printcap = add (printcap, e);
-	    });
-	}*/
         original_unique_keys = $[];
         foreach (`i, printcap, ``{
             if (haskey (i, "unique_key"))
@@ -1054,8 +1025,14 @@ Remove them?
 	    if (spooler == "cups")
 	    {
 		if ((lookup (entry, "cups-state", "changed") == "changed" || Printer::save_all) && (lookup (entry, "type", "yast2") == "yast2"))
+		{
+		    y2debug ("Saving printer %1", entry);
 		    if (writeCupsPrinter (entry))
+		    {
+			y2debug ("Success");
 			entry = add (entry, "cups-state", "commited");
+		    }
+		}
 		if (lookup (entry, "cups-state", "changed") == "void")
 		    // popup %1 is queue name
 		    UI::MessagePopup (sformat(_("Queue %1 cannot be saved because
@@ -1097,7 +1074,7 @@ the selected spooler does not support it.
 	    SCR::Write (.sysconfig.printer.DEFAULT_PRINTER, default_printer_found ? default : "none");
 	    SCR::Write (.sysconfig.printer, nil);
 	    SCR::Write (.cups.default_dest, default_printer_found ? default : "");
-	    SCR::Execute (.target.bash, "/usr/sbin/rccups reload");
+	    SCR::Execute (.target.bash, "/usr/sbin/rccups restart");
 	    if (size (Printer::printcap) > 0)
 		Runlevel::ServiceAdjust ("cups", "enable");
 	    else

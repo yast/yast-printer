@@ -849,7 +849,7 @@ with the SuSE database of printers only.</B></P>
 	    {
 		    y2debug ("modelsel changed");
 		    model_db = UI::QueryWidget (`id (`modelsel), `CurrentItem);
-		    y2debug ("To %1", model_db);
+		    y2error ("To %1", model_db);
 		    info = $[];
 		    string vc
 			= Printer::foomatic[manuf_db,`vcomment]:"";
@@ -879,7 +879,7 @@ with the SuSE database of printers only.</B></P>
                 ret = reallyAbort () ? `abort : `cont;
                 if (ret == `abort) break;
             }
-		y2debug ("MDB: %2", model_db);
+		y2error ("MDB: %1", model_db);
 	    if (ret == `next && (model_db == "" || model_db == nil))
 	    {
 		// popup
@@ -902,13 +902,11 @@ with the SuSE database of printers only.</B></P>
 	if (ret == `next)
 	{
 	    y2debug ("SN: V: %1, D: %2", manuf_db, model_db);
-	    boolean model_foomatic = false;
 	    if (size (filter (`k, `v,
                   Printer::foomatic[manuf_db, model_db]:$[],
                   ``(is (k, string)))) > 0)
 		// FIXME
 	    {
-		model_foomatic = true;
 		manuf_ieee = Printer::foomatic[manuf_db, `label]:manuf_db;
 		model_ieee
 		    = Printer::foomatic[manuf_db, model_db, `label]:model_db;;
@@ -926,16 +924,6 @@ with the SuSE database of printers only.</B></P>
 		    "ownppd" : "",
 		    "config" : "",
 		    ]);
-	    y2debug ("Set printer to %1", Printer::printer);
-	    if (! model_foomatic)
-	    {
-		y2milestone ("Using model not in Foomatic db, but current db is foomatic");
-		y2debug ("Before update: %1", Printer::printer);
-		manuf = Printer::printer["vendor"]:"";
-		manuf_ieee = Printer::printer["vendor_ieee"]:"";
-		model = Printer::printer["device"]:"";
-		model_ieee = Printer::printer["device_ieee"]:"";
-	    }
 	    y2milestone ("Set printer %1", Printer::printer);
 	}
 	else if (ret == `back || ret == `abort)

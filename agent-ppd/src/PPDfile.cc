@@ -34,6 +34,7 @@
 
 #include "ycp/y2log.h"
 #include "PPDfile.h"
+#include "PPDdb.h"
 
 /*****************************************************************/
 
@@ -282,47 +283,17 @@ YCPBoolean PPDfile::isPpd (const char* filename)
   */
 YCPMap PPDfile::ppdInfo (const char *filename)
 {
+    PPD::PPDInfo info;
+    PPD db;
+    db.process_file (filename, &info);
     YCPMap m = YCPMap();
-    const char* ppd_filename = filename;
-    char* ungzipped = NULL;
-    ppd_file_t *ppd;
-
-    ppd = ppdOpenFile(ppd_filename);
-    if (! ppd)
-    {
-        ungzipped = tempnam ("/tmp", "ppd_file.");
-        if (! ungzipped)
-            return YCPMap ();
-        bool ret = unpackGzipped (filename, ungzipped);
-        if (! ret)
-            return YCPMap ();
-        ppd_filename = ungzipped;
-    }
-    ppd = ppdOpenFile(ppd_filename);
-    if (ppd)
-    {
-        // added tests for NULL to avoid bug #19714
-        if (ppd->manufacturer)
-          m->add (YCPString ("manufacturer"), YCPString (ppd->manufacturer));
-        else
-          m->add (YCPString ("manufacturer"), YCPString (""));
-
-        if (ppd->modelname)
-          m->add (YCPString("model"), YCPString(ppd->modelname));
-        else
-          m->add (YCPString("model"), YCPString(""));
-
-        if (ppd->nickname)
-          m->add (YCPString ("nick"), YCPString(ppd->nickname));
-        else
-          m->add (YCPString ("nick"), YCPString(""));
-	ppdClose(ppd);
-    }
-    if (ungzipped)
-    {
-        unlink (ungzipped);
-        free (ungzipped);
-    }
+    string printer = info.printer;
+    if (info.products.size() > 0)
+	printer = *(info.products.begin());
+    m->add (YCPString ("manufacturer"), YCPString (info.vendor));
+    m->add (YCPString ("model"), YCPString (info.printer));
+    m->add (YCPString ("nick"), YCPString (info.nick));
+    m->add (YCPString ("filter"), YCPString (info.filter));
     return m;
 }
 

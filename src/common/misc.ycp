@@ -24,6 +24,11 @@
     import "Console";
 
 
+    /**
+      * Sort items according to locale
+      * @param items map items (item key -> item label)
+      * @return list of items to be used for selectionbox
+      */
     global define list sortitems (map items) ``{
 	string enc = Console::encoding;
 	items = mapmap (`k, `v, items, ``(
@@ -690,13 +695,24 @@ This usually takes one or two minutes")),
       * @param spooler string "cups" or "lprng"
       * @return boolean true if supports
       */
-    global define boolean testSupportedQueueBySpooler (string queue, string spooler) ``{
+    global define boolean testSupportedQueueBySpooler
+	(string queue, string spooler)
+    ``{
 	map supported = $[ "cups" : [ "parallel", "usb", "serial", "filtering", "ipp", "samba", "socket", "irda", "file", "class", "novell", "pipe", ],
 			   "lprng" : [ "parallel", "usb", "serial", "lpd", "samba", "novell", "irda", "filtering", "socket", "pipe", "file", ]];
 	list l = lookup (supported, spooler, []);
 	if (l == [])
 	    return true;
-	return contains (l, queue);
+	if (contains (l, queue))
+	    return true;
+	if (spooler == "cups")
+	{
+	    list(string) backends
+		= SCR::Read (.target.dir, "/usr/lib/cups/backend");
+	    if (backends != nil)
+		return contains (backends, queue);
+	}
+	return false;
     }
     /**
       * Test whether currently used spooler supports queue type
