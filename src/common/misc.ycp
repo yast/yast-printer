@@ -20,7 +20,7 @@
 {
     textdomain "printer";
 
-    import "Console";
+    import "Encoding";
     import "CUPS";
     import "Label";
     import "Mode";
@@ -129,7 +129,7 @@
       * @return list of items to be used for selectionbox
       */
     global define list sortitems (map items) ``{
-	string enc = Console::encoding;
+	string enc = Encoding::console;
 	items = mapmap (string k, string v, items, ``(
 	    $[k: (string)UI::Recode ("UTF-8", enc, v)]));
 	list l = (list)SCR::Read (.ppd.sort_items, items);
@@ -176,7 +176,7 @@
             return src;
         }
 
-        list tokens = [];
+        list<string> tokens = [];
 
         integer p = find(src, from);
         while(p >= 0)
@@ -269,7 +269,8 @@
 	    Printerlib::DisplayUnavailableAIPopup ();
 	    return true;
 	}
-	import "PackageCallbacks";
+	import "PackageCallbacksInit";
+	PackageCallbacksInit::InitPackageCallbacks ();
 	Printer::printcap = [];
 	Printer::default = "";
 
@@ -298,7 +299,7 @@
 	foreach (string e, to_install, ``{Pkg::PkgInstall (e);});
 
 	y2milestone("installing: %1", to_install);
-	Pkg::PkgSolve ();
+	Pkg::PkgSolve (false);
 	Pkg::PkgCommit (0);
 	Require::RunSuSEconfig ();
 	return true;

@@ -41,7 +41,9 @@ bool verbose = false;
 //#ifndef _DEVEL_
 
 #include "ycp/y2log.h"
-#include <ycp/YCPParser.h>
+#include <ycp/Parser.h>
+#include <ycp/YCode.h>
+#include <YCP.h>
 #include "PPDdb.h"
 
 /*****************************************************************/
@@ -1350,24 +1352,29 @@ bool PPD::validateModel (string vendor, string printer) {
 }
 
 bool PPD::loadPrebuiltDatabase () {
-    YCPParser *parser = new YCPParser (); 
-    if (!parser) {
-	y2error ("Failed to create YCPParser");
-	return false;
-    }
+    Parser parser;
 
     FILE *infile = fopen (ppd_db, "r");
     if (! infile)
     {
-	delete parser;
 	y2error ("Unable to open current database file");
 	return false;
     }
 
-    parser->setInput (infile, ppd_db);
-    parser->setBuffered ();
+    parser.setInput (infile, ppd_db);
+    parser.setBuffered ();
 
-    YCPValue val = parser->parse ();
+    YCode* parsed_code = parser.parse ();
+    YCPValue val = YCPNull ();
+    if (parsed_code != NULL)
+    {
+	val = parsed_code->evaluate (true);
+	delete parsed_code;
+    }
+    else
+    {
+	return false;
+    }
     bool ret = true;
 
     if ((! val.isNull ()) && val->isMap ())
@@ -1595,12 +1602,10 @@ bool PPD::loadPrebuiltDatabase () {
 
     y2milestone ("Database contents is OK");
     fclose (infile);
-    delete parser;
     return ret;
 
 error_exit:
     fclose (infile);
-    delete parser;
     db = Vendors ();
     return false;
 }
@@ -1763,14 +1768,14 @@ string PPD::fileChecksum (const string &filename) {
     f = fopen (filename.c_str(), "r");
     if (f)
     {
-	if (! md5_stream (f, buf))
+/*	if (! md5_stream (f, buf))
 	{
 	    for (int i = 0 ; i < 16 ; i++)
 	    {
 		sprintf (sum+2*i, "%02x", (unsigned char) buf[i]);
 	    }
 	    ret = sum;
-	}
+	}*/
 	fclose (f);
     }
     return ret;
@@ -1840,9 +1845,9 @@ YCPList PPD::sortItems (const YCPMap& items) {
     map<string, string, ltstr>::const_iterator it = listmap.begin();
     for (; it != listmap.end(); it++)
     {
-	YCPTerm k = YCPTerm ("id", true);
+	YCPTerm k = YCPTerm ("id");// FIXME if corrected wrong, true);
 	k->add (YCPString (it->second));
-	YCPTerm item = YCPTerm ("item", true);
+	YCPTerm item = YCPTerm ("item");// FIXME if corrected wrong, true);
 	item->add (k);
 	item->add (YCPString (it->first));
 	ret->add (item);

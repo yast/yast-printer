@@ -113,7 +113,7 @@
 // detected queue handing
 	if (options["detected_index"]:nil != nil)
 	{
-	    string s_index = options["detected_index"]:0;
+	    string s_index = options["detected_index"]:"0";
 	    integer index = tointeger (s_index);
 	    if (0 >= index || size (Printer::autodetected) < index)
 	    {
@@ -371,12 +371,12 @@
 	});
 	if (0 == found)
 	{
-	    Commandline::Print (_("No spooler specified"));
+	    CommandLine::Print (_("No spooler specified"));
 	    return false;
 	}
 	if (1 < found)
 	{
-	    Commandline::Print (_("More than spooler specified"));
+	    CommandLine::Print (_("More than spooler specified"));
 	    return false;
 	}
 	if (haskey (options, "cups"))
@@ -518,72 +518,72 @@
 	"id"		: "printer",
 	// command line help text for Printer module
 	"help"		: _("Printers configuration module."),
-	"guihandler"	: ``(GuiHandler ()),
-	"initialize"	: ``(Printer::Read()),
-	"finish"	: ``(Printer::Write()),
+	"guihandler"	: GuiHandler,
+	"initialize"	: Printer::Read,
+	"finish"	: Printer::Write,
 	"actions"	: $[
 	    "summary"	: $[
-		"handler"	: ``(PrinterSummaryHandler()),
+		"handler"	: PrinterSummaryHandler,
 		// command line help text for summary action
 		"help"		: _("Configuration summary of printers")
 	    ],
 	    "delete"	: $[
-		"handler"	: ``(PrinterDeleteHandler ()),
+		"handler"	: PrinterDeleteHandler,
 		// command line help text for delete action
 		"help"		: _("Delete a configured queue")
 	    ],
 	    "add"	: $[
-		"handler"	: ``(PrinterAddHandler ()),
+		"handler"	: PrinterAddHandler,
 		// command line help text for delete action
 		"help"		: _("Add new queue")
 	    ],
 	    "edit"	: $[
-		"handler"	: ``(PrinterEditHandler ()),
+		"handler"	: PrinterEditHandler,
 		// command line help text for delete action
 		"help"		: _("Edit a configured queue")
 	    ],
 	    "list"	: $[
-		"handler"	: ``(PrinterListHandler ()),
+		"handler"	: PrinterListHandler,
 		// command line help text for the list action
 		"help"		: _("List detected or configured printers"),
 	    ],
 	    "ppdoptions": $[
-		"handler"	: ``(PrinterPPDOptionsHandler ()),
+		"handler"	: PrinterPPDOptionsHandler,
 		// command line help text for the ppdoptions action
 		"help"		: _("Set options that will be writted directoy to PPD file. Options that are not mentioned stay untouched."),
 	    ],
 	    "lpoptions" : $[
-		"handler"	: ``(PrinterLPOptionsHandler ()),
+		"handler"	: PrinterLPOptionsHandler,
 		// command line help text for the lpoptions action
 		"help"		: _("Set options that will be written to /etc/cups/lpoptions. Options that are not mentioned stay untouched."),
 	    ],
 	    "spooler"	: $[
-		"handler"	: ``(PrinterSpoolerhandler ()),
+		"handler"	: PrinterSpoolerhandler,
 		// command line help text for the spooler action
 		"help"		: _("Switch the currently used spooler")
 	    ],
 	    "test"	: $[
-		"handler"	: ``(PrinterTestHandler ()),
+		"handler"	: PrinterTestHandler,
 		// command line help text for the test action
 		"help"		: _("Print test page"),
 	    ],
 	    "list_manufacturers": $[
-		"handler"	: ``(PrinterManufacturersHandler ()),
+		"handler"	: PrinterManufacturersHandler,
 		// command line help text for the test action
 		"help"		: _("List known manufacturers"),
 	    ],
 	    "list_models"	: $[
-		"handler"	: ``(PrinterModelsHandler ()),
+		"handler"	: PrinterModelsHandler,
 		// command line help text for the test action
 		"help"		: _("List known models of specified manufacturer"),
 	    ],
 	    "list_nicknames": $[
-		"handler"	: ``(PrinterNicknamesHandler ()),
+		"handler"	: PrinterNicknamesHandler,
 		// command line help text for the test action
 		"help"		: _("List known nicknames for specified model of specified manufacturers"),
 	    ],
 	    "list_ppdoptions": $[
-		"handler"	: ``(PrinterListPpdOptionsHandler ()),
+		"handler"	: PrinterListPpdOptionsHandler,
 		// command line help text for the test action
 		"help"		: _("List options of PPD file of specified queue"),
 	    ],
@@ -734,14 +734,14 @@
 
     Crash::Run ("printer.ycp");
 
-    any ret = nil;
+    boolean ret = nil;
 
     // ===== arguments ================================================
 
     integer i = 0;
     while (i < size (WFM::Args()))
     {
-	if (.test == WFM::Args (i))
+/*	if (.test == WFM::Args (i))
 	{
 	    Mode::test = true;
 	    Printer::skip_autodetection = true;
@@ -751,7 +751,7 @@
 	{
 	    Printer::skip_autodetection = true;
 	}
-	i = i + 1;
+	i = i + 1;*/
     }
 
     boolean cups_running = 0 == SCR::Execute (.target.bash,
@@ -760,6 +760,8 @@
 	"test -f /etc/init.d/lpd && /etc/init.d/lpd status");
 
     ret = CommandLineRun (cmdline);
+# // FIXME remove following line
+#    ret = GuiHandler ();
 
     if (! ret)
     {

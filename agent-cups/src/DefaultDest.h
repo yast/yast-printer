@@ -22,7 +22,7 @@ public:
       {
       }
   YCPValue Read();
-  YCPValue Write(const YCPPath &path, const YCPValue& value, const YCPValue& arg);
+  YCPBoolean Write(const YCPPath &path, const YCPValue& value, const YCPValue& arg);
 };
 
 #endif//_DefaultDest_H_

@@ -31,15 +31,16 @@ PPDAgent::~PPDAgent() {
 /**
  * Dir
  */
-YCPValue PPDAgent::Dir(const YCPPath& path) 
+YCPList PPDAgent::Dir(const YCPPath& path) 
 {
-    return YCPError (string ("Wrong path '") + path->toString() + string ("' in Dir()."));
+    ycp2error (string (string ("Wrong path '") + path->toString() + string ("' in Dir().")).c_str());
+    return YCPNull ();
 }
 
 /**
  * Read
  */
-YCPValue PPDAgent::Read(const YCPPath &path, const YCPValue& arg)
+YCPValue PPDAgent::Read(const YCPPath &path, const YCPValue& arg, const YCPValue& opt)
 {
     if (path->length() == 2 && path->component_str(0)=="db") {
 	if(path->component_str(1)=="creation_status")
@@ -128,7 +129,7 @@ YCPValue PPDAgent::Read(const YCPPath &path, const YCPValue& arg)
 /**
  * Write
  */
-YCPValue PPDAgent::Write(const YCPPath &path, const YCPValue& value, const YCPValue& arg)
+YCPBoolean PPDAgent::Write(const YCPPath &path, const YCPValue& value, const YCPValue& arg)
 {
 
     if(path->length()==2 && path->component_str(0)=="db") {
@@ -151,14 +152,15 @@ YCPValue PPDAgent::Write(const YCPPath &path, const YCPValue& value, const YCPVa
     // CHANGES handled via special PERL agent
 
     // fallback...
-    return YCPError(string ("Wrong path '%s' in Write().") + path->toString());
+    ycp2error(string (string ("Wrong path '%s' in Write().") + path->toString()).c_str());
+    return YCPBoolean (false);
 }
 
 /**
  * otherCommand
  */
 YCPValue PPDAgent::otherCommand(const YCPTerm& term) {
-    string sym = term->symbol()->symbol();
+    string sym = term->name();
 
     if (sym == "PPDAgent") {
         /* Your initialization */

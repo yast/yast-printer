@@ -348,7 +348,7 @@ YCPValue PrintersConf::Read()
     return l;
 }
 
-YCPValue PrintersConf::Write(const YCPPath &path, const YCPValue& value, const YCPValue& arg)
+YCPBoolean PrintersConf::Write(const YCPPath &path, const YCPValue& value, const YCPValue& arg)
 {
 //  Y2_ERROR("Write .cups.printers");
     if(2==path->length() && path->component_str(1) == "add")

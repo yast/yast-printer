@@ -843,7 +843,7 @@ char* TOLOWER(char* src) {
     return src;
 }
 
-YCPValue getPrinters (string hostname) {
+YCPList getPrinters (string hostname) {
     YCPList ret = YCPList ();;
     http_t*http = httpConnect(hostname.c_str (), ippPort());
     ipp_t *request,     /* IPP Request */
@@ -854,7 +854,7 @@ YCPValue getPrinters (string hostname) {
     if(http == NULL)
     {
         Y2_ERROR("Error while contacting CUPS server occured.");
-        return YCPVoid ();
+        return YCPNull ();
     }
 
     request = ippNew();
@@ -890,10 +890,10 @@ YCPValue getPrinters (string hostname) {
 	return ret;
     }
 
-    return YCPVoid ();
+    return YCPNull ();
 }
 
-YCPValue getClasses (string hostname) {
+YCPList getClasses (string hostname) {
     YCPList ret = YCPList ();;
     http_t*http = httpConnect(hostname.c_str (), ippPort());
     ipp_t *request,     /* IPP Request */
@@ -904,7 +904,7 @@ YCPValue getClasses (string hostname) {
     if(http == NULL)
     {
         Y2_ERROR("Error while contacting CUPS server occured.");
-        return YCPVoid ();
+        return YCPNull ();
     }
 
     request = ippNew();
@@ -940,7 +940,7 @@ YCPValue getClasses (string hostname) {
         return ret;
     }
 
-    return YCPVoid ();
+    return YCPNull ();
 
 }
 

@@ -9,6 +9,7 @@
  *  Petr Blahos <pblahos@suse.cz>
  *
  * $Id$
+ *
  * Main dialogs.
  */
 {
@@ -334,7 +335,7 @@
      * @return list list of selected users
      */
     global define list chooseUser () ``{
-            list<map> users_maps = (list)SCR::Read (.etc.passwd);
+            list<map> users_maps = (list<map>) SCR::Read (.etc.passwd);
             list<string>users_names = maplist (map i, users_maps, ``{
                 return lookup (i, "username", "");
             });
@@ -842,7 +843,7 @@
 	    if (haskey (CUPS::cups_server_permissions, pth))
 	    {
 		CUPS::cups_server_permissions
-		    = remove (CUPS::cups_server_permissions, pth);
+		    = (map<string,any>)remove (CUPS::cups_server_permissions, pth);
 	    }
 	    ret = `next;
 	}
@@ -939,7 +940,7 @@
 	    }
 	    else if (`del == ret)
 	    {
-                addresses = DeleteItem (addresses, UI::QueryWidget (`id (`addr), `CurrentItem));
+                addresses = (list<string>)DeleteItem (addresses, UI::QueryWidget (`id (`addr), `CurrentItem));
 		// selectionbox label
 		UI::ReplaceWidget (`id (`replace_addr), `SelectionBox (`id (`addr), _("Browse Addre&sses"), addresses));
 	    }
@@ -959,8 +960,8 @@
                     continue;
                 if (ad != "")
 		{
-		    addresses = DeleteItem (addresses, UI::QueryWidget (`id (`addr), `CurrentItem));
-                    addresses = toset (add (addresses, ad));
+		    addresses = (list<string>)DeleteItem (addresses, UI::QueryWidget (`id (`addr), `CurrentItem));
+                    addresses = (list<string>)toset (add (addresses, ad));
 		}
 		// selectionbox label
                 UI::ReplaceWidget (`id (`replace_addr), `SelectionBox (`id (`addr), _("Browse Addre&sses"), addresses));

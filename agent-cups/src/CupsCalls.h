@@ -96,7 +96,7 @@ bool getRemoteDestinations(const char*host,YCPList&ret,ipp_op_t what_to_get, boo
 
 char* TOLOWER(char* src);
 
-YCPValue getPrinters (string hostname);
-YCPValue getClasses (string hostname);
+YCPList getPrinters (string hostname);
+YCPList getClasses (string hostname);
 
 #endif//_CUPSCALLS_H_

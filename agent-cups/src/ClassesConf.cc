@@ -307,7 +307,7 @@ YCPValue ClassesConf::Read()
   return l;
 }
 
-YCPValue ClassesConf::Write(const YCPPath &path, const YCPValue& value, const YCPValue& arg)
+YCPBoolean ClassesConf::Write(const YCPPath &path, const YCPValue& value, const YCPValue& arg)
 {
     if(2==path->length() && path->component_str(1) == "add")
     {

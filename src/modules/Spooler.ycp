@@ -251,15 +251,15 @@ This usually takes one or two minutes")),
     global define void switchTo (string to) ``{
 	y2milestone ("Switching spooler to %1", to);
 	Require::EnsureTargetInit ();
-	list del = ["plp", "lprold", "lprng", "cups", "cups-client",
+	list<string> del = ["plp", "lprold", "lprng", "cups", "cups-client",
             "cups-drivers", "cups-drivers-cs", "cups-drivers-de",
             "cups-drivers-stp", "lpdfilter", "filters", "foomatic-filters"];
-	list inst = [];
+	list<string> inst = [];
 
-	list inst_cups = [ "cups", "cups-drivers", "cups-client",
+	list<string> inst_cups = [ "cups", "cups-drivers", "cups-client",
 	    "cups-drivers-stp", "filters", "foomatic-filters"];
-	list inst_cups_client = [ "cups-client"];
-	list inst_other = [ to, "filters", "lpdfilter", "foomatic-filters",
+	list<string> inst_cups_client = [ "cups-client"];
+	list<string> inst_other = [ to, "filters", "lpdfilter", "foomatic-filters",
 	    "cups-drivers"];
 
 	if ("cups" == to)
@@ -308,12 +308,13 @@ Install them now?"));
 	}
 	if (del != [] || inst != [])
 	{
-	    import "PackageCallbacks";
+	    import "PackageCallbacksInit";
+	    PackageCallbacksInit::InitPackageCallbacks ();
 	    y2milestone("-------- deleting = %1", del);
 	    foreach (string e, del, ``{Pkg::PkgDelete (e);});
 	    y2milestone("-------- installing = %1", inst);
 	    foreach (string e, inst, ``{Pkg::PkgInstall (e);});
-	    Pkg::PkgSolve ();
+	    Pkg::PkgSolve (false);
 	    Pkg::PkgCommit (0);
 	    Require::RunSuSEconfig ();
 	}

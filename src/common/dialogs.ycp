@@ -448,7 +448,7 @@ user name, and password.
 		Printer::index = -1;
 		map ppd_info = Printer::printer["ppd_info"]:$[];
 		Printer::printer["name"] = Printer::generateQueueName (
-		    Printer::printer["name"]:nil,
+		    (string) (Printer::printer["name"]:nil),
 		    Printer::printer["uri"]:"",
                     ppd_info["manufacturer"]:"",
                     ppd_info["model"]:"",
@@ -552,7 +552,7 @@ Select model first"));
 	if (config == "" || config == nil)
 	{
             {
-		term item = cfgs[0]:nil;
+		term item = (term) (cfgs[0]:nil);
 		if (nil != item)
 		{
 		    config = select (select (item, 0, nil), 0, "");
@@ -647,7 +647,7 @@ Select model first"));
 	string loc = Printer::printer["location"]:"";
 	string uri = Printer::printer["uri"]:"";
 	string uri_type = Printerlib::getUriType (uri);
-	boolean raw = Printer::printer["raw"]:nil;
+	boolean raw = (boolean) (Printer::printer["raw"]:nil);
 	if (raw == nil)
 	{
 	    if (uri_type == "lpd" || uri_type == "ipp")
@@ -1177,7 +1177,7 @@ and test the queue after the printer model is selected."));
 		else if (option_type == "PickMany")
 		{
 		    current = mergestring (
-			(list)UI::QueryWidget (`id (`vals), `SelectedItems),
+			(list<string>) UI::QueryWidget (`id (`vals), `SelectedItems),
 			","
 		    );
 		    if (current == "")
@@ -1262,7 +1262,7 @@ and test the queue after the printer model is selected."));
 	}
 	if (`next == ret)
 	{
-	    string ps = ppd_selected["PageSize"]:nil;
+	    string ps = (string) (ppd_selected["PageSize"]:nil);
 	    if (ps != nil)
 	    {
 		ppd_selected["PageRegion"] = ps;
@@ -1783,6 +1783,7 @@ y2error ("CIT: %1", CUPS::InstallationType ());
       * @return symbol for ws
       */
     global define symbol detectConfigType () ``{
+	y2milestone ("Detecting way to configure printer");
 	symbol ret = nil;
 	// new queue to existing printer
 	if (Printer::runAutoprobedListDialog__current == -2)
@@ -1816,7 +1817,10 @@ y2error ("CIT: %1", CUPS::InstallationType ());
 	}
 
 	if (ret == `connection)
+	{
+	    y2milestone ("Returning %1", `connection);
 	    return `connection;
+	}
 
 	string support
 	    = Printerdb::foomatic[Printer::printer["detected", "vendor_db"]:"",
@@ -1858,6 +1862,7 @@ y2error ("CIT: %1", CUPS::InstallationType ());
 		ret = `connection;
 	    }
 	}
+	y2milestone ("Returning %1", ret);
 	return ret;
     }
 
@@ -2070,7 +2075,9 @@ y2error ("CIT: %1", CUPS::InstallationType ());
 	    {
 		ret = `back;
 		if (reallyExit ())
+		{
 		    break;
+		}
 		continue;
 	    }
 	    else if (`next == ret) // finish
@@ -2113,8 +2120,13 @@ Continue?
 		    Printer::index = -1;
 		}
 	    }
+	    else if (`detected_selbox == ret)
+	    {
+		continue;
+	    }
 	    break;
 	}
+	y2milestone ("Finishing detected dialog with %1", ret);
 	return (symbol)ret;
     }
     /**

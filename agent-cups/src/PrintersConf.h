@@ -281,7 +281,7 @@ public:
   /**
    * Write printers...
    */
-  YCPValue Write(const YCPPath &path, const YCPValue& value, const YCPValue& arg = YCPNull());
+  YCPBoolean Write(const YCPPath &path, const YCPValue& value, const YCPValue& arg = YCPNull());
 
 };
 

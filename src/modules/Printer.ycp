@@ -531,7 +531,7 @@
      * Export module settings to map.
      * @return Map of module settings.
      */
-    global define map Export () ``{
+    global define map<string, any> Export () ``{
 	return $[
 	    "printcap" : printcap,
 	    "default"  : default,
@@ -546,10 +546,10 @@
      * Import module settings.
      * @param settings module settings
      */
-    global define void Import (map settings) ``{
+    global define void Import (map<string, any> settings) ``{
 	dirty = true;
 	Spooler::Set (settings["spooler"]:"cups");
-	CUPS::cups_installation = settings["cups_installation"]:nil;
+	CUPS::cups_installation = (symbol) (settings["cups_installation"]:nil);
 	CUPS::server_hostname = settings["server_hostname"]:"";
 	default = settings["default"]:"";
 	printcap = settings["printcap"]:[];
@@ -580,7 +580,7 @@
      * @param yast_printcap list of data read from YaST's configuration file
      * @return list of printers
      */
-    global define list printcapRead (list yast_printcap) ``{
+    global define list<map> printcapRead (list yast_printcap) ``{
 	SCR::Execute (.target.bash,
 	    "test -d /etc/lpdfilter || /bin/mkdir /etc/lpdfilter");
 
@@ -591,7 +591,8 @@
 		SCR::Execute (.target.bash, sformat (
 		    "/bin/touch /etc/lpdfilter/%1/yast2", p["name"]:""));
 	    }
-	    return [p["name"]:"", p];
+	    string name = p["name"]:"";
+	    return $[name: p];
 	});
 	list<map> ret = (list<map>)SCR::Read (.etc.printcap);
 	if (nil == ret)
@@ -642,7 +643,7 @@
 		"test -f /etc/lpdfilter/%1/yast2 && /bin/rm /etc/lpdfilter/%1/yast2", k));
 	});
 
-	default = ret[0, "name"]:nil;
+	default = (string) (ret[0, "name"]:nil);
 	return ret;
     }
 
@@ -650,11 +651,11 @@
      * Read the CUPS settings.
      * @return list of printers
      */
-    global define list cupsRead () ``{
+    global define list<map> cupsRead () ``{
         if (`server == CUPS::InstallationType ())
         {
 	    Spooler::RestartIfNeeded (true);
-            list ret = (list)SCR::Read (.cups.printers);
+            list<map>  ret = (list<map>) SCR::Read (.cups.printers);
 	    ret = filter (map e, ret, ``(e["uri"]:"" != ""));
 	    ret = maplist (map e, ret, ``{
 		if (SCR::Read (.target.size, e["ppd"]:"") > 0)
@@ -703,7 +704,7 @@
 		    [filename, ""]);
 		list<map> optlist = opts_ppd["data"]:[];
 		list<string> ppd_opts
-		    = maplist (map o, optlist, ``(o["name"]:nil));
+		    = (list<string>) maplist (map o, optlist, ``(o["name"]:nil));
 		ppd_opts = filter (string o, ppd_opts, ``(o != nil && o != ""));
 		foreach (string k, any v, options, ``{
 		    if (contains (ppd_opts, k))
@@ -732,7 +733,7 @@
 	    ret = ret + classes;
 	    default = (string)SCR::Read (.cups.default_dest);
 	    if (default == "" || default == nil)
-		default = ret[0, "name"]:nil;
+		default = (string) (ret[0, "name"]:nil);
 	    CUPS::readCupsSettings ();
 	    return ret;
         }
@@ -918,7 +919,7 @@ Detect your printers?"));
       * Read queues set for spooler
       * @return list of queues
       */
-    global define list spoolerSpecQueuesRead () ``{
+    global define list<map> spoolerSpecQueuesRead () ``{
 	if (Spooler::Get () == "cups")
         {
             return cupsRead();
@@ -1163,7 +1164,7 @@ Detect your printers?"));
 	// printer to "".
 	//
 	boolean default_printer_found = false;
-	printcap = (list<map>)maplist (map entry, printcap, ``{
+	foreach (map entry, printcap, ``{
 	    string uri = lookup (entry, "uri", "");
 	    string name = lookup (entry, "name", "");
 	    entry["default"] = (name == default);
@@ -1173,7 +1174,7 @@ Detect your printers?"));
 	    {
 		// error report. %1 is queue name
 		Report::Error (sformat (_("Attempting to save unnamed printer. Skipping: %1"), entry));
-		return;
+		return ;
 	    }
 	    if (name == default && entry["valid"]:true)
 		default_printer_found = true;
@@ -1221,7 +1222,6 @@ the selected spooler does not support it."), name));
 		}
 	    }
 	    Progress::NextStep ();
-	    return entry;
 	});
 	if (Spooler::Get () != "cups")
 	{
@@ -1436,7 +1436,7 @@ the selected spooler does not support it."), name));
 			// summary text part
 			// %1 server name
 		    sformat (_("using server %1."), CUPS::server_hostname));
-	    list servers = filter (`s, CUPS::cups_servers,
+	    list<string> servers = filter (string s, CUPS::cups_servers,
 		``(s != CUPS::server_hostname));
 	    servers = toset (servers);
 	    if (size (servers) > 0)
@@ -1460,7 +1460,7 @@ the selected spooler does not support it."), name));
 	    string found = "";
 	    string vendor = i["vendor"]:"";
 	    string model = i["device"]:"";
-	    string dev = sformat ("%1 %2: %3", vendor, model, Printerlib::getUriNiceName (lookup (i, "uri", "")));
+	    string dev = sformat ("%1 %2: %3", vendor, model, Printerlib::getUriNiceName (i["uri"]:""));
 	    foreach (map entry, printcap, ``{
 		if (i["unique_key"]:"" == entry["unique_key"]:" ")
 		{
@@ -1469,7 +1469,7 @@ the selected spooler does not support it."), name));
 		    used = add (used, cache);
 		    if (contains (style, `test))
 		    {
-			if (lookup (entry, "valid", true))
+			if (entry["valid"]:true)
 			{
 			    cache = sformat ("%1 [<a href=\"%1\">test</a>]", cache);
 			}
@@ -1587,7 +1587,7 @@ the selected spooler does not support it."), name));
 			cache = cache + state;
 		    }
 		    if (haskey (other_printers, dev))
-			other_printers = add (other_printers, dev, lookup (other_printers, dev, "???") + (contains (style, `short) ? ", " : "<br>") + cache);
+			other_printers = add (other_printers, dev, other_printers[dev]:"???" + (contains (style, `short) ? ", " : "<br>") + cache);
 		    else
 			other_printers = add (other_printers, dev, cache);
 		}
@@ -1722,6 +1722,7 @@ the selected spooler does not support it."), name));
 		getForbiddenNames ()),
 	    "ppd" : filename,
 	    "ppd_info" : ppdInfo (filename),
+	    "type" : "yast2",
 	];
 	y2milestone ("Detected printer after editation: %1", printer);
     }
