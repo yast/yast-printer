@@ -298,7 +298,7 @@ that your serial ports are not properly configured.
 	{
 	    if (Printer::conf_detected)
 	    {
-		// message popup
+		// message popup // FIXME in future: better ..found..
 		UI::MessagePopup (_("Warning!
 
 USB printer detection finds at least two printers
@@ -311,7 +311,7 @@ actually selected.
 	    }
 	    else
 	    {
-		// message popup
+		// message popup // FIXME in future: better ..found..
 		UI::MessagePopup (_("Warning!
 
 USB printer detection finds at least two printers
@@ -1463,8 +1463,10 @@ with the SuSE database of printers only.</B></P>
 	map info = $[];
 	list cfgs = [];
 	map cfgsmap = $[];
-	boolean foomatic = Printer::printer["database"]:"" == "foomatic"
-	    || Printer::printer["ownppd"]:"" != "";
+	boolean foomatic = ((Printer::db == `foomatic
+		&& Printer::printer["vendor_db"]:"" != ""
+		&& Printer::printer["device_db"]:"" != "")
+	    || Printer::printer["ownppd"]:"" != "");
 	y2milestone ("Configuring queue %1", Printer::printer);
 	if (foomatic)
 	{
@@ -1511,10 +1513,10 @@ with the SuSE database of printers only.</B></P>
 
 		if (k == `ownppd)
 		{
-		    cfgs = add (cfgs, `item (`id (""),
+		    cfgs = add (cfgs, `item (`id ("_____default_____"),
                             // selection box item
                             _("Default Configuration")));
-		    cfgsmap[""] = _("Default Configuration");
+		    cfgsmap["_____default_____"] = _("Default Configuration");
 		}
 		else if (is (k, symbol))
 		{
@@ -1614,7 +1616,24 @@ with the SuSE database of printers only.</B></P>
 	    }
 	}
 	else
-	    cfgs = SCR::Read (add (.printerdb.configsrt,model), Printer::spooler);
+	{
+	    if (ppd_only)
+	    {
+		y2error ("Internal workflow error");
+	    }
+	    else
+	    {
+		cfgs = SCR::Read (add (.printerdb.configsrt,model), Printer::spooler);
+		foreach (`c, select (cfgs, 1, []), ``{
+		    string label = select (c, 1, "");
+		    term cid = select (c, 0, "");
+		    string key = select (cid, 0, "");
+		    if (key != "" && label != "")
+			cfgsmap[key] = label;
+
+		});
+	    }
+	}
 	term contents = `HBox (
 	    `HSpacing (1),
 	    `VBox (
@@ -3380,7 +3399,8 @@ the current configuration.
 	}
 	y2milestone ("Single printer dialog: foomatic: %1", foomatic);
 
-	if (foomatic)
+	if (Printer::db == `foomatic && Printer::printer["vendor_db"]:"" != ""
+	    && Printer::printer["device_db"]:"" != "")
 	{
 	    mb_items = add (mb_items, `item (`id (`choose_ppd),
 		// menubutton item
@@ -4279,7 +4299,7 @@ All your changes will be lost.
 	    "add_queue_wz" : $[ `abort : `abort, `next : "single"],
 	    "add_queue_wz_1" : $[ `abort : `abort, `next : "single"],
 	    "ppdselect" : $[ `abort : `abort, `next : "single", ],
-	    "model" : $[ `abort : `abort, `next : "ppdselect", `useppd : "useppd", ],
+	    "model" : $[ `abort : `abort, `next : "single", `foomatic : "ppdselect", `useppd : "useppd", ],
             "useppd" : $[ `abort : `abort, `db : "model", `next: "ppdselect" ],
 
 	];
