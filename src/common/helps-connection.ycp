@@ -86,7 +86,8 @@ spooler. Leave it empty for defaults. </p>
 	if (! Arch::s390 ())
 	{
 	    // Help text 1/8, not present on S/390
-	    help = _("<P><B><BIG>Parallel, USB, Serial, IrDA Printer</BIG></B>
+	    help = _("<P><B><BIG>Parallel, USB, Serial, IrDA, Bluetooth
+Printer</BIG></B>
 <BR>To configure a printer connected locally, select the
 type of the local port to which your printer is connected.</p>
 ");
@@ -140,9 +141,9 @@ To set another kind of queue, select <B>Other Kind of Setup</B>.</P>
       */
    define string getLocalConnectionsHelp () ``{
         // Help text 1/1
-        return _("<P><B><BIG>Parallel, USB, Serial, IrDA Port:</BIG></B><BR>
-Select the type of local port to which your printer is connected.</P>
-");
+        return _("<P><B><BIG>Parallel, USB, Serial, IrDA,
+Bluetooth Printer:</BIG></B><BR>
+Select the type of the connection used for the printer.</P>");
     }
 
     /**
@@ -246,15 +247,26 @@ Select the device for your IrDA printer.</P>
 ");
 
 	}
+	else if (type == "bluetooth")
+	{
+	    // Help text 1/5, Bluetooth printer alternative
+	    help_text = _("<p><b><big>Bluetooth Device</big></b><br>
+Select your printer from the list of the the Bluetooth devices.</p>");
+	}
+
 	// Help text 2/5
 	help_text = help_text + _("<P><B><BIG>Other:</BIG></B><BR>
 To enter another device, press <b>Other</b>.</P>");
 
-	// Help text 3/5
-	help_text = help_text + _("<P><B><BIG>Testing Connection:</BIG></B><BR>
+	if (type != "bluetooth")
+	{
+	    help_text = help_text
+	    // Help text 3/5
+		+ _("<P><B><BIG>Testing Connection:</BIG></B><BR>
 To be sure the printer is properly connected,
 use <B>Test</B>.</P>
 ");
+	}
 
 	// help last part only for parallel or serial printers
 	if (type == "parallel")
@@ -268,7 +280,7 @@ parallel port does not work, set its IO ports here.</P>
 	    _("<p>Be careful when selecting a custom device or changing
 IO port settings. Improper values may damage your system.</p>");
 	}
-	if (type == "serial")
+	else if (type == "serial")
 	{
 	    // Help, text 4/5, serial printer alternative
 	    help_text = help_text + _("<P><B><BIG>Serial Port Details:
@@ -277,6 +289,13 @@ IO port settings. Improper values may damage your system.</p>");
 	    // Help, text 5/5, serial printer alternative
 	    _("<p>Be careful when selecting a custom device or changing
 serial port settings. Improper values may damage your system.</p>");
+	}
+	else if (type == "bluetooth")
+	{
+	    // Help text 4/5, bluetooth alt. (5/5 is missing for bluetooth)
+	    help_text = help_text +_("<p><b><big>Detecting devices</big></b><br>
+To scan the neighbourhood of your computer for available Bluetooth devices,
+click <b>Detect Devices</b>.</p>");
 	}
 
         return help_text;
