@@ -67,7 +67,8 @@ document</A>.</I>
 walked through:</P>
 <OL>
   <LI><B>Perform autodetection of possible printer connections.</B>
-  Check for <TT>lpd</TT>, <TT>apsfilter</TT> and other necessary packages.
+  Check for necessary packages and detect currently used spooler from the list of them.
+  In case of inconsistency ask user to choose spooler and reinstall it.
   <LI><B>Autoprobe printer models on detected connections.</B>
     <BR><I>Reference: <A HREF="spec_connection.html">Printer connection
       document</A></I>
@@ -148,15 +149,14 @@ the printer.</B> It means:</P>
 <P>Now it should update the spooling system:
 
 <OL>
-  <LI>Write the apsfilter configuration file
-  (<TT>/etc/gs.upp/y2prn_<B>printername</B>.upp</TT>) and YaST2 Printconf
-  configuration file (<TT>/etc/gs.upp/y2prn_<B>printername</B>.y2</TT>).
+  <LI>Write the spooler and filter configuration files
+  (<TT>/etc/gs.upp/y2prn_<B>printername</B>.upp</TT> if using LPRng or 
+  call CUPS daemon via IPP call to force it save change if using CUPS)
+  and YaST2 Printer configuration file (<TT>/var/lib/YaST2/printers</TT>).
   <LI>Call <TT>/var/lib/apsfilter/apsfilter.setup</TT> to add the printer
   (with <TT>/etc/gs.upp/y2prn_<B>printername</B>.upp</TT> as the configuration
-  file).
-  <LI>For USB printers, change the <TT>/etc/rc.config.d/usb.rc.config</TT> and
-  <TT>/etc/rc.config</TT>.
-  <LI>Change <TT>START_LPD</TT> to <TT>"yes"</TT> in <TT>/etc/rc.config</TT>.
+  file) if configuring LPRng.
+  <LI>Adjust starting of configured spooler
   <LI>Call <TT>SuSEConfig</TT>.
   <!--LI>Check, whether required packages are installed and
     <TT>lpd</TT> is running. <I>If no, install and/or run it.</I>
