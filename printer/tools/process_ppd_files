@@ -1,0 +1,78 @@
+#! /bin/bash
+#
+# Process downloaded PPD files
+#
+# Parameters: directory with downloaded files
+#             directory to copy passed PPD files to
+#             file to write checking log to
+#
+# Exits: 0 at least one correct PPD file found and copied to appropriate
+#          directory
+#        1 no correct PPD file found
+
+#set -x
+
+COPIED=0;
+EXIT=1;
+
+LOG_OUT=$3;
+
+export IFS='
+';
+
+cd $1;
+
+#uncompress the files first
+
+for I in `find -iname '*.tar.gz'` ; do 
+    gunzip "$I";
+done;
+
+for I in `find -iname '*.tar.bz2'` ; do 
+    bzip2 -d  "$I";
+done;
+
+for I in `find -iname '*.tgz'` ; do 
+    tar -xzvf "$I";
+done;
+
+for I in `find -iname '*.tar'` ; do 
+    tar -xvf "$I";
+done;
+
+for I in `find -iname '*.zip'` ; do 
+    unzip "$I";
+done;
+
+for I in `find -iname '*.cab'` ; do 
+    cabextract "$I";
+done;
+
+for I in `find -iname '*.gz'` ; do 
+    gunzip "$I";
+done;
+
+for I in `find -iname '*.bz2'` ; do
+    bzip2 -d  "$I";
+done;
+
+#check destination directory
+
+TARGET_DIR=$2;
+#"/usr/share/cups/model/downloaded";
+
+test -d $TARGET_DIR || mkdir -p $TARGET_DIR;
+
+#check files and copy them to the appropriate location
+for I in `find -iname '*.ppd'` ; do
+    echo "Checking file \"$I\"" >>$LOG_OUT; \
+    /usr/bin/cupstestppd "$I" >>$LOG_OUT \
+	&& echo "file $I is ok" >>$LOG_OUT \
+	&& cp "$I" $TARGET_DIR \
+	&& COPIED=$(($COPIED+1)) \
+	&& EXIT=0 ;
+done
+
+echo "$COPIED files passed" >>$LOG_OUT;
+echo "$COPIED" >./count;
+exit $EXIT;

@@ -1,0 +1,153 @@
+/**
+ * File:
+ *  texts.ycp
+ *
+ * Module:
+ *  Printer library
+ *
+ * Summary:
+ *  Texts.
+ *
+ * Authors:
+ *  Petr Blahos <pblahos@suse.cz>, 2001
+ *
+ * $Id$
+ *
+ * Common texts for printer confguration tools.
+ */
+{
+    textdomain "printer";
+
+    /**
+     * Texts for local tested device.
+     * @return text
+     */
+    global define string textTestDevice ()``{
+	// popup message
+	return _("Connect your printer to the computer,
+switch it on, and make sure  it is ONLINE.
+
+If the message 'Hello, world' is sent to
+the previously selected device and the operation
+fails, it will be timed out in %1 seconds.
+");
+    }
+
+    /**
+     * Result from tested device.
+     * @param res return from testdevice
+     * @return text
+     */
+    global define string textTestDeviceResult (integer res) ``{
+	if (0 == res)
+	    return
+		// results of printer test
+		_("It seems there are no problems with the device
+chosen.
+
+If your printer has reacted somehow (printed message,
+formfeed, or at least blinking leds), the hardware 
+connection should be functioning correctly.
+");
+	if (1 == res)
+	    return
+		// results of printer test
+		_("There was a problem while sending the message
+to the printer.  The operation has timed out.
+
+Verify that your printer is connected to
+the computer, that the printer power is on, and 
+that it is ONLINE. It is also possible that you
+have a cabling problem.
+");
+	if (2 == res)
+	    return
+		// results of printer test
+		_("There was a problem while printing.
+
+It seems that the device is not properly configured
+or you do not have permissions to write to it.
+Did you run the configuration program as user 'root'?");
+	if (127 == res)
+	    return
+		// results of printer test
+		_("FATAL: Unable to run
+the 'test_device' script.
+");
+	return "???";
+    }
+
+    /**
+     * Text for remote printer test.
+     * @param ping_only what testing will be done
+     * @return text
+     */
+    global define string textTestRemotePrinter (boolean ping_only) ``{
+	string ret = "";
+	if (ping_only)
+	    {
+		// message popup 1/2
+		ret =  _("Running 'ping -c 1 %1'.");
+	    }
+	else
+	    {
+		// message popup 1/2
+		ret = _("Testing if %1\naccepts printing jobs.");
+	    }
+		// message popup 2/2
+	ret = ret + _("\n\nIf the operation fails, it will\nbe timed out in a few seconds.");
+	return ret;
+    }
+
+    /**
+     * Remote printer test results.
+     * @param ret return from test remote printer
+     * @return text
+     */
+    global define string textTestRemotePrinterResult (integer ret) ``{
+	if (0 == ret)
+	    // result of testing
+	    return _("The printer server is accessible.");
+	if (1 == ret)
+	    // result of testing
+	    return _("There was a problem.
+
+This is an internal error of YaST2.
+");
+	if (2 == ret)
+	    // result of testing
+	    return _("There was a problem.
+
+Your network access is not properly configured
+or the printer server is unknown or inaccessible.
+Check the host name of the print
+server or contact your network administrator.
+");
+	if (3 == ret)
+	    // result of testing
+	    return _("There was a problem.
+
+Cannot connect to the printer server. Check
+if the printer server is running or contact your
+administrator.
+");
+	if (4 == ret)
+	    // result of testing. Output of some command is appended
+	    return _("There was a problem.
+
+You specified an invalid queue name
+on the printer server, the printer server
+does not accept print jobs, or the queue on
+the printer server does not accept print jobs.
+
+Return from remote server:
+");
+	if (127 == ret)
+	    // result of testing
+	    return _("FATAL: Running the test 
+was not successful.
+");
+	return "???";
+    }
+}
+

@@ -1,0 +1,1081 @@
+/**
+ * File:
+ *  dialogs-cups.ycp
+ * Module:
+ *  Printer configurator
+ * Summary:
+ *  Main dialogs.
+ * Authors:
+ *  Petr Blahos <pblahos@suse.cz>
+ *
+ * $Id$
+ *
+ * Main dialogs.
+ */
+{
+    textdomain "printer";
+
+    import "CUPS";
+    import "Label";
+    import "Mode";
+    import "Popup";
+    import "Printer";
+    import "Printerdb";
+    import "Printerlib";
+    import "Wizard";
+    import "CWMFirewallInterfaces";
+
+    include "printer/helps.ycp";
+    include "printer/misc.ycp";
+
+
+    /**
+      * Run dialog informing about IPP queue listening
+      * @return symbol for WS
+      */
+    define symbol runListenIPPDialog () ``{
+	// this avoids problem with unread CUPS settings in the proposal
+	// see bug #46822
+	if (CUPS::cups_server_settings == nil
+	    || CUPS::cups_server_permissions == nil)
+	{
+	    CUPS::ReadCupsSettings ();
+	}
+
+	map<string,any> firewall_settings = $[
+	    "services" : [ "ipp-udp" ],
+	    "display_details" : true,
+	    // firewall openning help
+	    "help" : _("<p><b><big>Firewall Settings</big></b><br>
+To open the firewall to accept IPP broadcast packets
+from remote computers, set <b>Open Port in Firewall</b>.
+To select interfaces on which to open the port, click <b>Firewall Details</b>.
+This option is available only if the firewall is enabled.</p>"),
+	];
+	map<string,any> firewall_widget =
+	    CWMFirewallInterfaces::CreateOpenFirewallWidget (firewall_settings);
+	string firewall_help = firewall_widget["help"]:"";
+	term firewall_layout = firewall_widget["custom_widget"]:`VBox ();
+
+	term contents = `HBox (`HStretch (), `VBox (
+	    `VStretch (),
+	    `Left (`Label (
+		// label
+		_("The local CUPS daemon will be running and listening
+to IPP broadcast packets sent by other servers
+in the network. All broadcasted queues will be
+accessible under the same names as they are
+on the remote host."))),
+	    `VSpacing (2),
+	    `Left (`HBox (`VBox (
+		`Left (`CheckBox (`id (`listen),
+		    // check box
+		    _("Listen to IPP &Broadcast Packets"),
+		    contains (
+			CUPS::cups_server_settings["Browsing"]:["On"],"On"))),
+		// push button
+		`PushButton (`id (`perm), _("Select A&dresses"))
+	    ), `HStretch ())),
+	    `VSpacing (2),
+	    firewall_layout,
+	    `VStretch ()
+	), `HStretch ());
+	// dialog caption
+	Wizard::SetContentsButtons (_("Listening to Remote CUPS Servers"),
+	    contents, getListenIPPHelp () + firewall_help, Label::BackButton (),
+	    Label::OKButton ());
+	Wizard::RestoreAbortButton ();
+
+	map event = $[];
+	any ret = nil;
+	CWMFirewallInterfaces::OpenFirewallInit (firewall_widget, "");
+	while (ret != `abort && ret != `next && ret != `back && ret != `perm)
+	{
+	    event = UI::WaitForEvent ();
+	    ret = event["ID"]:nil;
+	    CWMFirewallInterfaces::OpenFirewallHandle (firewall_widget, "",
+		event);
+	}
+
+	if (ret == `next)
+	{
+	    boolean listen = (boolean)UI::QueryWidget (`id (`listen), `Value);
+	    CUPS::cups_server_settings["Browsing"] = listen ? ["On"] : ["Off"];
+	    CWMFirewallInterfaces::OpenFirewallStore (firewall_widget, "",
+		event);
+	}
+
+	return (symbol)ret;
+    }
+
+    /**
+      * Is there only client?
+      * @param main boolean true if this is used as replacement of the
+      *   "Complex" dialog
+      * @return symbol for wizard sequencer
+      */
+    define symbol runCupsClientDialog (boolean main) ``{
+	term advanced = main
+	    ? `VBox (
+		`VSpacing (4),
+		// push button
+		`PushButton (`id (`advanced), `opt (`key_F7), _("Ad&vanced"))
+	    )
+	    : `VSpacing (0);
+
+        term contents = `VBox (
+	    `HBox (
+		`ReplacePoint (
+		    `id (`hostent_replace),
+		    `ComboBox (`id (`hostnameent), `opt (`editable, `hstretch),
+			// Combobox label
+			_("&Server name"), [ CUPS::server_hostname ] )
+		),
+		`VBox (
+		    `Label (" "),
+		    // menubutton
+                    `MenuButton (_("&Lookup"), [
+			// menu entry
+                        `item (`id (`get_hosts_special), _("Scan for &IPP Servers")),
+			// menu item
+			`item (`id (`get_hosts_listen),_("Listen for IPP &Broadcasts")),
+			// menu entry
+                        `item (`id (`get_hosts), _("Lookup &All Hosts")),
+                    ])
+		)
+            ),
+	    `VSpacing (2),
+	    `HBox (
+		`HStretch (),
+		`PushButton (`id (`test), `opt (`key_F6),
+		    // push button
+		    _("&Test remote IPP access")),
+		`HStretch ()
+	    ),
+	    `VSpacing (2),
+	    `HBox (`HWeight (999, `HStretch ()), `VBox (
+		`Left (`CheckBox (`id (`server),
+		    `opt (`notify),
+		    // checkbox
+		    _("Use &Server's Default Queue"))),
+		`VSpacing (0.4),
+		`HBox (`ReplacePoint (`id (`def_queue_rep),
+		    `Left (`ComboBox (`id (`def_queue),
+			`opt (`hstretch, `editable),
+			// combo box
+			_("&Default Queue")))),
+		    `VBox (
+			`Label (""),
+			// push button
+			`PushButton (`id (`refresh), _("&Lookup"))
+		    )
+		)
+	    ), `HWeight (999, `HStretch ())),
+	    advanced,
+	    `VSpacing (2)
+            );
+        // dialog label
+        Wizard::SetContentsButtons (_("CUPS server"), contents,
+	    getCupsClientHelp (main), Label::BackButton (),
+	    main ? Label::FinishButton () : Label::OKButton ());
+
+	UI::ChangeWidget (`id (`server), `Value, CUPS::server_default);
+	UI::ChangeWidget (`id (`def_queue), `Enabled, !CUPS::server_default);
+	UI::ChangeWidget (`id (`refresh), `Enabled, !CUPS::server_default);
+	UI::ChangeWidget (`id (`def_queue), `Value, Printer::default);
+
+        symbol ret = nil;
+        while (true)
+        {
+            ret = (symbol)UI::UserInput ();
+            if (ret == `cancel)
+                ret = `abort;
+	    if (`test == ret)
+	    {
+		string n = (string)UI::QueryWidget (`id(`hostnameent), `Value);
+                if (nil == n || "" == n)
+		    // popup
+		    Popup::Message (_("Enter a valid server name."));
+		else
+		    Printerlib::testRemote (n, "", "ipp_server", 0);
+	    }
+	    else if (`server == ret)
+	    {
+		boolean sd = (boolean)UI::QueryWidget (`id (`server), `Value);
+		UI::ChangeWidget (`id (`def_queue), `Enabled, !sd);
+		UI::ChangeWidget (`id (`refresh), `Enabled, !sd);
+	    }
+            else if (`next == ret)
+            {
+                string n = (string)UI::QueryWidget (`id(`hostnameent), `Value);
+                Printer::dirty = true;
+                CUPS::server_hostname = n;
+                if (nil == n || "" == n)
+		    // popup
+		    Popup::Message (_("Enter a valid server name."));
+		else
+		{
+		    CUPS::cups_installation = `client;
+		    CUPS::server_default
+			= (boolean)UI::QueryWidget (`id (`server), `Value);
+		    if (! CUPS::server_default)
+		    {
+			Printer::default = (string)UI::QueryWidget (
+			    `id (`def_queue), `Value);
+		    }
+                    break;
+		}
+            }
+	    else if (`advanced == ret)
+	    {
+		if (main)
+		{
+		    CUPS::server_hostname
+			= (string)UI::QueryWidget (`id(`hostnameent), `Value);
+		    CUPS::server_default
+			= (boolean)UI::QueryWidget (`id (`server), `Value);
+		    if (! CUPS::server_default)
+		    {
+			Printer::default = (string)UI::QueryWidget (
+			    `id (`def_queue), `Value);
+		    }
+		}
+		break;
+	    }
+	    else if (`refresh == ret)
+	    {
+		list queues = (list)SCR::Read (.cups.remote,
+		    UI::QueryWidget (`id (`hostnameent), `Value));
+		queues = toset (queues);
+		UI::ReplaceWidget (`id (`def_queue_rep),
+		    `Left (`ComboBox (`id (`def_queue),
+			`opt (`hstretch, `editable),
+			// combo box
+                        _("&Default Queue"),
+			queues)));
+	    }
+            else if (`abort == ret)
+            {
+		if (reallyAbort ())
+		    break;
+            }
+	    else if (`back == ret)
+	    {
+		if (! main || reallyExit ())
+		    break;
+	    }
+            else if (`get_hosts == ret || `get_hosts_special == ret || `get_hosts_listen == ret)
+            {
+		list hosts = [];
+		if (ret == `get_hosts_listen)
+		    hosts = CUPS::ListenCupsServers ();
+		else
+                    hosts = getHostnames (
+		    `get_hosts_special == ret ? "ipp" : "");
+                UI::ReplaceWidget (`id (`hostent_replace),
+		    `ComboBox (
+			`id (`hostnameent),
+			`opt (`editable, `hstretch),
+			// combobox label
+			_("&Server name"),
+			hosts));
+            }
+        }
+        return ret;
+    }
+    /**
+     * Choose PPD file
+     * @return symbol `next, `abort or `back
+     */
+    define symbol runSelectPpdFile () ``{
+	term contents = `HBox (
+	    `HStretch (),
+	    `VBox (
+		`VStretch (),
+		`HBox (
+		    // textentry
+		    `TextEntry (`id(`name), Label::FileName (), "/"),
+		    `VBox (
+			`Label (" "),
+			// pushbutton
+			`PushButton (`id (`browse), Label::BrowseButton ())
+		    )
+		),
+		`VStretch ()
+	    ),
+	    `HStretch ()
+	);
+
+	// dialog caption
+	Wizard::SetContentsButtons (_("Select PPD file"), contents, getPpdFileHelp (), Label::BackButton (), Label::NextButton ());
+
+	symbol ret = (symbol)nil;
+	while (ret == nil){
+	    ret = (symbol)UI::UserInput ();
+            if (ret == `cancel)
+                ret = `abort;
+	    if (`next == ret)
+	    {
+		string file = (string)UI::QueryWidget (`id (`name), `Value);
+		if (-1 == SCR::Read (.target.size, file))
+		{
+		    // popup
+		    Popup::Message (_("Enter a valid file name."));
+		    ret = nil;
+		    continue;
+		}
+		string dir = (string)SCR::Read (.target.tmpdir) + "/ppd_files";
+		y2milestone ("Working dir: %1", dir);
+		SCR::Execute (.target.bash, sformat (
+		    "test -d %1 || mkdir -p %1", dir));
+		SCR::Execute (.target.bash, sformat (
+		    "/bin/rm %1/*", dir));
+		SCR::Execute (.target.bash, sformat ("/bin/cp '%1' '%2'",
+		    file, dir));
+                if (! Printerdb::processPpdFiles (dir))
+                {
+                    ret = nil;
+                    continue;
+                }
+	    }
+	    else if (`abort == ret)
+	    {
+		if (! reallyAbort ())
+		    ret = nil;
+	    }
+	    else if (`browse == ret)
+	    {
+//		list mask = ["*.ppd", "*.ppd.gz"];
+		string new_name = (string)UI::QueryWidget (`id (`name), `Value);
+		new_name = substring (new_name, 0, findlastof(new_name, "/")) + "/";
+		if (new_name == "")
+		    new_name = "/";
+		new_name = UI::AskForExistingFile( new_name, "*.ppd *.ppd.gz .PPD .PPD.GZ .PPD.gz",
+			// dialog header
+                    _("Select the PPD file to use."));
+		if (new_name != "")
+		    UI::ChangeWidget (`id (`name), `Value, new_name);
+		ret = nil;
+	    }
+	}
+        return ret;
+    }
+    /**
+     * Choose an user.
+     * @return a list list of selected users
+     */
+    define list<string> chooseUser () ``{
+            list<map> users_maps = (list<map>) SCR::Read (.etc.passwd);
+            list<string>users_names = maplist (map i, users_maps, ``{
+                return i["username"]:"";
+            });
+            list<term>users = maplist (string i, users_names, ``{
+                return `item (`id (i), i);
+            });
+
+            UI::OpenDialog (
+                `HBox (
+                    `HSpacing (0.7),
+                    `VSpacing (16),
+                    `VBox (
+                        `VSpacing (0.5),
+                        `HSpacing (16),
+                        // selection box label
+                        `SelectionBox ( `id (`users), _("&Select user:"), users),
+                        // text entry label
+                        `TextEntry (`id (`user), _("Or type &user name:"), ""),
+                        `HBox (
+                            `PushButton (`id (`ok), `opt (`key_F10), Label::OKButton()),
+                            `PushButton (`id (`cancel), `opt (`key_F9), Label::CancelButton ())
+                            ),
+                        `VSpacing (0.3),
+			`HSpacing (40)
+                        ),
+                    `HSpacing (0.7)
+                    )
+                );
+        symbol ret = nil;
+        list<string> add_users = [];
+        while (true)
+            {
+                ret = (symbol)UI::UserInput ();
+                if (`ok == ret)
+                    {
+                        string user2 = (string)
+			    UI::QueryWidget (`id (`users), `CurrentItem);
+                        string user1 = (string)
+			    UI::QueryWidget (`id (`user), `Value);
+                        if ("" != user1)
+                            {
+                                add_users = add (add_users, user1);
+				user2 = "";
+                            }
+                        if ("" != user2)
+                            {
+                                add_users = add (add_users, user2);
+                            }
+                        break;
+                    }
+                else if (`cancel == ret)
+                    {
+                        break;
+                    }
+            }
+        UI::CloseDialog ();
+        return add_users;
+    }
+
+    /**
+     * Show dialog with users that can/can not use printer/class.
+     * @return symbol `next or `back
+     */
+    define symbol runUsersDialog () ``{
+        //
+        // parse settings...
+        //
+        symbol style = `all;
+        list<string> users = Printer::printer["allowusers"]:[];
+        if ([] == users)
+        {
+            users = Printer::printer["denyusers"]:[];
+            style = (([] == users) ? `all : `cannot);
+        }
+        else
+        {
+            style = `can;
+        }
+
+        users = toset (users);
+        list items = ((Printer::printer["uri"]:"class" != "class") ?
+            [
+                // items in combobox
+                `item ( `id (`all),    _("All users can use this printer"), `all == style),
+		// items in combobox
+                `item ( `id (`can),    _("The following users can use this printer"), `can == style),
+		// items in combobox
+                `item ( `id (`cannot), _("The following users cannot use this printer"), `cannot == style)
+            ] :
+            [
+                // items in combobox
+                `item ( `id (`all),    _("All users can use this class"), `all == style),
+		// items in combobox
+                `item ( `id (`can),    _("The following users can use this class."), `can == style),
+		// items in combobox
+                `item ( `id (`cannot), _("The following users cannot use this class."), `cannot == style)
+            ]);
+        term contents = `VBox (
+		`ComboBox (`id (`type), `opt (`notify),  "", items),
+		// selectionbox label
+		`ReplacePoint (`id( `replace_users), `SelectionBox (`id (`users), _("&Users"), maplist (string i, users, ``{return `item (`id (i), i);}))),
+		`HBox (`PushButton (`id (`add), `opt (`key_F3), Label::AddButton ()), `PushButton (`id (`delete), `opt (`key_F4), Label::DeleteButton ()))
+	    );
+
+        // dialog label
+        Wizard::SetContentsButtons (_("Restrictions"), contents, getUsersHelp (), Label::BackButton (), Label::NextButton ());
+
+        symbol ret = `type;
+        while (true)
+        {
+            if (`type == ret)
+            {
+                symbol type = (symbol)UI::QueryWidget (`id (`type), `Value);
+                if (`can == type || `cannot == type)
+                {
+                    UI::ChangeWidget (`id(`users), `Enabled, true);
+                    UI::ChangeWidget (`id(`add), `Enabled, true);
+                    UI::ChangeWidget (`id(`delete), `Enabled, true);
+                }
+                else
+                {
+                    UI::ChangeWidget (`id(`users), `Enabled, false);
+                    UI::ChangeWidget (`id(`add), `Enabled, false);
+                    UI::ChangeWidget (`id(`delete), `Enabled, false);
+                }
+            }
+            if (`add == ret)
+            {
+                list<string> users_to_add = chooseUser ();
+                users = (list<string>)toset (flatten ( [users, users_to_add]));
+		// selectionbox label
+                UI::ReplaceWidget (`id (`replace_users), `SelectionBox (`id (`users), _("&Users"),maplist (string i, users, ``{return `item (`id (i), i);})));
+            }
+            if (`delete == ret)
+            {
+                string user_to_delete = (string)
+		    UI::QueryWidget (`id (`users), `CurrentItem);
+                users = (list<string>)DeleteItem (users, user_to_delete);
+		// selectionbox label
+                UI::ReplaceWidget (`id (`replace_users), `SelectionBox (`id (`users), _("&Users"),maplist (string i, users, ``{return `item (`id (i), i);})));
+            }
+            if (`back == ret)
+            {
+                break;
+            }
+            if (`next == ret)
+            {
+                // read values
+                symbol type = (symbol)UI::QueryWidget (`id (`type), `Value);
+                if (`all == type)
+                    {
+                        Printer::printer = add (Printer::printer, "allowusers", []);
+                        Printer::printer = add (Printer::printer, "denyusers", []);
+                        break;
+                    }
+                else if (`can == type)
+                    {
+                        Printer::printer = add (Printer::printer, "allowusers", users);
+                        Printer::printer = add (Printer::printer, "denyusers", []);
+                        if (0 == size (users))
+                            {
+                                // message box
+                                Popup::Message (_("Specify at least one user."));
+                            }
+                        else
+                            {
+                                break;
+                            }
+                    }
+                else if (`cannot == type)
+                    {
+                        Printer::printer = add (Printer::printer, "allowusers", []);
+                        Printer::printer = add (Printer::printer, "denyusers", users);
+                        if (0 == size (users))
+                            {
+                                // message box
+                                Popup::Message (_("Specify at least one user."));
+                            }
+                        else
+                            {
+                                break;
+                            }
+                    }
+            }
+            else if (`abort == ret)
+            {
+                if (reallyAbort ())
+                    {
+                        break;
+                    }
+            }
+            ret = (symbol)UI::UserInput ();
+            if (ret == `cancel)
+                ret = `abort;
+        }
+        return ret;
+    }
+
+    /**
+     * State of printer/class.
+     * @return symbol `next or `back
+     */
+    define symbol runStateDialog () ``{
+	boolean is_class = Printer::printer["uri"]:"class" == "class";
+        // get state
+        boolean accept = Printer::printer["accepting"]:true;
+        boolean idle = Printer::printer["state"]:"idle" != "stopped";
+
+	// label
+        string caption_state = (!is_class ? _("The printer is idle or &printing.")
+	// label
+	 : _("The class is idle or &printing."));
+	// label
+        string caption_avail = (!is_class ? _("The printer is accepting &jobs.")
+	// label
+	 : _("The class is accepting &jobs."));
+	// label
+        string caption = (!is_class ? _("State and banners of the printer")
+	// label
+	 : _("State and banners of the class"));
+	// label
+	string state_caption = (!is_class ? _("State of the printer")
+	// label
+	 : _("State of the class"));
+	// label
+	string banners_caption = (!is_class ? _("Banners of the printer")
+	// label
+	 : _("Banners of the class"));
+
+        // read list of banners
+        list<string> banners = CUPS::getBannerList ();
+        banners = sort (banners);
+        // read current settings
+        string banner_start = Printer::printer["bannerstart"]:"none";
+        string banner_end = Printer::printer["bannerend"]:"none";
+
+        if ("" == banner_start)
+        {
+            banner_start = "none";
+        }
+        if ("" == banner_end)
+        {
+            banner_end = "none";
+        }
+
+
+
+	term contents = `HBox (`HStretch (), `VBox (
+	    `VStretch (),
+	    `Frame (state_caption,
+                `VBox (
+                    `Left (`CheckBox (`id (`state), caption_state, idle)),
+                    `VSpacing (0.2),
+                    `Left (`CheckBox (`id (`accept), caption_avail, accept)),
+                    `VSpacing (0.2)
+                )
+	    ),
+            `VStretch (),
+	    `Frame (banners_caption,
+	      `HBox (
+		`HStretch (),
+                `VBox (
+                    `ComboBox ( `id (`banner_start),
+                        // combo box label
+                        _("&Starting banner"),
+                        maplist (string i, banners, ``{
+                            return `item (`id (i), i, i == banner_start);
+                        })
+                    ),
+                    `ComboBox( `id (`banner_end),
+                        // combo box label
+                        _("&Ending banner"),
+                        maplist (string i, banners, ``{
+                            return `item (`id (i), i, i == banner_end);
+                       })
+                    )
+                ),
+		`HStretch ()
+	      )
+	    ),
+	    `VStretch ()
+            ), `HStretch ());
+
+
+        // dialog label
+        Wizard::SetContentsButtons (caption, contents, getStateHelp (), Label::BackButton (), Label::NextButton ());
+
+        symbol ret = nil;
+        while (true)
+            {
+                ret = (symbol)UI::UserInput ();
+	        if (ret == `cancel)
+	            ret = `abort;
+                if (`next == ret)
+                {
+                    idle = (boolean)UI::QueryWidget (`id (`state), `Value);
+                    accept = (boolean)UI::QueryWidget (`id (`accept), `Value);
+                    Printer::printer = add (Printer::printer, "accepting", accept);
+                    Printer::printer = add (Printer::printer, "state", idle ? "idle" : "stopped");
+
+                    banner_end = (string)
+			UI::QueryWidget (`id (`banner_end), `Value);
+                    banner_start = (string)
+			UI::QueryWidget (`id (`banner_start), `Value);
+                    if ("" == banner_start)
+                    {
+                        banner_start = "none";
+                    }
+                    if ("" == banner_end)
+                    {
+                        banner_end = "none";
+                    }
+                    Printer::printer = add (Printer::printer, "bannerstart", banner_start);
+                    Printer::printer = add (Printer::printer, "bannerend", banner_end);
+                    break;
+                }
+                else if (`back == ret)
+                {
+                    break;
+                }
+                else if (`abort == ret)
+                {
+                    if (reallyAbort ())
+                    {
+                        break;
+                    }
+                }
+            }
+	return ret;
+    }
+    /**
+      * CUPS dialog for enetring IP address
+      * @param ad boolean true to show allow-deny radiobutton pair
+      * @param label string label of IP address textentry
+      * @param init string initial IP address (for textentry)
+      * @param state symbol `allow or `deny checked radiobutton
+      * @return term dialog contents
+      */
+    define term ipAddrPopup (boolean ad, string label, string init, symbol state) ``{
+	return `VBox (
+	    ad ? `RadioButtonGroup (`id (`type),
+		`HBox (
+		    // radiobutton
+		    `RadioButton (`id (`allow), _("Allow From"), state != `deny),
+		    // radiobutton
+		    `RadioButton (`id (`deny), _("Deny From"), state == `deny)
+		)
+	    ) : `VSpacing (0),
+	    `TextEntry (`id (`ad), label, init),
+	    `HBox (
+		`PushButton (`id (`ok), `opt (`default, `key_F10), Label::OKButton()),
+		`PushButton (`id (`cancel), `opt (`key_F9), Label::CancelButton())
+	    )
+	);
+    }
+    /**
+     * CUPS access control list dialog
+     * @param type symbol `root, `admin, `printers of `classes specifying access configuration area
+     * @return symbol `next or `back
+     */
+    define symbol runCupsAclDialog (symbol type) ``{
+	string pth = type == `root
+	    ? "/"
+	    : (type == `admin
+		? "/admin"
+		: (type == `printers
+		    ? "/printers"
+		    : "/classes"));
+	boolean show_ignore = type != `root && type != `admin && type != `bcast;
+	term contents = `HBox (
+	    `HSpacing (2),
+	    `VBox (
+		`VSpacing (1),
+		// frame
+		`Frame (_("Application order"),
+                `RadioButtonGroup (`id (`order), `HBox (
+		    // radio button
+                    `RadioButton (`id (`ad), `opt (`hstretch), _("A&llow, Deny")),
+		    // radio button
+                    `RadioButton (`id (`da), `opt (`hstretch), _("&Deny, Allow"))
+                ))),
+		`VSpacing (1),
+		// selection box label
+                `ReplacePoint (`id (`replace_acl), `SelectionBox (`id (`acl), _("&Permissions"))),
+		`VSpacing (1),
+                `HBox (
+                    `PushButton (`id (`add), `opt (`key_F3), Label::AddButton ()),
+                    `PushButton (`id (`edit), `opt (`key_F4), Label::EditButton ()),
+                    `PushButton (`id (`del), `opt (`key_F5), Label::DeleteButton ())
+                ),
+		show_ignore ? `VSpacing (1) : `VSpacing (0),
+		// push button
+		show_ignore ? `PushButton (`id (`ignore), sformat (_("Use inherited permissions"))) : `VSpacing (0),
+		`VSpacing (1)
+	    ),
+	    `HSpacing (2)
+	);
+
+	string caption = "";
+	if (type == `bcast)
+	{
+	    caption = _("CUPS Permissions for Accepting IPP Broadcasts");
+	}
+	else
+	{
+	    // dialog caption
+	    caption = sformat (_("CUPS Permissions for %1"), pth);
+	}
+	Wizard::SetContentsButtons (caption, contents, getCupsAclHelp (show_ignore), Label::BackButton (), Label::OKButton ());
+
+	string allow_key = "Allow";
+	string deny_key = "Deny";
+	string order_key = "Order";
+	map<string, list<string> > settings = $[];
+	if (type == `bcast)
+	{
+	    allow_key = "BrowseAllow";
+	    deny_key = "BrowseDeny";
+	    order_key = "BrowseOrder";
+	    settings = CUPS::cups_server_settings;
+	}
+	else
+	{
+	    settings = CUPS::cups_server_permissions[pth]:$[];
+	}
+
+	if (settings[order_key]:["Deny,Allow"] == ["Allow,Deny"])
+	    UI::ChangeWidget (`id (`ad), `Value, true);
+	else
+	    UI::ChangeWidget (`id (`da), `Value, true);
+	list<term> cont = (list<term>)union (maplist (any e, settings[allow_key]:[], ``{return `i (`allow, e);}),
+			maplist (any e, settings[deny_key]:[], ``{return `i (`deny, e);}));
+	// selectionbox label
+	UI::ReplaceWidget (`id (`replace_acl), `SelectionBox (`id (`acl), _("&Permissions"),
+	   // listbox entry, %1 is IP address
+	   maplist (term e, cont, ``(`item (`id (e), e[0]:nil == `allow ? sformat (_("Allow From %1"), e[1]:"")
+		// listbox entry, %1 is IP address
+		: sformat (_("Deny From %1"), e[1]:""))))));
+        symbol ret = nil;
+        while (true)
+        {
+            ret = (symbol)UI::UserInput ();
+            if (ret == `cancel)
+                ret = `abort;
+            if (`abort == ret)
+	    {
+                if (reallyAbort ())
+                    break;
+	    }
+            else if (`back == ret)
+                break;
+            else if (`next == ret)
+            {
+                break;
+            }
+	    else if (`ignore == ret)
+	    {
+		break;
+	    }
+	    else if (`add == ret)
+            {
+		// popup request
+                UI::OpenDialog (ipAddrPopup (true, _("Enter &IP address"), "", `allow));
+                symbol r = nil;
+                while (nil == r)
+                    r = (symbol)UI::UserInput ();
+                string ad = (string)UI::QueryWidget (`id (`ad), `Value);
+		symbol acc = UI::QueryWidget (`id (`type), `CurrentButton) == `allow ? `allow : `deny;
+                UI::CloseDialog ();
+                if (r != `ok)
+                    continue;
+                if (ad != "")
+		{
+                    cont = toset (add (cont, `i (acc, ad)));
+		}
+		// selectionbox label
+		UI::ReplaceWidget (`id (`replace_acl), `SelectionBox (`id (`acl), _("&Permissions"),
+		    // listbox entry, %1 is IP address
+	            maplist (term e, cont, ``(`item (`id (e), e[0]:nil == `allow ? sformat (_("Allow From %1"), e[1]:"")
+			// listbox entry, %1 is IP address
+			: sformat (_("Deny From %1"), e[1]:""))))));
+	    }
+	    else if (`edit == ret)
+            {
+		term item =  (term)UI::QueryWidget (`id (`acl), `CurrentItem);
+		symbol acc = (symbol)item[0]:nil;
+		string ad = (string)item[1]:"";
+
+		// popup request
+                UI::OpenDialog (ipAddrPopup (true, _("Enter &IP address"), ad, acc));
+                symbol r = nil;
+                while (nil == r)
+                    r = (symbol)UI::UserInput ();
+                ad = (string)UI::QueryWidget (`id (`ad), `Value);
+                acc = UI::QueryWidget (`id (`type), `CurrentButton) == `allow ? `allow : `deny;
+                UI::CloseDialog ();
+                if (r != `ok)
+                    continue;
+                if (ad != "")
+                {
+		    cont = (list<term>)DeleteItem (cont, item);
+                    cont = toset (add (cont, `i (acc, ad)));
+                }
+		// selectionbox label
+                UI::ReplaceWidget (`id (`replace_acl), `SelectionBox (`id (`acl), _("&Permissions"),
+		    // listbox entry, %1 is IP address
+                    maplist (term e, cont, ``(`item (`id (e), e[0]:nil == `allow ? sformat (_("Allow From %1"), e[1]:"")
+			// listbox entry, %1 is IP address
+                        : sformat (_("Deny From %1"), e[1]:""))))));
+            }
+	    else if (`del == ret)
+	    {
+		cont = (list<term>)DeleteItem (cont, UI::QueryWidget (`id (`acl), `CurrentItem));
+		// selectionbox label
+                UI::ReplaceWidget (`id (`replace_acl), `SelectionBox (`id (`acl), _("&Permissions"),
+		    // listbox entry, %1 is IP address
+                    maplist (term e, cont, ``(`item (`id (e), e[0]:nil == `allow ? sformat (_("Allow From %1"), e[1]:"")
+			// listbox entry, %1 is IP address
+                        : sformat (_("Deny From %1"), e[1]:""))))));
+	    }
+        }
+	settings[order_key] = UI::QueryWidget (`id (`order), `CurrentButton)
+	    == `ad
+		? ["Allow,Deny"]
+		: ["Deny,Allow"];
+	list<string> allow = filter (string z, (list<string>)maplist (term x, filter (term e, cont, ``(e[0]:nil == `allow)), ``{return x[1]:"";}), ``(z != ""));
+	list<string> deny = filter (string z, (list<string>)maplist (term x, filter (term e, cont, ``(e[0]:nil == `deny)), ``{return x[1]:"";}), ``(z != ""));
+	settings = add (settings, allow_key, allow);
+	settings = add (settings, deny_key, deny);
+	if (`next == ret)
+	{
+	    if (type == `bcast)
+	    {
+		CUPS::cups_server_settings = settings;
+	    }
+	    else
+	    {
+		CUPS::cups_server_permissions[pth] = settings;
+	    }
+	}
+	else if (`ignore == ret)
+	{
+	    if (haskey (CUPS::cups_server_permissions, pth))
+	    {
+		CUPS::cups_server_permissions
+		    = (map <string, map <string, list <string> > >)
+			remove (CUPS::cups_server_permissions, pth);
+	    }
+	    ret = `next;
+	}
+        return ret;
+    }
+    /**
+     * CUPS server settings dialog
+     * @return symbol `next or `back
+     */
+    define symbol runCupsServerDialog () ``{
+
+	map<string,any> firewall_settings = $[
+	    "services" : [ "ipp-tcp" ],
+	    "display_details" : true,
+	];
+	map<string,any> firewall_widget
+	  = CWMFirewallInterfaces::CreateOpenFirewallWidget (firewall_settings);
+	string firewall_help = firewall_widget["help"]:"";
+	term firewall_layout = firewall_widget["custom_widget"]:`VBox ();
+
+	term contents = `HBox (`HSpacing (2), `VBox (
+	    `VSpacing (1),
+	    // frame
+	    `Frame (_("Browsing settings"), `VBox (
+		`HBox (`HSpacing (3), `RadioButtonGroup (`id (`browsing), `HBox (
+		    // label
+		    `Label (_("Browsing")),
+		    // radiobutton
+		    `RadioButton (`id (`on), _("On")),
+		    // radiobutton
+		    `RadioButton (`id (`off), _("Off"))
+		)),
+		`HSpacing (3)),
+		// selectionbox label
+		`HBox (`HSpacing (3), `ReplacePoint (`id( `replace_addr), `SelectionBox (`id (`addr), _("Browse Addre&sses"))), `HSpacing (3)),
+		`HBox (
+		    `HSpacing (3),
+		    `PushButton (`id (`add), `opt (`key_F3), Label::AddButton ()),
+		    `PushButton (`id (`edit), `opt (`key_F4), Label::EditButton ()),
+		    `PushButton (`id (`del), `opt (`key_F5), Label::DeleteButton ()),
+		    `HStretch (),
+		    // push button
+		    `PushButton (`id (`propose_server), _("&Propose")),
+		    `HSpacing (3)
+		)
+	    )),
+	    // frame
+	    `Frame (_("Access settings"), `VBox (
+		`RadioButtonGroup (`id (`loc), `VBox (
+		    `HBox (
+			`RadioButton (`id (`root), `opt (`hstretch), "/ (r&oot)", true),
+			`RadioButton (`id (`admin), `opt (`hstretch), "/ad&min")
+		    ),
+		    `HBox (
+			`RadioButton (`id (`printers), `opt (`hstretch), "/&printers"),
+			`RadioButton (`id (`classes), `opt (`hstretch), "/&classes")
+		    )
+		)),
+		// pushbutton
+		`PushButton (`id (`change), _("Change p&ermissions"))
+	    )),
+	    firewall_layout
+	), `HSpacing (2));
+
+	// dialog caption
+	Wizard::SetContentsButtons (_("CUPS server settings"), contents, getCupsServerHelp () + firewall_help, Label::BackButton (), Label::NextButton ());
+
+	list<string> addresses = CUPS::cups_server_settings["BrowseAddress"]:[];
+
+	UI::ChangeWidget (`id (`browsing), `CurrentButton, CUPS::cups_server_settings["Browsing"]:["On"] == ["Off"] ? `off : `on);
+	// selectionbox
+	UI::ReplaceWidget (`id (`replace_addr), `SelectionBox (`id (`addr), _("Browse Addre&sses"), addresses));
+
+	CWMFirewallInterfaces::OpenFirewallInit (firewall_widget, "");
+
+	map event = $[];
+	any ret = nil;
+	while (true)
+	{
+	    event = UI::WaitForEvent ();
+	    ret = event["ID"]:nil;
+            if (ret == `cancel)
+                ret = `abort;
+	    CWMFirewallInterfaces::OpenFirewallHandle (firewall_widget,
+		"", event);
+	    if (`abort == ret)
+	    {
+		if (reallyAbort ())
+		    break;
+	    }
+	    else if (`back == ret)
+		break;
+	    else if (`propose_server == ret)
+	    {
+		CUPS::ProposeServerSettings ();
+		addresses = CUPS::cups_server_settings["BrowseAddress"]:[];
+		UI::ReplaceWidget (`id (`replace_addr), `SelectionBox (`id (`addr), _("Browse Addre&sses"), addresses));
+	    }
+	    else if (`change == ret)
+	    {
+		ret = (symbol)UI::QueryWidget (`id (`loc), `CurrentButton);
+		break;
+	    }
+	    else if (`add == ret)
+	    {
+		// popup request
+		UI::OpenDialog (ipAddrPopup (false, _("Enter &IP address"), "", nil));
+		symbol r = nil;
+		while (nil == r)
+		    r = (symbol)UI::UserInput ();
+		string ad = (string)UI::QueryWidget (`id (`ad), `Value);
+		UI::CloseDialog ();
+		if (r != `ok)
+		    continue;
+		if (ad != "")
+		    addresses = toset (add (addresses, ad));
+		// selectionbox label
+		UI::ReplaceWidget (`id (`replace_addr), `SelectionBox (`id (`addr), _("Browse Addre&sses"), addresses));
+	    }
+	    else if (`del == ret)
+	    {
+                addresses = (list<string>)DeleteItem (addresses, UI::QueryWidget (`id (`addr), `CurrentItem));
+		// selectionbox label
+		UI::ReplaceWidget (`id (`replace_addr), `SelectionBox (`id (`addr), _("Browse Addre&sses"), addresses));
+	    }
+	    else if (`edit == ret)
+	    {
+		if (UI::QueryWidget (`id (`addr), `CurrentItem) == nil)
+		    continue;
+		// popup request
+		UI::OpenDialog (ipAddrPopup (false, _("Enter &IP address"),
+		    (string)UI::QueryWidget (`id (`addr), `CurrentItem), nil));
+                symbol r = nil;
+                while (nil == r)
+                    r = (symbol)UI::UserInput ();
+                string ad = (string)UI::QueryWidget (`id (`ad), `Value);
+                UI::CloseDialog ();
+                if (r != `ok)
+                    continue;
+                if (ad != "")
+		{
+		    addresses = (list<string>)DeleteItem (addresses, UI::QueryWidget (`id (`addr), `CurrentItem));
+                    addresses = (list<string>)toset (add (addresses, ad));
+		}
+		// selectionbox label
+                UI::ReplaceWidget (`id (`replace_addr), `SelectionBox (`id (`addr), _("Browse Addre&sses"), addresses));
+
+	    }
+	    if (`next == ret)
+	    {
+		break;
+	    }
+	}
+	if (ret == `next)
+	{
+	    CUPS::cups_server_settings["Browsing"]
+		= UI::QueryWidget (`id (`browsing), `CurrentButton) == `on
+		    ? ["On"]
+		    : ["Off"];
+	    CUPS::cups_server_settings["BrowseAddress"] = addresses;
+	    CWMFirewallInterfaces::OpenFirewallStore (firewall_widget,
+		"", event);
+	}
+	return (symbol)ret;
+    }
+}

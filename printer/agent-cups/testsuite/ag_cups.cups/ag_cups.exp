@@ -1,0 +1,18 @@
+#
+# ag_cups.exp
+# 'main' file for all ag_cups tests
+#
+
+if [info exists env(TEST_CUPSD)] {
+    # get all files matching cups/*.ycp
+    set filenames [glob $srcdir/cups/*.ycp]
+
+    cups-setup-temp { $srcdir }
+
+    # foreach file, call ycp-run (from testsuite/lib)
+    foreach file $filenames { cups-run $file }
+
+    cups-shutdown-temp
+} else {
+    warning "!!! type TEST_CUPSD=1 make check as root to run this test !!!"
+}

@@ -1,0 +1,143 @@
+/**
+ * File:
+ *  uriops.ycp
+ *
+ * Module:
+ *  Printer configurator
+ *
+ * Summary:
+ *  Tests for basic translation functions.
+ *
+ * Authors:
+ *  Petr Blahos <blahos@suse.cz>, 2001
+ *
+ * $Id$
+ *
+ * Test case for operations with printer uri.
+ */
+
+{
+
+// testedfiles: Printerlib.ycp
+
+    import "Pkg";
+
+    include "testsuite.ycp";
+    map I_READ = $[
+	"target" : $[
+	    "size" : -1,
+	    "tmpdir" : "/tmp/",
+	    "yast2" : nil,
+	],
+	"sysconfig" : $[
+	    "console" : $[
+		"CONSOLE_FONT" : "",
+		"CONSOLE_SCREENMAP" : "",
+		"CONSOLE_UNICODEMAP" : "",
+		"CONSOLE_MAGIC" : "",
+		"CONSOLE_ENCODING" : "",
+	    ],
+	    "language" : $[
+		"RC_LANG" : "",
+		"DEFAULT_LANGUAGE" : "",
+	    ],
+	],
+	"etc" : $[
+	    "install_inf" : $[
+		"Cmdline" : "",
+		"InstMode" : nil,
+	    ],
+	],
+	"probe" : $[
+	    "architecture" : "i386",
+	    "has_apm" : true,
+	    "has_pcmcia" : false,
+	    "has_smp" : false,
+	    "system" : [],
+	    "memory" : [],
+	    "cpu" : [],
+	    "cdrom" : $[
+		"manual" : [],
+	    ],
+	    "floppy" : $[
+		"manual" : [],
+	    ],
+	    "is_uml" : false,
+	],
+    ];
+    map I_WRITE = $[];
+    map I_EXEC = $[
+        "target" : $[
+            "bash_output" : $[],
+        ],
+    ];
+    TESTSUITE_INIT ([I_READ, I_WRITE, I_EXEC], 0);
+    import "Printerlib";
+
+    DUMP (sformat ("aNY_OutPuT=%1", Printerlib::getUriType (nil)));
+    DUMP (sformat ("aNY_OutPuT=%1", Printerlib::getUriType ("")));
+    DUMP (sformat ("aNY_OutPuT=%1", Printerlib::getUriType ("parallel:/dev/null")));
+    DUMP (sformat ("aNY_OutPuT=%1", Printerlib::getUriType ("samba://user:pass@x.y.z/printer")));
+
+    DUMP (sformat ("aNY_OutPuT=%1", Printerlib::getUriDevice (nil)));
+    DUMP (sformat ("aNY_OutPuT=%1", Printerlib::getUriDevice ("")));
+    DUMP (sformat ("aNY_OutPuT=%1", Printerlib::getUriDevice ("parallel:/dev/null")));
+    DUMP (sformat ("aNY_OutPuT=%1", Printerlib::getUriDevice ("samba://user:pass@x.y.z/printer")));
+    DUMP (sformat ("aNY_OutPuT=%1", Printerlib::getUriDevice ("serial://dev/ttyS0?baudrate=9600")));
+
+    DUMP (sformat ("aNY_OutPuT=%1", Printerlib::getUriRemoteQueue ("lpd://gorgon/lp")));
+    DUMP (sformat ("aNY_OutPuT=%1", Printerlib::getUriRemoteQueue ("ipp://cups.suse.de/printer/lp")));
+    DUMP (sformat ("aNY_OutPuT=%1", Printerlib::getUriRemoteQueue ("samba://user:pass@gorgon/lp")));
+    DUMP (sformat ("aNY_OutPuT=%1", Printerlib::getUriRemoteQueue ("novell://user@gorgon/lpz")));
+
+    DUMP (sformat ("aNY_OutPuT=%1", Printerlib::getUriBaudrate ("serial://dev/ttyS0?baudrate=9600")));
+    DUMP (sformat ("aNY_OutPuT=%1", Printerlib::getUriBaudrate ("serial://dev/ttyS0?baudrate=96000")));
+    DUMP (sformat ("aNY_OutPuT=%1", Printerlib::getUriBaudrate ("serial://dev/ttyS0")));
+
+    DUMP (sformat ("aNY_OutPuT=%1", Printerlib::getUriHost ("lpd://gorgon/lp")));
+    DUMP (sformat ("aNY_OutPuT=%1", Printerlib::getUriHost ("ipp://cups.suse.de/printer/lp")));
+    DUMP (sformat ("aNY_OutPuT=%1", Printerlib::getUriHost ("samba://user:pass@gorgon/lp")));
+    DUMP (sformat ("aNY_OutPuT=%1", Printerlib::getUriHost ("novell://user@gorgon/lpz")));
+    DUMP (sformat ("aNY_OutPuT=%1", Printerlib::getUriHost ("socket://hp4100dn.suse.de/")));
+    DUMP (sformat ("aNY_OutPuT=%1", Printerlib::getUriHost ("socket://hp4100dn.suse.de")));
+    DUMP (sformat ("aNY_OutPuT=%1", Printerlib::getUriHost ("socket://hp4100dn.suse.de:9100")));
+
+    DUMP (sformat ("aNY_OutPuT=%1", Printerlib::getUriUsernamePass ("samba://user:pass@gorgon/lp")));
+    DUMP (sformat ("aNY_OutPuT=%1", Printerlib::getUriUsernamePass ("samba://user@gorgon/lp")));
+    DUMP (sformat ("aNY_OutPuT=%1", Printerlib::getUriUsernamePass ("samba://gorgon/lp")));
+
+    DUMP (sformat ("aNY_OutPuT=%1", Printerlib::getUriValue ("serial:/dev/ttyS0", "baudrate")));
+    DUMP (sformat ("aNY_OutPuT=%1", Printerlib::getUriValue ("serial:/dev/ttyS0?baudrate=15", "baudrate")));
+    DUMP (sformat ("aNY_OutPuT=%1", Printerlib::getUriValue ("serial:/dev/ttyS0?baudrate=15+bits=7", "baudrate")));
+    DUMP (sformat ("aNY_OutPuT=%1", Printerlib::getUriValue ("serial:/dev/ttyS0?bits=7+baudrate=15", "baudrate")));
+    DUMP (sformat ("aNY_OutPuT=%1", Printerlib::getUriValue ("serial:/dev/ttyS0?baudrate=15", "baudrate")));
+    DUMP (sformat ("aNY_OutPuT=%1", Printerlib::getUriValue ("serial:/dev/ttyS0?baudrate=15+add=a a a+bits=15", "add")));
+    DUMP (sformat ("aNY_OutPuT=%1", Printerlib::getUriValue ("serial:/dev/ttyS0?baudrate=15+add=a a a+bits=15", "bits")));
+
+    DUMP (sformat ("aNY_OutPuT=%1", Printerlib::getUriPort ("socket://hp4100dn.suse.de:9100")));
+    DUMP (sformat ("aNY_OutPuT=%1", Printerlib::getUriPort ("ipp://zealot.suse.cz:666/printer/1")));
+    DUMP (sformat ("aNY_OutPuT=%1", Printerlib::getUriPort ("ipp://zealot.suse.cz/printer/1")));
+    DUMP (sformat ("aNY_OutPuT=%1", Printerlib::getUriPort ("socket://hp4100dn.suse.de")));
+
+    DUMP (sformat ("aNY_OutPuT=%1", Printerlib::getUriDevice ("serial:/dev/ttyS0?baudrate=9600+ty=ixon -imaxbel -ixany -ixoff")));
+    DUMP (sformat ("aNY_OutPuT=%1", Printerlib::getUriBaudrate ("serial:/dev/ttyS0?baudrate=9600+ty=ixon -imaxbel -ixany -ixoff")));
+    DUMP (sformat ("aNY_OutPuT=%1", Printerlib::getUriValue ("serial:/dev/ttyS0?baudrate=9600+ty=ixon -imaxbel -ixany -ixoff", "ty")));
+
+    DUMP (sformat ("aNY_OutPuT=%1", Printerlib::getUriWorkgroup ("samba://user:pass@workgroup/host/queue")));
+    DUMP (sformat ("aNY_OutPuT=%1", Printerlib::getUriHost("samba://user:pass@workgroup/host/queue")));
+    DUMP (sformat ("aNY_OutPuT=%1", Printerlib::getUriRemoteQueue ("samba://user:pass@workgroup/host/queue")));
+    DUMP (sformat ("aNY_OutPuT=%1", Printerlib::getUriUsernamePass ("samba://user:pass@workgroup/host/queue")));
+
+    DUMP (sformat ("aNY_OutPuT=%1", Printerlib::getUriWorkgroup ("samba://workgroup/host/queue")));
+    DUMP (sformat ("aNY_OutPuT=%1", Printerlib::getUriHost("samba://workgroup/host/queue")));
+    DUMP (sformat ("aNY_OutPuT=%1", Printerlib::getUriRemoteQueue ("samba://workgroup/host/queue")));
+    DUMP (sformat ("aNY_OutPuT=%1", Printerlib::getUriUsernamePass ("samba://workgroup/host/queue")));
+
+    DUMP (sformat ("aNY_OutPuT=%1", Printerlib::getUriWorkgroup ("samba://user:pass@host/queue")));
+    DUMP (sformat ("aNY_OutPuT=%1", Printerlib::getUriHost("samba://user:pass@host/queue")));
+    DUMP (sformat ("aNY_OutPuT=%1", Printerlib::getUriRemoteQueue ("samba://user:pass@host/queue")));
+    DUMP (sformat ("aNY_OutPuT=%1", Printerlib::getUriUsernamePass ("samba://user:pass@host/queue")));
+
+
+
+}

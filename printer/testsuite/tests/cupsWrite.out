@@ -1,0 +1,47 @@
+Read	.etc.cups.client_conf.value.ServerName ""
+Read	.target.size "/var/run/listen_remote_ipp.pid" 555
+Read	.target.string "/var/run/listen_remote_ipp.pid" ""
+Execute	.target.bash "kill -15 " 0
+Write	.etc.cups.client_conf.value.ServerName nil true
+Write	.etc.cups.client_conf nil true
+Dir	.etc.cups.cupsd_conf.value: []
+Dir	.etc.cups.cupsd_conf.section: []
+Write	.etc.cups.cupsd_conf nil true
+Execute	.target.bash "test -f /etc/init.d/lpd && /etc/init.d/lpd stop" 0
+Execute	.target.bash "test -f /etc/init.d/cups && /etc/init.d/cups stop" 0
+Read	.init.scripts.exists "lpd" true
+Execute	.target.bash "/usr/bin/lpstat -r 2>/dev/null" 0
+Write	.cups.default_dest "" true
+Write	.target.ycp "/var/lib/YaST2/printers" $["cups_usb_devices":`always, "drivers_were_installed":nil, "printers":[], "version":523] true
+Execute	.target.bash "/bin/chmod 600 /var/lib/YaST2/printers" 0
+Execute	.target.bash "test -f /etc/init.d/lpd && /etc/init.d/lpd stop" 0
+Execute	.target.bash "test -f /etc/init.d/cups && /etc/init.d/cups stop" 0
+Execute	.target.bash "test -f /etc/init.d/cups && /etc/init.d/cups start" 0
+Return	true
+Dump	====================================================
+Read	.target.size "/var/run/listen_remote_ipp.pid" 555
+Read	.target.string "/var/run/listen_remote_ipp.pid" ""
+Execute	.target.bash "kill -15 " 0
+Write	.etc.cups.client_conf.value.ServerName nil true
+Write	.etc.cups.client_conf nil true
+Write	.etc.cups.cupsd_conf nil true
+Execute	.target.bash "test -f /etc/init.d/lpd && /etc/init.d/lpd stop" 0
+Execute	.target.bash "test -f /etc/init.d/cups && /etc/init.d/cups stop" 0
+Read	.init.scripts.exists "lpd" true
+Execute	.target.bash "/usr/bin/lpstat -r 2>/dev/null" 0
+Write	.cups.printers.remove "lpx" true
+Execute	.target.bash "/bin/grep '#this database was generated during package building' /var/lib/YaST2/ppd_db.ycp" 0
+Read	.ppd.db.changed false
+Read	.target.ycp "/var/lib/YaST2/ppd_db.ycp" $["":$["":$["":$["filename":"filename"]]]]
+Read	.target.tmpdir "/tmp"
+Write	.ppd.file.modify ["filename", "/tmp/patched_ppd_lp", $[]] true
+Read	.target.size "/tmp/patched_ppd_lp" 555
+Write	.cups.printers.add $["accepting":true, "allowusers":[], "bannerend":"none", "bannerstart":"none", "changed":true, "default":true, "denyusers":[], "name":"lp", "ppd":"/tmp/patched_ppd_lp", "state":"idle", "uri":"parallel://dev/lp0"] true
+Write	.cups.default_dest "lp" true
+Write	.target.ycp "/var/lib/YaST2/printers" $["cups_usb_devices":`always, "drivers_were_installed":nil, "printers":[$["name":"lp", "uri":"parallel://dev/lp0"]], "version":523] true
+Execute	.target.bash "/bin/chmod 600 /var/lib/YaST2/printers" 0
+Execute	.target.bash "test -f /etc/init.d/lpd && /etc/init.d/lpd stop" 0
+Execute	.target.bash "test -f /etc/init.d/cups && /etc/init.d/cups stop" 0
+Execute	.target.bash "test -f /etc/init.d/cups && /etc/init.d/cups start" 0
+Return	true
+Dump	====================================================

@@ -1,0 +1,601 @@
+/**
+ * File:
+ *  wizards.ycp
+ * Module:
+ *  Printer configurator
+ * Summary:
+ *  Wizard sequencer
+ * Authors:
+ *  Petr Blahos <pblahos@suse.cz>
+ *  Jiri Srain <jsrain@suse.cz>
+ *
+ * $Id$
+ */
+{
+    textdomain "printer";
+
+    import "Arch";
+    import "Label";
+    import "Mode";
+    import "Printer";
+    import "Sequencer";
+    import "Wizard";
+
+    include "printer/dialogs-connection.ycp";
+    include "printer/dialogs-cups.ycp";
+    include "printer/dialogs.ycp";
+
+// pre-declare sequences
+
+    define symbol MainSequence();
+    define symbol AddPrinterSubSequence ();
+    define symbol EditPrinterSequence ();
+    define symbol AddPrinterSequence ();
+
+    /**
+      * Get map of aliases for wizard sequencer.
+      * @return aliases
+      */
+    define map<string,any> getAliases () ``{
+	 return $[
+	    // switchers, no dialogs
+	    "detectconftype" :	[ ``(detectConfigType ()), true],
+	    "config_type" :	[ ``(getInstType ()), true, ],
+
+	    // sequences
+	    "main_wz" :		``(MainSequence ()),
+	    "add_printer_wz" :	``(AddPrinterSequence ()),
+	    "edit_printer_wz" :	``(EditPrinterSequence ()),
+	    "add_printer_sub_wz":``(AddPrinterSubSequence ()),
+
+	    // real dialogs
+	    "name_auto" :	``(runNameDialog (true)),
+	    "name" :		``(runNameDialog (false)),
+            "detected" :        ``(runDetectedDialog ()),
+            "complex" :         ``(runComplexDialog ()),
+	    "model" :           ``(runManufModelDialog ()),
+	    "inst_printer" :    ``(runInstalledPrinterDialog ()),
+	    "queues_proposal" : ``(runQueuesProposalDialog ()),
+
+	    // connection selection
+	    "connection_type" :	``(runConnectionTypeDialog ()),
+	    "connection_local" :``(runLocalConnectionDialog ()),
+	    "connection_cups" : ``(runCupsConnectionDialog ()),
+	    "connection_direct":``(runDirectConnectionDialog ()),
+	    "connection_other": ``(runOtherConnectionDialog ()),
+		// by connection type
+		    // local
+	    "parallel" :	``(runDeviceDialog ("parallel")),
+	    "serial" :          ``(runDeviceDialog ("serial")),
+	    "usb" :             ``(runDeviceDialog ("usb")),
+	    "irda" :            ``(runDeviceDialog ("irda")),
+	    "bluetooth" :	``(runDeviceDialog ("bluetooth")),
+		    // special
+	    "ppdetails" :       ``(editParallelPort ()),
+            "spdetails" :       ``(editSerialPort ()),
+		    // remote
+	    "lpd" :             ``(runRemoteDialog ("lpd")),
+	    "ipp" :             ``(runRemoteDialog ("ipp")),
+	    "samba" :           ``(runRemoteDialog ("samba")),
+	    "novell" :          ``(runRemoteDialog ("novell")),
+	    "socket" :          ``(runRemoteDialog ("socket")),
+		    // other
+	    "pipe" :            ``(runPipeDialog ()),
+	    "other" :           ``(runUriDialog()),
+		    // cups-only
+	    "listen_ipp_bcast": ``(runListenIPPDialog ()),
+	    "cups_client" :     ``(runCupsClientDialog (false)),
+
+		// cups only
+
+		// lprng only
+
+
+	    "advanced" :	``(runAdvancedDialog ()),
+	    "cupsd" :		``(runCupsServerDialog ()),
+            "cupsaclroot" :	``(runCupsAclDialog (`root)),
+            "cupsacladmin" :	``(runCupsAclDialog (`admin)),
+            "cupsaclprinters" :	``(runCupsAclDialog (`printers)),
+            "cupsaclclasses" :	``(runCupsAclDialog (`classes)),
+	    "cupsaclbcast" :	``(runCupsAclDialog (`bcast)),
+	    "cups_client_main":	``(runCupsClientDialog (true)),
+	    "useppd" :		``(runSelectPpdFile ()),
+	    "downloadppd" :	``(runDownloadPpdFile ()),
+	    "ppdselect" :	``(runPpdSelectDialog (false)),
+	    "ppdselect_all" :	``(runPpdSelectDialog (true)),
+	    "members" :		``(runMembersDialog ()),
+	    "filter" :		``(runOptionsDialog ()),
+	    "users" :		``(runUsersDialog ()),
+	    "state" :		``(runStateDialog ()),
+	    "edit" :		``(runEditDialog ()),
+	    "redetect" :	[ ``(runProbeDialog ()), true ],
+	    "storeprinter" :	[ ``(storePrinter ()) , true ],
+
+
+	    "cups_usb" :	``(runCupsUsbDeviceTypeDialog ()),
+	];
+    }
+    /**
+     * Show all dialogs with some fake data...
+     */
+    define void testDialogs () ``{
+	// FIXME if is really needed
+	Printer::printcap = [
+	    $["conf":$[], "ff":false, "name":"rem", "raw":false, "type":"yast2", "uri":"lpd://printer.suse.de/lp"],
+	];
+	Printer::autodetected = [
+	    $["dev_name":"/dev/usb/lp0", "device":"BJC-6100", "unique_key":"Kns9.VeHHAhw8MvA", "uri":"usb:/dev/usb/lp0", "vendor":"Canon"],
+	];
+	Printer::default = "lp";
+	Printer::selectPrinter (3);
+	list<string> seq = [ "detected", "configdetected", "quick", "complex", "connection_local", "usb", "name", "model", "filter", "featues", "edit", ];
+	foreach (string i, seq, ``{
+	    eval (getAliases ()[i]:nil);
+	});
+	Printer::index = -1;									runLocalConnectionDialog ();
+	Printer::printer = add (Printer::printer, "uri", "parallel:/dev/lp0");		runDeviceDialog ("parallel");
+	Printer::printer = add (Printer::printer, "uri", "serial:/dev/ttyS0");		runDeviceDialog ("serial");
+	Printer::printer = add (Printer::printer, "uri", "file:/tmp/printer.ps");		runPipeDialog ();
+	Printer::printer = add (Printer::printer, "uri", "samba://user@smb.suse.de/lp");	runRemoteDialog ("samba");
+	Printer::printer = add (Printer::printer, "uri", "novell://user@novell.suse.de/lp");runRemoteDialog ("novell");
+	Printer::printer = add (Printer::printer, "uri", "lpr://printer.suse.de/lp");	runRemoteDialog ("lpd");
+    }
+
+    /**
+      * Workflow for editing a single queue
+      * @return sequence result
+      */
+    define symbol EditPrinterSequence () ``{
+	map<string,any> aliases = getAliases ();
+	map sequence = $[
+	    "ws_start"   : "edit",
+	    "edit" : $[
+		`con_samba : "samba",
+		`con_novell : "novell",
+		`con_lpd: "lpd",
+		`con_pipe: "pipe",
+		`con_ipp : "ipp",
+		`con_socket: "socket",
+		`con_local : "connection_local",
+		`con_uri : "other",
+		`name : "name",
+		`model : "model",
+		`ppd : "ppdselect",
+		`settings : "filter",
+		`state : "state",
+		`perm : "users",
+		`class_members : "members",
+		`add : "add_printer_sub_wz",
+		`next : "storeprinter",
+		`abort : `abort,
+		],
+	    "state" : $[ `next : "edit", `abort : `abort, ],
+	    "users" : $[ `next : "edit", `abort : `abort, ],
+	    "add_printer_sub_wz" : $[
+		`next : `edit,
+		`edit : `edit,
+		`abort : `abort
+	    ],
+	    "other" : $[ `next : "edit", `abort : `abort, ],
+	    "samba" : $[ `next : "edit", `abort : `abort, ],
+	    "novell" : $[ `next : "edit", `abort : `abort, ],
+	    "ipp" : $[ `next : "edit", `abort : `abort, ],
+	    "socket" : $[ `next : "edit", `abort : `abort, ],
+	    "connection_local" : $[
+		`parallel: "parallel",
+		`serial : "serial",
+		`usb : "usb",
+		`irda : "irda",
+		`bluetooth : "bluetooth",
+		`abort : `abort,
+	    ],
+	    "parallel" : $[
+		`abort : `abort,
+		`next : "edit",
+		`ppdetails : "ppdetails",
+	    ],
+	    "ppdetails" : $[ `abort : `abort, `next : "parallel", ],
+	    "serial" : $[
+		`abort : `abort,
+		`next : "edit",
+		`spdetails : "spdetails",
+	    ],
+	    "spdetails" : $[ `abort : `abort, `next : "serial", ],
+	    "usb" : $[ `abort : `abort, `next : "edit", ],
+	    "irda" : $[ `next : "edit", `abort : `abort, ],
+	    "bluetooth" : $[ `next : "edit", `abort : `abort, ],
+	    "lpd" : $[ `abort: `abort, `next: "edit", ],
+	    "pipe" : $[ `abort : `abort, `next : "edit", ],
+	    "model" : $[
+		`abort : `abort,
+		`next : "edit",
+		`specifyppd : "useppd",
+		`downloadppd : "downloadppd",
+		`select_ppd : "ppdselect_all",
+	    ],
+	    "ppdselect_all" : $[
+		`abort : `abort,
+		`next : "edit",
+		`select_model : "model",
+	    ],
+	    "ppdselect" : $[
+		`abort : `abort,
+		`advanced : "filter",
+		`next: "edit",
+	    ],
+	    "name" : $[
+		`abort : `abort,
+		`next : "edit",
+		`raw : "edit",
+		`class : "edit"
+	    ],
+	    "filter" : $[
+		`abort : `abort,
+		`next : "edit",
+	    ],
+	    "useppd" : $[
+		`abort : `abort,
+		`next : "model",
+	    ],
+	    "downloadppd" : $[ `abort : `abort, `next : "model"],
+	    "members" : $[ `abort : `abort, `next : "edit", ],
+	    "storeprinter" : $[`next : `next, ],
+	];
+	aliases = (map<string,any>)filter (string k, any v, aliases, ``(haskey (sequence, k)));
+	return Sequencer::Run (aliases, sequence);
+    }
+
+    /**
+     * Get the sub-sequence of adding new queue
+     * @return a map the sub sequence for WS
+     */
+    define map<string,any> getAddPrinterSubSequence () ``{
+	return $[
+	    "ws_start"   : "detectconftype",
+	    "detectconftype" : $[
+                `abort : `abort,
+                `quick : `edit,
+                `name : "name_auto",
+		`installed_printer : "inst_printer",
+		`connection : "connection_type",
+	    ],
+	    "connection_type" : $[
+		`parallel : "parallel",
+		`serial: "serial",
+		`usb: "usb",
+		`irda: "irda",
+		`bluetooth: "bluetooth",
+		`cups : "connection_cups",
+		`lpd : "lpd",
+		`smb : "samba",
+		`ipx : "novell",
+		`direct : "connection_direct",
+		`queue : "inst_printer",
+		`other : "connection_other",
+		`abort : `abort,
+	    ],
+	    "connection_cups" : $[
+		`cups_client : "cups_client",
+		`listen_ipp : "listen_ipp_bcast",
+		`ipp : "ipp",
+		`abort : `abort,
+	    ],
+	    "connection_direct" : $[
+		`socket : "socket",
+		`lpd : "lpd",
+		`ipp : "ipp",
+		`uri : "other",
+		`abort : `abort,
+	    ],
+	    "connection_other" : $[
+		`class : "name_auto",
+		`pipe : "pipe",
+		`uri : "other",
+		`abort : `abort,
+	    ],
+	    // single connection types
+	    "parallel" : $[
+		`next : "name_auto",
+		`abort : `abort,
+		`ppdetails : "ppdetails",
+	    ],
+	    "pipe" : $[ `next : "name_auto", `abort : `abort, ],
+	    "serial" : $[
+		`next : "name_auto",
+		`abort : `abort,
+		`spdetails : "spdetails",
+	    ],
+	    "usb" : $[ `next : "name_auto", `abort : `abort, ],
+	    "irda" : $[ `next : "name_auto", `abort : `abort, ],
+	    "bluetooth" : $[ `next : "name_auto", `abort : `abort, ],
+	    "samba" : $[ `next : "name_auto", `abort : `abort, ],
+	    "novell" : $[ `next : "name_auto", `abort : `abort, ],
+	    "lpd" : $[ `next : "name_auto", `abort : `abort, ],
+	    "ipp" : $[ `next : "name_auto", `abort : `abort, ],
+	    "socket" : $[ `next : "name_auto", `abort : `abort, ],
+	    "other" : $[ `next : "name_auto", `abort : `abort, ],
+            "ppdetails" : $[ `abort : `abort, `next : "parallel", ],
+            "spdetails" : $[ `abort : `abort, `next : "serial", ],
+	    "listen_ipp_bcast" : $[
+		`abort : `abort,
+		`next : "storeprinter",
+		`perm : "cupsaclbcast",
+	    ],
+	    "cupsaclbcast" : $[ `abort : `abort, `next : "listen_ipp_bcast"],
+	    "cups_client" : $[ `abort : `abort, `next : "storeprinter" ],
+	    // end of connection types
+	    "inst_printer" : $[ `next : `edit, `abort : `abort, ],
+
+	    "name_auto" : $[
+		`abort : `abort,
+		`next : "model",
+		`raw : "storeprinter",
+		`class : "members",
+	    ],
+	    "model" : $[
+		`abort : `abort,
+		`next : `edit,
+		`next_propose_queues : "queues_proposal",
+		`specifyppd : "useppd",
+		`downloadppd : "downloadppd",
+		`select_ppd : "ppdselect_all",
+	    ],
+	    "ppdselect_all" : $[
+		`abort : `abort,
+		`next : `edit,
+		`select_model : "model",
+	    ],
+	    "useppd" : $[
+		`abort : `abort,
+		`next : "model",
+	    ],
+	    "downloadppd" : $[
+		`abort : `abort,
+		`next: "model",
+	    ],
+	    "members" : $[
+		`abort : `abort,
+		`next : `edit,
+	    ],
+	    "queues_proposal" : $[
+		`abort : `abort,
+		`next : `next,
+	    ],
+
+	    "storeprinter" : $[`next : `next, ],
+	];
+    }
+
+    /**
+      * Workflow for adding a single queue
+      * @return sequence result
+      */
+    define symbol AddPrinterSubSequence () ``{
+	map<string,any> aliases = getAliases ();
+	map sequence = getAddPrinterSubSequence ();
+	aliases = (map<string,any>)filter (string k, any v, aliases, ``(haskey (sequence, k)));
+	return Sequencer::Run(aliases, sequence);
+    }
+
+    /**
+      * Workflow for adding a single queue
+      * @return sequence result
+      */
+    define symbol AddPrinterSequence () ``{
+	map<string,any> aliases = getAliases ();
+	map sequence = $[
+/*	    "ws_start"   : "add_printer_sub_wz",
+	    "add_printer_sub_wz" : $[
+                `abort : `abort,
+		`next : `next,
+		`edit : "edit_printer_wz"
+//                `quick : "edit_printer_wz",
+//                `name : "name_auto",
+//		`installed_printer : "inst_printer",
+//		`connection : "connection_type",
+	    ],*/
+	    "edit_printer_wz" : $[ `abort : `abort, `next : `next ],
+	];
+	map<string,any> add_seq = getAddPrinterSubSequence ();
+	add_seq = mapmap (string k, any v, add_seq, ``{
+	    if (is (v, map))
+	    {
+		v = mapmap (symbol event, any vv, (map<symbol,any>)v, ``{
+		    if (vv == `edit)
+			vv = "edit_printer_wz";
+		    return $[ event : vv ];
+		});
+	    }
+	    return $[ k : v ];
+	});
+	sequence = union (sequence, add_seq);
+	aliases = (map<string,any>)filter (string k, any v, aliases, ``(haskey (sequence, k)));
+	return Sequencer::Run(aliases, sequence);
+    }
+
+    /**
+      * Main workflow of the printer configuration with detected printers dialog
+      * @return sequence result
+      */
+    define symbol MainSequence() ``{
+	map<string,any> aliases = getAliases ();
+	map sequence = $[
+	    "ws_start" : "config_type",
+	    "config_type" : $[
+		`server : "complex",
+		`client : "cups_client_main",
+	    ],
+	    "complex"  : $[
+		`next : `next,
+		`add  : "add_printer_wz",
+		`edit : "edit_printer_wz",
+		`abort : `abort,
+		`client : "cups_client_main",
+		`advanced : "advanced",
+	    ],
+	    "advanced" : $[
+		`next : "config_type",
+		`this : "advanced",
+		`cups : "config_type",
+		`cupsd : "cupsd",
+		`cupsusb : "cups_usb",
+		`reinstall : `reinstall,
+		`switch : `switch,
+		`abort : `abort,
+	    ],
+	    "cups_usb" : $[
+		`next : "advanced",
+		`abort : `abort,
+	    ],
+	    "cupsd" : $[
+		`next : "advanced",
+		`abort : `abort,
+		`root : "cupsaclroot",
+		`admin : "cupsacladmin",
+		`printers : "cupsaclprinters",
+		`classes : "cupsaclclasses",
+	    ],
+	    "cupsaclroot" : $[
+		`next : "cupsd",
+		`abort : `abort,
+	    ],
+            "cupsacladmin" : $[
+                `next : "cupsd",
+                `abort : `abort,
+            ],
+            "cupsaclprinters" : $[
+                `next : "cupsd",
+                `abort : `abort,
+            ],
+            "cupsaclclasses" : $[
+                `next : "cupsd",
+                `abort : `abort,
+            ],
+	    "add_printer_wz" : $[
+		`next: "complex",
+		`abort : `abort,
+	    ],
+	    "edit_printer_wz": $[
+		`next: "complex",
+		`abort : `abort,
+	    ],
+	    "cups_client_main" : $[
+		`next : `next,
+		`abort : `abort,
+		`advanced : "advanced",
+		`switch : `switch,
+	    ],
+	];
+	aliases = (map<string,any>)filter (string k, any v, aliases, ``(haskey (sequence, k)));
+	return Sequencer::Run(aliases, sequence);
+    }
+
+    /**
+      * Main workflow of the printer configuration with detected printers dialog
+      * @return sequence result
+      */
+    define symbol DetectedSequence() ``{
+	map<string,any> aliases = getAliases ();
+	map sequence = $[
+	    "ws_start" : "detected",
+	    "redetect" : $[`next : "detected", ],
+	    "detected" : $[
+		`next : `next,
+		`abort : `abort,
+		`configure_button : "add_printer_wz",
+		`restart_button : "redetect",
+		`edit_button : "main_wz",
+		`change_ipp_listen : "listen_ipp_bcast",
+	    ],
+	    "add_printer_wz" : $[
+		`abort : `abort,
+		`next : "detected",
+	    ],
+	    "main_wz" : $[
+		`next : `next,
+		`abort : `abort,
+		`switch : `switch,
+		`reinstall : `reinstall,
+	    ],
+	    "listen_ipp_bcast" : $[
+		`next : "detected",
+		`abort : `abort,
+		`perm : "cupsaclbcast",
+	    ],
+	    "cupsaclbcast" : $[ `abort : `abort, `next : "listen_ipp_bcast"],
+	];
+	aliases = (map<string,any>)filter (string k, any v, aliases, ``(haskey (sequence, k)));
+	return Sequencer::Run(aliases, sequence);
+    }
+
+    /**
+      * Whole configuration of printer but without reading and writing.
+      * For use with autoinstallation.
+      * @return sequence result
+      */
+    define symbol PrinterAutoSequence() ``{
+	Wizard::CreateDialog();
+	Wizard::SetDesktopIcon("printer");
+        Wizard::SetContentsButtons("", `VBox (), "",
+            Label::BackButton(), Label::NextButton());
+	if (Stage::cont ()) // running from hardware proposal
+	{
+	    if (! Printer::checkSpooler ())
+	    {
+		UI::CloseDialog();
+		return `back;
+	    }
+	}
+	symbol ret = DetectedSequence();
+	UI::CloseDialog();
+	return ret;
+    }
+
+    /**
+      * Whole configuration of dns-server
+      * @return sequence result
+      */
+    define symbol PrinterSequence() ``{
+	map aliases = $[
+	    "read"	: [ ``( ReadDialog() ), true ],
+	    "main"	:   ``( DetectedSequence() ),
+	    "write"	: [ ``( WriteDialog() ), true ],
+//	    "switch"	: [ ``(`next), true ],
+//	    "reinstall"	: [ ``(`next), true ],
+	];
+
+	map sequence = $[
+	    "ws_start"		: "read",
+	    "read" : $[
+		`abort		: `abort,
+		`next		: "main"
+	    ],
+	    "main" : $[
+		`abort		: `abort,
+		`next		: "write",
+		`switch		: "read",
+		`reinstall	: "read",
+	    ],
+/*	    "switch" : $[
+		`next : "read",
+	    ],
+	    "reinstall" : $[
+		`next : "read",
+	    ],*/
+	    "write" : $[
+		`abort  : `abort,
+		`next   : `next
+	    ]
+	];
+
+	Wizard::CreateDialog();
+	Wizard::SetDesktopIcon("printer");
+	symbol ret = Sequencer::Run(aliases, sequence);
+
+	UI::CloseDialog();
+	return ret;
+    }
+
+
+
+}

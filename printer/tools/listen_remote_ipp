@@ -1,0 +1,62 @@
+#! /bin/bash
+#
+# Listen on UDP port 631 for incoming CUPS network server broadcasts
+# and if so extract the CUPS network server name
+#
+# Exits: 0 doesn't seem to have a problem
+#        1 local UDP port 631 not available (perhaps cupsd is running?)
+#        2 cannot create temporary file
+
+set -x
+
+YAST_OUTPUT="/var/lib/YaST2/cups_network_server_name"
+# The minimum timeout is 31 seconds because by default a
+# CUPS server broadcasts every 30 seconds.
+MINIMUM_TIMEOUT=31
+
+cleanup()
+{ EXIT_CODE=$?
+  kill $NETCAT_PID &>/dev/null
+  rm -f $OUTPUT &>/dev/null
+  rm -f $PID_FILE &>/dev/null
+  exit $EXIT_CODE
+}
+trap 'cleanup' 0 2 3 15
+# Use SIGHUP to stop the additional waiting
+trap 'SIGHUP_RECEIVED=1' 1
+
+MY_NAME=${0##*/}
+PID_FILE="/var/run/${MY_NAME}.pid"
+echo $$ 1>$PID_FILE
+
+# An additional timeout may be set
+ADDITIONAL_TIMEOUT="$1"
+[ -z "$ADDITIONAL_TIMEOUT" ] && ADDITIONAL_TIMEOUT=1
+
+# Test whether local UDP port 631 is not available for connecting
+fuser -n udp 631 &>/dev/null && exit 1
+
+# Create temporary file
+OUTPUT=$(mktemp -u /tmp/$MY_NAME.XXXXXX) || exit 2
+
+# Listen on UDP port 631 for CUPS network server packages
+netcat -u -l -p 631 1>$OUTPUT 2>/dev/null &
+NETCAT_PID=$!
+
+# sleep is not interrupted by signals (except SIGKILL)
+sleep $MINIMUM_TIMEOUT
+
+# if SIGHUP was sent during "sleep $MINIMUM_TIMEOUT"
+# then "SIGHUP_RECEIVED=1" is set by the signal handler
+# if SIGHUP is sent during "sleep $ADDITIONAL_TIMEOUT &"
+# then "wait $!" would be interrupted
+[ -z "$SIGHUP_RECEIVED" ] && sleep $ADDITIONAL_TIMEOUT & wait $!
+
+# as "netcat -w" does not work together with "-u" we send SIGTERM
+kill $NETCAT_PID &>/dev/null
+
+# extract the CUPS network server name from the output
+# and store it to be available for YaST
+sed -n -e 's/^.*ipp:\/\/\(.*\):.*$/\1/p' $OUTPUT 1>$YAST_OUTPUT
+
+exit 0
