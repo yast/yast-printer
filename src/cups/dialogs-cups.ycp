@@ -311,10 +311,13 @@ on the remote host."))),
 		    ret = nil;
 		    continue;
 		}
-		string dir = (string)SCR::Read (.target.tmpdir);
+		string dir = (string)SCR::Read (.target.tmpdir) + "/ppd_files";
+		y2milestone ("Working dir: %1", dir);
+		SCR::Execute (.target.bash, sformat (
+		    "test -d %1 || mkdir -p %1", dir));
 		SCR::Execute (.target.bash, sformat (
 		    "/bin/rm %1/*", dir));
-		SCR::Execute (.target.bash, sformat ("/bin/cp %1 %2",
+		SCR::Execute (.target.bash, sformat ("/bin/cp '%1' '%2'",
 		    file, dir));
                 if (! Printerdb::processPpdFiles (dir))
                 {
