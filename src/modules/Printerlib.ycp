@@ -410,7 +410,10 @@ ECHO_PID=$!
     global define string getUriRemoteQueue (string uri) ``{
 	if (nil == uri || "" == uri)
 	    return "";
-	integer i = findfirstof (uri, "/");
+	integer i = findfirstof (uri, "@");
+	if (i != nil)
+	    uri = substring (uri, i + 1);
+	i = findfirstof (uri, "/");
 	if (nil == i)
 		return "";
 	string s = substring (uri, i + 1);
@@ -508,9 +511,10 @@ ECHO_PID=$!
 	integer i = findfirstof (dev, "@");
 	if (nil != i)
 	    dev = substring (dev, i + 1);
-	if (getUriType (uri) == "samba")
+	else if (getUriType (uri) == "samba")
 	{
-	    list uri_list = splitstring (dev, "/");
+	    list<string> uri_list = splitstring (dev, "/");
+	    uri_list = filter (string c, uri_list, {return c != "";});
 	    if (size (uri_list) >= 3)
 		return uri_list[1]:"";
 	}
@@ -525,39 +529,13 @@ ECHO_PID=$!
     }
 
     /**
-      * Get workgroup from URI
-      * @param uri string
-      * @return string workgroup
-      */
-    global define string getUriWorkgroup (string uri) ``{
-	if (getUriType (uri) != "samba")
-	    return "";
-        string dev = getUriDevice (uri);
-        if ("" == dev)
-            return "";
-        dev = substring (dev, 1);
-        // is there a user@pass?
-        integer i = findfirstof (dev, "@");
-        if (nil != i)
-            dev = substring (dev, i + 1);
-        if (getUriType (uri) == "samba")
-	{
-	    list uri_list = splitstring (dev, "/");
-            if (size (uri_list) >= 3)
-                return uri_list[0]:"";
-
-	}
-	return "";
-
-    }
-
-    /**
      * Get uri user name and password. Applies to samba, novell.
      * @param uri printer uri
-     * @return [ username, password ]
+     * @return [ username, password, workgroup ]
      * @see getUriType
      */
-    global define list getUriUsernamePass (string uri) ``{
+    global define list getUriUsernamePassWorkgroup (string uri) ``{
+	string type = getUriType (uri);
 	if (size (uri) < 8)
 	    return [ "", "" ];
 	uri = substring (uri, 8);
@@ -565,7 +543,16 @@ ECHO_PID=$!
 	    uri = substring (uri, 1);
 	integer len = findfirstof (uri, "@");
 	if (nil == len)
+	{
+	    if (type == "samba")
+	    {
+		list<string> parts = splitstring (uri, "/");
+		parts = filter (string s, parts, {return s != "";});
+		if (size (parts) >= 3)
+		    return [ "", "", parts[0]:""];
+	    }
 	    return [ "", "" ];
+	}
 	string user = substring (uri, 0, len);
 	string pass = "";
 	len = findfirstof (user, ":");
@@ -574,7 +561,14 @@ ECHO_PID=$!
 	    pass = substring (user, len + 1);
 	    user = substring (user, 0, len);
 	}
-	return [ user, pass, ];
+	string workgroup = "";
+	len = findfirstof (user, "/");
+	if (len != nil)
+	{
+	    workgroup = substring (user, 0, len);
+	    user = substring (user, len + 1);
+	}
+	return [ user, pass, workgroup];
     }
     /**
      * Get nice name for printer uri
