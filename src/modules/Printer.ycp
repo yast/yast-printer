@@ -1674,10 +1674,18 @@ the selected spooler does not support it."), name));
 	});
 	if (Spooler::Get () == "cups")
 	{
+	    string ipp_listen_modify = "";
+	    if (contains (style, `ipp_listen_modify))
+	    {
+		ipp_listen_modify = sformat (
+		    " <a href=\"change_ipp_listen\">%1</a>",
+		    // link in rich text
+		    _("Change"));
+	    }
 	    if (contains (CUPS::cups_server_settings["Browsing"]:["On"], "On"))
 	    {
 		// part of summary
-		summary = add (summary, _("<LI>Listen to remote CUPS servers to get comfortable access to remote queues.</LI>"));
+		summary = add (summary, _("<LI>Listen to remote CUPS servers to get comfortable access to remote queues.</LI>") + ipp_listen_modify);
 		if (! Mode::config && Service::Enabled("SuSEfirewall2_init"))
 		{
 		    map<string,boolean> service_status = $[];
@@ -1704,13 +1712,13 @@ the selected spooler does not support it."), name));
 		    if (size (allowed_interfaces) == 0)
 		    {
 			// part of summary
-			summary = add (summary, _("<li>Port for listening to remote CUPS servers is closed by firewall.</li>"));
+			summary = add (summary, _("<li>Port for listening to remote CUPS servers is closed by firewall.</li>") + ipp_listen_modify);
 		    }
 		    else
 		    {
 			string il = mergestring (allowed_interfaces, ", ");
 			// part of summary, %1 is list of interfaces
-			summary = add (summary, sformat (_("<li>Port for listening to remote CUPS servers is open on %1.</li>"), il));
+			summary = add (summary, sformat (_("<li>Port for listening to remote CUPS servers is open on %1.</li>"), il) + ipp_listen_modify);
 		    }
 		}
 	    }

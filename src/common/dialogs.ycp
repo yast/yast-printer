@@ -2070,7 +2070,7 @@ the current configuration."));
 	    true,
 	    // richtext caption
 	    _("<P>Already installed printers and queues:</P>")
-	    + Printer::Summary ([`nonew, `test, `state])
+	    + Printer::Summary ([`nonew, `test, `state, `ipp_listen_modify])
 	    );
 	// dialog label
 	Wizard::SetContentsButtons (_("Printer Configuration"), contents, getDetectedHelp (), Label::BackButton (), Label::FinishButton ());
@@ -2084,10 +2084,18 @@ the current configuration."));
 		ret = `abort;
 	    if (is (ret, string))
 	    {
-		// request for testing printer...
-		Printer::selectPrinterByName ((string)ret);
-		PrinterTest::testPrinter (Printer::printer, `ask);
-		continue ;
+		if (ret == "change_ipp_listen")
+		{
+		    ret = `change_ipp_listen;
+		    break;
+		}
+		else
+		{
+		    // request for testing printer...
+		    Printer::selectPrinterByName ((string)ret);
+		    PrinterTest::testPrinter (Printer::printer, `ask);
+		    continue ;
+		}
 	    }
 	    if (`back == ret || `cancel == ret || `abort == ret)
 	    {
