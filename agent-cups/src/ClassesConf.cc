@@ -44,7 +44,7 @@ bool ClassesConf::readSettings(const char*fn)
  */
 bool ClassesConf::getClasses ()
 {
-    http_t*http = httpConnect(cupsServer(), ippPort());
+    http_t*http = httpConnect("localhost"/*cupsServer()*/, ippPort());
     ipp_t *request,	/* IPP Request */
         *response;	/* IPP Response */
     ipp_attribute_t *attr;	/* Current attribute */

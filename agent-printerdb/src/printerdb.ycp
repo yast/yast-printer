@@ -33,6 +33,35 @@
     a = _("RTS/CTS (Hardware)");
     a = _("DTR/DSR (Hardware)");
 */
+
+    /**
+      * replaces all occurences of 'from' to 'to' in src
+      * @param src input string
+      * @param from string to be replaced
+      * @param to string to be replaced by
+      * @return string modified string
+      */
+    global define string replaceAll(string src, string from, string to) ``{
+        if (from == "")
+        {
+            return src;
+        }
+
+        list tokens = [];
+
+        integer p = find(src, from);
+        while(p >= 0)
+        {
+            tokens = add(tokens, substring(src, 0, p));
+            src = substring(src, p + size(from), size(src) - (p+size(from)));
+            p = find(src, from);
+        }
+        tokens = add(tokens, src);
+        return mergestring(tokens, to);
+    }
+
+
+
     define getConfigTreeHelper (list l, string pre) ``{
 	list ll = [];
 	foreach (`i, l, ``{
@@ -68,6 +97,87 @@
 	    SCR::Write (.printerdb.gettext.db, tmp + "db.msg");
 	    SCR::Write (.printerdb.gettext.prg, tmp + "prg.msg");
 	    SCR::Write (.printerdb.testscript, tmp + "tst");
+	    string result = "vendor_name | product_name | architecture | distribution | language | support_status | bus_type | manufacturer_comment | model_comment | available_configurations \n";
+	    list vend = SCR::Read (.printerdb.vendors, current_vendor);
+	    foreach (`v, vend, ``{
+		string vlabel = select (v, 1, "");
+		string vid = select (select (select (v, 0, []), 0, []), 0, "");
+		list mod = SCR::Read (add (.printerdb.models, vid), current_printer);
+		string vcomment = "";
+		foreach (`m, mod, ``{
+		    string mlabel = select (m, 1, "");
+		    string mid = select (select (select (m, 0, []), 0, []), 0, "");
+		    list cfgs = select (SCR::Read (add (.printerdb.configsrt, mid), ""),1,[]);
+y2error ("cfgs: %1", cfgs);
+		    boolean cups = false;
+		    boolean lprng = false;
+		    boolean problematic = true;
+		    list cfgslst = [];
+		    list auto = SCR::Read (.printerdb.auto, mid);
+		    auto = maplist (`a, auto, ``(a["config"]:""));
+		    string mcomment = "";
+		    foreach (`c, cfgs, ``{
+			string cid = select (select (c, 0, []), 0, "");
+			string clabel = select (c, 1, "");
+			if (! issubstring (clabel, "Not available"))
+			{
+			    if (! issubstring (clabel, "LPRng only"))
+			    {
+			        lprng = true;
+			    }
+//			    else clabel = substring (clabel, 12);
+			    if (! issubstring (clabel, "CUPS only"))
+			    {
+			        cups = true;
+			    }
+//			    else clabel = substring (clabel, 11);
+			}
+//			else clabel = substring (clabel, 15);
+			if (contains (auto, cid))
+			    clabel = clabel + " - used by YaST2 as default";
+			cfgslst = add (cfgslst, clabel);
+		    });
+y2error ("cfgslst: %1", cfgslst);
+		    string cfgstr = mergestring (cfgslst, ", ");
+y2error ("%1", cfgstr);
+		    string support = "not";
+		    if (cups && lprng)
+			support = "full";
+		    else if (cups || lprng)
+			support = "partially";
+		    if (support != "not" && size (SCR::Read (.printerdb.auto, mid)) == 0)
+			support = "problematic";
+y2error ("Auto: %1", SCR::Read (.printerdb.auto, mid));
+
+		    map pinfo = SCR::Read (.printerdb.info, [ vid, mid ]);
+		    if (/*0 != lookup (pinfo, "type", 0) && */"" != lookup (pinfo, "printer", lookup (pinfo, "config", "")))
+		    {
+			mcomment = lookup (pinfo, "printer", lookup (pinfo, "config", ""));
+			vcomment = lookup (pinfo, "vendor", "");
+		    }
+//		    mcomment = mergestring (splitstring (mcomment, "\n"), " ");
+//		    vcomment = mergestring (splitstring (vcomment, "\n"), " ");
+//		    mcomment = mergestring (splitstring (mcomment, "<BR>"), "\\0");
+//		    vcomment = mergestring (splitstring (vcomment, "<BR>"), "\\0");
+		    mcomment = replaceAll (mcomment, "\n", " ");
+		    vcomment = replaceAll (vcomment, "\n", " ");
+                    mcomment = replaceAll (mcomment, "<BR>", "\\0");
+                    vcomment = replaceAll (vcomment, "<BR>", "\\0");
+
+
+// FIXMEdone remove 2 lines
+//mcomment = "";
+//vcomment = "";
+		    string line = mergestring ([vlabel, mlabel, "i386", "8.1", "en_UK/de_DE", support, "unknown", vcomment, mcomment, cfgstr], " | ");
+//		    string line = sformat ("%1 | %2 | %3 | %4 | %5 | %6 | %7 | %8 | %9 | %10 \n", vlabel, mlabel, "i386", "8.1", "en_UK/de_DE", support, "unknown", vcomment, mcomment, cfgstr);
+		    if (! (issubstring (mlabel, "supported") || issubstring (mlabel, "no GDI") || issubstring (mlabel, "laser printer") || issubstring (mlabel, "PostScript or PDF")
+				|| issubstring (mlabel, "inkjet printer") || issubstring (mlabel, "dot matrix") || issubstring (mlabel, "special")))
+			result = result + line + " \n";
+		});
+
+	    });
+	    SCR::Write (.target.string, "/tmp/hwdb", result);
+
 	    UI::OpenDialog (`VBox (
 			// label
 			`Label (sformat (_("Files %1msg and %1tst were generated."), tmp)),
