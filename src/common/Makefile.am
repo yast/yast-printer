@@ -16,7 +16,8 @@ ynclude_DATA =			\
 	testpage.ycp		\
 	ppds.ycp		\
 	dialogs-connection.ycp	\
-	helps-connection.ycp
+	helps-connection.ycp	\
+	wizards.ycp
 
 
 client_DATA =                           \

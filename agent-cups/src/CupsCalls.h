@@ -85,7 +85,7 @@ bool deleteClass(const char*name);
  * @param ret printer names will be added here
  * @return success state
  */
-bool getRemoteDestinations(const char*host,YCPList&ret,ipp_op_t what_to_get);
+bool getRemoteDestinations(const char*host,YCPList&ret,ipp_op_t what_to_get, bool get_remote);
 
 char* TOLOWER(char* src);
 

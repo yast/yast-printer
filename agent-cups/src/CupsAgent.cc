@@ -71,8 +71,8 @@ YCPValue CupsAgent::Read(const YCPPath &path, const YCPValue& arg)
                 if(arg->isString())
                     {
                         YCPList l;
-                        getRemoteDestinations(arg->asString()->value_cstr(),l,CUPS_GET_PRINTERS);
-                        getRemoteDestinations(arg->asString()->value_cstr(),l,CUPS_GET_CLASSES);
+                        getRemoteDestinations(arg->asString()->value_cstr(),l,CUPS_GET_PRINTERS, true);
+                        getRemoteDestinations(arg->asString()->value_cstr(),l,CUPS_GET_CLASSES, true);
                         return l;
                     }
 		return YCPError (string ("Read(.cups.remote): Wrong argument: ") + arg->toString() + string (". Expecting <string>."));
