@@ -241,7 +241,7 @@
 // info handling
 // location handling
 // banners handling
-	list just_copy = ["info", "location", "bannerstart", "bannerend"];
+	list<string> just_copy = ["info", "location", "bannerstart", "bannerend"];
 	foreach (string key, just_copy, ``{
 	    if (haskey (options, key))
 		Printer::printer[key] = options[key]:"";
@@ -252,7 +252,7 @@
 	    CommandLine::Print (_("Only one of 'allowusers' and 'denyusers' can be specified."));
 	    return false;
 	}
-	list string2list = ["allowusers", "denyusers"];
+	list<string> string2list = ["allowusers", "denyusers"];
 	Printer::printer["allowusers"] = [];
 	Printer::printer["denyusers"] = [];
 	foreach (string key, string2list, ``{
@@ -459,10 +459,10 @@
 	string manufacturer = (string)SCR::Read (.ppd.db.vendorname,
 	    options["manufacturer"]:"");
 	CommandLine::Print (_("Known Models"));
-	foreach (string k, map v,
+	foreach (string k, map v, (map<string,map>)
 	    filter (any k, any v, Printerdb::foomatic[manufacturer]:$[],
 	    ``(
-		is (k, string)
+		is (k, string) && is (v, map)
 	    )),
 	``{
 	    CommandLine::Print (v[`label]:k);
@@ -492,11 +492,11 @@
 	string model = (string)SCR::Read (.ppd.db.modelname,
 	    [manufacturer, options["model"]:""]);
 	CommandLine::Print (_("Known Nick Names"));
-	foreach (string k, map v,
+	foreach (string k, map v, (map<string,map>)
 	    filter (any k, any v,
 		Printerdb::foomatic[manufacturer, model]:$[],
 	    ``(
-		is (k, string)
+		is (k, string) && is (v, map)
 	    )),
 	``{
 	    CommandLine::Print (v[`label]:k);
