@@ -629,7 +629,7 @@ All changes will be lost.
 		if ("yast2" == lookup (ent, "type", "yast2"))
 		{
 		    string description = Printerlib::getUriNiceName (lookup (ent, "uri", ""));
-		    if ("void" == Printer::getPrinterState (ent, Spooler::Get ()))
+		    if (! ent["valid"]:true)
 			// table item. SHORT!
 			description = _("- invalid for selected spooler -");
 		    ret = add (ret, description);
@@ -641,17 +641,10 @@ All changes will be lost.
 		{
 		    if ("yast2" == lookup (ent, "type", "yast2"))
 			// table item. SHORT
-			ret = add (ret, "commited" == Printer::getPrinterState (ent, Spooler::Get ()) ? _("OK") : "");
+			ret = add (ret, ! ent["changed"]:false ? _("OK") : "");
 		    else
 			// table item. SHORT
 			ret = add (ret, _("unknown"));
-		}
-		else
-		{
-			// table item. SHORT
-		    ret = add (ret, "void" != Printer::getPrinterState (ent, "cups") ? _("OK") : "");
-			// table item. SHORT
-		    ret = add (ret, "void" != Printer::getPrinterState (ent, "lprng") ? _("OK") : "");
 		}
 		count = count+1;
 		return ret;
