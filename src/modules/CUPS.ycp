@@ -28,8 +28,10 @@ import "Service";
 
 // local variables
 
-
-
+/**
+ * List of supported URI schemess
+ */
+list<string> supported_uri_types = nil;
 
 // global variables
 
@@ -453,26 +455,32 @@ global list<string> GetProblematicCupsUsbDevices () {
  * @return a list of supported URI types
  */
 global list<string> GetSupportedUriTypes () {
-    list<string> supported = [
-	"parallel",
-	"usb",
-	"serial",
-	"lpd",
-	"ipp",
-	"samba",
-	"socket",
-	"irda",
-	"class",
-	"novell",
-	"pipe",
-	"file",
-	"class",
-    ];
-    list<string> backends
-	= (list<string>)SCR::Read (.target.dir, "/usr/lib/cups/backend");
-    if (backends != nil)
-	supported = (list<string>)merge (supported, backends);
-    return supported;
+    if (supported_uri_types == nil)
+    {
+	supported_uri_types = [
+	    "parallel",
+	    "usb",
+	    "serial",
+	    "lpd",
+	    "ipp",
+	    "samba",
+	    "socket",
+	    "irda",
+	    "novell",
+	    "pipe",
+	    "file",
+	    "class",
+	];
+	list<string> backends
+	    = (list<string>)SCR::Read (.target.dir, "/usr/lib/cups/backend");
+	if (backends != nil)
+	{
+	    supported_uri_types = (list<string>)merge (
+		supported_uri_types,
+		backends);
+	}
+    }
+    return supported_uri_types;
 }
 
 // detecting and proposing the overall configuration
