@@ -1761,8 +1761,8 @@ bool PPD::cleanupEmptyEntries () {
 
 string PPD::fileChecksum (const string &filename) {
     FILE* f;
-    char buf[16];
-    char sum[33];
+//    char buf[16];
+//    char sum[33];
     string ret = "";
 
     f = fopen (filename.c_str(), "r");
