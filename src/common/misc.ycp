@@ -25,7 +25,7 @@
     /**
       * check whether spooler (if needed to be running) runns, if not start it
       */
-    global define void restartSpoolerIfNeeded () ``{
+    global define void restartSpoolerIfNeeded (boolean showPopup) ``{
         if (Printer::spooler == "cups")
         {
             if (0 == Printer::cupsInstallationType ())
@@ -33,6 +33,8 @@
 		integer status = SCR::Execute (.target.bash, "/usr/bin/lpq");
                 if (status == 0)
                     return;
+		UI::OpenDialog(`opt(`decorated ),`Label(_("Initializing CUPS server...
+This usually takes one or two minutes")));
                 status = SCR::Execute (.target.bash, "/etc/init.d/cups status");
                 if (0 != status)
                     SCR::Execute (.target.bash, "/etc/init.d/cups start");
@@ -49,8 +51,10 @@
                         UI::MessagePopup (
                             // error popup
                             _("CUPS daemon died during initialization"));
+			break;
                     }
                 }
+		UI::CloseDialog ();
             }
         }
     }
