@@ -334,15 +334,20 @@ ECHO_PID=$!
 		    if (contains (pr["requires"]:[], "hp-officeJet"))
 		    {
 			y2milestone ("PTAL device found");
-			boolean req_ret = Require::RequireAndConflict (
-			    ["hp-officeJet"],
-			    [],
-			    // question, %1 is package name
-			    _("HP all-in-one device has been detected. For
+			boolean req_ret = true;
+			if (! Pkg::IsProvided ("hp-officeJet"))
+			{
+			    req_ret = Require::RequireAndConflict (
+				 ["hp-officeJet"],
+				[],
+				// question, %1 is package name
+				_("HP all-in-one device has been detected. For
 using it as both printer and scanner,
 package %1 must be installed.
 
 Install it now?"));
+			    reinitTarget ();
+			}
 			if (! req_ret && ! Require::LastOperationCanceled ())
 			{
 			    // error report
@@ -642,6 +647,7 @@ Install it now?"));
 must be installed.
 
 Install them now?"));
+	    reinitTarget ();
 	    return;
 	}
 	stopServices ();

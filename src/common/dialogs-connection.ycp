@@ -749,14 +749,19 @@ actually selected.
         if (packages_to_check != [])
         {
             import "Require";
-            if ((! Require::RequireAndConflictTarget (packages_to_check, [],
-                _("<P>For the selected function, the additional packages<BR>
-<TT>%1</TT><BR> must be installed.<BR><BR> Install them now?</P>")))
-		&& ! Require::LastOperationCanceled ())
+	    boolean reinit = false;
+	    if (! Require::AreAllPackagesInstalledTarget (packages_to_check))
 	    {
-		// error report
-		Report::Error (_("Failed to install required packages."));
-	    };
+		if ((! Require::RequireAndConflictTarget (packages_to_check, [],
+	            _("<P>For the selected function, the additional packages<BR>
+<TT>%1</TT><BR> must be installed.<BR><BR> Install them now?</P>")))
+		    && ! Require::LastOperationCanceled ())
+		{
+		    // error report
+		    Report::Error (_("Failed to install required packages."));
+		};
+		Printerlib::reinitTarget ();
+	    }
         }
 
         boolean has_user_password = (type == "samba" || type == "novell");

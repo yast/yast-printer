@@ -83,7 +83,14 @@ PPD::PPD(const char *ppddir, const char *ppddb) {
 	yast2_dir = "/usr/share/YaST2";
     }
 
-    datadir = yast2_dir + "/data/printer/";
+    if (char* tmp_ydata_dir = getenv ("Y2_PRINTER_DATA_DIR"))
+    {
+	datadir = tmp_ydata_dir;
+    }
+    else
+    {
+	datadir = yast2_dir + "/data/printer/";
+    }
     var_datadir = "/var/lib/YaST2/";
 
     fast_check = false;
@@ -376,7 +383,8 @@ void* PPD::startCreatedbThread (void* instance) {
  * @return operation succeeded
  */
 void* PPD::createdbThread(const char* filename) {
-    y2debug ("CreateDbThread started");
+    y2milestone ("CreateDbThread started");
+
     bool f1 = false;
     bool f2 = false;
     bool f3 = false;
@@ -416,6 +424,7 @@ void* PPD::createdbThread(const char* filename) {
 	if (! cleanupEmptyEntries ())
 	    update_failed = true;
 	updated = true;
+	y2milestone ("Update database done");
     }
 
 start_from_scratch:
@@ -447,7 +456,7 @@ start_from_scratch:
     creation_status = 90;
 
     // process list of SuSE database printers
-   
+
     if (! updated)
     { 
 	addAdditionalInfo ();
@@ -482,7 +491,7 @@ start_from_scratch:
             F(f2) fprintf(file,str);
             fprintf(file,"    \"%s\" : $[\n", it2->first.c_str ());
 
-	    int support = (*it2).second.support;
+	    string support = (*it2).second.support;
 	    string mcomment = (*it2).second.mcomment;
 
 	    if (it2->second.label != "")
@@ -491,8 +500,8 @@ start_from_scratch:
 	    else
 		fprintf(file,"      `label : \"%s\",\n", it2->first.c_str());
 
-	    if (support != -1)
-		fprintf(file,"      `support : %d,\n", support);
+	    if (support != "")
+		fprintf(file,"      `support : \"%s\",\n", support.c_str());
             if (mcomment != "" && mcomment != " ")
                 fprintf(file,"      `mcomment : \"%s\",\n", mcomment.c_str ());
 
@@ -523,22 +532,19 @@ start_from_scratch:
 }
 
 void PPD::addAdditionalInfo () {
-    return;//FIXME - add info to unsupported printers without PPD file only
       y2debug ("Reading YaST2 file");
       char buf[16384];
-      string filename = datadir + "printers.susedb";
+      string filename = datadir + "printers_support";
       FILE* f = fopen (filename.c_str(), "r");
       if (f)
       {
-        y2milestone ("File with SuSE database entries found, processing...");
+        y2milestone ("File with support status entries opened, processing...");
         while (fgets (buf, 16384, f))
         {
             unsigned int i = 0;
-            string vendor;
-            string model;
-            string support;
-            string vendor_comment;
-            string model_comment;
+            string vendor = "";
+            string model = "";
+            string support = "";
             for (; i < strlen (buf) ; i++)
             {
                 if (buf[i] == '|' || buf[i] == '\n')
@@ -566,25 +572,8 @@ void PPD::addAdditionalInfo () {
                 }
                 support = support + buf[i];
             }
-            for (; i < strlen (buf) ; i++)
-            {
-                if (buf[i] == '|' || buf[i] == '\n')
-                {
-                    i++;
-                    break;
-                }
-                vendor_comment = vendor_comment + buf[i];
-            }
-            for (; i < strlen (buf) ; i++)
-            {
-                if (buf[i] == '|' || buf[i] == '\n')
-                {
-                    i++;
-                    break;
-                } 
-                model_comment = model_comment + buf[i]; 
-            }
             string mlabel = model;
+	    string vlabel = vendor;
             vendor = getVendorId (vendor);
             model = getModelId (vendor, model);
             int size = vendor.size () + 1;
@@ -593,7 +582,9 @@ void PPD::addAdditionalInfo () {
 
             VendorInfo vi;
             if (db.find (vendor) != db.end ())
-                vi = db[vendor]; 
+                vi = db[vendor];
+	    else
+		vi.label = vlabel;
             ModelInfo mi;
             bool updating_model = false;
             if (vi.models.find(model) != vi.models.end ())
@@ -603,89 +594,21 @@ void PPD::addAdditionalInfo () {
             }
             else
             {
-                signed size = vendor.size();
-                if (strupper (model.substr (0, size + 1)) == vendor + " ")
-                    model.erase(0,size);
-                if (vi.models.find(model) != vi.models.end ())
-                {
-                    y2warning (
-                        "%s:%s found after removing vendor from model name",
-                        vendor.c_str (), model.c_str ());
-                    mi = vi.models[model];
-                }
-                else
-                    y2warning ("Printer %s:%s not found in Foomatic database",
-                        vendor.c_str (), model.c_str ());
+		mi.label = mlabel;
+		updating_model = false;
             }
-
-            string tmp = vendor_comment;
-            vendor_comment = "";
-            for (string::const_iterator i = tmp.begin (); i != tmp.end (); i++)
-            {
-                if (*i == '\\' || *i == '\"')
-                    vendor_comment = vendor_comment + '\\';
-                vendor_comment = vendor_comment + *i;
-            }
-            tmp = model_comment;
-            model_comment = "";
-            for (string::const_iterator i = tmp.begin (); i != tmp.end (); i++)
-            {
-                if (*i == '\\' || *i == '\"')
-                    model_comment = model_comment + '\\';
-                model_comment = model_comment + *i;
-            }
-            vi.vcomment = vendor_comment;
-            mi.mcomment = model_comment;
-            int sup_status = 0;
-            if (support == "problematic")
-                sup_status = 1;
-            else if (support != "full")
-                sup_status = 2;
-            mi.support = sup_status;
-
-            mlabel = updateLabel (mlabel);
-            string old_label = mi.label;
-            bool old_fuzzy = mi.fuzzy_label;
-            bool new_fuzzy
-                = modellabels[vendor].find(mlabel) != modellabels[vendor].end();
-            if (new_fuzzy && (old_fuzzy || old_label == ""))
-            {
-                y2error ("Same labels present in multiple PPD files - %s",
-                    mlabel.c_str());
-                bool blank = true;
-                while (modellabels[vendor].find(mlabel)
-                    != modellabels[vendor].end())
-                {
-                    if (blank)
-                    {
-                        blank = false;
-                        mlabel = mlabel + " ";
-                    }
-                    mlabel = mlabel + "I";
-                }
-            }
-            if (old_fuzzy || old_label == "" || ! new_fuzzy)
-            {
-                mi.label = mlabel;
-                mi.fuzzy_label = new_fuzzy;
-                if (modellabels[vendor].find (old_label)
-                    != modellabels[vendor].end()
-                    && updating_model)
-                {
-                    modellabels[vendor].erase(old_label);
-                    y2milestone ("Removed label %s, replacing with %s", old_label.c_str(), mi.label.c_str());
-                }
-                modellabels[vendor].insert(mi.label);
-                y2debug ("Inserted label %s", mi.label.c_str());
-            }
-
-            vi.models[model] = mi;
-            db[vendor] = vi;
+	    if (modellabels[vendor].find(mlabel) != modellabels[vendor].end()
+		|| updating_model)
+	    {
+		mi.support = support;
+		vi.models[model] = mi;
+		db[vendor] = vi;
+	    }
         }
         fclose (f);
       }
-
-
+      else
+        y2error ("Failed to open file with support status entries");
 
 }
 
@@ -1584,12 +1507,12 @@ bool PPD::loadPrebuiltDatabase () {
 			    else if (attrib == "`support")
 			    {
                                 if (it3.value().isNull() ||
-                                    ! it3.value()->isInteger())
+                                    ! it3.value()->isString())
                                 {
                                     y2error ("Incorrect database format");
                                     goto error_exit;
                                 }
-				mi.support = it3.value()->asInteger()->value();
+				mi.support = it3.value()->asString()->value_cstr();
 			    }
                             else if (attrib == "`mcomment")
                             {

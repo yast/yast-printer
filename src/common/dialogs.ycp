@@ -241,9 +241,34 @@ only if using CUPS spooler"));
 		Printer::foomatic[manuf_db, model_db]:$[],
 		``(is (k, string)))) <= 0)
 	    {
-		Popup::Message (_(
-		    // message popup
-		    "No PPD file available for selected model"));
+		// message popup
+		string old_text = _("No PPD file available for selected model");
+
+		// richtext - information about support status
+		string unsup_message = _("This printer is not supported by SuSE Linux.<BR>
+Find information regarding supported and unsupported printers
+in your manual or in the support database articles
+\"Purchase of Printers and Compatibility\" and \"GDI printers\",
+available online at<BR>
+http://sdb.suse.de/en/sdb/html/jsmeix_print-kompatibel.html<BR>
+and<BR>
+http://sdb.suse.de/sdb/en/html/ke_printer-gdi.html<BR>
+If the printer can be switched to support a standard
+printer language (PostScript, PCL, ESC/P) then it can be
+configured as PostScript or PCL or ESC/P printer.<BR>
+Please ask the vendor of the printer whether this model
+\"understands\" a standard printer language directly (not
+through a driver emulation) and how to switch the printer
+into the standard printer language mode (e.g. via an
+additional PostScript module).");
+		term d = `VBox (
+		    `HSpacing (40),
+		    `RichText (unsup_message),
+		    `PushButton (`id (`ok), Label::OKButton ())
+                );
+		UI::OpenDialog (d);
+		UI::UserInput ();
+		UI::CloseDialog ();
 		ret = nil;
 	    }
 

@@ -2003,8 +2003,9 @@ the selected spooler does not support it."), name));
 		string vdb = printer["vendor_db"]:"";
 		string mdb = printer["device_db"]:"";
 		string ppd_file = getAutoPpdFile (vdb, mdb, nil);
-		boolean configure
-		    = 0 == foomatic[vdb, mdb, `support]:0;
+		string support = foomatic[vdb, mdb, `support]:"";
+		boolean configure = (support == "full" || support == "partially"
+		    || support == "");
 		if (ppd_file != nil && configure)
 		{
 		    boolean ok = true;
@@ -2166,7 +2167,7 @@ the selected spooler does not support it."), name));
 	    ret = SCR::Read (.cups.remote, hostname);
 	    ret = toset (ret);
 	}
-	y2error ("Ret: %1", ret);
+	y2milestone ("Ret: %1", ret);
 	return ret;
     }
 }
