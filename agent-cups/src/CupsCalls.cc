@@ -432,7 +432,6 @@ bool setDefaultDestLocal(const char*d)
 {
   cups_dest_t *dests;
   int num_dests = cupsGetDests(&dests);
-  y2error ("Dests: %d", num_dests);
   for(int i = 0;i<num_dests;i++)
     if (! strcmp (dests[i].name, d))
       dests[i].is_default = 1;
