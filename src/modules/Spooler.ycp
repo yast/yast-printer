@@ -95,12 +95,12 @@ This usually takes one or two minutes")),
 	    if (0 != SCR::Execute (.target.bash, "test -d /etc/lpdfilter"))
 		sys_forbidden_names = [];
 	    else
-		sys_forbidden_names = SCR::Read (.etc.printcap.sysnames);
+		sys_forbidden_names = (list)SCR::Read (.etc.printcap.sysnames);
 	    if (nil == sys_forbidden_names)
 		sys_forbidden_names = [];
 	}
 	sys_forbidden_names
-	    = maplist (`n, sys_forbidden_names, ``(tolower (n)));
+	    = maplist (string n, sys_forbidden_names, ``(tolower (n)));
 	return sys_forbidden_names;
     }
 
@@ -207,7 +207,7 @@ This usually takes one or two minutes")),
 		"test -f /etc/printcap && /bin/rm /etc/printcap");
 	    inst = inst_other;
         }
-	del = filter (`e, del, ``(! contains (inst, e)));
+	del = filter (string e, del, ``(! contains (inst, e)));
 
 
 	if (Mode::config)
@@ -226,8 +226,8 @@ Install them now?"));
 	StopServices ();
 	Runlevel::ServiceAdjust ("lpd", "disable");
 	Runlevel::ServiceAdjust ("cups", "disable");
-	del = filter (`e, del, ``(Pkg::IsProvided (e) == true));
-	inst = filter (`i, inst, ``(! Pkg::IsProvided (i)));
+	del = filter (string e, del, ``(Pkg::IsProvided (e) == true));
+	inst = filter (string i, inst, ``(! Pkg::IsProvided (i)));
 	if (! (Pkg::IsProvided ("ghostscript-x11")
 	    || Pkg::IsProvided ("ghostscript-serv")))
 	{
@@ -237,9 +237,9 @@ Install them now?"));
 	{
 	    import "PackageCallbacks";
 	    y2milestone("-------- deleting = %1", del);
-	    foreach (`e, del, ``{Pkg::PkgDelete (e);});
+	    foreach (string e, del, ``{Pkg::PkgDelete (e);});
 	    y2milestone("-------- installing = %1", inst);
-	    foreach (`e, inst, ``{Pkg::PkgInstall (e);});
+	    foreach (string e, inst, ``{Pkg::PkgInstall (e);});
 	    Pkg::PkgSolve ();
 	    Pkg::PkgCommit (0);
 	    Require::RunSuSEconfig ();
@@ -278,7 +278,7 @@ Install them now?"));
             if (`server == CUPS::InstallationType ())
             {
 		boolean close_dialog = false;
-		integer status = SCR::Execute (.target.bash, "/usr/bin/lpq 2>/dev/null");
+		integer status = (integer)SCR::Execute (.target.bash, "/usr/bin/lpq 2>/dev/null");
                 if (status == 0)
                     return;
 		if (SCR::Read (.target.size, "/etc/cups/ppds.dat") <= 0)
@@ -286,7 +286,7 @@ Install them now?"));
 		    close_dialog = true;
 		    showCupsInitPopup ();
 		}
-                status = SCR::Execute (.target.bash, "/etc/init.d/cups status");
+                status = (integer)SCR::Execute (.target.bash, "/etc/init.d/cups status");
                 if (0 != status)
 		{
                     SCR::Execute (.target.bash_background, "/etc/init.d/cups start");
@@ -296,7 +296,7 @@ Install them now?"));
 		integer attempts = 0;
                 while (true)
                 {
-                    status = SCR::Execute (.target.bash, "/usr/bin/lpq 2>/dev/null");
+                    status = (integer)SCR::Execute (.target.bash, "/usr/bin/lpq 2>/dev/null");
                     if (status == 0)
                         break;
 		    attempts = attempts + 1;
@@ -312,7 +312,7 @@ Install them now?"));
                     if (close_dialog)
                         UI::ChangeWidget (`id (`cups_prog), `Value, attempts);
                     sleep (1000);
-                    status = SCR::Execute (.target.bash, "/etc/init.d/cups status");
+                    status = (integer)SCR::Execute (.target.bash, "/etc/init.d/cups status");
                     if (0 != status)
                     {
                         Popup::Error (
@@ -340,11 +340,11 @@ Install them now?"));
 
 	if (Spooler::Get () == "cups")
 	{
-	    if (SCR::Read (.init.scripts.exists, "lpd"))
+	    if ((boolean)SCR::Read (.init.scripts.exists, "lpd"))
 		Runlevel::ServiceAdjust ("lpd", "disable");
             if (`client == CUPS::InstallationType ())
 	    {
-		if (SCR::Read (.init.scripts.exists, "cups"))
+		if ((boolean)SCR::Read (.init.scripts.exists, "cups"))
 		    Runlevel::ServiceAdjust ("cups", "disable");
 	    }
 	    else
@@ -354,9 +354,9 @@ Install them now?"));
 	}
 	else
 	{
-	    if (SCR::Read (.init.scripts.exists, "cups"))
+	    if ((boolean)SCR::Read (.init.scripts.exists, "cups"))
 		Runlevel::ServiceAdjust ("cups", "disable");
-	    if (SCR::Read (.init.scripts.exists, "lpd") && have_some_queue)
+	    if ((boolean)SCR::Read (.init.scripts.exists, "lpd") && have_some_queue)
 		Runlevel::ServiceAdjust ("lpd", "enable");
 	}
 	Spooler::RestartIfNeeded (true);
@@ -498,8 +498,8 @@ may not run properly.");
 	    return true;
 	if (spooler == "cups")
 	{
-	    list(string) backends
-		= SCR::Read (.target.dir, "/usr/lib/cups/backend");
+	    list<string> backends
+		= (list<string>)SCR::Read (.target.dir, "/usr/lib/cups/backend");
 	    if (backends != nil)
 		return contains (backends, queue);
 	}
