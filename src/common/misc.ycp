@@ -30,7 +30,16 @@
 	UI::OpenDialog(`opt(`decorated ),`Label(_("Initializing CUPS server...
 This usually takes one or two minutes")));
     }
-
+    /**
+      * start CUPS server and don't wait until initialization finishes
+      */
+    global define void startCupsServer () ``{
+	integer status = SCR::Execute (.target.bash, "/etc/init.d/cups status");
+	if (0 != status)
+	{
+	    SCR::Execute (.target.bash_background, "/etc/init.d/cups start");
+	}
+    }
     /**
       * check whether spooler (if needed to be running) runns, if not start it
       * @param showPopup boolean true if shall show a popup if needed
@@ -341,6 +350,7 @@ queue you want to use."));
      * @return boolean true if success
      */
     global define boolean testPrinter (map printer, integer testpage_type) ``{
+	restartSpoolerIfNeeded (true);
 	if (Printer::spooler != "lprng" && Printer::spooler != "cups")
 	{
 	    // message box

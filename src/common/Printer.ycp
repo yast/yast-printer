@@ -569,6 +569,7 @@ END { if (!used) print \"ServerName %1\" }
     global define list cupsRead () ``{
         if (0 == cupsInstallationType ())
         {
+	    startCupsServer ();
             list ret = SCR::Read (.cups.printers);
 	    ret = filter (`e, ret, ``(lookup (e, "uri", "") != ""));
             list classes = SCR::Read (.cups.classes);
@@ -623,7 +624,6 @@ END { if (!used) print \"ServerName %1\" }
      * @return boolean success?
      */
     global define boolean Read () ``{
-	restartSpoolerIfNeeded (true);
 	list tmplist = [];
 	list tmpdellist = [];
 	boolean ret = true;
