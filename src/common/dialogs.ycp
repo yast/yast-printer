@@ -566,7 +566,8 @@ actually selected.
 	{
             if (Mode::config)
             {
-                // TODO add to requested list
+		import "Require";
+		Require::RequireAndConflictTarget (["samba-client"], [], "");
             }
             else if (! Pkg::IsProvided ("samba-client")
 		&& AskInstallPackages (["samba-client"]))
@@ -582,7 +583,8 @@ actually selected.
 	{
             if (Mode::config)
             {
-                // TODO add to requested list
+		import "Require";
+		Require::RequireAndConflictTarget (["ncpfs"], [], "");
             }
             else if (! Pkg::IsProvided ("ncpfs")
 		&& AskInstallPackages (["ncpfs"]))
@@ -2896,7 +2898,8 @@ with a prefilled name?
 	    ret = UI::UserInput ();
             if (ret == `cancel)
                 ret = `abort;
-	    if (ret == `scratch || ret == `reinstall || ret == `cupsusb)
+	    if (ret == `scratch || ret == `reinstall || ret == `cupsusb
+		|| ret == `cupsd)
 	    {
 		if (Mode::config)
 	        {
@@ -3767,7 +3770,7 @@ for proposing new queues.");
 	    else if (`next == ret) // finish
 	    {
 		// message box
-		if (Printer::warn_finish && !UI::YesNoPopup (_("Now the changes to your printing 
+		if (Printer::warn_finish && ! Mode::config && !UI::YesNoPopup (_("Now the changes to your printing 
 system will be saved.
 ")))
 		{
@@ -3930,7 +3933,7 @@ system will be saved.
 		if (`next == ret)
 		{
 		    // message box
-		    if (!Printer::warn_finish || UI::YesNoPopup (Printer::save_all ? _("Now the configuration of the printing 
+		    if (!Printer::warn_finish || Mode::config || UI::YesNoPopup (Printer::save_all ? _("Now the configuration of the printing 
 system will be saved
 ")
 			// message box

@@ -673,35 +673,43 @@
      * @param to Spooler to install. Should be one of "cups" "lprold" "plrng "plp"
      */
     global define void switchTo (string to) ``{
+	list del = ["plp", "lprold", "lprng", "cups", "cups-client",
+            "cups-drivers", "cups-drivers-cs", "cups-drivers-de",
+            "cups-drivers-stp", "lpdfilter", "filters"];
+	list inst = [];
+
+        if ("cups" == to)
+        {
+            inst = [ "cups", "cups-drivers", "cups-client", "cups-drivers-stp"];
+        }
+        else if ("cups_client" == to)
+        {
+            inst = [ "cups-client"];
+        }
+        else
+        {
+            inst = [ to, "filters", "lpdfilter"];
+        }
+	del = filter (`e, del, ``(! contains (inst, e)));
+
 	if (Mode::config)
 	{
 	    Printer::spooler = to;
+	    import "Require";
+	    Require::RequireAndConflictTarget (inst, del, "");
+	    if (Printer::spooler == "cups" && Printer::db == "foomatic")
+		Require::RequireAndConflict (inst, del, _("For the selected function, the additional packages
+%1
+must be installed.
+
+Install them now?"));
 	    return;
 	}
-	import "PackageCallbacks";
 	stopServices ();
 	Runlevel::ServiceAdjust ("lpd", "disable");
 	Runlevel::ServiceAdjust ("cups", "disable");
-	map script = $["userInput" : false];
-	list del = ["plp", "lprold", "lprng", "cups", "cups-client",
-	    "cups-drivers", "cups-drivers-cs", "cups-drivers-de",
-	    "cups-drivers-stp", "lpdfilter", "filters"];
 	del = filter (`e, del, ``(Pkg::IsProvided (e) == true));
-	list inst = [];
-
-	if ("cups" == to)
-	{
-	    inst = [ "cups", "cups-drivers", "cups-client", "cups-drivers-stp"];
-	}
-	else if ("cups_client" == to)
-	{
-	    inst = [ "cups-client"];
-	}
-	else
-	{
-	    inst = [ to, "filters", "lpdfilter"];
-	}
-	del = filter (`e, del, ``(! contains (inst, e)));
+	import "PackageCallbacks";
 	y2milestone("-------- deleting = %1", del);
 	foreach (`e, del, ``{Pkg::PkgDelete (e);});
 	y2milestone("-------- installing = %1", inst);
