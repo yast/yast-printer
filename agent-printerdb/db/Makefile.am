@@ -1,7 +1,6 @@
 #
 # Makefile.am
 #
-#
 
 dbdir = $(YAST2DIR)/lib/printerdb
 
