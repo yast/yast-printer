@@ -77,7 +77,7 @@ preparation for autoinstallation.
     define void wakeUpEpson (string device) ``{
 	string sequence =
 	    "\"\\000\\000\\000\\033\\001\\100\\105\\112\\114\\040\\061\\062\\070\\064\\056\\064\\012\\100\\105\\112\\114\\040\\040\\040\\040\\040\\012\"";
-	if (haskey (SCR::Read (.proc.modules), "printer"))
+	if (haskey ((map)SCR::Read (.proc.modules), "printer"))
 	    SCR::Execute (.target.bash, sformat ("
 MAIN_PID=$$
 {/bin/echo -en %1 > %2 ; kill MAIN_PID} &
@@ -89,7 +89,7 @@ ECHO_PID=$!
       * List of CUPS USB device names
       * Contains lists of [<cups_device>, <model_name>, <unix_device>]
       */
-    global list(list(string)) cups_usb_devices = [];
+    global list< list<string> > cups_usb_devices = [];
 
     /**
       * Set list of CUPS USB devices
@@ -98,12 +98,12 @@ ECHO_PID=$!
 	cups_usb_devices = [];
 	if (SCR::Read (.target.size, "/usr/lib/cups/backend/usb") <= 0)
 	    return;
-	map out = SCR::Execute (.target.bash_output,
+	map out = (map)SCR::Execute (.target.bash_output,
 	    "/usr/lib/cups/backend/usb");
-	list(string) lines = splitstring (out["stdout"]:"", "\n");
+	list<string> lines = splitstring (out["stdout"]:"", "\n");
 	lines = filter (`l, lines, ``(l != "" && l != nil));
 	integer counter = 0;
-	foreach (`l, lines, ``{
+	foreach (string l, lines, ``{
 	    string model = regexpsub (l, "[^\"]*\"([^\"]*)\".*", "\\1");
 	    string c_dev = regexpsub (l, "direct usb:([^ ]*) .*", "\\1");
 	    string u_dev = sformat ("/dev/usb/lp%1", counter);
@@ -121,19 +121,19 @@ ECHO_PID=$!
       * Get problematic CUPS USB devices names
       * @return a list of strings with problematic device names
       */
-    global define list(string) getProblematicCupsUsbDevices () ``{
-	list c_devs = maplist (`e, cups_usb_devices, ``(e[0]:""));
-	c_devs = filter (`d, c_devs, ``(d != ""));
+    global define list<string> getProblematicCupsUsbDevices () ``{
+	list c_devs = maplist (list<string> e, cups_usb_devices, ``(e[0]:""));
+	c_devs = filter (string d, c_devs, ``(d != ""));
 	if (size (c_devs) == size (toset (c_devs)))
 	    return [];
 	list tested = [];
 	list problematic = [];
-	foreach (`d, c_devs, ``{
+	foreach (string d, c_devs, ``{
 	    if (contains (tested, d))
 		problematic = add (problematic, d);
 	    tested = add (tested, d);
 	});
-	return toset (problematic);
+	return (list<string>)toset (problematic);
     }
 
     /**
@@ -142,7 +142,7 @@ ECHO_PID=$!
       * @return a list containing CUPS device name, Printer model and
       *   UNIX-like device
       */
-    global define list(string) getCupsUsbDeviceInfo (string device) ``{
+    global define list<string> getCupsUsbDeviceInfo (string device) ``{
         if (SCR::Read (.target.size, "/usr/lib/cups/backend/usb") > 0)
         {
             integer pos = find (device, "lp");
@@ -159,21 +159,6 @@ ECHO_PID=$!
     }
 
     /**
-      * Get URI of ptal device
-      * @param model string device model identification
-      * @return ptal uri or nil if no ptal device found
-      */
-    global define string getPtalUri (string model) ``{
-	list(list(string)) devices = getPtalDevices ();
-	string ret = nil;
-	foreach (`d, devices, ``{
-	    if (d[1]:"" == model)
-		ret = sformat ("ptal:%1", d[0]:"");
-        });
-	return ret;
-    }
-
-    /**
       * Get list of all PTAL devices
       * @return list of PTAL devices
       */
@@ -181,11 +166,11 @@ ECHO_PID=$!
 	SCR::Execute (.target.bash, "test -f /usr/sbin/ptal-init && /usr/sbin/ptal-init setup-usb >/dev/null 2>&1");
         if (SCR::Read (.target.size, "/usr/lib/cups/backend/ptal") <= 0)
             return [];
-        map out = SCR::Execute (.target.bash_output,
+        map out = (map)SCR::Execute (.target.bash_output,
             "/usr/lib/cups/backend/ptal");
-        list(string) lines = splitstring (out["stdout"]:"", "\n");
-        lines = filter (`l, lines, ``(l != "" && l != nil));
-	list ptal_devs = maplist (`l, lines, ``{
+        list<string> lines = splitstring (out["stdout"]:"", "\n");
+        lines = filter (string l, lines, ``(l != "" && l != nil));
+	list ptal_devs = maplist (string l, lines, ``{
             string ptal_model = regexpsub (l, "[^\"]*\"([^\"]*)\".*", "\\1");
             string ptal_dev = regexpsub (l, "direct ptal:([^ ]*) .*", "\\1");
 	    if (ptal_dev != nil && ptal_model != nil)
@@ -199,12 +184,27 @@ ECHO_PID=$!
     }
 
     /**
+      * Get URI of ptal device
+      * @param model string device model identification
+      * @return ptal uri or nil if no ptal device found
+      */
+    global define string getPtalUri (string model) ``{
+	list<list<string> > devices = getPtalDevices ();
+	string ret = nil;
+	foreach (map d, devices, ``{
+	    if (d[1]:"" == model)
+		ret = sformat ("ptal:%1", d[0]:"");
+        });
+	return ret;
+    }
+
+    /**
       * Get all CUPS-like USB device names
       * @return a list of CUPS USB device names
       */
-    global define list(string) getCupsUsbDevices () ``{
+    global define list<string> getCupsUsbDevices () ``{
 	setCupsUsbDevicesInfo ();
-	list ret = maplist (`e, cups_usb_devices, ``(e[0]:""));
+	list ret = maplist (list e, cups_usb_devices, ``(e[0]:""));
 	return ret;
     }
 
@@ -250,7 +250,7 @@ ECHO_PID=$!
 	}
 	SCR::Execute (.target.bash,
 	    "test -f /etc/init.d/hotplug && (test -d /proc/bus/usb/001 || /etc/init.d/hotplug start)");
-	list aprobe = SCR::Read (.probe.printer);
+	list aprobe = (list)SCR::Read (.probe.printer);
 /*		aprobe = [
 		    $[ "bus" : "Parallel",      // recognized, found in db
 		     "dev_name" : "/dev/lp0",
@@ -284,7 +284,7 @@ ECHO_PID=$!
 	    {
 		return [];
 	    }
-	list ret = maplist (`pr, aprobe, ``{
+	list ret = maplist (map pr, aprobe, ``{
 	    map record = $[];
 	    string bus = pr["bus"]:"Parallel";
 	    string unique_key = "";
@@ -369,11 +369,11 @@ Install it now?
 	    if (0 !=  SCR::Execute (.target.bash, "grep '^printer ' /proc/modules"))
 	    {
 		y2error ("USB printer found and printer module not loaded, loading it");
-		boolean probe_success = SCR::Execute(.target.modprobe, "printer", "");
+		boolean probe_success = (boolean)SCR::Execute(.target.modprobe, "printer", "");
 		string hotplug
-		    = SCR::Read (.sysconfig.hotplug.HOTPLUG_USB_STATIC_MODULES);
+		    = (string)SCR::Read (.sysconfig.hotplug.HOTPLUG_USB_STATIC_MODULES);
 		y2debug ("Current hotplug: %1", hotplug);
-		list(string) hplist = splitstring (hotplug, " ");
+		list<string> hplist = splitstring (hotplug, " ");
 		if (! contains (hplist, "printer"))
 		{
 		    hplist = add (hplist, "printer");
@@ -412,7 +412,7 @@ Install it now?
      * @return true if yast2 was run by root.
      */
     global define boolean amIRoot () ``{
-	map ret = SCR::Execute (.target.bash_output, "/usr/bin/id");
+	map ret = (map)SCR::Execute (.target.bash_output, "/usr/bin/id");
 	if (0 == ret["exit"]:0)
 	{
 	    string out = ret["stdout"]:"";
@@ -434,7 +434,7 @@ Install it now?
             return;
         }
 	Popup::Message (sformat (textTestDevice (), 10));
-	integer tst = SCR::Execute (.target.bash,
+	integer tst = (integer)SCR::Execute (.target.bash,
 				   sformat ("/usr/lib/YaST2/bin/test_device \"\\rHello, world\\r\\f\" %1 %2", dev, 10));
 
 	Popup::Message (textTestDeviceResult (tst));
@@ -457,9 +457,9 @@ Install it now?
 	UI::OpenDialog (`opt (`decorated), `Label (sformat (textTestRemotePrinter (false), hname)));
 	map test_return = $[];
 	if ("samba" == type)
-	    test_return = SCR::Execute (.target.bash_output, sformat ("/usr/lib/YaST2/bin/test_remote_smb \"%1\" \"%2\" \"%3\" \"%4\" \"%5\" 5", wg, hname, rname, user, pass));
+	    test_return = (map)SCR::Execute (.target.bash_output, sformat ("/usr/lib/YaST2/bin/test_remote_smb \"%1\" \"%2\" \"%3\" \"%4\" \"%5\" 5", wg, hname, rname, user, pass));
 	else if ("novell" == type)
-	    test_return = SCR::Execute (.target.bash_output, sformat ("/usr/lib/YaST2/bin/test_remote_novell \"%1\" \"%2\" \"%3\" \"%4\" 5", hname, rname, user, pass));
+	    test_return = (map)SCR::Execute (.target.bash_output, sformat ("/usr/lib/YaST2/bin/test_remote_novell \"%1\" \"%2\" \"%3\" \"%4\" 5", hname, rname, user, pass));
 	integer tst = lookup (test_return, "exit", 0);
 	string message = textTestRemotePrinterResult (tst);
 	if (4 == tst)
@@ -499,7 +499,7 @@ Install it now?
 		test_command = sformat ("/usr/lib/YaST2/bin/test_remote_lpd \"%1\" \"%2\" 5", hname, rname);
 	}
 
-	map test_return = SCR::Execute (.target.bash_output, test_command);
+	map test_return = (map)SCR::Execute (.target.bash_output, test_command);
 	integer tst = lookup (test_return, "exit", 0);
 	if (4 == tst && type == "ipp_server")
 	    tst = 0;
@@ -610,25 +610,12 @@ Install it now?
 	    while ("0" == substring (dev, 0, 1))
 		dev = substring (dev, 1);
 	    if (dev == "")
-		dev = 0;
+		dev = "0";
 	    port = tointeger (dev);
 	}
         return port;
 
 
-    }
-    /**
-     * Get printer baud rate from uri. Applies to serial printers only.
-     * Does not check if passed uri belongs to serial printer.
-     * @param uri printer uri
-     * @return baud rate
-     * @see getUriType
-     */
-    global define integer getUriBaudrate (string uri) ``{
-	string br = getUriValue (uri, "baudrate");
-	if (br == "" || br != filterchars (br, "0123456789"))
-	    return 0;
-	return tointeger (br);
     }
     /**
      * Get any parameter from uri. Suppose uri has form:
@@ -649,6 +636,19 @@ Install it now?
 	if (nil != i)
 	    val = substring (val, 0, i);
 	return val;
+    }
+    /**
+     * Get printer baud rate from uri. Applies to serial printers only.
+     * Does not check if passed uri belongs to serial printer.
+     * @param uri printer uri
+     * @return baud rate
+     * @see getUriType
+     */
+    global define integer getUriBaudrate (string uri) ``{
+	string br = getUriValue (uri, "baudrate");
+	if (br == "" || br != filterchars (br, "0123456789"))
+	    return 0;
+	return tointeger (br);
     }
     /**
      * Get host name from uri. Applies to lpd, novell, samba, ipp/http,
@@ -811,7 +811,7 @@ Install it now?
 		return sformat (_("USB port (%1)"), serial);
 	    }*/
 	    string ret = "";
-	    foreach (`e, cups_usb_devices, ``{
+	    foreach (list e, cups_usb_devices, ``{
 		if (e[0]:"" == dev)
 		    ret = e[1]:"";
 	    });
@@ -880,7 +880,7 @@ Install it now?
     global define symbol getDefaultPaperSize () ``{
 	if (nil != paper_size)
 	    return paper_size;
-	integer int_paper_size = SCR::Execute (.target.bash,
+	integer int_paper_size = (integer)SCR::Execute (.target.bash,
 	    "/usr/bin/locale -k LC_PAPER | /usr/bin/grep width=210");
 	if (int_paper_size != 0 && int_paper_size != 1)
 	    int_paper_size = 0;

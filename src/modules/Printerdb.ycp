@@ -42,7 +42,7 @@
       */
     global define string getFoomaticDefaultQueue (list queues) ``{
         string default_queue = queues[0, "name"]:nil;
-        foreach (`q, queues, ``{
+        foreach (map q, queues, ``{
             if (regexpmatch (q["name"]:"", "normal[0-9]")
                  || q["name"]:"" == "normal")
             {
@@ -50,6 +50,58 @@
             }
         });
         return default_queue;
+    }
+
+    /**
+      * Check whether foomatic database has been loaded, and if not, then
+      * load it
+      */
+    global define void loadFoomaticIfNeeded () ``{
+        if (foomatic != nil)
+            return;
+	boolean contains_flag = 0 == SCR::Execute (.target.bash, "/bin/grep '#this database was generated during package building' /var/lib/YaST2/ppd_db.ycp");
+        y2milestone ("Checking foomatic database");
+        if (((boolean)SCR::Read (.ppd.db.changed) || contains_flag) && ! Mode::test)
+        {
+            y2milestone ("Database changed");
+            boolean fast_update = false;
+            if (Mode::cont)
+            {
+                fast_update = true;
+                SCR::Write (.ppd.db.check_method, `size);
+            }
+            SCR::Write (.ppd.db.create, "");
+            UI::OpenDialog (`VBox (
+                `HSpacing (50),
+                `ProgressBar (`id(`pr),
+                        // progress bar label
+                        _("The list of installed drivers has changed.
+Building database of drivers..."), 100, 0)));
+            integer result = 0;
+            while (true)
+            {
+                    result = (integer)SCR::Read (.ppd.db.creation_status);
+                    if (result < 0)
+                        break;
+                    if (result == 100)
+                        break;
+                    UI::ChangeWidget (`id (`pr), `Value, result);
+                    sleep (1000);
+            }
+            UI::CloseDialog ();
+            if (result < 0)
+            {
+                    // error report
+                    Report::Error (_("An error occurred while creating the database
+of printers.
+"));
+            }
+            if (fast_update)
+            {
+                SCR::Write (.ppd.db.check_method, `checksum);
+            }
+        }
+        foomatic= (map)SCR::Read (.target.ycp, "/var/lib/YaST2/ppd_db.ycp");
     }
 
     /**
@@ -63,21 +115,21 @@
     global define list sortPpds (string vendor_db, string device_db,
 	list ppd_nicks)
     ``{
-	vendor_db = SCR::Read (.ppd.db.vendorname, vendor_db);
-	device_db = SCR::Read (.ppd.db.modelname, [vendor_db, device_db]);
+	vendor_db = (string)SCR::Read (.ppd.db.vendorname, vendor_db);
+	device_db = (string)SCR::Read (.ppd.db.modelname, [vendor_db, device_db]);
         SCR::Execute (.target.bash, sformat (
 	    "/usr/bin/touch %1/ppd_preference_list",
 	    Printerlib::baseDataDir));
-        map order = SCR::Read (.target.ycp,
+        map order = (map)SCR::Read (.target.ycp,
 	    sformat ("%1/ppd_preference_list", Printerlib::baseDataDir));
         if (order == nil)
             order = $[];
 
-        list(string) preferred = [];
-        foreach (`k, `v, order, ``{
+        list<string> preferred = [];
+        foreach (string k, map v, order, ``{
             if (regexpmatch (vendor_db, k))
             {
-                foreach (`kk, `vv, v, ``{
+                foreach (string kk, list vv, v, ``{
                     if (regexpmatch (device_db, kk))
                     {
                         y2debug ("Matched %1, %2", k, kk);
@@ -108,9 +160,9 @@
 	else
 	    ppds = listmap (string k, ppd_nicks, ``([k, $[]]));
 
-        foreach (`k, `v, ppds, ``{
+        foreach (string k, map v, ppds, ``{
             boolean found = false;
-            foreach (`i, preferred, ``{
+            foreach (string i, preferred, ``{
                 if (! found && regexpmatch (k, i))
                 {
 		  if (issubstring (v["filename"]:"",
@@ -217,7 +269,7 @@
 	if (Spooler::Get () == "cups")
 	    return ppds[0]:nil;
 	// for LPRng find first with foomatic-rip as filter
-	return find (string s, ppds, ``(
+	return (string)find (string s, ppds, ``(
 	    foomatic[vendor_db, device_db, s, "filter"]:""
 		== "foomatic-rip"));
     }
@@ -230,7 +282,7 @@
       */
     global define map getUpdatedPpdFile (map entry) ``{
         string src_ppd = entry["ppd"]:"";
-	string dst_ppd = SCR::Read (.target.tmpdir) + "/patched_ppd_"
+	string dst_ppd = (string)SCR::Read (.target.tmpdir) + "/patched_ppd_"
 	    + entry["name"]:"";
 	if (! Mode::test)
 	{
@@ -265,58 +317,6 @@ printer model again.
 
 
     /**
-      * Check whether foomatic database has been loaded, and if not, then
-      * load it
-      */
-    global define void loadFoomaticIfNeeded () ``{
-        if (foomatic != nil)
-            return;
-	boolean contains_flag = 0 == SCR::Execute (.target.bash, "/bin/grep '#this database was generated during package building' /var/lib/YaST2/ppd_db.ycp");
-        y2milestone ("Checking foomatic database");
-        if ((SCR::Read (.ppd.db.changed) || contains_flag) && ! Mode::test)
-        {
-            y2milestone ("Database changed");
-            boolean fast_update = false;
-            if (Mode::cont)
-            {
-                fast_update = true;
-                SCR::Write (.ppd.db.check_method, `size);
-            }
-            SCR::Write (.ppd.db.create, "");
-            UI::OpenDialog (`VBox (
-                `HSpacing (50),
-                `ProgressBar (`id(`pr),
-                        // progress bar label
-                        _("The list of installed drivers has changed.
-Building database of drivers..."), 100, 0)));
-            integer result = 0;
-            while (true)
-            {
-                    result = SCR::Read (.ppd.db.creation_status);
-                    if (result < 0)
-                        break;
-                    if (result == 100)
-                        break;
-                    UI::ChangeWidget (`id (`pr), `Value, result);
-                    sleep (1000);
-            }
-            UI::CloseDialog ();
-            if (result < 0)
-            {
-                    // error report
-                    Report::Error (_("An error occurred while creating the database
-of printers.
-"));
-            }
-            if (fast_update)
-            {
-                SCR::Write (.ppd.db.check_method, `checksum);
-            }
-        }
-        foomatic= SCR::Read (.target.ycp, "/var/lib/YaST2/ppd_db.ycp");
-    }
-
-    /**
       * get configurations, which may be usable for detected printer
       * @param vendor_db string name of printer vendor
       * @param device_db string printer model name
@@ -326,7 +326,7 @@ of printers.
 	loadFoomaticIfNeeded ();
 	map ppd_db = foomatic[vendor_db, device_db]:$[];
 	ppd_db = filter (`k, `v, ppd_db, ``(is (k, string)));
-	map ret = mapmap (string k, map v, ppd_db, ``( [v["filename"]:"", k]));
+	map ret = mapmap (string k, map v, ppd_db, ``( $[(v["filename"]:"") : k]));
 	ret = filter (`k, `v, ret, ``(k != "" && v != ""));
 	return ret;
     }
@@ -339,7 +339,7 @@ of printers.
     global define boolean processPpdFiles (string dir) ``{
 	string log = dir + "/log";
 	string target_dir = "/usr/share/cups/model/downloaded";
-	integer test = SCR::Execute (.target.bash, sformat (
+	integer test = (integer)SCR::Execute (.target.bash, sformat (
 	    "/usr/lib/YaST2/bin/process_ppd_files %1 %2 %3", dir,
 	    target_dir, log));
 	y2milestone ("Test status: %1", test);
