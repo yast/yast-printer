@@ -22,26 +22,18 @@
     /***
      * <H3>YaST2 Printers configuration</H3>
      * Configurator of printers that works with packages <tt>cups</tt> and <tt>LPRng</tt>
-     * as printing daemons and <tt>apsfilter</tt> as magic filter.<BR>
+     * as printing daemons and <tt>apsfilter</tt> or Foomatoc as magic filter.<BR>
      * For printer documentation index, click <a href="../index.html">here</a>.
      */
 
     textdomain "printer";
-    import "Printer";
-    import "Wizard";
-    import "Progress";
-    import "Mode";
-    import "Arch";
-    include "printer/misc.ycp";
-    include "printer/dialogs.ycp";
-    include "printer/helps.ycp";
-    include "printer/wizards.ycp";
-    import "Label";
-    import "Popup";
-    import "Runlevel";
-    import "Printerlib";
 
     import "Crash";
+    import "Label";
+    import "Mode";
+    import "Printer";
+
+    include "printer/wizards.ycp";
 
     Crash::Run ("printer.ycp");
 
@@ -49,36 +41,43 @@
 
     // ===== arguments ================================================
 
-    boolean test_mode = false;
-    boolean skip_autodetection = false;
-    boolean skip_io = false;	// FIXME: use Printer::?????_mode variable
-				// or other mode handling
+    boolean cups_running = 0 == SCR::Execute (.target.bash,
+	"test -f /etc/init.d/cups && /etc/init.d/cups status");
+    boolean lprng_running = 0 == SCR::Execute (.target.bash,
+	"test -f /etc/init.d/lpd && /etc/init.d/lpd status");
 
-    boolean cups_running = 0 == SCR::Execute (.target.bash, "test -f /etc/init.d/cups && /etc/init.d/cups status");
-    boolean lprng_running = 0 == SCR::Execute (.target.bash, "test -f /etc/init.d/lpd && /etc/init.d/lpd status");
-
-    // static variables
-    integer runAutoprobedListDialog__current = 0;
-
+    integer i = 0;
+    while (i < size (Args()))
     {
-	integer i = 0;
-	while (i < size (Args()))
+	if (.test == Args (i))
 	{
-	    if (.test == Args (i))	{	test_mode = true;	skip_io = true;		skip_autodetection = true;	}
-	    else if (.nodetection == Args (i) || ".nodetection" == Args (i))	skip_autodetection = true;
-	    else if (.noio == Args (i))	{	skip_io = true;		}
-	    i = i + 1;
+	    Mode::test = true;
+	    Printer::skip_autodetection = true;
 	}
+	else if (.nodetection == Args (i) || ".nodetection" == Args (i))
+	{
+	    Printer::skip_autodetection = true;
+	}
+	i = i + 1;
     }
 
-    ret = PrinterSequence ();
+    if (Mode::test)
+	testDialogs ();
+    else
+	ret = PrinterSequence ();
 
     if (ret == `abort || ret == `back)
     {
 	if (! cups_running)
-	    SCR::Execute (.target.bash, "test -f /etc/init.d/cups && /etc/init.d/cups stop");
+	{
+	    SCR::Execute (.target.bash,
+		"test -f /etc/init.d/cups && /etc/init.d/cups stop");
+	}
 	if (! lprng_running)
-	    SCR::Execute (.target.bash, "test -f /etc/init.d/lpd && /etc/init.d/lpd stop");
+	{
+	    SCR::Execute (.target.bash,
+		"test -f /etc/init.d/lpd && /etc/init.d/lpd stop");
+	}
     }
 
     Crash::Finish ("printer.ycp");

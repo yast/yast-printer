@@ -21,11 +21,12 @@
 
     textdomain "printer";
 
+    import "CUPS";
+    import "LPRng";
     import "Mode";
+    import "Popup";
     import "Require";
     import "Runlevel";
-    import "CUPS";
-    import "Popup";
 
 // local variables
 
@@ -76,6 +77,7 @@ This usually takes one or two minutes")),
 
     /**
       * Get the currently used spooler
+      * FIXME TODO if not known, detect
       * @return currently used spooler
       */
     global define string Get() ``{
@@ -339,9 +341,10 @@ Install them now?"));
 
     /**
       * Adjust services for runlevel, set them to state needed for writing
+      * @param have_some_queue true if at least one queue was configured
       * @return boolean true on success
       */
-    global define boolean AdjustServices () ``{
+    global define boolean AdjustServices (boolean have_some_queue) ``{
 	// FIXME error checking
 	StopServices();
 
@@ -356,20 +359,14 @@ Install them now?"));
 	    }
 	    else
 	    {
-// always adjust CUPS to be run (bugzilla 29413)
-/*		if (SCR::Read (.init.scripts.exists, "cups")
-		    && (size (printcap) > 0
-			|| CUPS::cups_server_settings["Browsing"]:"On" == "On"))
-		{*/
-		    Runlevel::ServiceAdjust ("cups", "enable");
-//		}
+		Runlevel::ServiceAdjust ("cups", "enable");
 	    }
 	}
 	else
 	{
 	    if (SCR::Read (.init.scripts.exists, "cups"))
 		Runlevel::ServiceAdjust ("cups", "disable");
-	    if (SCR::Read (.init.scripts.exists, "lpd") && size (printcap) > 0)
+	    if (SCR::Read (.init.scripts.exists, "lpd") && have_some_queue)
 		Runlevel::ServiceAdjust ("lpd", "enable");
 	}
 	Spooler::RestartIfNeeded (true);
@@ -423,7 +420,7 @@ install and configure.
 	    else if (3 == spool_sys) //both spoolers are installed
 	    {
 		// popup message
-		message = _("Both LPRng and CUPS are installed.
+	message = _("Both LPRng and CUPS are installed.
 Select the spooler  
 to leave installed and configure.");
 	    }
@@ -525,24 +522,37 @@ may not run properly.");
 
     /**
       * Restart printer daemon
+      * @param have_some_queue true if at least one queue was configured
       * @return boolean true on success
       */
-    global define boolean restartServices () ``{
+    global define boolean restartServices (boolean have_some_queue) ``{
 	Spooler::StopServices ();
-	if (! write_only)
-	{
 // always adjust CUPS to be run (bugzilla 29413)
-	    if (size (printcap) > 0 || (Spooler::Get () == "cups"/* &&
-		CUPS::cups_server_settings["Browsing"]:"On" == "On"*/))
-	    {
-		if (Spooler::Get () == "cups")
-		    SCR::Execute (.target.bash, "test -f /etc/init.d/cups && /etc/init.d/cups start");
-		else
-		    SCR::Execute (.target.bash, "test -f /etc/init.d/lpd && /etc/init.d/lpd start");
-	    }
+	if (have_some_queue || (Spooler::Get () == "cups"))
+	{
+	    if (Spooler::Get () == "cups")
+		SCR::Execute (.target.bash,
+		    "test -f /etc/init.d/cups && /etc/init.d/cups start");
+	    else
+		SCR::Execute (.target.bash,
+		    "test -f /etc/init.d/lpd && /etc/init.d/lpd start");
 	}
 	return true;
     }
+
+    /**
+      * List all available queues (local and remote)
+      * @return a list of strings all available queues
+      */
+    global define list<string> GetAvailableQueues () ``{
+	if (Spooler::Get () == "cups")
+	{
+	    return CUPS::GetAvailableQueues ();
+	}
+	else
+	return LPRng::GetAvailableQueues ();
+    }
+
 
 
 }

@@ -18,25 +18,20 @@
 
 {
     textdomain "printer";
-    import "Printer";
-    import "Printerlib";
     import "Arch";
-    include "printer/misc.ycp";
-    include "printer/dialogs.ycp";
+    import "CUPS";
+    import "Label";
     import "Mode";
     import "Popup";
-    import "Label";
-    import "Report";
+    import "Printer";
+    import "Printerlib";
     import "Spooler";
-    import "Wizard";
-    import "CUPS";
+
+    include "printer/wizards.ycp";
 
     string func  = Args(0);
     map    param = Args(1);
     map    ret   = $[];
-
-    // static variables
-    integer runAutoprobedListDialog__current = 0;
 
     integer spool_sys = Spooler::getSpoolSystem ();
 
@@ -46,7 +41,8 @@
 	Spooler::Set ("cups");
     if (func == "MakeProposal")
     {
-	startCupsServer ();
+	if (Spooler::Get () == "cups")
+	    CUPS::StartDaemon ();
 	boolean force_reset = lookup (param, "force_reset", false);
 	string proposal = "";
 	string warning = nil;
@@ -64,9 +60,7 @@
 		}
 		else
 		{
-		    Printer::do_not_read_cups = true;
-		    Printer::queuesRead ();
-		    Printer::do_not_read_cups = false;
+		    // no queues are existing in case of fresh install
 		}
 		// S390/S390x do not have local printers,
 		// so no warning and no probing is necessary (#19186)
@@ -95,84 +89,8 @@ Detect your printers?
 		    && size (Printer::autodetected) == 0
 		    && Spooler::Get () == "cups")
 		{
-		    Spooler::StopServices ();
-		    // no local printer found
-		    y2milestone ("No local printer found, trying IPP servers");
-		    string pid = nil;
-		    if (SCR::Read (.target.size,
-			"/var/run/listen_remote_ipp.pid") > 0)
-		    {
-		        pid = SCR::Read (.target.string,
-			    "/var/run/listen_remote_ipp.pid");
-		    }
-		    boolean abort_server = false;
-		    if (pid != nil)
-		    {
-			y2milestone ("Scanning for CUPS server in progress");
-			SCR::Execute (.target.bash,
-			    sformat ("kill -1 %1", pid));
-			boolean runs = true;
-			boolean displayed = false;
-			integer counter = 0;
-			while (runs)
-			{
-			    if (counter == 10)
-			    {
-				displayed = true;
-				UI::OpenDialog (`VBox (`Label (_("Detecting CUPS network server...")),
-`PushButton (`id (`abort), `opt (`key_F9), Label::AbortButton ())));
-
-			    }
-			    sleep (100);
-			    runs = SCR::Read (.target.size,
-				"/var/run/listen_remote_ipp.pid") > 0;
-			    counter = counter + 1;
-                            if (displayed)
-                            {
-                                any ui = UI::PollInput ();
-                                if (ui == `abort)
-                                {
-                                    SCR::Execute (.target.bash,
-					sformat ("kill -15 %1", pid));
-				    runs = false;
-				    abort_server = true;
-                                }
-                            }
-
-			}
-			if (displayed)
-			    UI::CloseDialog ();
-		    }
-		    if (SCR::Read (.target.size,
-			"/var/lib/YaST2/cups_network_server_name") != -1)
-		    {
-			y2milestone ("File with CUPS servers found");
-			if (! abort_server)
-			{
-			    string tmp = SCR::Read (.target.string,
-				"/var/lib/YaST2/cups_network_server_name");
-			    Printer::cups_servers = splitstring (tmp, "\n");
-			    Printer::cups_servers
-				= toset (Printer::cups_servers);
-			    Printer::cups_servers = filter (`s,
-				Printer::cups_servers, ``(
-				s != "" && s != nil));
-			}
-// don't do it here because of possibility to run propose repeatedly
-//			SCR::Execute (.target.bash,
-//			    "/bin/rm /var/lib/YaST2/cups_network_server_name");
-		    }
-		    if (size (Printer::cups_servers) > 0)
-		    {
-			y2milestone ("Found servers: %1",Printer::cups_servers);
-			string server = Printer::cups_servers[0]:"";
-			CUPS::cups_installation = `client;
-			CUPS::server_hostname = server;
-		    }
+		    CUPS::ProposeClientOnly ();
 		}
-		// cleanup after testing of remote CUPS server existence
-		SCR::Execute (.target.bash, "test -f /var/lib/YaST2/cups_network_server_name && /bin/rm /var/lib/YaST2/cups_network_server_name");
-		SCR::Execute (.target.bash, "test -f /var/run/listen_remote_ipp.pid && /bin/rm /var/run/listen_remote_ipp.pid");
 		Printer::Propose ();
 	    }
 	    if (size (Printer::printcap) > 0 && ! Printer::tested)
@@ -197,14 +115,8 @@ Detect your printers?
     }
     else if (func == "AskUser")
     {
-	any saved = nil;
-	any seq = nil;
-	saved = Printer::Export ();
-        Wizard::CreateDialog();
-        Wizard::SetContentsButtons(caption, contents, "",
-            Label::BackButton(), Label::NextButton());
-	seq = runWizard (false);
-        UI::CloseDialog();
+	map saved = Printer::Export ();
+	symbol seq = PrinterAutoSequence ();
 	if (`next != seq)
 	    Printer::Import (saved);
 	y2milestone ("Printer WS return: %1", seq);

@@ -19,25 +19,27 @@
 
 {
     module "Printer";
-    import "Printerlib";
-    import "Progress";
-    import "Runlevel";
-    import "Report";
-    import "Summary";
-    import "Mode";
-    import "HTML";
-    import "Popup";
-    import "Arch";
-    import "Crash";
-    import "Label";
-    import "Confirm";
-    import "Spooler";
-    import "CUPS";
-    import "Printerdb";
-    include "printer/misc-lprng.ycp";
-    include "printer/misc-cups.ycp";
 
     textdomain "printer";
+
+    import "Arch";
+    import "Confirm";
+    import "Crash";
+    import "CUPS";
+    import "HTML";
+    import "Label";
+    import "Mode";
+    import "Popup";
+    import "Printerdb";
+    import "Printerlib";
+    import "Progress";
+    import "Report";
+    import "Runlevel";
+    import "Spooler";
+    import "Summary";
+    include "printer/misc-cups.ycp";
+    include "printer/misc-lprng.ycp";
+
 
     //////////
     ////////// Module data
@@ -46,15 +48,11 @@
     /**
       * Version of YaST2 printer module for updates handling
       */
-    global integer version = 256 * 2 + 8; // 2.8
+    global integer version = 256 * 2 + 9; // 2.9
     /**
       * Don't run SuSEconfig, don't restart services if true and possible
       */
     global boolean write_only = false;
-    /**
-      * List of detected CUPS servers
-      */
-    global list(string) cups_servers = [];
     /**
       * Shall be printers detected
       * If nil, ask user
@@ -137,9 +135,9 @@
     global boolean tested = false;
 
     /**
-      * Forbid to read CUPS settings, because it would mean to start CUPS server
+      * True if autodetection should be skipped
       */
-    global boolean do_not_read_cups = false;
+    global boolean skip_autodetection = Arch::s390;
 
 // variables for UI purproses
 
@@ -169,6 +167,11 @@
       * When configuring client, using server's default queue?
       */
     global boolean server_default = true;
+
+    /**
+      * Selected item of the list of detected printers
+      */
+    global integer runAutoprobedListDialog__current = 0;
 
 // local functions
 
@@ -595,7 +598,7 @@
      * @return list of printers
      */
     global define list cupsRead () ``{
-        if (`server == CUPS::InstallationType () && ! do_not_read_cups)
+        if (`server == CUPS::InstallationType ())
         {
 	    Spooler::RestartIfNeeded (true);
             list ret = SCR::Read (.cups.printers);
@@ -606,7 +609,7 @@
 	    classes = maplist (`e, classes, ``(add (e, "uri", "class")));
 	    ret = ret + classes;
 	    default = SCR::Read (.cups.default_dest);
-	    readCupsSettings ();
+	    CUPS::readCupsSettings ();
 	    return ret;
         }
         return [];
@@ -655,9 +658,8 @@
      * @return boolean success?
      */
     global define boolean Read () ``{
-	boolean skip_autodetection = Arch::s390;
-	boolean test_mode = false;
-	boolean skip_io = false;
+	if (Arch::s390)
+	    skip_autodetection = true;
 	list stages = [
 	    // progress stage, text in dialog (short) (infinitive)
 	    _("Check environment"),
@@ -709,7 +711,7 @@
 	Progress::NextStep (); // step 3 - initialize spooler
 	if (testAbort ()) return false;
 
-	if (!test_mode)
+	if (Mode::test)
 	{
 	    spoolerInitialize ();
 	}
@@ -717,20 +719,15 @@
 	Progress::NextStageStep (4); // step 4-7 - read the settings
 	if (testAbort ()) return false;
 
-	if (!skip_io)
+	if (Spooler::Get () == "cups" && CUPS::InstallationType () == `client)
 	{
-	    if (Spooler::Get () == "cups" && CUPS::InstallationType () == `client)
-	    {
-		if (! cupsClientRead ())
-		    return false;
-	    }
-	    else
-	    {
-		if (! queuesRead ())
-		{
-		    return false;
-		}
-	    }
+	    if (! cupsClientRead ())
+		return false;
+	}
+	else
+	{
+	    if (! queuesRead ())
+		return false;
 	}
 
 	Progress::NextStageStep (8); // step 8-11 - check and load database
@@ -764,7 +761,7 @@
       */
     global define boolean checkRootPerm () ``{
 	// make sure we are root
-	if (!Printerlib::amIRoot () && !test_mode)
+	if (!Printerlib::amIRoot () && !Mode::test)
 	{
 	    if (! Popup::AnyQuestion ("",
 		// popup
@@ -1048,6 +1045,9 @@ Detect your printers?"));
       * @return boolean true on success
       */
     global define boolean queuesRead () ``{
+	// during installation, no queues are saved
+	if (Mode::cont && ! Mode::update)
+	    return true;
 	boolean ret = true;
 	list nonyast = spoolerSpecQueuesRead ();
 
@@ -1179,12 +1179,12 @@ Detect your printers?"));
 	{
 	    CUPS::server_hostname = "";
 	    CUPS::saveClientHostName ();
-	    writeCupsSettings ();
+	    CUPS::writeCupsSettings ();
 	}
 
 	Progress::NextStage (); // adjst services
 	if (testAbort ()) return false;
-	ret = Spooler::AdjustServices () && ret;
+	ret = Spooler::AdjustServices (size (printcap) > 0) && ret;
 
 	if (with_daemon)
 	{
@@ -1206,7 +1206,8 @@ Detect your printers?"));
 
 	    Progress::NextStage ();// restart spooler
 	    if (testAbort ()) return false;
-	    ret = Spooler::restartServices () && ret;
+	    if (! write_only)
+		ret = Spooler::restartServices (size (printcap) > 0) && ret;
 
 	}
 	else
@@ -1945,49 +1946,6 @@ the selected spooler does not support it."), name));
 	return p;
     }
 
-    /**
-      * List all available queues (local and remote)
-      * @return a list of strings all available queues
-      */
-    global define list(string) GetAvailableQueues () ``{
-	list(string) ret = [];
-	if (Spooler::Get () != "cups")
-	{
-	    list pc = SCR::Read (.etc.printcap);
-	    foreach (`e, pc, ``{
-		ret = add (ret, e["name"]:"");
-		string printcap_part = e["saved", "printcap_part"]:"";
-		list l = splitstring (printcap_part, "\n");
-		l = maplist (`i, l, ``{
-		    integer hash = findfirstof (i, "#");
-		    if (hash != nil)
-			i = substring (i, 0, hash);
-		    if (substring (i, size (i)) == "\\")
-			i = substring (i, 0, size (i) - 1);
-		    return i;
-		});
-		printcap_part = mergestring (l, "");
-		l = splitstring (printcap_part, ":");
-		string names = l[0]:"";
-		l = splitstring (names, "|");
-		l = filter (`n, l, ``(n != "" && ! issubstring (n, " ")));
-		foreach (`n, l, ``{
-		    ret = add (ret, n);
-		});
-	    });
-	    ret = toset (filter (string r, ret, ``(r != "")));
-	}
-	else
-	{
-	    string hostname = "localhost";
-	    if (CUPS::InstallationType () == `client && CUPS::server_hostname != "")
-		hostname = CUPS::server_hostname;
-	    ret = SCR::Read (.cups.remote, hostname);
-	    ret = toset (ret);
-	}
-	y2milestone ("Ret: %1", ret);
-	return ret;
-    }
 
     /**
      * TODO: create test case
