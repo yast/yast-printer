@@ -637,7 +637,10 @@ printer model again."), entry["name"]:""));
 	y2milestone ("Test status: %1", test);
 	if (test != 0)
 	{
-	    term text = `RichText (`opt (`plainText), SCR::Read (.target.string, log));
+	    string log = (string)SCR::Read (.target.string, log);
+	    term text = `VBox ();
+	    if (log != "" && log != nil)
+		text = `RichText (`opt (`plainText), SCR::Read (.target.string, log));
 	    UI::OpenDialog(`opt ( `decorated ),
 		`VBox (`HSpacing(75),
 		// heading
@@ -654,10 +657,13 @@ printer model again."), entry["name"]:""));
 	    return false;
 	}
 	integer count = tointeger (SCR::Read (.target.string, dir + "/count"));
-	// reported message
-	Report::Message (sformat (_("%1 file was added to the database",
-	    "%1 files were added to the database", count),
-	    count));
+	if (count != nil)
+	{
+	    // reported message
+	    Report::Message (sformat (_("%1 file was added to the database",
+		"%1 files were added to the database", count),
+		count));
+	}
 	foomatic = nil;
 	loadFoomaticIfNeeded ();
 	return true;
