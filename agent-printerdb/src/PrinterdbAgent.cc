@@ -1271,7 +1271,7 @@ void spdbReportError (int line, const char*file, const char*func, const char*for
 {
     va_list ap;
     va_start(ap, format);
-    y2_vlogger (LOG_ERROR, "ag_printerdb", file, line, func, format, ap);
+    Y2Logging::y2_vlogger (LOG_ERROR, "ag_printerdb", file, line, func, format, ap);
     va_end(ap);
 }
 
