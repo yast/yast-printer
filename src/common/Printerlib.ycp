@@ -24,6 +24,7 @@
     import "Label";
     import "Popup";
     import "Runlevel";
+    import "Require";
     include "printer/misc.ycp";
     import "Mode";
 
@@ -324,7 +325,6 @@ ECHO_PID=$!
 		    if (contains (pr["requires"]:[], "hp-officeJet"))
 		    {
 			y2milestone ("PTAL device found");
-			import "Require";
 			boolean req_ret = Require::RequireAndConflict (
 			    ["hp-officeJet"],
 			    [],
@@ -531,6 +531,8 @@ Install it now?"));
 	boolean cups_exists = Pkg::IsProvided ("cups-client");
 	// for lpd we need to check the file because
 	boolean lpd_exists = (SCR::Read(.target.size, "/etc/init.d/lpd")!=-1);
+	y2milestone ("CUPS exists: %1, LPD exists: %2",
+	    cups_exists, lpd_exists);
 	boolean cups_complete = Pkg::IsProvided ("cups-drivers")
 	    && Pkg::IsProvided ("cups-libs")
 	    && Pkg::IsProvided ("cups")
@@ -585,6 +587,7 @@ Install it now?"));
      * @param to Spooler to install. Should be one of "cups" "lprold" "plrng "plp"
      */
     global define void switchTo (string to) ``{
+	initTarget ();
 	list del = ["plp", "lprold", "lprng", "cups", "cups-client",
             "cups-drivers", "cups-drivers-cs", "cups-drivers-de",
             "cups-drivers-stp", "lpdfilter", "filters", "foomatic-filters"];
@@ -598,7 +601,7 @@ Install it now?"));
 
         if ("cups" == to)
         {
-            inst = isnt_cups;
+            inst = inst_cups;
         }
         else if ("cups_client" == to)
         {
@@ -614,7 +617,6 @@ Install it now?"));
 	if (Mode::config)
 	{
 	    Printer::spooler = to;
-	    import "Require";
 	    Require::RequireAndConflictTarget (inst, del, "");
 	    if (Printer::spooler == "cups")
 		// question popup
@@ -629,6 +631,7 @@ Install them now?"));
 	Runlevel::ServiceAdjust ("lpd", "disable");
 	Runlevel::ServiceAdjust ("cups", "disable");
 	del = filter (`e, del, ``(Pkg::IsProvided (e) == true));
+	inst = filter (`i, inst, ``(! Pkg::IsProvided (i)));
 	import "PackageCallbacks";
 	y2milestone("-------- deleting = %1", del);
 	foreach (`e, del, ``{Pkg::PkgDelete (e);});
@@ -637,6 +640,14 @@ Install them now?"));
 	Pkg::PkgSolve ();
 	Pkg::PkgCommit (0);
 	WFM::CallModule("inst_suseconfig", []);
+
+
+
+	Require::DoInstallAndRemove (inst, del);
+	Printer::save_all = true;
+	Printer::reread = true;
+	Printer::sys_forbidden_names = nil;
+
     }
     /**
      * Printer uri = type://device

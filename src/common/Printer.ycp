@@ -785,33 +785,11 @@ END { if (!used) print \"ServerName %1\" }
 	// step 0
 	Progress::NextStageStep (0); if (testAbort ()) return false;
 
-
-
-	// make sure we are root
-	if (!Printerlib::amIRoot () && !test_mode)
-	{
-	    if (! Popup::AnyQuestion ("",
-		// popup
-		_("You must be root to run the printer configuration tool. 
- If you continue, you will not be able to save your settings. 
- Continue?"),
-		Label::YesButton (), Label::NoButton (), `focus_no))
-	    {
-		return false;
-	    }
-	}
-
-	Printer::spooler = checkSpoolSystem();
-	if (Printer::spooler == "switched")
-	{
-	    Printer::save_all = true;
-	    Printer::reread = true;
-	    Printer::sys_forbidden_names = nil;
-	    return oldRead ();
-	}
-	if (Printer::spooler == "exit")
+	if (! checkRootPerm ())
 	    return false;
 
+	if (! checkSpooler ())
+	    return false;
 
 	if (!test_mode)
 	{
@@ -875,16 +853,10 @@ END { if (!used) print \"ServerName %1\" }
 		Progress::NextStep();
 	    }
 	}
-	// step 3
-	Progress::NextStep (); if (testAbort ()) return false;
+	Progress::NextStep (); // step 3 - check ghostscript
+	if (testAbort ()) return false;
 
-	if (SCR::Execute (.target.bash, "/usr/bin/which gs") != 0)
-	{
-	    // message box
-	    Report::Warning (_("It seems that you do not have GhostScript
-installed on your computer. It is needed
-to print."));
-	}
+	checkGhostscript ();
 
 	// step 4
 	Progress::NextStageStep (4); if (testAbort ()) return false;
@@ -947,6 +919,51 @@ Detect your printers?"));
 	}
 	// Progress finish
 	Progress::Finish (); if (testAbort ()) return false;
+	return true;
+    }
+
+    /**
+      * Check if running with root permission
+      * @return boolean true if yes, or user confirmed he agrees with
+      *  possible problems
+      */
+    global define boolean checkRootPerm () ``{
+	// make sure we are root
+	if (!Printerlib::amIRoot () && !test_mode)
+	{
+	    if (! Popup::AnyQuestion ("",
+		// popup
+		_("You must be root to run the printer configuration tool. 
+ If you continue, you will not be able to save your settings. 
+ Continue?"),
+		Label::YesButton (), Label::NoButton (), `focus_no))
+	    {
+		return false;
+	    }
+	}
+	return true;
+    }
+
+    /**
+      * Detect spooler currently in use
+      * @return boolean true on success
+      */
+    global define boolean checkSpooler () ``{
+	Printer::spooler = checkSpoolSystem();
+	if (Printer::spooler == "exit")
+	    return false;
+
+	return true;
+    }
+    global define boolean checkGhostscript () ``{
+	if (SCR::Execute (.target.bash, "/usr/bin/which gs") != 0)
+	{
+	    // message box
+	    Report::Warning (_("It seems that you do not have GhostScript
+installed on your computer. It is needed
+to print."));
+	    return false;
+	}
 	return true;
     }
 
@@ -1195,36 +1212,44 @@ Detect your printers?"));
 	}
 
 	Progress::NextStage (); // adjst services
+	if (testAbort ()) return false;
 	ret = adjustServices () && ret;
 
 	if (with_daemon)
 	{
 	    Progress::NextStage (); // delete old printers
+	    if (testAbort ()) return false;
 	    ret = deleteDeletedPrinters () && ret;
 
 	    Progress::NextStage (); // save printers
+	    if (testAbort ()) return false;
 	    ret = savePrinters () && ret;
 
 	    Progress::NextStage (); // set default queue
+	    if (testAbort ()) return false;
 	    ret = saveDefaultQueue () && ret;
 
 	    Progress::NextStage (); // save system settings
+	    if (testAbort ()) return false;
 	    ret = saveTheConfiguration() && ret;
 
 	    Progress::NextStage ();// restart spooler
+	    if (testAbort ()) return false;
 	    ret = restartServices () && ret;
 
 	}
 	else
 	{
 	    Progress::NextStage (); // save system settings
+	    if (testAbort ()) return false;
 	    ret = saveCupsClient () && ret;
 	    ret = saveTheConfiguration() && ret;
 	}
 
 
 	Progress::NextStage (); // finished
-        // progress stage
+	if (testAbort ()) return false;
+	// progress step
         Progress::Title(_("Finished"));
 	sleep (500);
 	return ret;
@@ -1980,8 +2005,6 @@ the selected spooler does not support it."), name));
       */
     global define list(string) GetAvailableQueues () ``{
 	list(string) ret = [];
-	string state = spooler + "-state";
-	list(map) relevant = filter (`e, printcap, ``(e[state]:"" != "void"));
 	if (spooler != "cups")
 	{
 	    list pc = SCR::Read (.etc.printcap);
