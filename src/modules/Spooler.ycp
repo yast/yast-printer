@@ -382,13 +382,17 @@ Install them now?"));
 	spool_sys = spool_sys & 0xFF;
 	if (1 == spool_sys) //lpd is installed
 	{
-	    return "lprng";
+	    spooler = "lprng";
 	}
 	else if (2 == spool_sys) //cups is installed
 	{
-	    return "cups";
+	    spooler = "cups";
 	}
-	return "unknown";
+	else
+	{
+	    spooler = "unknown";
+	}
+	return spooler;
     }
 
     /**
@@ -399,10 +403,12 @@ Install them now?"));
 	integer spool_sys = Spooler::getSpoolSystem ();
 	if (1 == spool_sys) //lpd is installed
 	{
+	    spooler = "lprng";
 	    return "lprng";
 	}
 	else if (2 == spool_sys) //cups is installed
 	{
+	    spooler = "cups";
 	    return "cups";
 	}
 	else if (0 == spool_sys || 3 == spool_sys || 256 + 1 == spool_sys
@@ -457,6 +463,7 @@ may not run properly.");
 		Spooler::switchTo ("cups");
 		// FIXME
 //		Printer::assignAllQueuesChanged ();
+		spooler = "cups";
 		return "cups";
 	    }
 	    else if (`cups_client == result)
@@ -464,6 +471,7 @@ may not run properly.");
                 Spooler::switchTo ("cups_client");
 		// FIXME
 //		Printer::assignAllQueuesChanged ();
+		spooler = "cups";
                 return "cups";
             }
 	    else if (`lprng == result)
@@ -471,6 +479,7 @@ may not run properly.");
 		Spooler::switchTo ("lprng");
 		// FIXME
 //		Printer::assignAllQueuesChanged ();
+		spooler = "lprng";
 		return "lprng";
 	    }
             else if (`cancel == result)
@@ -481,6 +490,7 @@ may not run properly.");
 	else if (512 + 2 == spool_sys) // only client installation of cups
 				       // is installed
 	{
+	    spooler = "cups";
 	    return "cups";
 	}
 	return ""; //should be never reached
