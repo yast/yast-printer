@@ -729,13 +729,13 @@
 
 	// dialog caption
         Wizard::SetContentsButtons (sformat (_("CUPS permissions settings for %1"), pth), contents, getCupsAclHelp (show_ignore), Label::BackButton (), Label::NextButton ());
-	map settings = lookup (CUPS::cups_server_settings, pth, $[]);
-	if (lookup (settings, "Order", "Deny,Allow") == "Allow,Deny")
+	map settings = lookup (CUPS::cups_server_permissions, pth, $[]);
+	if (settings["Order"]:["Deny,Allow"] == ["Allow,Deny"])
 	    UI::ChangeWidget (`id (`ad), `Value, true);
 	else
 	    UI::ChangeWidget (`id (`da), `Value, true);
-	list cont = union (maplist (any e, lookup (settings, "AllowFrom", []), ``{return `i (`allow, e);}),
-			maplist (any e, lookup (settings, "DenyFrom", []), ``{return `i (`deny, e);}));
+	list cont = union (maplist (any e, lookup (settings, "Allow", []), ``{return `i (`allow, e);}),
+			maplist (any e, lookup (settings, "Deny", []), ``{return `i (`deny, e);}));
 	// selectionbox label
 	UI::ReplaceWidget (`id (`replace_acl), `SelectionBox (`id (`acl), _("&Permissions"),
 	   // listbox entry, %1 is IP address
@@ -825,18 +825,25 @@
                         : sformat (_("Deny From %1"), select (e, 1, "")))))));
 	    }
         }
-	settings = add(settings, "Order", UI::QueryWidget (`id (`order), `CurrentButton) == `ad ? "Allow,Deny" : "Deny,Allow");
+	settings["Order"] = UI::QueryWidget (`id (`order), `CurrentButton)
+	    == `ad
+		? ["Allow,Deny"]
+		: ["Deny,Allow"];
 	list allow = filter (string z, maplist (list x, filter (list e, cont, ``(select (e, 0, nil) == `allow)), ``{return select (x, 1, nil);}), ``(z != ""));
 	list deny = filter (string z, maplist (list x, filter (list e, cont, ``(select (e, 0, nil) == `deny)), ``{return select (x, 1, nil);}), ``(z != ""));
-	settings = add (settings, "AllowFrom", allow);
-	settings = add (settings, "DenyFrom", deny);
+	settings = add (settings, "Allow", allow);
+	settings = add (settings, "Deny", deny);
 	if (`next == ret)
 	{
-	    CUPS::cups_server_settings = add (CUPS::cups_server_settings, pth, settings);
+	    CUPS::cups_server_permissions[pth] = settings;
 	}
 	else if (`ignore == ret)
 	{
-	    CUPS::cups_server_settings = add (CUPS::cups_server_settings, pth, $[]);
+	    if (haskey (CUPS::cups_server_permissions, pth))
+	    {
+		CUPS::cups_server_permissions
+		    = remove (CUPS::cups_server_permissions, pth);
+	    }
 	    ret = `next;
 	}
         return ret;
@@ -890,9 +897,9 @@
 	// dialog caption
 	Wizard::SetContentsButtons (_("CUPS server settings"), contents, getCupsServerHelp (), Label::BackButton (), Label::NextButton ());
 
-	list addresses = lookup (CUPS::cups_server_settings, "BrowseAddress", []);
+	list<string> addresses = CUPS::cups_server_settings["BrowseAddress"]:[];
 
-	UI::ChangeWidget (`id (`browsing), `CurrentButton, lookup (CUPS::cups_server_settings, "Browsing", "On") == "On" ? `on : `off);
+	UI::ChangeWidget (`id (`browsing), `CurrentButton, CUPS::cups_server_settings["Browsing"]:["On"] == ["Off"] ? `off : `on);
 	// selectionbox
 	UI::ReplaceWidget (`id (`replace_addr), `SelectionBox (`id (`addr), _("Browse Addre&sses"), addresses));
 
@@ -967,8 +974,8 @@
 	if (ret == `next)
 	    CUPS::cups_server_settings["Browsing"]
 		= UI::QueryWidget (`id (`browsing), `CurrentButton) == `on
-		    ? "On"
-		    : "Off";
+		    ? ["On"]
+		    : ["Off"];
 	    CUPS::cups_server_settings["BrowseAddress"] = addresses;
 	return ret;
     }
