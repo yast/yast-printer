@@ -573,18 +573,18 @@ END { if (!used) print \"ServerName %1\" }
 	boolean ret = true;
 	list nonyast = [];
 	string old_default = default;
-
+y2error ("Before Read: %1", printcap);
 	if (spooler == "cups")
         {
             nonyast = cupsRead();
         }
-        else
+        else if (spooler == "lprng")
         {
             nonyast = printcapRead();
         }
 	if (save_all)
 	{
-	    printcap = filter (`e, printcap, ``(lookup (e, "type", "yast2") == "yast2" && lookup (e, "uri", "class") != "class"));
+	    printcap = filter (`e, printcap, ``(lookup (e, "type", "yast2") == "yast2"));// && lookup (e, "uri", "class") != "class"));
 	    foreach (`e, printcap, ``{
 		string name = lookup (e, "name", "");
 		if ("" != name)
@@ -619,7 +619,9 @@ END { if (!used) print \"ServerName %1\" }
 		    tmpdellist = add (tmpdellist, name);
 	    });
 	}
+y2error ("After Read: %1", printcap);
 	printcap = maplist (`e, printcap, ``{return assignStates (e, false);});
+y2error ("With states: %1", printcap);
 	if (old_default != "" && old_default != nil)
 	    default = old_default;
         foreach (`e, nonyast, ``{
@@ -690,7 +692,7 @@ END { if (!used) print \"ServerName %1\" }
 			    }
 			}
 		    }
-		    else
+		    else if (spooler == "lprng")
 		    {
 			if (p_type != "class" && lookup (states, "lprng-state", "changed") != "commited")
 			{

@@ -1689,15 +1689,15 @@ with prefilled name?")))
     global define symbol runAdvancedDialog () ``{
 	string new_spooler = Printer::spooler;
 	integer new_cups_i = Printer::cupsInstallationType ();
-	list items = [];
+//	list items = [];
 	if (new_spooler == "cups" && Printer::cupsInstallationType () != 0)
 	    new_spooler = "cups-client";
 
-	items = add (items, `item (`id (`spooler), _("Current spooler"), Printer::spooler == "cups" ? "CUPS" : Printer::spooler == "lprng" ? "LPRng" : _("unknown")));
+/*	items = add (items, `item (`id (`spooler), _("Current spooler"), Printer::spooler == "cups" ? "CUPS" : Printer::spooler == "lprng" ? "LPRng" : _("unknown")));
 	items = add (items, `item (`id (`spoolermode), _("Spooler installation type"), Printer::spooler != "cups" ? _("unavailable")
 	    : Printer::cupsInstallationType () == 0 ? _("Full server installation") : _("Network client only installation")));
 	items = add (items, `item (`id (`save), _("Save method"), Printer::save_all ? _("Save all queues") : _("Save modified queues only")));
-
+*/
 /*        term contents = `VBox (
             `VSpacing (1),
             `HBox (
@@ -1746,10 +1746,10 @@ with prefilled name?")))
 	while (nil == ret)
 	{
 	    ret = UI::UserInput ();
-	    if (`edit == ret)
+/*	    if (`edit == ret)
 	    {
 		ret = UI::QueryWidget (`id (`options), `CurrentItem);
-	    }
+	    }*/
 /*	    if (`spooler == ret)
 	    {
 		symbol new_spooler_s = chooseSpooler (_("Choose new spooler"), _("&Use current"));
@@ -1860,6 +1860,7 @@ the current configuration.
 	    }
 	    if (Printer::spooler != new_spooler)
 	    {
+		Printer::save_all = true;
 		Printerlib::switchTo (new_spooler);
 		return `switch;
 	    }
