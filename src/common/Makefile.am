@@ -13,7 +13,8 @@ ynclude_DATA =			\
 	dialogs.ycp		\
 	helps.ycp		\
 	texts.ycp		\
-	testpage.ycp
+	testpage.ycp		\
+	ppds.ycp
 
 
 client_DATA =                           \

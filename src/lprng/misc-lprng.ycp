@@ -23,8 +23,8 @@
     import "Printerlib";
     import "Report";
 
-    include "printer/misc-cups.ycp";
     include "printer/testpage.ycp";
+    include "printer/ppds.ycp";
 
     /**
      * Write the .upp file and the configuration.
@@ -167,11 +167,6 @@ is not completed properly.
             SCR::Write (.target.string, fn, ret);
             SCR::Execute (.target.bash, sformat ("chmod 0750 %1 ; chown lp:lp %1", fn));
             if (callLprsetup (sformat ("/usr/lib/lpdfilter/bin/lprsetup -lprng -overwrite %1 -device /dev/null", name) + tail))
-                return true;
-        }
-        else if (con_type == "file")
-        {
-            if (callLprsetup (sformat ("/usr/lib/lpdfilter/bin/lprsetup -lprng -overwrite %1 -device '| -$ /bin/cat > %2'", name, Printerlib::getUriDevice (uri)) + tail))
                 return true;
         }
         else if (con_type == "pipe")

@@ -22,64 +22,39 @@
     import "Printer";
     import "Printerlib";
     import "Report";
-    include "printer/misc.ycp";
 
     /**
-      * Get PPD file updated according to printer options
-      * @param entry map of printer
-      * @return map updated printer map
+      * start CUPS server and don't wait until initialization finishes
       */
-    global define map getUpdatedPpdFile (map entry) ``{
-        string ppdfilename = lookup (entry, "ppd", "");
-        string ownppd = lookup (entry, "ownppd", "");
-        boolean raw = entry["raw"]:false;
-        if (raw)
+    global define void startCupsServer () ``{
+        integer status = SCR::Execute (.target.bash, "/etc/init.d/cups status");
+        if (0 != status)
         {
-            ppdfilename = "";
-            ownppd = "";
-            entry["ppd"] = "";
+            SCR::Execute (.target.bash_background, "/etc/init.d/cups start");
         }
-        else if (ppdfilename == "")
-        {
-            ppdfilename = SCR::Read (.target.tmpdir);
-            ppdfilename = ppdfilename + "/ppdfile";
-        }
+    }
 
-        string ppdfile = "";
-        if (entry["ownppd"]:"" != "")
-            ppdfile = entry["ownppd"]:"";
-        else if (! raw)
-        {
-            ppdfile = Printer::foomatic[entry["vendor_db"]:"",
-                entry["device_db"]:"",
-                entry["config"]:"",
-		"filename"]:"";
-            y2milestone ("Using PPD file >>%1<<", ppdfile);
-            if (ppdfile == "")
-            {
-                // message popup
-                Report::Error (sformat (_("An error occurred while saving queue %1.
+    /**
+      * display CUPS initialization popup
+      */
+    global define void showCupsInitPopup () ``{
+        // popup
+        UI::OpenDialog(`opt(`decorated ),`VBox (
+                // label
+            `Label(_("Initializing CUPS server...
+This usually takes one or two minutes")),
+            `ProgressBar (`id (`cups_prog), "", 60 * 10)));
+    }
 
-Incorrect internal data. Try selecting the
-printer model again.
-"), name));
-                return nil;
-            }
-        }
-
-        if ((ownppd == "" || isPpd (ownppd)) && ! raw)
-        {
-            if (ppdfilename != "")
-            {
-                SCR::Write (.ppd.file.modify, [ppdfile, ppdfilename, entry["options"]:$[]]);
-                entry["ppd"] = ppdfilename;
-            }
-        }
-        else
-            if (isPpd (ownppd))
-                entry["ppd"] = ownppd;
-
-	return entry;
+    /**
+      * Get list of possible banners for CUPS server
+      * @return list banners names
+      */
+    global define list getBannerList () ``{
+        map out = SCR::Execute (.target.bash_output, "/bin/ls -1 /usr/share/cups/banners");
+        list ban = splitstring (lookup (out, "stdout", ""), "\n");
+        ban = toset (add (ban, "none"));
+        return filter (`i, ban, ``("" != i));
     }
 
     /**

@@ -1,0 +1,395 @@
+/**
+ * File:
+ *  ppd.ycp
+ *
+ * Module:
+ *  Printer configurator
+ *
+ * Summary:
+ *  Misc. defines for handling foomatic PPD files.
+ *
+ * Authors:
+ *  Jiri Srain <jsrain@suse.cz>   2002
+ *
+ * $Id$
+ *
+ */
+
+{
+    textdomain "printer";
+    import "Printer";
+    import "Printerlib";
+
+    /**
+      * Get proposed default queue when using foomatic db
+      * @param list of queues
+      * @return proposed default queue name
+      */
+    global define string getFoomaticDefaultQueue (list queues) ``{
+        string default_queue = queues[0, "name"]:nil;
+        foreach (`q, queues, ``{
+            if (regexpmatch (q["name"]:"", "normal[0-9]")
+                 || q["name"]:"" == "normal")
+            {
+                default_queue = q["name"]:"";
+            }
+        });
+        return default_queue;
+    }
+
+    /**
+      * Sort PPD files according to preference list
+      * @param vendor string vendor name
+      * @param model string model name
+      * @param ppds list of PPD file nicknames
+      * @return list of sorted PPD nicknames
+      */
+    global define list sortPpds (string vend, string mod, list ppds) ``{
+        vend = SCR::Read (.ppd.db.vendorname, vend);
+        mod = SCR::Read (.ppd.db.modelname, [vend, mod]);
+        SCR::Execute (.target.bash, sformat ("/usr/bin/touch %1/ppd_preference_list", Printerlib::baseDataDir));
+        map order = SCR::Read (.target.ycp, sformat ("%1/ppd_preference_list", Printerlib::baseDataDir));
+        if (order == nil)
+            order = $[];
+
+        list(string) preferred = [];
+        foreach (`k, `v, order, ``{
+            if (regexpmatch (vend, k))
+            {
+                foreach (`kk, `vv, v, ``{ 
+                    if (regexpmatch (mod, kk))
+                    {
+                        y2debug ("Matched %1, %2", k, kk);
+                        preferred = order[k, kk]:[];
+                    }
+                });
+                if (preferred == [])
+                {
+                    preferred = order[k, "__default__"]:[];
+                }
+
+            }
+        });
+        if (preferred == [])
+            preferred = order["__default__"]:[];
+        y2debug ("Order preferred list: %1", preferred);
+
+        map recom = $[];
+        map other = $[];
+
+        foreach (`k, ppds, ``{
+            boolean found = false;
+            foreach (`i, preferred, ``{
+                if (! found && regexpmatch (k, i))
+                {
+                    if (issubstring (k, "(recommended)"))
+                    {
+                        recom[i] = add (recom[i]:[], k);
+                    }
+                    else
+                    {
+                        other[i] = add (other[i]:[], k);
+                    }
+                    found = true;
+                }
+
+            });
+            if (! found)
+            {
+                if (issubstring (k, "(recommended)"))
+                {
+                    recom["other"] = add (recom["other"]:[], k);
+                }
+                else
+                {
+                    other["other"] = add (other["other"]:[], k);
+                }
+            }
+        });
+
+        list result = [];
+
+        y2debug ("Recom: %1, other: %2", recom, other);
+
+        foreach (`i, preferred, ``{
+            result = merge (result, recom[i]:[]);
+        });
+        result = merge (result, recom["other"]:[]);
+
+        foreach (`i, preferred, ``{
+            result = merge (result, other[i]:[]);
+        });
+        result = merge (result, other["other"]:[]);
+
+        y2debug ("Sorteed PPD files: %1", result);
+        return result;
+    }
+
+
+    /**
+      * Get the PPD file for automatic installation
+      * @param ppds map of ppd files
+      * @param vend string vendor name
+      * @param mod string model name
+      * @return name of the PPD file
+      */
+    global define string getAutoPpdFile (map ppds, string vend, string mod) ``{
+        list(string) names = [];
+        map mapping = $[];
+        foreach (`k, `v, ppds, ``{
+            mapping[v] = k;
+            names = add (names, v);
+        });
+        string ret = select (sortPpds (vend, mod, names), 0, "");
+        return mapping[ret]:ret;
+    }
+
+    /**
+      * Get PPD file updated according to printer options and add it's name to
+      * printer description map
+      * @param entry map of printer
+      * @return map updated printer map
+      */
+    global define map getUpdatedPpdFile (map entry) ``{
+        string ppdfilename = lookup (entry, "ppd", "");
+        string ownppd = lookup (entry, "ownppd", "");
+        boolean raw = entry["raw"]:false;
+        if (raw)
+        {
+            ppdfilename = "";
+            ownppd = "";
+            entry["ppd"] = "";
+        }
+        else if (ppdfilename == "")
+        {
+            ppdfilename = SCR::Read (.target.tmpdir);
+            ppdfilename = ppdfilename + "/ppdfile";
+        }
+
+        string ppdfile = "";
+        if (entry["ownppd"]:"" != "")
+            ppdfile = entry["ownppd"]:"";
+        else if (! raw)
+        {
+            ppdfile = Printer::foomatic[entry["vendor_db"]:"",
+                entry["device_db"]:"",
+                entry["config"]:"",
+                "filename"]:"";
+            y2milestone ("Using PPD file >>%1<<", ppdfile);
+            if (ppdfile == "")
+            {
+                // message popup
+                Report::Error (sformat (_("An error occurred while saving queue %1.
+
+Incorrect internal data. Try selecting the
+printer model again.
+"), name));
+                return nil;
+            }
+        }
+
+        if ((ownppd == "" || isPpd (ownppd)) && ! raw)
+        {
+            if (ppdfilename != "")
+            {
+                SCR::Write (.ppd.file.modify, [ppdfile, ppdfilename, entry["options"]:$[]]);
+                entry["ppd"] = ppdfilename;
+            }
+        }
+        else
+            if (isPpd (ownppd))
+                entry["ppd"] = ownppd;
+
+        return entry;
+    }
+
+
+    /**
+      * Get auto queues for printer when using foomatic database
+      * @param vendor string vendor db key
+      * @param model string model db key
+      * @param config string choosen ppd file, nil = auto
+      * @return list of PPD files
+      */
+    global define list getFoomaticAutoQueues (string vendor, string model,
+        string config)
+    ``{
+        list forbidden_names = Printer::getForbiddenNames ();
+        y2debug ("Getting auto queues for >>%1<< >>%2<<", vendor, model);
+        loadFoomaticIfNeeded ();
+        list new_queues = [];
+        map ppds = getPpdFiles (vendor, model);
+        string ppdfile_orig = "";
+        if (vendor == "__ownppd__")
+            ppdfile_orig = model;
+        else if (config == nil || config == "")
+            ppdfile_orig = getAutoPpdFile (ppds, vendor, model);
+        else
+            ppdfile_orig = Printer::foomatic[vendor, model, config, "filename"]:"";
+        y2debug ("Choosen PPD file: %1", ppdfile_orig);
+        string config = ppds[ppdfile_orig]:"";
+        string ppdfile = SCR::Read (.ppd.file.open,
+            [ppdfile_orig, SCR::Read (.target.tmpdir)]);
+        map options = SCR::Read (.ppd.file.options, [ppdfile, ""]);
+        list opts = options["data"]:[];
+            integer ind = -1;
+            boolean found = true;
+            find (`i, opts, ``{
+                ind = ind + 1;
+                found = i["name"]:"" == "PrintoutMode";
+                return found;
+            });
+            map composite = $[];
+            if (found)
+                composite = opts[ind]:$[];
+            if (composite != $[])
+            {
+                foreach (`v, composite["valorder"]:[], ``{
+                    string optname = composite["name"]:"";
+                    string pagesize = Printerlib::getDefaultPaperSize () == `a4 ? "A4" : "Letter";
+                    map new_options = $[
+                        optname : v,
+                        "PageSize" : pagesize,
+                        "PageRegion" : pagesize,
+                        "ImageableArea" : pagesize,
+                        "PaperDimension" : pagesize,
+                    ];
+                    new_queues = add (new_queues, $[
+                        "config" : config,
+                        "name" : mergestring (splitstring
+                            (tolower (v), "."), "_"),
+                        "comment" : composite["values", v]:v,
+                        "database" : "foomatic",
+                        "options" : new_options,
+                        "composite" : composite["name"]:"",
+                    ]);
+
+                });
+            }
+            else
+            {
+                new_queues = [ $[
+                    "config" : config,
+                    "name" : "lp",
+                        // table cell
+                    "comment" : _("default configuration"),
+                    "database" : "foomatic",
+                ]];
+            }
+
+            string suffix = Printer::getQueueSuffix (new_queues);
+            new_queues = maplist (`v, new_queues, ``{
+                v = add (v, "name", Printer::adjustQueueName (lookup (v, "name", "lp") + suffix, forbidden_names));
+                if (nil == first_queue)
+                {
+                    first_queue = lookup (v, "name", "");
+                }
+                forbidden_names = add (forbidden_names, lookup (v, "name", ""));
+                return union (Printer::printer, v);
+        });
+        y2debug ("Proposing queues %1", maplist (`q, new_queues, ``(q["name"]:"")));
+        y2debug ("Proposed queues: %1", new_queues);
+        return new_queues;
+    }
+
+    /**
+      * Check whether foomatic database has been loaded, and if not, then
+      * load it
+      */
+    global define void loadFoomaticIfNeeded () ``{
+        if (Printer::foomatic != nil)
+            return;
+        y2milestone ("Checking foomatic database");
+        if (SCR::Read (.ppd.db.changed))
+        {
+            y2milestone ("Database changed");
+            boolean fast_update = false;
+            if (Mode::cont)
+            {
+                fast_update = true;
+                SCR::Write (.ppd.db.check_method, `size);
+            }
+            SCR::Write (.ppd.db.create, "");
+            UI::OpenDialog (`VBox (
+                `HSpacing (50),
+                `ProgressBar (`id(`pr),
+                        // progress bar label
+                        _("The list of installed drivers has changed.
+Building database of drivers..."), 100, 0)));
+            integer result = 0;
+            while (true)
+            {
+                    result = SCR::Read (.ppd.db.creation_status);
+                    if (result < 0)
+                        break;
+                    if (result == 100)
+                        break;
+                    UI::ChangeWidget (`id (`pr), `Value, result);
+                    sleep (1000);
+            }
+            UI::CloseDialog ();
+            if (result < 0)
+            {
+                    // error report
+                    Report::Error (_("An error occurred while creating the database
+of printers.
+"));
+            }
+            if (fast_update)
+            {
+                SCR::Write (.ppd.db.check_method, `checksum);
+            }
+        }
+        Printer::foomatic= SCR::Read (.target.ycp, "/var/lib/YaST2/ppd_db.ycp");
+    }
+
+    /**
+      * get configurations, which may be usable for detected printer
+      * @param vendor string name of printer vendor
+      * @param device string printer model name
+      * @return map of ppd files
+      */
+    global define map getPpdFiles (string vendor, string device) ``{
+        string vendor_db = SCR::Read (.ppd.db.vendorname, vendor);
+        map models = $[];
+        string cache = filterchars (tolower (vendor_db),
+            "abcdefghijklmnopqrstuvwxyz0123456789");
+        foreach (`k, `v, Printer::foomatic, ``{
+            if (filterchars (tolower (k),
+                "abcdefghijklmnopqrstuvwxyz0123456789") == cache)
+            {
+                models = v;
+            }
+        });
+        map ppds = $[];
+        string device_db = SCR::Read (.ppd.db.modelname, [vendor_db, device]);
+        cache = filterchars (tolower (device_db),
+            "abcdefghijklmnopqrstuvwxyz0123456789");
+        foreach (`k1, `v1, models, ``{
+          if (is (k1, string))
+          {
+            foreach (`k2, `v2, v1, ``{ 
+                if (is (k2, string) && size (v2) > 2)
+                {
+                    if (filterchars (tolower (lookup (v2, "pnp_printer", "")),
+                        "abcdefghijklmnopqrstuvwxyz0123456789") == cache) // compare ieee1248 id
+                    {
+                        ppds = add (ppds, v2["filename"]:"", k2);
+                    }
+                    else if (filterchars (tolower (k1),
+                        "abcdefghijklmnopqrstuvwxyz0123456789") == cache)
+                    {   // if it does not match, try printer name
+                        ppds = add (ppds, v2["filename"]:"", k2);
+                    }
+                }
+            });
+          }
+        });
+        y2debug ("Possible PPDs: %1", ppds);
+        return ppds;
+    }
+
+
+
+
+}

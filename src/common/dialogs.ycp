@@ -47,10 +47,9 @@
     }
     /**
       * Disk file specification
-      * @param type string "file" or "pipe"
       * @return symbol `next or `back
       */
-    global define symbol runDiskFileDialog (string type) ``{
+    global define symbol runPipeDialog () ``{
 	//
 	// parse Uri
 	//
@@ -81,9 +80,7 @@
 			     `HBox (
 				 `HSpacing (0.7),
 				 // text entry label
-				 `TextEntry (`id(`name), (type == "file" ? _("&File name:")
-				 // text entry label
-				 : _("&Program name:")), file),
+				 `TextEntry (`id(`name), _("&Program name:"), file),
 				 `HSpacing (0.7)
 				 ),
 			     `VSpacing (0.5)
@@ -93,9 +90,8 @@
 	    `HSpacing (8)
 	    );
 	// dialog label
-	Wizard::SetContentsButtons (type == "file" ? _("Printing to file")
-	// dialog label
-	: _("Printing to pipe"), contents, getDiskFileHelp (), BackButtonLabel (), NextButtonLabel ());
+	Wizard::SetContentsButtons (_("Printing to pipe"), contents,
+	    getDiskFileHelp (), BackButtonLabel (), NextButtonLabel ());
 
 	symbol ret = nil;
 	while (true)
@@ -112,16 +108,15 @@
 		    {
 			name = "/" + name;
 		    }
-		    file = (type == "file" ? "file:" : "pipe:") + name;
+		    file = "pipe:" + name;
 		    Printer::printer = add (Printer::printer, "uri", file);
 		    break;
 		}
 		else
 		{
+		    UI::MessagePopup (
 		    // message box
-		    UI::MessagePopup (type == file ? _("Enter the full path of the file to which to print.")
-		    // message box
-			: _("Enter full path of the program to which to print through pipe."));
+			_("Enter full path of the program to which to print through pipe."));
 		}
 	    }
 	    else if (`back == ret)
@@ -424,7 +419,8 @@ actually selected.
 	}
 
 	// push button label
-	term test_button = `PushButton (`id (`test), `opt (`key_F6), _("&Test remote LPD access"));
+	term test_button = `PushButton (`id (`test), `opt (`key_F6),
+	    _("&Test remote LPD access"));
 	term queue_button = `HSpacing (0);
 	term queue_entry = `TextEntry (`id (`queueent),
 					  // text entry label
@@ -442,12 +438,14 @@ actually selected.
 		// menu button
 		lookup_hosts = `PushButton (`id (`get_hosts), _("&Lookup"));
 		// pushbutton
-		test_button = `PushButton (`id (`test), `opt (`key_F6), _("&Test remote Novell access"));
+		test_button = `PushButton (`id (`test), `opt (`key_F6),
+		    _("&Test remote Novell access"));
 	    }
 	if (type == "samba")
 	    {
 		// pushbutton
-		test_button = `PushButton (`id (`test), `opt (`key_F6), _("&Test remote SMB access"));
+		test_button = `PushButton (`id (`test), `opt (`key_F6),
+		    _("&Test remote SMB access"));
 		queue_entry = `ComboBox (`id (`queueent), `opt (`editable, `hstretch),
 					    // text entry label
 					    _("Name of the remote &queue:"));
@@ -3372,8 +3370,7 @@ All your changes will be lost.
 	    "connection" :	``(runConnectionDialog ()),
 	    "advconnection" :	``(runAdvancedConnectionDialog ()),
 	    "parallel" :	``(runDeviceDialog ("parallel")),
-	    "file" :		``(runDiskFileDialog ("file")),
-	    "pipe" :		``(runDiskFileDialog ("pipe")),
+	    "pipe" :		``(runPipeDialog ()),
 	    "serial" :		``(runDeviceDialog ("serial")),
 	    "usb" :		``(runDeviceDialog ("usb")),
 	    "irda" :		``(runDeviceDialog ("irda")),
@@ -3438,7 +3435,7 @@ All your changes will be lost.
 	Printer::index = -1;									runConnectionDialog ();
 	Printer::printer = add (Printer::printer, "uri", "parallel:/dev/lp0");		runDeviceDialog ("parallel");
 	Printer::printer = add (Printer::printer, "uri", "serial:/dev/ttyS0");		runDeviceDialog ("serial");
-	Printer::printer = add (Printer::printer, "uri", "file:/tmp/printer.ps");		runDiskFileDialog ();
+	Printer::printer = add (Printer::printer, "uri", "file:/tmp/printer.ps");		runPipeDialog ();
 	Printer::printer = add (Printer::printer, "uri", "samba://user@smb.suse.de/lp");	runRemoteDialog ("samba");
 	Printer::printer = add (Printer::printer, "uri", "novell://user@novell.suse.de/lp");runRemoteDialog ("novell");
 	Printer::printer = add (Printer::printer, "uri", "lpr://printer.suse.de/lp");	runRemoteDialog ("lpd");
@@ -3571,7 +3568,6 @@ All your changes will be lost.
 		`serial: "serial",
 		`usb: "usb",
 		`irda: "irda",
-		`file: "file",
 		`more: "advconnection",
 		`existing : "inst_printer",
 		`abort : `abort,
@@ -3591,7 +3587,6 @@ All your changes will be lost.
 	    ],
 	    // single connection types
 	    "parallel" : $[ `next : "model", `abort : `abort, `ppdetails : "ppdetails", ],
-	    "file" : $[ `next : "model", `abort : `abort, ],
 	    "pipe" : $[ `next : "model", `abort : `abort, ],
 	    "serial" : $[ `next : "model", `abort : `abort,  `spdetails : "spdetails", ],
 	    "usb" : $[ `next : "model", `abort : `abort, ],
@@ -3702,7 +3697,6 @@ All your changes will be lost.
 		`serial : "serial",
 		`usb : "usb",
 		`irda : "irda",
-		`file : "file",
 		`abort : `abort,
 		],
 	    "parallel" : $[ `abort : `abort, `next : "edit", `ppdetails : "ppdetails", ],
@@ -3711,7 +3705,6 @@ All your changes will be lost.
 	    "usb" : $[ `abort : `abort, `next : "edit", ],
 	    "irda" : $[ `next : "edit", `abort : `abort, ],
 	    "filtering" : $[ `abort: `abort, `next: "edit", ],
-	    "file" : $[ `abort : `abort, `next : "edit", ],
 	    "pipe" : $[ `abort : `abort, `next : "edit", ],
 	    "model" : $[ `abort : `abort, `next : "config", `useppd: "useppd",],
 	    "config" : $[ `abort : `abort, `advanced : "filter", `next: "edit", ],
