@@ -1576,6 +1576,10 @@ the current configuration.
 	    }
 	    if (Printer::spooler != new_spooler)
 	    {
+		// after switch from CUPS to LPRng printcap with imported queues
+		// can be left. remove it (#29440)
+		if (new_spooler == "lprng")
+		    SCR::Execute (.target.bash, "/usr/bin/rm /etc/printcap");
 		Printer::save_all = true;
 		Printer::reread = false;
 		Printerlib::switchTo (new_spooler);
