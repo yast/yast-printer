@@ -349,9 +349,23 @@ ECHO_PID=$!
 	    {
 		y2error ("USB printer found and printer module not loaded, loading it");
 		SCR::Execute(.target.modprobe, "printer", "");
-		y2error ("Restarting detection");
+		string hotplug
+		    = SCR::Read (.sysconfig.hotplug.HOTPLUG_USB_STATIC_MODULES);
+		y2debug ("Current hotplug: %1", hotplug);
+		list(string) hplist = splitstring (hotplug, " ");
+		if (! contains (hplist, "printer"))
+		{
+		    hplist = add (hplist, "printer");
+		    hotplug = mergestring (hplist, " ");
+		    y2debug ("Final hotplug: %1", hotplug);
+		    SCR::Write (.sysconfig.hotplug.HOTPLUG_USB_STATIC_MODULES,
+			hotplug);
+		    SCR::Write (.sysconfig.hotplug, nil);
+		}
+		sleep (100);
+		y2milestone ("Restarting detection");
 		ret = Printerlib::Detect (cups);
-		y2error ("Redetection done");
+		y2debug ("Redetection done");
 	    }
 	}
 	return ret;
