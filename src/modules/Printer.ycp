@@ -39,6 +39,7 @@
     import "Summary";
 
 
+
     //////////
     ////////// Module data
     //////////
@@ -462,7 +463,8 @@
 		true
 	    :
 		false;
-	p["changed"] = changed;
+	if (changed)
+	    p["changed"] = true;
 	return p;
     }
 
@@ -537,6 +539,7 @@
 	    "cups_installation" : CUPS::cups_installation,
 	    "server_hostname" : CUPS::server_hostname,
 	    "server_default" : CUPS::server_default,
+	    "cups_server_settings" : CUPS::cups_server_settings,
 	];
     }
     /**
@@ -554,6 +557,7 @@
 	index = -1;
 	deleted = [];
 	CUPS::server_default = settings["server_default"]:false;
+	CUPS::cups_server_settings = settings["cups_server_settings"]:$[];
     }
     /**
      * Reset all settings...
@@ -654,6 +658,10 @@
 	    ret = maplist (map e, ret, ``{
 		if (SCR::Read (.target.size, e["ppd"]:"") > 0)
 		{
+		    string orig_file = e["ppd"]:"";
+		    e["ppd"] = SCR::Read (.ppd.file.open,
+			[e["ppd"]:"", SCR::Read (.target.tmpdir)]);
+		    SCR::Execute (.target.remove, orig_file);
 		    e["ppd_info"] = Printer::ppdInfo (e["ppd"]:"");
 		    e["raw"] = false;
 		}
@@ -1681,7 +1689,7 @@ the selected spooler does not support it."), name));
 	    det["vendor_db"]:"", det["device_db"]:"", nil);
 	string filename = Printerdb::foomatic[det["vendor_db"]:"",
 	    det["device_db"]:"", config, "filename"]:"";
-	y2error ("Filename: %1", filename);
+	y2debug ("Filename: %1", filename);
 	filename = (string)SCR::Read (.ppd.file.open,
 	    [filename, SCR::Read (.target.tmpdir)]);
 	printer = $[
@@ -1744,9 +1752,9 @@ the selected spooler does not support it."), name));
 			"PageRegion", "PageSize", "PaperDimension"],
 		    ``{
 			if (page_size == `letter)
-			    printer["options", paperentry] = "Letter";
+			    printer["ppd_options", paperentry] = "Letter";
 			else
-			    printer["options", paperentry] = "A4";
+			    printer["ppd_options", paperentry] = "A4";
 		    });
 		    if (ok)
 		    {

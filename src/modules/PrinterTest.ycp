@@ -116,8 +116,7 @@
 	    "/usr/lib/YaST2/bin/prepare_ps_testpage.pl %1 %2 %3 %4",
 	    opt_file,
 	    out_file,
-	    // FIXME point to the theme directory
-	    "/local/testpg/SUSE-logo.eps",
+	    "/usr/share/YaST2/theme/current/testpage/logo.eps",
 	    photo
 	);
 	y2milestone ("Testpage prepare command: %1", command);
@@ -165,8 +164,7 @@ When the whole page is printed, press
 	    return true;
 	}
 
-	// FIXME point to the theme directory
-	string photo_filename = "/local/testpg/chameleon-photo.eps";
+	string photo_filename = "/usr/share/YaST2/theme/current/testpage/photo.eps";
 
 	if (testpage_type == `photo)
 	{
@@ -245,11 +243,11 @@ press 'OK'.
 		    `VSpacing (1),
 		    `RadioButtonGroup (`id (`type), `VBox (
 			// radiobutton
-			`Left (`RadioButton (`id (`photo), _("Test &graphical printing with photo"))),
+			`Left (`RadioButton (`id (`graphic), _("&Graphical test page without photo"))),
 			// radiobutton
-			`Left (`RadioButton (`id (`graphic), _("Test &graphical printing"))),
+			`Left (`RadioButton (`id (`photo), _("Graphical test page with &photo"))),
 			// radiobutton
-			`Left (`RadioButton (`id (`ascii), _("Test &text printing")))
+			`Left (`RadioButton (`id (`ascii), _("&Text test page")))
 		    )),
 		    `VSpacing (1),
 		    `HBox (
@@ -260,7 +258,7 @@ press 'OK'.
 		    )
 		)
 	    );
-	    UI::ChangeWidget (`id (`type), `CurrentButton, `photo);
+	    UI::ChangeWidget (`id (`type), `CurrentButton, `graphic);
 	    symbol ret = nil;
 	    while (nil == ret)
 	    {
@@ -361,14 +359,11 @@ press 'OK'.
 
 	    string enc = "ISO-8859-2" == ce ? "h02" : "h01";
 
-// FIXME recode to UTF-8
-
-	    map options = (map)SCR::Read (.ppd.file.options, [ppd_file, ""]);
-	    list optlist = options["data"]:[];
+	    list optlist =  Printerdb::getPpdFileOptions (ppd_file);
 	    optlist = maplist (map i, optlist, ``{
 		    string name = i["name"]:"";
 		    string label = i["gui"]:"";
-		    string value = printer["options", name]:"";
+		    string value = printer["ppd_options", name]:"";
 		    if (value == "")
 			value = i["current"]:"";
 		    string valuelabel = i["values", value]:"";
