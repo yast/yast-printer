@@ -361,7 +361,8 @@ of printers.
 
         map<string,list<string> > recom = $[];
         map<string,list<string> > other = $[];
-	map<string,list<string> > vend = $[];
+	map<string,list<string> > vendrec = $[];
+	map<string,list<string> > vendoth = $[];
 	map<string,list<string> > downrec = $[];
 	map<string,list<string> > downoth = $[];
 	loadFoomaticIfNeeded ();
@@ -389,7 +390,14 @@ of printers.
 		  else if (issubstring (fn,
 		    "/usr/share/cups/model/manufacturer-PPDs"))
 		  {
-			vend[i] = add (vend[i]:[], fn);
+                    if (issubstring (v["nickname"]:"", "(recommended)"))
+                    {
+                        vendrec[i] = add (vendrec[i]:[], fn);
+                    }
+                    else
+                    {
+                        vendoth[i] = add (vendoth[i]:[], fn);
+                    }
 		  }
 		  else
 		  {
@@ -422,7 +430,14 @@ of printers.
 	      else if (issubstring (fn,
 		"/usr/share/cups/model/manufacturer-PPDs"))
 	      {
-		    vend["other"] = add (vend["other"]:[], fn);
+                if (issubstring (v["nickname"]:"", "(recommended)"))
+                {
+                    vendrec["other"] = add (vendrec["other"]:[], fn);
+                }
+                else
+                {
+                    vendoth["other"] = add (vendoth["other"]:[], fn);
+                }
 	      }
 	      else
 	      {
@@ -440,35 +455,41 @@ of printers.
 
         y2debug ("Recom: %1, other: %2", recom, other);
 	y2debug ("Downloaded: Recom: %1, other: %2", downrec, downoth);
-	y2debug ("Provided by vendor: %1", vend);
+	y2debug ("Provided by vendor: Recom: %1, other: %2", vendrec, vendoth);
 
 	list<string> drec = [];
 	list<string> doth = [];
-	list<string> vnd = [];
+	list<string> vrec = [];
+	list<string> voth = [];
 	list<string> rec = [];
 	list<string> oth = [];
 
-        foreach (string i, preferred, ``{
+        foreach (string i, preferred, {
             drec = (list<string>)merge (drec, downrec[i]:[]);
         });
         drec = (list<string>)merge (drec, downrec["other"]:[]);
 
-        foreach (string i, preferred, ``{
+        foreach (string i, preferred, {
             doth = (list<string>)merge (doth, downoth[i]:[]);
         });
         doth = (list<string>)merge (doth, downoth["other"]:[]);
 
-        foreach (string i, preferred, ``{
-            vnd = (list<string>)merge (vnd, vend[i]:[]);
+        foreach (string i, preferred, {
+            vrec = (list<string>)merge (vrec, vendrec[i]:[]);
         });
-        vnd = (list<string>)merge (vnd, vend["other"]:[]);
+        vrec = (list<string>)merge (vrec, vendrec["other"]:[]);
 
-        foreach (string i, preferred, ``{
+        foreach (string i, preferred, {
+            voth = (list<string>)merge (voth, vendoth[i]:[]);
+        });
+        voth = (list<string>)merge (voth, vendoth["other"]:[]);
+
+        foreach (string i, preferred, {
             rec = (list<string>)merge (rec, recom[i]:[]);
         });
         rec = (list<string>)merge (rec, recom["other"]:[]);
 
-        foreach (string i, preferred, ``{
+        foreach (string i, preferred, {
             oth = (list<string>)merge (oth, other[i]:[]);
         });
         oth = (list<string>)merge (oth, other["other"]:[]);
@@ -476,19 +497,19 @@ of printers.
         list<string> result = [];
 
 	list<string> rec_ps = (list<string>)merge (rec, drec);
-	rec_ps = filter (string r, rec_ps, ``(! issubstring (r, "Postscript")));
+	rec_ps = filter (string r, rec_ps, ``(issubstring (r, "Postscript")));
 
-	if (0 != size (rec_ps))
+	if (0 == size (rec_ps))
 	{
-	    if (size (vnd) > 0)
+	    if (size (voth) > 0)
 		y2milestone ("Prefering Foomatic to manufacurer's");
-	    result = (list<string>)flatten ([drec, doth, rec, vnd, oth]);
+	    result = (list<string>)flatten ([drec, doth, vrec, rec, voth, oth]);
 	}
 	else
 	{
-	    if (size (vnd) > 0)
+	    if (size (voth) > 0)
 		y2milestone ("Prefering manufacturer's to Foomatic");
-	    result = (list<string>)flatten ([drec, doth, vnd, rec, oth]);
+	    result = (list<string>)flatten ([drec, doth, vrec, voth, rec, oth]);
 	}
 
         y2milestone ("Sorted PPD files for %1:%2: %3",
@@ -512,7 +533,7 @@ global define string getAutoPpdFile (string vendor_db, string device_db) {
 	return nil;
     if (known_filters == nil)
 	return (string) (ppds[0]:nil);
-    // for LPRng find first with foomatic-rip as filter
+    // if not all filters are supported, choose the first PPD file that is
     return (string)find (string s, ppds, {
 	return contains (
 	    known_filters,
@@ -694,4 +715,14 @@ packages %1."));
 	return i_result;
     }
 
+/**
+ * Get PPD file info
+ * @param file string filename to get info from
+ * @return map of informations
+ */
+global define map PpdInfo (string file) ``{
+    return (map)SCR::Read (.ppd.file.ppdinfo, file);
 }
+
+
+} // EOF

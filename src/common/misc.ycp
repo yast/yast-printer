@@ -29,6 +29,7 @@
     import "Printer";
     import "Printerdb";
     import "Printerlib";
+    import "Report";
     import "Spooler";
     import "Wizard";
 
@@ -58,7 +59,7 @@
         string ppdfile = (string)SCR::Read (.ppd.file.open,
             [ppdfile_orig, SCR::Read (.target.tmpdir)]);
 	Printer::printer["ppd"] = ppdfile;
-	Printer::printer["ppd_info"] = Printer::ppdInfo (ppdfile);
+	Printer::printer["ppd_info"] = Printerdb::PpdInfo (ppdfile);
         map options = (map)SCR::Read (.ppd.file.options, [ppdfile, ""]);
         list<map> opts = options["data"]:[];
             integer ind = -1;
@@ -159,33 +160,6 @@
 	options["PaperDimension"] = pagesize;
 	p["ppd_options"] = options;
 	return p;
-    }
-
-
-    /**
-      * replaces all occurences of 'from' to 'to' in src
-      * @param src input string
-      * @param from string to be replaced
-      * @param to string to be replaced by
-      * @return string modified string
-      */
-    define string replaceAll(string src, string from, string to) ``{
-        if (from == "")
-        {
-            return src;
-        }
-
-        list<string> tokens = [];
-
-        integer p = find(src, from);
-        while(p >= 0)
-        {
-            tokens = add(tokens, substring(src, 0, p));
-            src = substring(src, p + size(from), size(src) - (p+size(from)));
-            p = find(src, from);
-        }
-        tokens = add(tokens, src);
-        return mergestring(tokens, to);
     }
 
     /**
@@ -439,40 +413,6 @@ contain the characters : , / @.
         return false;
     };
 
-
-
-    /**
-     * Check if remote_printer is not nil. Display message otherwise.
-     * @param remote_printer Printer name to check
-     * @return boolean true if name is OK
-     */
-    define boolean checkRemotePrinter (string remote_printer) ``{
-	if ("" != remote_printer)
-	    {
-		return true;
-	    }
-	// message box
-	Popup::Message ( _("Please choose which forwarding
-queue you want to use."));
-	return false;
-    };
-
-    /**
-      * generate class name
-      * @param forbidden_names list of forbidden names
-      * @return new class name
-      */
-    define string generateClassName (list forbidden_names) ``{
-	string name = "class1";
-	integer i = 2;
-	while (contains (forbidden_names, name))
-	{
-	    name = sformat ("class%1", i);
-	    i = i + 1;
-	}
-	return name;
-    }
-
     /**
      * Ask if really abort. Uses boolean Printer::dirty. Sets boolean do_abort_now.
      * @return boolean true if user really wants to abort
@@ -571,38 +511,48 @@ All changes will be lost.
 	});
     }
 
-    /**
-      * Is the name of local queue correct? If not, display message.
-      * @param name string queue name
-      * @param forbidden_names list of forbidden names
-      * @return boolean true if correct
-      */
-    define boolean checkLocalQueueName (string name, list forbidden_names) ``{
-	if (size (name) > 0 && size (name) < 32 &&
-	    size (filterchars (substring (name, 0, 1),
-		"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")) > 0 &&
-	    name == filterchars (name,
-		"_0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
-	    && ! contains (forbidden_names, name))
-	    {
-		if (contains (Spooler::getSystemForbiddenNames (), name))
-		{
-		    // message box
-		   Popup::Message (_("Invalid queue name. The name must not be used
-for any file in directory /etc/lpdfilter"));
-		   return false;
-		}
-		return true;
-	    }
-	    else
-	    {
-		// popup
-		 Popup::Message (_("Invalid queue name. It must be
+/**
+ * Is the name of local queue correct? If not, display message.
+ * @param name string queue name
+ * @param forbidden_names list of forbidden names
+ * @return boolean true if correct
+ */
+boolean CheckLocalQueueName (string name, list forbidden_names) {
+    if (size (name) <= 0)
+    {
+	// error message
+	Report::Message (_("The queue name is empty"));
+	return false;
+    }
+    if (size (name) >= 32)
+    {
+	Report::Message (
+	    // error message
+	    _("The queue name cannot be longer than 32 characters."));
+	return false;
+    }
+    if (! (size (filterchars (substring (name, 0, 1),
+	    "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")) > 0
+	&& name == filterchars (name,
+	    "_0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
+	&& ! contains (forbidden_names, name)))
+    {
+	// popup
+	Report::Message (_("Invalid queue name. It must be
 shorter than 32 characters, start with a letter,
 and only contain 0...9, A...Z, a...z, and _."));
-		return false;
-	    }
+	return false;
+
     }
+    if (contains (Spooler::GetSystemForbiddenNames (), name))
+    {
+	// message box
+	Popup::Message (_("Invalid queue name. The entered name is reserved
+by the spooler."));
+	return false;
+    }
+    return true;
+}
 
     /**
      * Is the name of the remote printer correct? If not, display message.
@@ -696,51 +646,6 @@ It cannot contain the characters @ and :.
 	    ))
 	);
     }
-
-    /**
-     * Remove characters that are not allowed by ieee1284.
-     * @param id string to check
-     * @return string updated string
-     */
-    define string filter1284 (string id) ``{
-	return filterchars (tolower (id), "abcdefghijklmnopqrstuvwxyz0123456789_+/");
-    }
-
-    /**
-     * Compare saved gs_upp file with the generated one.
-     * @param file1 contents of one upp file
-     * @param file2 contents of the other upp file
-     * @return boolean true if files are the same
-     */
-    define boolean diffUppFiles (string file1, string file2) ``{
-	// save files
-	string tmpdir = (string)SCR::Read (.target.tmpdir);
-	SCR::Write (.target.string, tmpdir + "/options1.upp", file1);
-	SCR::Write (.target.string, tmpdir + "/options2.upp", file2);
-	// diff files
-	boolean changed = (0 == SCR::Execute (.target.bash, sformat ("/usr/bin/diff -w -B %1/options1.upp %1/options2.upp", tmpdir)));
-	// delete files
-	SCR::Execute (.target.bash, sformat ("/bin/rm %1/options1.upp %1/options2.upp", tmpdir));
-	return changed;
-    }
-    /**
-     * Looks if selected options contain paper size.
-     * @param selected currently selected options
-     * @return true if they contain paper size
-     */
-    define boolean havePaperSize (map<string,any> selected) ``{
-	boolean found = false;
-	foreach (string k, any v, selected, ``{
-	    if (substring (k, 0, 10) == "papersize-")
-		found = true;
-	});
-	return found;
-    }
-
-
-
-
-
 
 
 

@@ -98,6 +98,7 @@ This usually takes one or two minutes")),
 	    Printerdb::SetDriverPackages ([]);
 	    Printerdb::SetSupportedFilters (nil);
 	}
+	sys_forbidden_names = nil;
     }
 
     /**
@@ -166,26 +167,24 @@ This usually takes one or two minutes")),
 	return ret;
     }
 
-    /**
-     * Get list of names that are forbidden because they are used as
-     * filenames in /etc/lpdfilter
-     * @return list of strings -- these strings are not allowed as queue
-     * names.
-     */
-    global define list getSystemForbiddenNames () ``{
-	if (nil == sys_forbidden_names)
+/**
+ * Get list of names that are forbidden by the currently used spooler
+ * @return a list of strings -- these strings are not allowed as queue names.
+ */
+global list GetSystemForbiddenNames () {
+    if (nil == sys_forbidden_names)
+    {
+	if (Get () == "cups")
 	{
-	    if (0 != SCR::Execute (.target.bash, "test -d /etc/lpdfilter"))
-		sys_forbidden_names = [];
-	    else
-		sys_forbidden_names = (list<string>)SCR::Read (.etc.printcap.sysnames);
-	    if (nil == sys_forbidden_names)
-		sys_forbidden_names = [];
+	    sys_forbidden_names = CUPS::GetSystemForbiddenNames ();
 	}
-	sys_forbidden_names
-	    = maplist (string n, sys_forbidden_names, ``(tolower (n)));
-	return sys_forbidden_names;
+	else
+	{
+	    sys_forbidden_names = [];
+	}
     }
+    return sys_forbidden_names;
+}
 
     /**
       * stop currently running printer spooler service

@@ -279,11 +279,7 @@ global boolean WriteQueue (map entry) {
     if (entry == nil)
 	return false;
 
-    if (Printerlib::getUriType (uri) == "usb")
-    {
-	integer i__ = 0; // suppress warning
-    }
-    else if (Printerlib::getUriType (uri) == "serial")
+    if (Printerlib::getUriType (uri) == "serial")
     {
 	string dev_name = Printerlib::getUriDevice (uri);
 	integer baudrate = Printerlib::getUriBaudrate (uri);
@@ -450,39 +446,6 @@ global list<string> GetProblematicCupsUsbDevices () {
     return (list<string>)toset (problematic);
 }
 
-/**
- * Get URI Types supported by CUPS
- * @return a list of supported URI types
- */
-global list<string> GetSupportedUriTypes () {
-    if (supported_uri_types == nil)
-    {
-	supported_uri_types = [
-	    "parallel",
-	    "usb",
-	    "serial",
-	    "lpd",
-	    "ipp",
-	    "samba",
-	    "socket",
-	    "irda",
-	    "novell",
-	    "pipe",
-	    "file",
-	    "class",
-	];
-	list<string> backends
-	    = (list<string>)SCR::Read (.target.dir, "/usr/lib/cups/backend");
-	if (backends != nil)
-	{
-	    supported_uri_types = (list<string>)merge (
-		supported_uri_types,
-		backends);
-	}
-    }
-    return supported_uri_types;
-}
-
 // detecting and proposing the overall configuration
 
 /**
@@ -616,6 +579,49 @@ global void ProposeClientOnly () {
  */
 global void ProposeServerSettings () {
     cups_server_settings["BrowseAddress"] = ["@LOCAL"];
+}
+
+// functions for getting information about CUPS properties
+
+/**
+ * Get the list of queue names that are forbidden by the spooler
+ * @return a list of forbidden queue names
+ */
+global list<string>GetSystemForbiddenNames () {
+    return [];
+}
+
+/**
+ * Get URI Types supported by CUPS
+ * @return a list of supported URI types
+ */
+global list<string> GetSupportedUriTypes () {
+    if (supported_uri_types == nil)
+    {
+	supported_uri_types = [
+	    "parallel",
+	    "usb",
+	    "serial",
+	    "lpd",
+	    "ipp",
+	    "samba",
+	    "socket",
+	    "irda",
+	    "novell",
+	    "pipe",
+	    "file",
+	    "class",
+	];
+	list<string> backends
+	    = (list<string>)SCR::Read (.target.dir, "/usr/lib/cups/backend");
+	if (backends != nil)
+	{
+	    supported_uri_types = (list<string>)merge (
+		supported_uri_types,
+		backends);
+	}
+    }
+    return supported_uri_types;
 }
 
 
