@@ -593,24 +593,33 @@ by the spooler."));
      * @param name Hostname to check
      * @return boolean true if hostname is correct.
      */
-    define boolean checkQueueName (string name) ``{
-	if (size (name) > 0 && /*size (name) < 30 &&
-	    size (filterchars (substring (name, 0, 1),
-		    "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz")) > 0 &&*/
-	    "" == filterchars (name,
-				"@:"))
-	    {
+    define boolean checkRemoteQueueName (string name) ``{
+	if (size (name) > 0 && "" == filterchars (name, "@:"))
+	{
 		return true;
-	    }
+	}
 	else
-	    {
-		// message box
-		Popup::Message (_("Invalid remote queue name. 
+	{
+	    // message box
+	    Popup::Message (_("Invalid remote queue name. 
 It cannot contain the characters @ and :.
 "));
-	    }
+	}
 	return false;
     }
+
+/**
+ * Check IPP queue name
+ * Uses CheckQueueName, just remove leading printers/ or classes/ from the
+ * queue name before
+ */
+define boolean checkIppQueueName (string name) {
+    if ("printers/" == substring (name, 0, 9))
+       name = substring (name, 9);
+    else if ("classes/" == substring (name, 0, 8))
+       name = substring (name, 8);
+    return checkRemoteQueueName (name);
+}
 
     /**
       * Creates UI widgets from values.
