@@ -109,7 +109,7 @@
 	string manuf_db = lookup (Printer::printer, "vendor_db", "");
 	string model_db = lookup (Printer::printer, "device_db", "");
 	map info = $[];
-	boolean info_instead_next = false;
+//	boolean info_instead_next = false;
 
 	loadFoomaticIfNeeded ();
 
@@ -221,8 +221,8 @@ only if using CUPS spooler"));
 		model_db = UI::QueryWidget (`id (`modelsel), `CurrentItem);
 		y2debug ("modelsel changed to %1", model_db);
 		info = $[];
-		integer type = Printer::foomatic[manuf_db,model_db, `support]:0;
-		info_instead_next = ! (2 != type);
+//		string type = Printer::foomatic[manuf_db,model_db, `support]:"full";
+//		info_instead_next = ! ("not" != type);
 	    }
 	    ret = UI::UserInput ();
 	    if (`abort == ret || `cancel == ret)
@@ -1715,9 +1715,9 @@ the current configuration.
 	if (ret == `connection)
 	    return `connection;
 
-	integer support
+	string support
 	    = Printer::foomatic[Printer::printer["vendor_db"]:"",
-		Printer::printer["device_db"]:"", `support]:0;
+		Printer::printer["device_db"]:"", `support]:"full";
 
 	// check for existence of at least one PPD file
 	map PPDs = Printer::foomatic[
@@ -1730,7 +1730,7 @@ the current configuration.
 	    ret = `name;
 	}
 	// check for support status
-	else if (support != 0)
+	else if (support != "full")
 	{
 	    y2milestone ("Support status isn't fully supported");
 	    ret = `name;
@@ -1861,16 +1861,18 @@ the current configuration.
 	    else if (`test == ret)
 	    {
 		string i = UI::QueryWidget (`id (`table), `CurrentItem);
-		if (i == nil || i != "")
+		if (i == nil || i == "")
 		{
 		    // message popup
 		    Popup::Message (_("Select a queue"));
-		    continue;
 		}
-		foreach (`e, queues, ``{
-		    if (lookup (e, "name", "") == i)
-			testPrinter (e, `ask);
-		});
+		else
+		{
+		    foreach (`e, queues, ``{
+			if (lookup (e, "name", "") == i)
+			    testPrinter (e, `ask);
+		    });
+		}
 		ret = nil;
 	    }
 	    else
