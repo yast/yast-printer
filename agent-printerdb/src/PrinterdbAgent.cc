@@ -1243,7 +1243,7 @@ YCPValue PrinterdbAgent::Write (const YCPPath &path, const YCPValue& value, cons
 YCPValue PrinterdbAgent::otherCommand(const YCPTerm& term)
 {
     string sym = term->symbol()->symbol();
-    YCPString v = YCPString ("/usr/lib/YaST2/data/printerdb/suse.prdb");
+    YCPString v = YCPString ("/usr/share/YaST2/data/printerdb/suse.prdb");
     if (term->size () > 0 && term->value (0)->isString ())
 	v = term->value (0)->asString ();
 

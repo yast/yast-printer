@@ -413,11 +413,16 @@ string getDefaultDest()
   int num_dests = cupsGetDests(&dests);
 
   for(int i = 0;i<num_dests;i++)
+  {
+//    Y2_ERROR("Testing %s", dests[i].name);
     if(dests[i].is_default)
       {
+//	Y2_ERROR("Passed");
         s = dests[i].name;
         break;
       }
+  }
+//  Y2_ERROR("Returning default %s", s.c_str());
   return s;
 }
 

@@ -19,6 +19,7 @@
     import "Printer";
 
     include "printer/misc.ycp";
+    include "printer/misc-cups.ycp";
     include "printer/helps.ycp";
     include "ui/common_popups.ycp";
     include "ui/file_popups.ycp";
@@ -51,7 +52,7 @@
 		`HStretch ()
 	    ),
             `VSpacing (4),
-	    `PushButton (`id (`advanced), _("&Advanced")),
+	    `PushButton (`id (`advanced), _("Ad&vanced")),
 	    `VSpacing (2)
             );
         // dialog label
@@ -81,30 +82,6 @@
             }
 	    else if (`advanced == ret)
 	    {
-/*		Printer::cups_installation = 0;
-		string n = UI::QueryWidget (`id(`hostnameent), `Value);
-		Printer::server_hostname = n;
-		if (Printerlib::getSpoolSystem () != 2)
-		{
-		    Printer::server_hostname = "";
-		    Printer::saveClientHostName ();
-		    Printerlib::switchTo ("cups");
-		    ret = `switch;
-		    Printer::cups_installation = -1;
-		    break;
-		}
-		else if (Printer::read_done == false)
-		{
-		    if (!Printer::Read ())
-		    {
-			// message box
-			UI::MessagePopup (_("ERROR: Unable to read
-the current configuration.
-"));
-			continue;
-		    }
-		    break;
-		}*/
 		break;
 	    }
             else if (`back == ret || `abort == ret)
@@ -146,7 +123,7 @@ the current configuration.
 		    `TextEntry (`id(`name), `opt (`notify), _("&File name:"), file),
 		    `VBox (
 			`Label (" "),
-			`PushButton (`id (`browse), _("&Browse..."))
+			`PushButton (`id (`browse), _("Bro&wse..."))
 		    )
 		),
 		`VSpacing (3),
@@ -167,13 +144,13 @@ the current configuration.
 		`HBox (
 		    `HStretch (),
 		    `HWeight (1, `PushButton (`id (`test), _("&Test graphical printing"))),
-		    `HWeight (1, `PushButton (`id (`advanced), _("&Advanced settings"))),
+		    `HWeight (1, `PushButton (`id (`advanced), _("Ad&vanced settings"))),
 		    `HStretch ()
 		),
 		`VSpacing (2),
 		`HBox (
 		    `HStretch (),
-		    `PushButton (`id (`db), _("Use driver from printer database"))
+		    `PushButton (`id (`db), _("Use &driver from printer database"))
 		)
 	    )
 	);
@@ -610,81 +587,264 @@ the current configuration.
             }
 	return ret;
     }
-
     /**
-     * Banners dialog
+      * CUPS dialog for enetring IP address
+      *
+      */
+    global define term ipAddrPopup (boolean ad, string label, string init, symbol state) ``{
+	return `VBox (
+	    ad ? `RadioButtonGroup (`id (`type),
+		`HBox (
+		    `RadioButton (`id (`allow), _("Allow From"), state != `deny),
+		    `RadioButton (`id (`deny), _("Deny From"), state == `deny)
+		)
+	    ) : `VSpacing (0),
+	    `TextEntry (`id (`ad), label, init),
+	    `HBox (
+		`PushButton (`id (`ok), `opt (`default), OKButtonLabel()),
+		`PushButton (`id (`cancel), CancelButtonLabel())
+	    )
+	);
+    }
+    /**
+     * CUPS access control list dialog
      * @return symbol `next or `back
      */
-/*    global define symbol runBannersDialog () ``{
-        // read list of banners
-        list banners = getBannerList ();
-        banners = sort (banners);
-        // read current settings
-        string banner_start = lookup (Printer::printer, "bannerstart", "none");
-        string banner_end = lookup (Printer::printer, "bannerend", "none");
-
-        if ("" == banner_start)
-        {
-            banner_start = "none";
-        }
-        if ("" == banner_end)
-        {
-            banner_end = "none";
-        }
-
-        term contents = `VBox (
-            `ComboBox ( `id (`banner_start),
-                        // combo box label
-                        _("&Starting banner"),
-                        maplist (`i, banners, ``{
-                            return `item (`id (i), i, i == banner_start);
-                        })
+    global define symbol runCupsAclDialog (symbol type) ``{
+	string pth = type == `root ? "/" : type == `admin ? "/admin" : type == `printers ? "/printers" : "/classes";
+	boolean show_ignore = type != `root && type != `admin;
+	term contents = `HBox (
+	    `HSpacing (2),
+	    `VBox (
+		`VSpacing (1),
+		`Frame (_("Application order"),
+                `RadioButtonGroup (`id (`order), `HBox (
+                    `RadioButton (`id (`ad), `opt (`hstretch), _("A&llow, Deny")),
+                    `RadioButton (`id (`da), `opt (`hstretch), _("&Deny, Allow"))
+                ))),
+		`VSpacing (1),
+                `ReplacePoint (`id (`replace_acl), `SelectionBox (`id (`acl), _("&Permissions"))),
+		`VSpacing (1),
+                `HBox (
+                    `PushButton (`id (`add), AddButtonLabel ()),
+                    `PushButton (`id (`edit), EditButtonLabel ()),
+                    `PushButton (`id (`del), DeleteButtonLabel ())
                 ),
-            `ComboBox( `id (`banner_end),
-                       // combo box label
-                       _("&Ending banner"),
-                       maplist (`i, banners, ``{
-                           return `item (`id (i), i, i == banner_end);
-                       })
-                ),
-            `VSpacing (2)
-            );
-        // dialog label
-        Wizard::SetContentsButtons (_("Banners"), contents, getBannersHelp (), BackButtonLabel (), NextButtonLabel ());
+		show_ignore ? `VSpacing (1) : `VSpacing (0),
+		show_ignore ? `PushButton (`id (`ignore), sformat (_("Use inherited permissions"))) : `VSpacing (0),
+		`VSpacing (1)
+	    ),
+	    `HSpacing (2)
+	);
 
+        Wizard::SetContentsButtons (sformat (_("CUPS permissions settings for %1"), pth), contents, getCupsAclHelp (show_ignore), BackButtonLabel (), NextButtonLabel ());
+	map settings = lookup (Printer::cups_server_settings, pth, $[]);
+	if (lookup (settings, "Order", "Deny,Allow") == "Allow,Deny")
+	    UI::ChangeWidget (`id (`ad), `Value, true);
+	else
+	    UI::ChangeWidget (`id (`da), `Value, true);
+	list cont = union (maplist (`e, lookup (settings, "AllowFrom", []), ``{return `i (`allow, e);}),
+			maplist (`e, lookup (settings, "DenyFrom", []), ``{return `i (`deny, e);}));
+	UI::ReplaceWidget (`id (`replace_acl), `SelectionBox (`id (`acl), _("&Permissions"),
+	   maplist (`e, cont, ``(`item (`id (e), select (e, 0, nil) == `allow ? sformat (_("Allow From %1"), select (e, 1, ""))
+		: sformat (_("Deny From %1"), select (e, 1, "")))))));
         symbol ret = nil;
         while (true)
         {
             ret = UI::UserInput ();
-            if (`next == ret)
-            {
-                banner_end = UI::QueryWidget (`id (`banner_end), `Value);
-                banner_start = UI::QueryWidget (`id (`banner_start), `Value);
-                if ("" == banner_start)
-                {
-                    banner_start = "none";
-                }
-                if ("" == banner_end)
-                {
-                    banner_end = "none";
-                }
-                Printer::printer = add (Printer::printer, "bannerstart", banner_start);
-                Printer::printer = add (Printer::printer, "bannerend", banner_end);
-                break;
-            }
-            else if (`back == ret)
-            {
-                break;
-            }
-           else if (`abort == ret)
-            {
+            if (`abort == ret)
+	    {
                 if (reallyAbort ())
-                {
                     break;
-                }
+	    }
+            else if (`back == ret)
+                break;
+            else if (`next == ret)
+            {
+                break;
             }
+	    else if (`ignore == ret)
+	    {
+		break;
+	    }
+	    else if (`add == ret)
+            {
+                UI::OpenDialog (ipAddrPopup (true, _("Enter &IP address"), "", `allow));
+                symbol r = nil;
+                while (nil == r)
+                    r = UI::UserInput ();
+                string ad = UI::QueryWidget (`id (`ad), `Value);
+		symbol acc = UI::QueryWidget (`id (`type), `CurrentButton) == `allow ? `allow : `deny;
+                UI::CloseDialog ();
+                if (r != `ok)
+                    continue;
+                if (ad != "")
+		{
+                    cont = toset (add (cont, `i (acc, ad)));
+		}
+		UI::ReplaceWidget (`id (`replace_acl), `SelectionBox (`id (`acl), _("&Permissions"),
+	            maplist (`e, cont, ``(`item (`id (e), select (e, 0, nil) == `allow ? sformat (_("Allow From %1"), select (e, 1, ""))
+			: sformat (_("Deny From %1"), select (e, 1, "")))))));
+	    }
+	    else if (`edit == ret)
+            {
+		term item =  UI::QueryWidget (`id (`acl), `CurrentItem);
+		symbol acc = select (item, 0, nil);
+		string ad = select (item, 1, "");
+
+                UI::OpenDialog (ipAddrPopup (true, _("Enter &IP address"), ad, acc));
+                symbol r = nil;
+                while (nil == r)
+                    r = UI::UserInput ();
+                ad = UI::QueryWidget (`id (`ad), `Value);
+                acc = UI::QueryWidget (`id (`type), `CurrentButton) == `allow ? `allow : `deny;
+                UI::CloseDialog ();
+                if (r != `ok)
+                    continue;
+                if (ad != "")
+                {
+		    cont = DeleteItem (cont, item);
+                    cont = toset (add (cont, `i (acc, ad)));
+                }
+                UI::ReplaceWidget (`id (`replace_acl), `SelectionBox (`id (`acl), _("&Permissions"),
+                    maplist (`e, cont, ``(`item (`id (e), select (e, 0, nil) == `allow ? sformat (_("Allow From %1"), select (e, 1, ""))
+                        : sformat (_("Deny From %1"), select (e, 1, "")))))));
+            }
+	    else if (`del == ret)
+	    {
+		cont = DeleteItem (cont, UI::QueryWidget (`id (`acl), `CurrentItem));
+                UI::ReplaceWidget (`id (`replace_acl), `SelectionBox (`id (`acl), _("&Permissions"),
+                    maplist (`e, cont, ``(`item (`id (e), select (e, 0, nil) == `allow ? sformat (_("Allow From %1"), select (e, 1, ""))
+                        : sformat (_("Deny From %1"), select (e, 1, "")))))));
+	    }
         }
+	settings = add(settings, "Order", UI::QueryWidget (`id (`order), `CurrentButton) == `ad ? "Allow,Deny" : "Deny,Allow");
+	list allow = filter (`z, maplist (`x, filter (`e, cont, ``(select (e, 0, nil) == `allow)), ``{return select (x, 1, nil);}), ``(z != ""));
+	list deny = filter (`z, maplist (`x, filter (`e, cont, ``(select (e, 0, nil) == `deny)), ``{return select (x, 1, nil);}), ``(z != ""));
+	settings = add (settings, "AllowFrom", allow);
+	settings = add (settings, "DenyFrom", deny);
+	if (`next == ret)
+	{
+	    Printer::cups_server_settings = add (Printer::cups_server_settings, pth, settings);
+	}
+	else if (`ignore == ret)
+	{
+	    Printer::cups_server_settings = add (Printer::cups_server_settings, pth, $[]);
+	    ret = `next;
+	}
         return ret;
     }
-*/
+    /**
+     * CUPS server settings dialog
+     * @return symbol `next or `back
+     */
+    global define symbol runCupsServerDialog () ``{
+	term contents = `HBox (`HSpacing (2), `VBox (
+	    `VSpacing (1),
+	    `Frame (_("Browsing settings"), `VBox (
+		`HBox (`HSpacing (3), `RadioButtonGroup (`id (`browsing), `HBox (
+		    `Label (_("Browsing")),
+		    `RadioButton (`id (`on), _("On")),
+		    `RadioButton (`id (`off), _("Off"))
+		)),
+
+/*`CheckBox (`id (`browsing), `opt (`hstretch), _("Bro&wsing")),*/ `HSpacing (3)),
+		`VSpacing (1),
+		`HBox (`HSpacing (3), `ReplacePoint (`id( `replace_addr), `SelectionBox (`id (`addr), _("Browse Addre&sses"))), `HSpacing (3)),
+		`HBox (
+		    `PushButton (`id (`add), AddButtonLabel ()),
+		    `PushButton (`id (`edit), EditButtonLabel ()),
+		    `PushButton (`id (`del), DeleteButtonLabel ())
+		)
+	    )),
+	    `VSpacing (1),
+	    `Frame (_("Access settings"), `VBox (
+		`RadioButtonGroup (`id (`loc), `VBox (
+		    `HBox (
+			`RadioButton (`id (`root), `opt (`hstretch), "/ (r&oot)", true),
+			`RadioButton (`id (`admin), `opt (`hstretch), "/ad&min")
+		    ),
+		    `HBox (
+			`RadioButton (`id (`printers), `opt (`hstretch), "/&printers"),
+			`RadioButton (`id (`classes), `opt (`hstretch), "/&classes")
+		    )
+		)),
+		`PushButton (`id (`change), _("Change p&ermissions"))
+	    )),
+	    `VSpacing (1)
+	), `HSpacing (2));
+
+	Wizard::SetContentsButtons (_("CUPS server settings"), contents, getCupsServerHelp (), BackButtonLabel (), NextButtonLabel ());
+
+	list addresses = lookup (Printer::cups_server_settings, "BrowseAddress", []);
+
+	UI::ChangeWidget (`id (`browsing), `CurrentButton, lookup (Printer::cups_server_settings, "Browsing", "Off") == "On" ? `on : `off);
+	UI::ReplaceWidget (`id (`replace_addr), `SelectionBox (`id (`addr), _("Browse Addre&sses"), addresses));
+
+	symbol ret = nil;
+	while (true)
+	{
+	    ret = UI::UserInput ();
+	    if (`abort == ret)
+	    {
+		if (reallyAbort ())
+		    break;
+	    }
+	    else if (`back == ret)
+		break;
+	    else if (`change == ret)
+	    {
+		ret = UI::QueryWidget (`id (`loc), `CurrentButton);
+		break;
+	    }
+	    else if (`add == ret)
+	    {
+		UI::OpenDialog (ipAddrPopup (false, _("Enter &IP address"), "", nil));
+		symbol r = nil;
+		while (nil == r)
+		    r = UI::UserInput ();
+		string ad = UI::QueryWidget (`id (`ad), `Value);
+		UI::CloseDialog ();
+		if (r != `ok)
+		    continue;
+		if (ad != "")
+		    addresses = toset (add (addresses, ad));
+		UI::ReplaceWidget (`id (`replace_addr), `SelectionBox (`id (`addr), _("Browse Addre&sses"), addresses));
+	    }
+	    else if (`del == ret)
+	    {
+                addresses = DeleteItem (addresses, UI::QueryWidget (`id (`addr), `CurrentItem));
+		UI::ReplaceWidget (`id (`replace_addr), `SelectionBox (`id (`addr), _("Browse Addre&sses"), addresses));
+	    }
+	    else if (`edit == ret)
+	    {
+		if (UI::QueryWidget (`id (`addr), `CurrentItem) == nil)
+		    continue;
+		UI::OpenDialog (ipAddrPopup (false, _("Enter &IP address"), UI::QueryWidget (`id (`addr), `CurrentItem), nil));
+                symbol r = nil;
+                while (nil == r)
+                    r = UI::UserInput ();
+                string ad = UI::QueryWidget (`id (`ad), `Value);
+                UI::CloseDialog ();
+                if (r != `ok)
+                    continue;
+                if (ad != "")
+		{
+		    addresses = DeleteItem (addresses, UI::QueryWidget (`id (`addr), `CurrentItem));
+                    addresses = toset (add (addresses, ad));
+		}
+                UI::ReplaceWidget (`id (`replace_addr), `SelectionBox (`id (`addr), _("Browse Addre&sses"), addresses));
+
+	    }
+	    if (`next == ret)
+	    {
+		break;
+	    }
+	}
+	if (ret == `next)
+	    Printer::cups_server_settings = add(Printer::cups_server_settings, "Browsing", UI::QueryWidget (`id (`browsing), `CurrentButton) == `on ? "On" : "Off");
+	    Printer::cups_server_settings = add(Printer::cups_server_settings, "BrowseAddress", addresses);
+y2error ("%1", Printer::cups_server_settings);
+	return ret;
+    }
 }

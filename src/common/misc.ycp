@@ -46,15 +46,15 @@
 	fn = fn + "/script.sw_single";
 	SCR::Write (.target.ycp, fn, script);
 
-	SCR::Execute (.target.bash, "rm -rf /etc/cups/");
-	SCR::Execute (.target.bash, "rm -rf /etc/lpdfilter/");
-	SCR::Execute (.target.bash, "rm -r /etc/printcap");
-	SCR::Execute (.target.bash, "rm -r /etc/printcap.rpm*");
-	SCR::Execute (.target.bash, "rm -r /etc/printcap-2*");
-	SCR::Execute (.target.bash, "rm -r /etc/printcap.y2*");
-	SCR::Execute (.target.bash, "rm -rf /var/spool/lpd/");
-	SCR::Execute (.target.bash, "rm -rf /var/spool/cups/");
-	SCR::Execute (.target.bash, "rm -rf /var/lib/YaST2/printers/");
+	SCR::Execute (.target.bash, "/bin/rm -rf /etc/cups/");
+	SCR::Execute (.target.bash, "/bin/rm -rf /etc/lpdfilter/");
+	SCR::Execute (.target.bash, "/bin/rm -r /etc/printcap");
+	SCR::Execute (.target.bash, "/bin/rm -r /etc/printcap.rpm*");
+	SCR::Execute (.target.bash, "/bin/rm -r /etc/printcap-2*");
+	SCR::Execute (.target.bash, "/bin/rm -r /etc/printcap.y2*");
+	SCR::Execute (.target.bash, "/bin/rm -rf /var/spool/lpd/");
+	SCR::Execute (.target.bash, "/bin/rm -rf /var/spool/cups/");
+	SCR::Execute (.target.bash, "/bin/rm -rf /var/lib/YaST2/printers/");
 
 	CallFunction (`sw_single (fn));
 
@@ -110,12 +110,9 @@
 	map supported = $[ "cups" : [ "parallel", "usb", "serial", "filtering", "ipp", "samba", "socket", "irda", "file", "class", ],
 			   "lprng" : [ "parallel", "usb", "serial", "lpd", "prefilter", "samba", "novell", "irda", "filtering", "socket", "pipe", "ipp", "file", ]];
 	list l = lookup (supported, spooler, []);
-/*	boolean res = contains (l, queue);
-	if (! res)
-	{
-	    UI::ErrorPopup (_("You sellected unsupported printer type. You must change your spooler or choose another printertype"));
-	}
-*/	return contains (l, queue);
+	if (l == [])
+	    return true;
+	return contains (l, queue);
     }
 
     global define boolean testSupportedQueue (string queue) ``{
@@ -534,89 +531,89 @@ All changes will be lost!",
     /**
      * Create the content of the selection box with all connections
      * @param type type of connection to pre-select.
-     * @param all show all possible connections (true) or only local connections (false)?
      * @return List of items. Item of Id is its name.
      */
-    global define list connectionsRadioButtons (string type, boolean all) ``{
-	return all ?
-	    Printer::spooler == "cups" ?
+    global define list advancedConnectionsRadioButtons (string type) ``{
+	return Printer::spooler == "cups" ?
 		`VBox (
-		    `Label (`opt (`hstretch), _("Local printing:")),
-		    `RadioButton (`id (`parallel), `opt (`hstretch), _("&Parallel printer"), type == "parallel"),
-		    `RadioButton (`id (`usb), `opt (`hstretch),      _("&USB printer"), type == "usb"),
-		    `RadioButton (`id (`serial), `opt (`hstretch),   _("&Serial printer"), type == "serial"),
-		    `RadioButton (`id (`irda), `opt (`hstretch),     _("&IrDA printer"), type == "irda"),
-		    `RadioButton (`id (`file), `opt (`hstretch),     _("&Disk file"), type == "file"),
 		    `Label (`opt (`hstretch), _("LPD and IPP network printing:")),
-                    `RadioButton (`id (`filtering),`opt (`hstretch), _("LPD fi&ltering and forwarding queue"), type == "filtering"),
+                    `RadioButton (`id (`filtering),`opt (`hstretch), _("LPD fil&tering and forwarding queue"), type == "filtering"),
 		    `RadioButton (`id (`ipp), `opt (`hstretch),    _("&IPP filtering and forwarding queue"), type == "ipp"),
 		    `Label (`opt (`hstretch), _("Other network printing:")),
 		    `RadioButton (`id (`samba), `opt (`hstretch),    _("SMB Printing (Samba/&Windows printer)"), type == "samba"),
-		    `RadioButton (`id (`socket), `opt (`hstretch),    _("Direct TCP port printing (network printer)"), type == "socket"),
-		    `Label (`opt (`hstretch), _("Unsupported network printing in CUPS:")),
-                    `RadioButton (`id (`remote), `opt (`hstretch),      _("LPD &forwarding queue"), type == "lpd"),
-                    `RadioButton (`id (`prefilter),`opt (`hstretch), _("P&refilter queue for a LPD forwarding queue"), type == "prefilter"),
-		    `RadioButton (`id (`novell), `opt (`hstretch),   _("IPX printing (Nove&ll printer)"), type == "novell"),
+		    `RadioButton (`id (`socket), `opt (`hstretch),    _("Direct TCP port printin&g (network printer)"), type == "socket"),
 		    `Label (`opt (`hstretch), _("Other:")),
 		    `RadioButton (`id (`other), `opt (`hstretch),  _("&Other Printer (set URI)"), "" == knowConnection (type) && type != "class"),
-		    `RadioButton (`id (`pipe), `opt (`hstretch),     _("&Pipe printing"), type == "pipe"),
-		    `RadioButton (`id (`class), `opt (`hstretch),  _("CUPS &class"), type == "class")
+		    `RadioButton (`id (`class), `opt (`hstretch),  _("CUPS &class"), type == "class"),
+		    `Label (`opt (`hstretch), _("Unsupported printing in CUPS:")),
+                    `RadioButton (`id (`remote), `opt (`hstretch),      _("LPD &forwarding queue"), type == "lpd"),
+                    `RadioButton (`id (`prefilter),`opt (`hstretch), _("Prefilter queue for a LPD forwarding &queue"), type == "prefilter"),
+                    `RadioButton (`id (`novell), `opt (`hstretch),   _("IPX printing (Nove&ll printer)"), type == "novell"),
+		    `RadioButton (`id (`pipe), `opt (`hstretch),     _("Pip&e printing"), type == "pipe")
 		    )
 		: Printer::spooler == "lprng" ?
                 `VBox (
-                    `Label (`opt (`hstretch), _("Local printing:")),
-                    `RadioButton (`id (`parallel), `opt (`hstretch), _("&Parallel printer"), type == "parallel"),
-                    `RadioButton (`id (`usb), `opt (`hstretch),      _("&USB printer"), type == "usb"),
-                    `RadioButton (`id (`serial), `opt (`hstretch),   _("&Serial printer"), type == "serial"),
-		    `RadioButton (`id (`irda), `opt (`hstretch),     _("&IrDA printer"), type == "irda"),
-                    `RadioButton (`id (`file), `opt (`hstretch),     _("&Disk file"), type == "file"),
                     `Label (`opt (`hstretch), _("LPD and IPP network printers:")),
                     `RadioButton (`id (`remote), `opt (`hstretch),      _("LPD &forwarding queue"), type == "lpd"),
-                    `RadioButton (`id (`prefilter),`opt (`hstretch), _("P&refilter queue for a LPD forwarding queue"), type == "prefilter"),
-                    `RadioButton (`id (`filtering),`opt (`hstretch), _("LPD fi&ltering forwarding queue"), type == "filtering"),
+                    `RadioButton (`id (`prefilter),`opt (`hstretch), _("Prefilter queue for a LPD forwarding &queue"), type == "prefilter"),
+                    `RadioButton (`id (`filtering),`opt (`hstretch), _("LPD fil&tering forwarding queue"), type == "filtering"),
 		    `RadioButton (`id (`ipp), `opt (`hstretch),    _("&IPP filtering and forwarding queue"), type == "ipp"),
 		    `Label (`opt (`hstretch), _("Other network printing:")),
                     `RadioButton (`id (`samba), `opt (`hstretch),    _("SMB Printing (Samba/&Windows printer)"), type == "samba"),
                     `RadioButton (`id (`novell), `opt (`hstretch),   _("IPX printing (Nove&ll printer)"), type == "novell"),
-		    `RadioButton (`id (`socket), `opt (`hstretch),    _("Direct TCP port printing (network printer)"), type == "socket"),
-//                    `Label (`opt (`hstretch), _("Unsupported network printing in LPRng:")),
-//                    `RadioButton (`id (`ipp), `opt (`hstretch),    _("&IPP filtering and forwarding queue"), type == "ipp"),
-		    `Label (`opt (`hstretch), _("Other:")),
-                    `RadioButton (`id (`other), `opt (`hstretch),   _("&Other Printer (set URI)"), "" == knowConnection (type) && type != "class"),
-		    `RadioButton (`id (`pipe), `opt (`hstretch),     _("&Pipe printing"), type == "pipe"),
+		    `RadioButton (`id (`socket), `opt (`hstretch),    _("Direct TCP port printin&g (network printer)"), type == "socket"),
+		    `Label (`opt (`hstretch), _("Other printing:")),
+		    `RadioButton (`id (`pipe), `opt (`hstretch),     _("Pip&e printing"), type == "pipe"),
+		    `Label (`opt (`hstretch), _("Unsupported printing in LPRng:")),
+		    `RadioButton (`id (`other), `opt (`hstretch),   _("&Other Printer (set URI)"), "" == knowConnection (type) && type != "class"),
 		    `RadioButton (`id (`class), `opt (`hstretch),  _("CUPS &class"), type == "class")
                     )
 		: //unknown spooler
 		`VBox (
-                    `Label (`opt (`hstretch), _("Local printing:")),
-                    `RadioButton (`id (`parallel), `opt (`hstretch), _("&Parallel printer"), type == "parallel"),
-                    `RadioButton (`id (`usb), `opt (`hstretch),      _("&USB printer"), type == "usb"),
-                    `RadioButton (`id (`serial), `opt (`hstretch),   _("&Serial printer"), type == "serial"),
-                    `RadioButton (`id (`irda), `opt (`hstretch),     _("&IrDA printer"), type == "irda"),
-                    `RadioButton (`id (`file), `opt (`hstretch),     _("&Disk file"), type == "file"),
                     `Label (`opt (`hstretch), _("LPD and IPP network printing:")),
                     `RadioButton (`id (`remote), `opt (`hstretch),      _("LPD &forwarding queue"), type == "lpd"),
-                    `RadioButton (`id (`prefilter),`opt (`hstretch), _("P&refilter queue for a LPD forwarding queue"), type == "prefilter"),
-                    `RadioButton (`id (`filtering),`opt (`hstretch), _("LPD fi&ltering and forwarding queue"), type == "filtering"),
+                    `RadioButton (`id (`prefilter),`opt (`hstretch), _("Prefilter& queue for a LPD forwarding queue"), type == "prefilter"),
+                    `RadioButton (`id (`filtering),`opt (`hstretch), _("LPD fil&tering and forwarding queue"), type == "filtering"),
                     `RadioButton (`id (`ipp), `opt (`hstretch),    _("&IPP filtering and forwarding queue"), type == "ipp"),
                     `Label (`opt (`hstretch), _("Other network printing:")),
                     `RadioButton (`id (`samba), `opt (`hstretch),    _("SMB Printing (Samba/&Windows printer)"), type == "samba"),
                     `RadioButton (`id (`novell), `opt (`hstretch),   _("IPX printing (Nove&ll printer)"), type == "novell"),
-                    `RadioButton (`id (`socket), `opt (`hstretch),    _("Direct TCP port printing (network printer)"), type == "socket"),
+                    `RadioButton (`id (`socket), `opt (`hstretch),    _("Direct TCP port printin&g (network printer)"), type == "socket"),
                     `Label (`opt (`hstretch), _("Other:")),
                     `RadioButton (`id (`other), `opt (`hstretch),  _("&Other Printer (set URI)"), "" == knowConnection (type) && type != "class"),
-                    `RadioButton (`id (`pipe), `opt (`hstretch),     _("&Pipe printing"), type == "pipe"),
+                    `RadioButton (`id (`pipe), `opt (`hstretch),     _("Pip&e printing"), type == "pipe"),
                     `RadioButton (`id (`class), `opt (`hstretch),  _("CUPS &class"), type == "class")
-		)
+		);
+    }
+    /**
+     * Create the content of the selection box with all connections
+     * @param type type of connection to pre-select.
+     * @param all show all possible connections (true) or only local connections (false)?
+     * @return List of items. Item of Id is its name.
+     */
+    global define list connectionsRadioButtons (string type, boolean all) ``{
+        return all ?
+	    `VBox (
+		`Label (`opt (`hstretch), _("Local printing:")),
+		`RadioButton (`id (`parallel), `opt (`hstretch), _("&Parallel printer"), type == "parallel"),
+		`RadioButton (`id (`usb), `opt (`hstretch),      _("&USB printer"), type == "usb"),
+		`RadioButton (`id (`serial), `opt (`hstretch),   _("&Serial printer"), type == "serial"),
+		`RadioButton (`id (`irda), `opt (`hstretch),     _("IrD&A printer"), type == "irda"),
+		`RadioButton (`id (`file), `opt (`hstretch),     _("&Disk file"), type == "file"),
+		`Label (`opt (`hstretch), _("Expert printer setup e.g. LPD, IPP, Samba/Windows,")),
+		`Label (`opt (`hstretch), _("Novell Netware and direct TCP socket network")),
+		`Label (`opt (`hstretch), _("printing and other queue types")),
+		`RadioButton (`id (`more), `opt (`hstretch),	 _("Show &more connection types..."), ! contains (["parallel", "usb", "serial", "irda", "file"], type))
+	    )
 	    :
 	    `VBox (
 		`Label (`opt (`hstretch), _("Local printing:")),
 		`RadioButton (`id (`parallel), `opt (`hstretch), _("&Parallel printer"), type == "parallel"),
 		`RadioButton (`id (`usb), `opt (`hstretch),      _("&USB printer"), type == "usb"),
 		`RadioButton (`id (`serial), `opt (`hstretch),   _("&Serial printer"), type == "serial"),
-		`RadioButton (`id (`irda), `opt (`hstretch),     _("&IrDA printer"), type == "irda"),
+		`RadioButton (`id (`irda), `opt (`hstretch),     _("IrD&A printer"), type == "irda"),
 		`RadioButton (`id (`file), `opt (`hstretch),     _("&Disk file"), type == "file")
-		);
+	    );
     }
 
     /**
@@ -667,6 +664,8 @@ All changes will be lost!",
 		else
 		    // This printer was not configured using YaST2. Item in table. SHORT!
 		    ret = add (ret, _("- not YaST2 -"));
+		ret = add (ret, "commited" == Printer::getPrinterState (ent, "cups") ? _("OK") : "");
+		ret = add (ret, "commited" == Printer::getPrinterState (ent, "lprng") ? _("OK") : "");
 		count = count+1;
 		return ret;
 	});
@@ -822,7 +821,7 @@ for any file in directory /etc/lpdfilter"));
     global define term getValuesUI (any vals) ``{
 	if (is (vals,list))
 	{
-	    return `SelectionBox (`id (`vals), `opt (`notify), _("&Values"), vals);
+	    return `SelectionBox (`id (`vals), `opt (`notify), _("Val&ues"), vals);
 	}
 	if (!is (vals, term))
 	    return `VStretch ();
@@ -982,17 +981,19 @@ for any file in directory /etc/lpdfilter"));
     /**
       *
       */
-    global define term getSpoolerItems (string spooler) ``{
+    global define term getSpoolerItems (string spooler, boolean none) ``{
         return `RadioButtonGroup (
                         `id (`spooler),
                         `HBox (`HSpacing (1),
                             `VBox (
                                 `VSpacing (1),
-                                `RadioButton (`id (`cups_server), `opt (`hstretch), _("CUPS full server installation"), spooler == "cups"),
+                                `RadioButton (`id (`cups_server), `opt (`hstretch), _("CUPS full &server installation"), spooler == "cups"),
                                 `VSpacing (0.5),
-                                `RadioButton (`id (`cups_client), `opt (`hstretch), _("CUPS client only installation"), spooler == "cups-client"),
+                                `RadioButton (`id (`cups_client), `opt (`hstretch), _("CUPS &client only installation"), spooler == "cups-client"),
                                 `VSpacing (0.5),
-                                `RadioButton (`id (`lprng), `opt (`hstretch), _("LPRng"), spooler == "lprng"),
+                                `RadioButton (`id (`lprng), `opt (`hstretch), _("&LPRng"), spooler == "lprng"),
+				none ? `VSpacing (0.5) : `VSpacing (0),
+				none ? `RadioButton (`id (`none), `opt (`hstretch), _("&Leave current status"), spooler == "current") : `VSpacing (0),
                                 `VSpacing (1)
                             ),
                             `HSpacing (1)
@@ -1012,7 +1013,7 @@ for any file in directory /etc/lpdfilter"));
 	UI::OpenDialog (
             `VBox (
 		`Label (msg),
-		getSpoolerItems (""),
+		getSpoolerItems ("current", true),
 		`HBox (
 		    `HWeight (1, `PushButton (`id (`ok), "&OK")),
 		    `HWeight (1, `PushButton (`id (`cancel), abort_msg))))
@@ -1059,8 +1060,8 @@ for any file in directory /etc/lpdfilter"));
 	else if (0 == spool_sys) //none installed
 	{
 	    symbol result = chooseSpooler (_("No printing system is installed. 
-You have to choose if you want to configure 
-the LPRng spooler or the CUPS spooler"), _("&Continue without spooler"));
+Please choose what spooler do you 
+want to install and configure."), _("Abo&rt setup"));
 	    if (`lprng == result)
 	    {
 		Printerlib::switchTo ("lprng");
@@ -1076,24 +1077,33 @@ the LPRng spooler or the CUPS spooler"), _("&Continue without spooler"));
 		Printerlib::switchTo ("cups_client");
 		return "switched";
 	    }
+	    else if (`cancel == result)
+		return "exit";
 	    else
 		return "";
 	}
 	else if (3 == spool_sys) //both spoolers are installed
 	{
             symbol result = chooseSpooler (_("Both LPRng and CUPS are installed.
-You have to choose if you want to configure
-the LPRng spooler or the CUPS spooler"), _("&Continue without spooler"));
+Please choose what spooler do you 
+want to leave installed and configure."), _("Abo&rt setup"));
             if (`lprng == result)
             {
                 Printerlib::switchTo ("lprng");
                 return "switched";
             }
-            else if (`cups == result)
+            else if (`cups_server == result)
             {
                 Printerlib::switchTo ("cups");
                 return "switched";
             }
+	    else if (`cups_client == result)
+	    {
+		Printerlib::switchTo ("cups_client");
+		return "switched";
+	    }
+            else if (`cancel == result)
+                return "exit";
             else
                 return "";
 	}
@@ -1102,11 +1112,11 @@ the LPRng spooler or the CUPS spooler"), _("&Continue without spooler"));
 	    symbol result = chooseSpooler (
 _("You have installed some LPD compatible spooler,
 probably LPRng but the instalation doesn't seem 
-to be complete. You can choose to install new spooler, 
-or let current status.
+to be complete. You can choose to reinstall 
+LPRng, install CUPS or leave current status.
 If you want to only repair current configuration, select LPRng.
 If you leave current status, your spooler doesn't have
-to run properly"), _("&Leave current"));
+to run properly"), _("Abo&tr setup"));
 	    if (`cups_server == result)
 	    {
 		Printerlib::switchTo ("cups");
@@ -1122,6 +1132,8 @@ to run properly"), _("&Leave current"));
 		Printerlib::switchTo ("lprng");
 		return "switched";
 	    }
+            else if (`cancel == result)
+                return "exit";
 	    else
 		return "lprng";
 	}
@@ -1131,9 +1143,10 @@ to run properly"), _("&Leave current"));
 _("You have installed CUPS spooler, but the instalation 
 doesn't seem to be complete. You can choose to reinstall
 CUPS, install LPRng, or leave current status. 
-If you want to only repair current configuration, select CUPS.
+If you want to only repair current configuration, select 
+CUPS full server installation.
 If you leave current status, your spooler doesn't have
-to run properly"), _("&Leave current"));
+to run properly"), _("Abo&rt setup"));
 	    if (`cups_server == result)
 	    {
 		Printerlib::switchTo ("cups");
@@ -1149,6 +1162,8 @@ to run properly"), _("&Leave current"));
 		Printerlib::switchTo ("lprng");
 		return "switched";
 	    }
+            else if (`cancel == result)
+                return "exit";
 	    else
 		return "cups";
 	}

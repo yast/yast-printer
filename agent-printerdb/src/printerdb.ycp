@@ -1,6 +1,17 @@
-
+/**
+ * File:
+ *  printerdb.ycp
+ * Summary:
+ *  Printer database viewer
+ * Authors:
+ *  Petr Blahos <pblahos@suse.cz>
+ *
+ * $Id$
+ */
 {
 //    import "Wizard";
+    textdomain "printer";
+
     include "wizard/sequencer.ycp";
     include "ui/wizard_dialog.ycp";
 
@@ -29,9 +40,9 @@
 
     define vendors () ``{
 	list items = SCR::Read (.printerdb.vendors, current_vendor);
-	UI::SetWizardContents ("Vendors", `VBox (
+	UI::SetWizardContents (_("Vendors"), `VBox (
 		    `SelectionBox (`id (`sel), "", items),
-		    `PushButton (`id (`generate), "Generate translation strings and test script")
+		    `PushButton (`id (`generate), _("&Generate translation strings and test script"))
 		    ), "", true, true);
 	symbol ret = UI::UserInput ();
 	while (`generate == ret)
@@ -41,8 +52,8 @@
 	    SCR::Write (.printerdb.gettext.prg, tmp + "prg.msg");
 	    SCR::Write (.printerdb.testscript, tmp + "tst");
 	    UI::OpenDialog (`VBox (
-			`Label (sformat ("Files %1msg and %1tst were generated.", tmp)),
-			`HBox (`PushButton ("OK"),`PushButton ("Cancel"))));
+			`Label (sformat (_("Files %1msg and %1tst were generated."), tmp)),
+			`HBox (`PushButton (OKButtonLabel ()),`PushButton (CancelButtonLabel ()))));
 	    ret = UI::UserInput ();
 	    UI::CloseDialog ();
 	    ret = UI::UserInput ();
@@ -53,7 +64,7 @@
 
     define printers () ``{
 	list items = SCR::Read (add (.printerdb.models, current_vendor), current_printer);
-	UI::SetWizardContents ("Printers", `VBox (
+	UI::SetWizardContents (_("Printers"), `VBox (
 		    `SelectionBox (`id (`sel), "", items)
 		    ), "", true, true);
 	symbol ret = UI::UserInput ();
@@ -63,9 +74,9 @@
 
     define configsrt () ``{
 	list l = SCR::Read (add (.printerdb.configsrt, current_printer), "");
-	UI::SetWizardContents ("Configs", `VBox (
+	UI::SetWizardContents (_("Configs"), `VBox (
 		    `RichText (`id (`sel), select (l, 0, "")),
-		    `MenuButton ("Configurations", select (l, 1, []))
+		    `MenuButton (_("Configurations"), select (l, 1, []))
 		    ),
 		    "", true, true);
 	any ret = "";
@@ -81,7 +92,7 @@
 	return ret;
     }
     define configs () ``{
-	UI::SetWizardContents ("Configs", `VBox (
+	UI::SetWizardContents (_("Configs"), `VBox (
 		    `Table (`id (`sel), `header ("leaf","name", "id", "queue"), getConfigTree ())
 		    ), "", true, true);
 	symbol ret = UI::UserInput ();
@@ -89,12 +100,12 @@
 	return ret;
     }
     define options () ``{
-	UI::SetWizardContents ("Options", `VBox (
-		    `VWeight (1, `ReplacePoint (`id (`upper), `SelectionBox (`id (`opts), "&Options", []))),
-		    `VWeight (1, `ReplacePoint (`id (`lower), `SelectionBox (`id (`vals), "&Values", [])))
+	UI::SetWizardContents (_("Options"), `VBox (
+		    `VWeight (1, `ReplacePoint (`id (`upper), `SelectionBox (`id (`opts), _("&Options"), []))),
+		    `VWeight (1, `ReplacePoint (`id (`lower), `SelectionBox (`id (`vals), _("&Values"), [])))
 		    ), "", true, false);
 	list opts = SCR::Read (add (.printerdb.options, current_config));
-	UI::ReplaceWidget (`id (`upper), `SelectionBox (`id (`opts), `opt (`notify), "Options", opts));
+	UI::ReplaceWidget (`id (`upper), `SelectionBox (`id (`opts), `opt (`notify), _("&Options"), opts));
 	symbol ret = `opts;
 	map selected = $[];
 	while (true) {
@@ -110,7 +121,7 @@
 		string co = UI::QueryWidget (`id (`opts), `CurrentItem);
 		selected = add (selected, co, UI::QueryWidget (`id (`vals), `CurrentItem));
 		opts = SCR::Read (add (add (.printerdb.options, current_config), co), selected);
-		UI::ReplaceWidget (`id (`upper), `SelectionBox (`id (`opts), `opt (`notify), "Options", opts));
+		UI::ReplaceWidget (`id (`upper), `SelectionBox (`id (`opts), `opt (`notify), _("&Options"), opts));
 	    }
 	    ret = UI::UserInput ();
 	}
@@ -119,25 +130,25 @@
 
     define getValuesUI (any vals) ``{
 	if (is (vals,list))
-	    return `SelectionBox (`id (`vals), `opt (`notify), "&Values", vals);
+	    return `SelectionBox (`id (`vals), `opt (`notify), _("&Values"), vals);
 	if (!is (vals, term))
 	    return `VStretch ();
 	if (`int == symbolof (vals))
 	{
-	    term out = UI::HasSpecialWidget (`Slider) ? `Slider (`id (`int), "&Values") : `IntField (`id (`int), "&Values");
+	    term out = UI::HasSpecialWidget (`Slider) ? `Slider (`id (`int), _("&Values")) : `IntField (`id (`int), _("&Values"));
 	    out = add (out, select (vals, 0, 0));
 	    out = add (out, select (vals, 1, 0));
 	    out = add (out, select (vals, 2, 0));
 	    out = `VBox (
-		    `Label (`opt (`hstretch), sformat ("Minimal value: %1, Maximal value: %2, Step: %3", select (vals, 0, nil), select (vals, 1, nil), select (vals, 2, nil))),
+		    `Label (`opt (`hstretch), sformat (_("Minimal value: %1, Maximal value: %2, Step: %3"), select (vals, 0, nil), select (vals, 1, nil), select (vals, 2, nil))),
 		    out);
 	    return out;
 	}
 	if (`float == symbolof (vals))
 	{
-	    term out = `TextEntry (`id (`float), "&Values", sformat ("%1",select (vals,2,nil)));
+	    term out = `TextEntry (`id (`float), _("&Values"), sformat ("%1",select (vals,2,nil)));
 	    out = `VBox (
-		    `Label (`opt (`hstretch), sformat ("Minimal value: %1, Maximal value: %2, Step: %3", select (vals, 0, nil), select (vals, 1, nil), select (vals, 2, nil))),
+		    `Label (`opt (`hstretch), sformat (_("Minimal value: %1, Maximal value: %2, Step: %3"), select (vals, 0, nil), select (vals, 1, nil), select (vals, 2, nil))),
 		    out);
 	    return out;
 	}

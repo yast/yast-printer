@@ -75,9 +75,17 @@
       */
     global boolean save_all = false;
     /**
+      * Shall be settings read at the beginning?
+      */
+    global boolean reread = true;
+    /**
       * Were settings read?
       */
     global boolean read_done = false;
+    /**
+      * Settings of CUPS server
+      */
+    global map cups_server_settings = $[];
     /**
      * Print queue we are currently working with.
      * @example
@@ -97,10 +105,6 @@
      * ]
      */
     global map printer = $[];
-    /**
-      * Type of printer map, 1 == printer, 0 == class
-      */
-    global integer type = 1;
     /**
      * Index of printer we are working with.
      */
@@ -239,13 +243,49 @@
 		addToDeleted (lookup (printer, "name", ""), "printer");
 	    }
 	}
-//	string printer_type = lookup (printer, "type", "yast2") == "lprng" ? "printer" : lookup (printer, "uri", "class") == "class" ? "class" : "printer";
 	addToDeleted (lookup (printer, "name", ""), printer_type);
 	printcap = remove (printcap, index);
 	if (index >= size (printcap))
 	    index = index - 1;
 	dirty = true;
+	assignDefault ();
     }
+    /**
+      * Set implicit default queue if no queue is set as default
+      */
+    global define void assignDefault () ``{
+	boolean found_default = false;
+	boolean found_lp = false;
+	string first = "";
+	string state_string = Printer::spooler + "-state";
+	foreach (`e, printcap, ``{
+	    string name = lookup (e, "name", "");
+	    if (lookup (e, state_string, "") != "void")
+	    {
+		if (name == "lp")
+		    found_lp = true;
+		if (name == "default")
+		    found_default = true;
+		if (first == "")
+		    first = name;
+	    }
+	});
+	if (found_default)
+	{
+
+	}
+	else if (found_lp)
+	{
+	    default = "lp";
+	    dirty = true;
+	}
+	else
+	{
+	    default = first;
+	    dirty = true;
+	}
+    }
+
     /**
      * Set current printer as default printer
      */
@@ -328,7 +368,7 @@
     /**
       * Adds a queue to the deleted list
       * @param string name
-      * @param string type "printer" or "class"
+      * @param string printer_type "printer" or "class"
       */
     global define void addToDeleted (string name, string printer_type) ``{
 	deleted = add (deleted, $[ "name" : name, "type" : printer_type, "states" : $["cups-state" : "changed", "lprng-state" : "changed"]]);
@@ -444,7 +484,7 @@
      * @return list of printers
      */
     global define list printcapRead () ``{
-	SCR::Execute (.target.bash, "test -d /etc/lpdfilter || mkdir /etc/lpdfilter");
+	SCR::Execute (.target.bash, "test -d /etc/lpdfilter || /bin/mkdir /etc/lpdfilter");
 	list ret = SCR::Read (.etc.printcap);
 	default = SCR::Read (.sysconfig.printer.DEFAULT_PRINTER);
 	if (nil == ret)
@@ -461,7 +501,7 @@
         if (0 == lookup (e, "exit", 1))
         {
             server_hostname = select (splitstring (lookup (e, "stdout", ""), "\n"), 0, "");
-            if (nil == server_hostname || "" == server_hostname ||
+            if (nil == server_hostname || "" == server_hostname || "nil" == server_hostname ||
                 "localhost" == server_hostname || "127.0.0.1" == server_hostname)
                 server_hostname = "";
         }
@@ -470,13 +510,26 @@
      * Save client.conf host name host name
      */
     global define void saveClientHostName () ``{
-        SCR::Execute (.target.bash,
-                      sformat ("/usr/bin/awk '
+	if (server_hostname == "")
+	{
+	     SCR::Execute (.target.bash, "test -f /etc/cups/client.conf && (/usr/bin/awk '
+BEGIN { used = 0 }
+/^ServerName/ { next }
+{ print $0; }
+' /etc/cups/client.conf > /etc/cups/client.conf.yast2; mv /etc/cups/client.conf.yast2 /etc/cups/client.conf)");
+	}
+	else
+	{
+            SCR::Execute (.target.bash,
+                      sformat ("test -f /etc/cups/client.conf && (/usr/bin/awk '
 BEGIN { used = 0 }
 /^ServerName/ { print \"ServerName %1\"; used = 1; next }
 { print $0; }
 END { if (!used) print \"ServerName %1\" }
-' /etc/cups/client.conf > /etc/cups/client.conf.yast2; mv /etc/cups/client.conf.yast2 /etc/cups/client.conf", server_hostname));
+' /etc/cups/client.conf > /etc/cups/client.conf.yast2; /bin/mv /etc/cups/client.conf.yast2 /etc/cups/client.conf)", server_hostname));
+	}
+	if (server_hostname == "")
+	    server_hostname = nil;
 	SCR::Write (.sysconfig.printer.CUPS_SERVER, server_hostname);
 	SCR::Write (.sysconfig.printer, nil);
 	SCR::Execute (.target.bash, "/sbin/SuSEconfig --module profiles");
@@ -496,7 +549,6 @@ END { if (!used) print \"ServerName %1\" }
         {
             loadClientHostName ();
             cups_installation = 1;
-	    y2error ("Installation type: client");
             return 1;
         }
         loadClientHostName ();
@@ -512,13 +564,13 @@ END { if (!used) print \"ServerName %1\" }
         {
             list ret = SCR::Read (.cups.printers);
 	    ret = filter (`e, ret, ``(lookup (e, "uri", "") != ""));
-	y2error ("CUPS: %1", ret);
             list classes = SCR::Read (.cups.classes);
 	    if (nil == ret) ret = [];
 	    if (nil == classes)  classes = [];
 	    classes = maplist (`e, classes, ``(add (e, "uri", "class")));
 	    ret = ret + classes;
 	    default = SCR::Read (.cups.default_dest);
+	    readCupsSettings ();
 	    return ret;
         }
         return [];
@@ -535,10 +587,7 @@ END { if (!used) print \"ServerName %1\" }
 	list locals = filter (`e, printers, ``(contains (["parallel", "serial", "irda", "file", "usb", "pipe"], Printerlib::getUriType (lookup (e, "uri", "")))));
 	list remote = filter (`e, printers, ``(! contains (["parallel", "serial", "irda", "file", "usb", "pipe"], Printerlib::getUriType (lookup (e, "uri", "")))));
 
-//	locals = sort (`x, `y, locals, ``(lookup (x, "uri", "") <= lookup (y, "uri", "")));
-
 	foreach (`e, locals, ``{
-//	    string suffix = filterchars (lookup (e, "name", ""), "1234567890");
 	    string uri = lookup (e, "uri", "");
 	    list s = lookup (sorted, uri, []);
 	    s = add (s, e);
@@ -548,7 +597,6 @@ END { if (!used) print \"ServerName %1\" }
 	foreach (`k, `v, sorted, ``{locals = merge (locals, v);});
 	sorted = $[];
 	foreach (`e, remote, ``{
-//	    string suffix = filterchars (lookup (e, "name", ""), "1234567890");
 	    string uri = lookup (e, "uri", "");
 	    list s = lookup (sorted, uri, []);
 	    s = add (s, e);
@@ -573,7 +621,7 @@ END { if (!used) print \"ServerName %1\" }
 	boolean ret = true;
 	list nonyast = [];
 	string old_default = default;
-y2error ("Before Read: %1", printcap);
+
 	if (spooler == "cups")
         {
             nonyast = cupsRead();
@@ -582,7 +630,7 @@ y2error ("Before Read: %1", printcap);
         {
             nonyast = printcapRead();
         }
-	if (save_all)
+	if (! reread)
 	{
 	    printcap = filter (`e, printcap, ``(lookup (e, "type", "yast2") == "yast2"));// && lookup (e, "uri", "class") != "class"));
 	    foreach (`e, printcap, ``{
@@ -599,10 +647,11 @@ y2error ("Before Read: %1", printcap);
 	else
 	{
 	    printcap = [];
-	    SCR::Execute (.target.bash, "touch /var/lib/YaST2/printers");
+	    SCR::Execute (.target.bash, "/bin/touch /var/lib/YaST2/printers");
 	    map state = SCR::Read (.target.ycp, "/var/lib/YaST2/printers");
 	    printcap = lookup (state, "printers", []);
 	    deleted = lookup (state, "deleted", []);
+	    default = lookup (state, "default", "");
 	    if (nil == printcap)
 		printcap = [];
 	    printcap = maplist (`e, printcap, ``(
@@ -619,9 +668,7 @@ y2error ("Before Read: %1", printcap);
 		    tmpdellist = add (tmpdellist, name);
 	    });
 	}
-y2error ("After Read: %1", printcap);
 	printcap = maplist (`e, printcap, ``{return assignStates (e, false);});
-y2error ("With states: %1", printcap);
 	if (old_default != "" && old_default != nil)
 	    default = old_default;
         foreach (`e, nonyast, ``{
@@ -661,6 +708,7 @@ y2error ("With states: %1", printcap);
                 original_unique_keys = add (original_unique_keys, lookup (i, "unique_key", ""), true);
         });
 	read_done = true;
+	assignDefault ();
         return ret;
      }
     /**
@@ -717,10 +765,13 @@ y2error ("With states: %1", printcap);
 	if (Printer::spooler == "cups")
 	{
 	    if (0 == cupsInstallationType ())
+	    {
+		writeCupsSettings ();
 		Printer::server_hostname = "";
-	    saveClientHostName ();
+	    }
             if (0 != cupsInstallationType ())
 	    {
+		saveClientHostName ();
 		boolean delete = SCR::Read (.targetpkg.installed, "cups") && UI::YesNoPopup (_("Some packages you have installed are not needed 
 for CUPS client-only installation. Do you want
 to remove them?"));
@@ -738,6 +789,8 @@ to remove them?"));
 		return true;
 	    }
 	}
+	Printer::server_hostname = "";
+	saveClientHostName ();
 	// caption of progress
 	Progress::New (_("Saving settings of printers. Please wait..."),
 		       // progress stages, short texts
@@ -778,7 +831,8 @@ to remove them?"));
 		Report::Error (sformat (_("Attempting to save printer with no name. Skipping: %1"), ent));
 		return;
 	    }
-	    if (name == default)
+	    string state = Printer::spooler + "-state";
+	    if (name == default && lookup (entry, state, "changed") != "void")
 		default_printer_found = true;
 
 	    string unique_key = lookup (entry,"unique_key", nil);
@@ -798,12 +852,16 @@ to remove them?"));
 		if ((lookup (entry, "cups-state", "changed") == "changed" || Printer::save_all) && (lookup (entry, "type", "yast2") == "yast2"))
 		    if (writeCupsPrinter (entry))
 			entry = add (entry, "cups-state", "commited");
+		if (lookup (entry, "cups-state", "changed") == "void")
+		    UI::MessagePopup (_("Queue %1 cannot be saved, because\n selected spooler doesn't support it"), name);
 	    }
 	    else if (spooler == "lprng")
 	    {
 		if ((lookup (entry, "lprng-state", "changed") == "changed" || Printer::save_all) && (lookup (entry, "type", "yast2") == "yast2"))
 		    if (writeLpdPrinter (entry))
 			entry = add (entry, "lprng-state", "commited");
+		if (lookup (entry, "lprng-state", "changed") == "void")
+		    UI::MessagePopup (_("Queue %1 cannot be saved, because\n selected spooler doesn't support it"), name);
 	    }
 	    Progress::NextStep ();
 	    return entry;
@@ -826,14 +884,14 @@ to remove them?"));
 	});
 	if (spooler == "cups")
 	{
-	    SCR::Write (.sysconfig.printer.DEFAULT_PRINTER, default_printer_found ? default : "");
+	    SCR::Write (.sysconfig.printer.DEFAULT_PRINTER, default_printer_found ? default : "none");
 	    SCR::Write (.sysconfig.printer, nil);
 	    SCR::Write (.cups.default_dest, default_printer_found ? default : "");
 	    Runlevel::ServiceAdjust ("cups", "enable");
 	}
 	else
 	{
-	    SCR::Write (.sysconfig.printer.DEFAULT_PRINTER, default_printer_found ? default : "");
+	    SCR::Write (.sysconfig.printer.DEFAULT_PRINTER, default_printer_found ? default : "none");
 	    SCR::Write (.sysconfig.printer, nil);
 
 	    Runlevel::ServiceAdjust ("lpd", "enable");
@@ -871,7 +929,7 @@ to remove them?"));
 	list l = filter (`e, printcap, ``(lookup (e, "type", "yast2") == "yast2"));
 	l = maplist (`e, l, ``(filter (`k, `v, e, ``(k != "changed" && k != "ppd"))));
 	cleanDeletedPrinters ();
-	map save = $["printers" : l, "deleted" : deleted];
+	map save = $["printers" : l, "deleted" : deleted, "default" : default ];
 	if (! SCR::Write (.target.ycp, "/var/lib/YaST2/printers", save))
 	{
 	    Report::Error (sformat (_("Cannot write %1."), "/var/lib/YaST2/printers"));
@@ -1183,7 +1241,7 @@ to remove them?"));
 	    return true;
 	current_database = s;
 	if (nil == s)
-	    s = "/usr/lib/YaST2/data/printerdb/suse.prdb";
+	    s = "/usr/share/YaST2/data/printerdb/suse.prdb";
 	string fn = SCR::Read (.target.tmpdir) + "/re-agent.scr";
 	SCR::Write (.target.string, fn, sformat (".printerdb\n`ag_printerdb(PrinterdbAgent(\"%1\"))\n", s));
 	SCR::UnregisterAgent (.printerdb);
@@ -1339,7 +1397,7 @@ to remove them?"));
      */
     define boolean isPrinterNetwork (map pr) ``{
 	string type = Printerlib::getUriType (lookup (pr, "uri", ""));
-	return type == "samba" || type == "novell" || type == "prefilter" || type == "lpd";
+	return type == "samba" || type == "novell" || type == "prefilter" || type == "lpd" || type == "ipp" || type == "socket" || type == "filtering";
     }
     /**
      * Is current printer network printer?

@@ -53,7 +53,6 @@
 	return false;
     }
 
-y2error ("Start");
     // ===== arguments ================================================
 
     boolean test_mode = false;
@@ -107,12 +106,15 @@ y2error ("Start");
     Printer::spooler = checkSpoolSystem();
     if (Printer::spooler == "switched")
     {
-	Printer::save_all = false;
+	Printer::save_all = true;
+	Printer::reread = true;
 	Printer::sys_forbidden_names = nil;
 	symbol ret = CallFunction ("printer", Args());
 	CloseDialog ();
         return ret; //CallFunction ("printer", Args());
     }
+    if (Printer::spooler == "exit")
+	return `back;
 
     if (Printer::spooler == "cups" && Printer::cupsInstallationType () != 0)
 	skip_autodetection = true;
@@ -275,15 +277,21 @@ the current configuration.
     {
 //	UI::CloseDialog ();
 	if (`switch == ret)
+	{
 	    Printer::save_all = true;
+	    Printer::reread = false;
+	}
 	else
+	{
 	    Printer::save_all = false;
+	    Printer::reread = true;
+	}
 	Printer::sys_forbidden_names = nil;
 	ret = CallFunction ("printer", add (Args(), .nodetection));
 	UI::CloseDialog ();
 	return ret;
     }
-    SCR::Execute (.target.bash, "test -d /var/spool/cups/tmp && rm -f /var/spool/cups/tmp/*");
+    SCR::Execute (.target.bash, "test -d /var/spool/cups/tmp && /bin/rm -f /var/spool/cups/tmp/*");
 
     if (Mode::cont)
     {

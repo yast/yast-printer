@@ -131,6 +131,58 @@ with corrupted or old pacages installed. Pushing <B>Reinstall printing packages<
 	_("<P><B><BIG>Clearing current configuration</BIG></B><BR>If you want to uninstall all currently configured queues,
 you can push <B>Clear current configuration</B>.</P>");
     }
+    /**
+     * Help text.
+     * @return help text
+     */
+    global define string getCupsServerHelp () ``{
+	return
+	// Help 1/3
+	_("<P><B><BIG>Allow Browsing</BIG></B><BR>
+If you allow browsing, other computers in you network will be able to see your queues the same way as their local ones.
+<B>Browse Addresses</B> shows IP addresses (eg. 192.168.0.1) of computers to which you want to send informations of your queues. Use <B>Add</B>, <B>Edit</B>
+and <Delete> to modify the list of addresses. For whole network use Broadcast address of your network (eg. 192.168.0.255)</P>")
+	+
+	// Help 2/3
+	_("After enabling Browsing the permission for / should be set
+accordingly so that the other computers can print.
+For example when 192.168.0.255 is used as Browse Address the
+permission for / must be set to 192.168.0.* to allow printing.")
+	+
+	// Help 3/3
+	_("<P><B><BIG>Access settings</BIG></B><BR>
+You can adjust permissions of other computers in you network to use your CUPS server.
+Permissions can be set for whole server, administration of your server, and optionally
+to your printers and classes. Select requested area and push <B>Change permissions</B>
+button to view or change permission settings.</P>");
+    }
+    /**
+     * Help text.
+     * @return help text
+     */
+    global define string getCupsAclHelp (boolean ignore_but) ``{
+	string help =
+	// Help text 1/3 or 1/2
+	_("<P><B><BIG>Order of application</BIG></B><BR>
+Select, whether you want to apply Deny rules before Allow rules or 
+Allow before Deny.</P>")
+	+
+	//  Help text 2/3 or 2/2
+	_("<P><B><BIG>Permissions</BIG></B><BR>
+You can edit the list of IP addresses and theis permissions. Each line
+contains one address and informations whether it's owner has access allowed 
+or denied. Addres can be normal IP address (eg. 192.168.0.1), 
+address block using * as wildcard (eg. 192.168.0.*), address with mask (eg. 192.168.0.0/255.255.255.0
+or 192.168.0.0/24), full domain name (eg. host.domain.com) or partial domain name
+(eg. *.domain.com)</P>");
+	if (ignore_but)
+	    help = help +
+	// Help text 3/3
+	_("<P><B><BIG>Inherited permissions</BIG></B><BR>
+If you want to use permission inherited from the root location (/),
+push the <B>Use inherited permissions</B> button.</P>");
+	return help;
+    }
 
     /**
      * Help text.
@@ -255,22 +307,54 @@ For some languages, this choice is important to get correct output from
      * Help text.
      * @return help text
      */
-    global define string getConnectionHelp () ``{
-	return _("<P><B><BIG>Parallel, USB, Serial, IrDA port:</BIG></B><BR>
+   global define string getConnectionHelp () ``{
+        // Help text 1/3
+        return _("<P><B><BIG>Parallel, USB, Serial, IrDA port:</BIG></B><BR>
 Printers connected to local port.</P>")
-	// Help text 2/5
-	+ _("<P><B><BIG>Forwarding queue to remote LPD:</BIG></B><BR>
+	// Help text 2/3
+	+ _("<P><B><BIG>Disk file</BIG></B><BR>
+Printing to file can be usefull to print later without printing application needed to be installed.</P>")
+	// Help text 3/3
+	+ _("<P><B><BIG>More connections</BIG></B><BR>
+If you want to print using remote printer, or any other queue type, please choose 
+<B>Show more connection types</B>.</P>");
+    }
+    /**
+     * Help text.
+     * @return help text
+     */
+    global define string getAdvancedConnectionHelp () ``{
+	// Help text 1/10
+	return _("<P><B><BIG>Forwarding queue to remote LPD:</BIG></B><BR>
 Files to print are sent directly to the remote printer.</P>")
-	// Help text 3/5
+	// Help text 2/10
 	+ _("<P><B><BIG>Prefilter queue for a LPD forwarding queue:</BIG></B><BR>
-Files are prepared on the local computer. Raw data is sent to the remote host with the printer.</P>
+Files are prepared on the local computer. Raw data is sent to the remote host with the printer using local forwarding queue.</P>
 ")
-	// Help text 4/5
+	// Help text 3/10
+	+ _("<P><B><BIG>Filtering and forwarding queue</BIG></B><BR>
+Files are prepared on the local computer. Raw data is sent to the remote host with the printer.</P>")
+	// Help text 4/10
+	+ _("<P><B><BIG>IPP filtering and forwarding queue queue</BIG></B><BR>
+Files are prepared on the local computer. Raw data is sent to the remote host with the printer using IPP protocol.</P>")
+	// Help text 5/10
 	+ _("<P><B><BIG>Samba/Windows Printer:</BIG></B><BR>
 Remote printer connected to Samba server or Windows.</P>")
-	// Help text 5/5
+	// Help text 6/10
 	+ _("<P><B><BIG>Novell Printer:</BIG></B><BR>
-Remote printer connected to Novell Netware print server.</P>");
+Remote printer connected to Novell Netware print server.</P>")
+	// Help text 7/10
+        + _("<P><B><BIG>Direct TCP port printing</BIG></B><BR>
+Files are prepared on the local computer. Then they are sent directly to TCP socket on remote host. Use for JetDirect and another network printers.</P>")
+	// Help text 8/10
+	+ _("<P><B><BIG>Other printer:</BIG></B><BR>
+You can set URI of the printer.</P>")
+	// Help text 9/110
+	+ _("<P><B><BIG>Pipe printing:</BIG></B><BR>
+You can print to another program using pipe.</P>")
+	// Help text 10/10
+	+ _("<P><B><BIG>CUPS class:</BIG></B><BR>
+You can set some printers into one class and then print to the class and CUPS will divide print jobs between members of the class.</P>");
     }
     /**
      * Help text.
@@ -574,19 +658,6 @@ Page that is printed after each job.</P>");
      * Get help text.
      * @return string help text
      */
-/*    global define string getBannersHelp () ``{
-        // Help text 1/2
-        string help_text = _("<P><B><BIG>Starting banner:</BIG></B><BR>
-Page that is printed before each job.</P>");
-        // Help text 2/2
-        help_text = help_text + _("<P><B><BIG>Ending banner:</BIG></B><BR>
-Page that is printed after each job.</P>");
-        return help_text;
-    }*/
-    /**
-     * Get help text.
-     * @return string help text
-     */
     global define string getMembersHelp () ``{
         // Help text 1/1
         string help_text = _("<P><B><BIG>Members of class:</BIG></B><BR>
@@ -600,7 +671,7 @@ List of printers that belong to class.
       */
     global define string getCupsClientHelp () ``{
 	// Help text 1/6
-	string help_text = _("<P>This module allows you to configure your CUPS printing system as client of other network server")
+	string help_text = _("<P>This module allows you to configure your CUPS printing system as client of other network server</p>")
 	// Help text 2/6
 	+ _("<P><B><BIG>Host name:</BIG></B><BR>
 Enter the host name of your CUPS server.</P>")
@@ -608,7 +679,7 @@ Enter the host name of your CUPS server.</P>")
 	+ _("<P>To verify the name, use <B>Test</B>.</P>")
 	// Help text 4/6
 	+ _("<P><B><BIG>Full server installation:</BIG></B><BR>
-Click <B>Configure full server installation</B> if you don't want client installation, but standalone CUPS printing system. <P>")
+Click <B>Configure full server installation</B> if you don't want client installation, but standalone CUPS printing system. </P>")
 	// Help text 5/6
 	+ _("<P><B><BIG>Saving changes:</BIG></B><BR>Press <b>Finish</b> to save changes.</P>")
         // Help text 6/6

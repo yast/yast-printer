@@ -1,8 +1,12 @@
-Write	.target.ycp "/var/lib/YaST2/printers" $["deleted":[], "printers":[]] true
+Execute	.target.bash "test -f /etc/cups/client.conf && (/usr/bin/awk '\nBEGIN { used = 0 }\n/^ServerName/ { next }\n{ print $0; }\n' /etc/cups/client.conf > /etc/cups/client.conf.yast2; mv /etc/cups/client.conf.yast2 /etc/cups/client.conf)" 0
+Write	.sysconfig.printer.CUPS_SERVER nil true
+Write	.sysconfig.printer nil true
+Execute	.target.bash "/sbin/SuSEconfig --module profiles" 0
+Write	.target.ycp "/var/lib/YaST2/printers" $["default":"", "deleted":[], "printers":[]] true
 Execute	.target.bash "/bin/chmod 600 /var/lib/YaST2/printers" 0
 Read	.target.size "/etc/printcap" 0
 Execute	.target.bash "/bin/chmod 0644 /etc/printcap" 0
-Write	.sysconfig.printer.DEFAULT_PRINTER "" true
+Write	.sysconfig.printer.DEFAULT_PRINTER "none" true
 Write	.sysconfig.printer nil true
 Read	.init.scripts.exists "lpd" true
 Read	.init.scripts.exists "lpd" true
@@ -11,6 +15,10 @@ Read	.init.scripts.comment "lpd" $[]
 Execute	.target.bash "/sbin/insserv -d lpd" 0
 Return	true
 Dump	====================================================
+Execute	.target.bash "test -f /etc/cups/client.conf && (/usr/bin/awk '\nBEGIN { used = 0 }\n/^ServerName/ { next }\n{ print $0; }\n' /etc/cups/client.conf > /etc/cups/client.conf.yast2; mv /etc/cups/client.conf.yast2 /etc/cups/client.conf)" 0
+Write	.sysconfig.printer.CUPS_SERVER nil true
+Write	.sysconfig.printer nil true
+Execute	.target.bash "/sbin/SuSEconfig --module profiles" 0
 Execute	.target.bash "/usr/lib/lpdfilter/bin/lprsetup -lprng -delete lpx" 0
 Read	.target.size "/etc/printcap" 0
 Execute	.target.bash "/bin/rm -r /etc/lpdfilter/lpx /var/spool/lpd/lpx; \n" 0
@@ -23,11 +31,11 @@ Write	.target.string "/etc/lpdfilter/lp/upp" "-supModel=\" \"\n" true
 Execute	.target.bash "/bin/chmod 644 /etc/lpdfilter/lp/upp" 0
 Write	.target.string "/etc/lpdfilter/lp/conf" "#\n# for documentation see /usr/lib/lpdfilter/global/optional.options\n#\n\n" true
 Execute	.target.bash "/bin/chmod 660 /etc/lpdfilter/lp/conf ; /bin/chown lp:lp /etc/lpdfilter/lp/conf" 0
-Write	.target.ycp "/var/lib/YaST2/printers" $["deleted":[$["name":"lpx", "states":$["cups-state":"changed", "lprng-state":"commited"], "type":"printer"]], "printers":[$["accepting":true, "bannerend":"none", "bannerstart":"none", "lprng-state":"commited", "name":"lp", "state":"idle", "uri":"parallel://dev/lp0"]]] true
+Write	.target.ycp "/var/lib/YaST2/printers" $["default":"lp", "deleted":[$["name":"lpx", "states":$["cups-state":"changed", "lprng-state":"commited"], "type":"printer"]], "printers":[$["accepting":true, "bannerend":"none", "bannerstart":"none", "lprng-state":"commited", "name":"lp", "state":"idle", "uri":"parallel://dev/lp0"]]] true
 Execute	.target.bash "/bin/chmod 600 /var/lib/YaST2/printers" 0
 Read	.target.size "/etc/printcap" 0
 Execute	.target.bash "/bin/chmod 0644 /etc/printcap" 0
-Write	.sysconfig.printer.DEFAULT_PRINTER "" true
+Write	.sysconfig.printer.DEFAULT_PRINTER "lp" true
 Write	.sysconfig.printer nil true
 Read	.init.scripts.exists "lpd" true
 Read	.init.scripts.exists "lpd" true

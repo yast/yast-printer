@@ -246,7 +246,7 @@
 	SCR::Execute (
 	    .target.bash,
 	    sformat (
-		"/bin/cat /usr/lib/YaST2/data/suse_testpg.ascii | /bin/sed -e \"s/~common~explanation~/%1/\" -e \"s/~special~text~/%2/\" > %3",
+		"/bin/cat /usr/share/YaST2/data/suse_testpg.ascii | /bin/sed -e \"s/~common~explanation~/%1/\" -e \"s/~special~text~/%2/\" > %3",
 		c_text, s_text, out_file));
 	return out_file;
     }
@@ -261,7 +261,7 @@
 	string out_file = SCR::Read (.target.tmpdir) + "/testpg.ps";
 
 	SCR::Execute (.target.bash, sformat (
-"awk -v SKIPPICTURE=\"%4\" '
+"/bin/awk -v SKIPPICTURE=\"%4\" '
       BEGIN { COPY = 1 }
       /^----X-VENDOR:/		{ $1 = \"\"; ARRAY[\"vendor\"] = $0; 	next;	}
       /^----X-QUEUE-L:/		{ $1 = \"\"; ARRAY[\"queue\"] = $0; 	next;	}
@@ -325,7 +325,7 @@
           next;
       }
       { print $0; }
-' %2 /usr/lib/YaST2/data/suse_testpg.ps > %3", queue, opt_file, out_file, PS_printer));
+' %2 /usr/share/YaST2/data/suse_testpg.ps > %3", queue, opt_file, out_file, PS_printer));
 	return out_file;
     }
 
