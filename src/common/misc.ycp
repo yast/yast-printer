@@ -23,6 +23,39 @@
     import "Printerlib";
 
     /**
+      * check whether spooler (if needed to be running) runns, if not start it
+      */
+    global define void restartSpoolerIfNeeded () ``{
+        if (Printer::spooler == "cups")
+        {
+            if (0 == Printer::cupsInstallationType ())
+            {
+		integer status = SCR::Execute (.target.bash, "/usr/bin/lpq");
+                if (status == 0)
+                    return;
+                status = SCR::Execute (.target.bash, "/etc/init.d/cups status");
+                if (0 != status)
+                    SCR::Execute (.target.bash, "/etc/init.d/cups start");
+                status = 1;
+                while (true)
+                {
+                    status = SCR::Execute (.target.bash, "/usr/bin/lpq");
+                    if (status == 0)
+                        break;
+                    sleep (1000);
+                    status = SCR::Execute (.target.bash, "/etc/init.d/cups status");
+                    if (0 != status)
+                    {
+                        UI::MessagePopup (
+                            // error popup
+                            _("CUPS daemon died during initialization"));
+                    }
+                }
+            }
+        }
+    }
+
+    /**
      * Get list of available banners from /usr/share/cups/banners, adds
      * "none" and sorts.
      * I think it isn't worth to have it in separate agent.

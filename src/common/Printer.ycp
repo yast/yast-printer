@@ -616,6 +616,7 @@ END { if (!used) print \"ServerName %1\" }
      * @return boolean success?
      */
     global define boolean Read () ``{
+	restartSpoolerIfNeeded ();
 	list tmplist = [];
 	list tmpdellist = [];
 	boolean ret = true;
@@ -777,6 +778,7 @@ END { if (!used) print \"ServerName %1\" }
      * @return success state
      */
     global define boolean Write () ``{
+	restartSpoolerIfNeeded ();
 	if (Printer::spooler == "cups")
 	{
 	    if (0 == cupsInstallationType ())
@@ -1365,7 +1367,10 @@ the selected spooler does not support it.
 			    string k = adjustQueueName (lookup (v, "name", "lp") + suffix, forbidden_names);
 			    v = add (v, "name", k);
 			    forbidden_names = add (forbidden_names, lookup (v, "name", ""));
-			    printcap = add (printcap, union (v, i));
+
+			    map info = SCR::Read (.printerdb.configinfo, lookup (v, "config", ""));
+			    if ((lookup (info, "cups", true) && lookup (info, "lprng", true)))
+				printcap = add (printcap, union (v, i));
 			});
 		    }
 		}

@@ -20,6 +20,7 @@
     textdomain "printer";
     import "Printer";
     import "Printerlib";
+    include "printer/misc.ycp";
 
     string func  = Args(0);
     map    param = Args(1);
@@ -33,23 +34,12 @@
 	Printer::spooler = "cups";
     if (func == "MakeProposal")
     {
+	restartSpoolerIfNeeded ();
 	boolean force_reset = lookup (param, "force_reset", false);
 	string proposal = "";
 	string warning = nil;
 	symbol warning_level = nil;
-/*	if (2 == spool_sys)
-	{
-	    if (force_reset || !Printer::proposal_valid)
-	    {
-		Printer::proposal_valid = true;
-		Printer::Reset ();
-		Printer::Read ();
-		Printer::Detect ();
-		Printer::Propose ();
-	    }
-	    proposal = Cups::Summary ();
-	}
-	else */ if (1 == spool_sys || 2 == spool_sys)
+	if (1 == spool_sys || 2 == spool_sys)
 	{
 	    if (force_reset || !Printerlib::proposal_valid)
 	    {
@@ -83,14 +73,7 @@
     {
 	any saved = nil;
 	any seq = nil;
-/*	if (2 == spool_sys)
-	{
-	    saved = Cups::Export ();
-	    seq = CallFunction (`cups (.nocheck, .noio));
-	    if (`next != seq)
-		Cups::Import (saved);
-	}
-	else */ if (1 == spool_sys || 2 == spool_sys)
+	if (1 == spool_sys || 2 == spool_sys)
 	{
 	    saved = Printer::Export ();
 	    seq = CallFunction (`printer (.nocheck, .noio));
@@ -117,12 +100,7 @@
 	 * of printers is empty (there is nothing to save).
 	 */
 	boolean success = true;
-/*	if (2 == spool_sys)
-	{
-	    if (0 != size (Cups::printers) + size (Cups::classes))
-	    success = Cups::Write ();
-	}
-	else */ if (1 == spool_sys || 2 == spool_sys)
+	if (1 == spool_sys || 2 == spool_sys)
 	{
 	    if (0 != size (Printer::printcap))
 	    success = Printer::Write ();
