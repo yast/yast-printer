@@ -221,7 +221,11 @@ Detect your printers?
 	boolean success = true;
 	if (1 == spool_sys || 2 == spool_sys)
 	{
-	    if (0 != size (Printer::printcap))
+	    if (0 != size (Printer::printcap) || Printer::cupsInstallationType () == 1)
+	    success = Printer::Write ();
+	}
+	else if (512 + 2 == spool_sys) // CUPS client-only
+	{
 	    success = Printer::Write ();
 	}
 	Printerlib::stopServices ();
