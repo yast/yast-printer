@@ -99,9 +99,9 @@ YCPString PPDfile::openPpdFile (YCPString filename, YCPString tmpdir) {
     const char* td = tmpdir -> value_cstr ();
 
     bool ungzipped = false;
-    int len = strlen (fn);
     char* new_name = tempnam (td, "ppd_file.");
 
+    int len = strlen (fn);
     if (len>3 && !strcmp(fn+len-3,".gz"))
     {
         ungzipped = unpackGzipped (fn, new_name);
@@ -235,3 +235,94 @@ YCPMap PPDfile::getOptions (YCPString filename, YCPString section) {
     m->add (YCPString ("charset"), YCPString (""));
     return m;
 }
+
+/**
+  * Check whether file is PPD file (try to open it using CUPS library calls)
+  * @param filename file to check
+  * @return true if is PPD file
+  */
+YCPBoolean PPDfile::isPpd (const char* filename)
+{
+    bool ret = true;
+    const char* ppd_filename = filename;
+    char* ungzipped = NULL;
+    ppd_file_t *ppd; 
+    
+    ppd = ppdOpenFile(ppd_filename);
+    if (! ppd)
+    {
+	ungzipped = tempnam ("/tmp", "ppd_file.");
+	if (! ungzipped)
+	    return YCPBoolean (false);
+        ret = unpackGzipped (filename, ungzipped);
+	if (! ret)
+	    return YCPBoolean (false);
+        ppd_filename = ungzipped; 
+    }
+    ppd = ppdOpenFile(ppd_filename);
+    if (ppd)
+    {
+        ret = true;
+        ppdClose(ppd);
+    }
+    else
+        ret = false;
+
+    if (ungzipped)
+    {
+        unlink (ungzipped);
+        free (ungzipped);
+    }
+    return YCPBoolean (ret);
+}
+/**
+  * Get the info about PPD file
+  * @param filename file to check
+  * @return true if is PPD file
+  */
+YCPMap PPDfile::ppdInfo (const char *filename)
+{
+    YCPMap m = YCPMap();
+    const char* ppd_filename = filename;
+    char* ungzipped = NULL;
+    ppd_file_t *ppd;
+
+    ppd = ppdOpenFile(ppd_filename);
+    if (! ppd)
+    {
+        ungzipped = tempnam ("/tmp", "ppd_file.");
+        if (! ungzipped)
+            return YCPMap ();
+        bool ret = unpackGzipped (filename, ungzipped);
+        if (! ret)
+            return YCPMap ();
+        ppd_filename = ungzipped;
+    }
+    ppd = ppdOpenFile(ppd_filename);
+    if (ppd)
+    {
+        // added tests for NULL to avoid bug #19714
+        if (ppd->manufacturer)
+          m->add (YCPString ("manufacturer"), YCPString (ppd->manufacturer));
+        else
+          m->add (YCPString ("manufacturer"), YCPString (""));
+
+        if (ppd->modelname)
+          m->add (YCPString("model"), YCPString(ppd->modelname));
+        else
+          m->add (YCPString("model"), YCPString(""));
+
+        if (ppd->nickname)
+          m->add (YCPString ("nick"), YCPString(ppd->nickname));
+        else
+          m->add (YCPString ("nick"), YCPString(""));
+	ppdClose(ppd);
+    }
+    if (ungzipped)
+    {
+        unlink (ungzipped);
+        free (ungzipped);
+    }
+    return m;
+}
+

@@ -1403,7 +1403,7 @@ the selected spooler does not support it.
 			:
 			sformat ("%1: %2", model, Printerlib::getUriNiceName (lookup (i, "uri", "")))
 		    );
-		    if (contains (style, `test) && (isNetAvailable () || !isPrinterNetwork (i)) && !raw)
+		    if (contains (style, `test) && !raw)
 		    {
 			if ((Printer::spooler == "cups" && lookup (i, "cups-state", "") != "void")
 			    || (Printer::spooler == "lprng" && lookup (i, "lprng-state", "") != "void"))
@@ -1684,30 +1684,6 @@ the selected spooler does not support it.
 	return sformat ("%1", highest);
     }
     /**
-     * Is a printer network printer?
-     * @param pr printer to check
-     * @return true if yes
-     */
-    define boolean isPrinterNetwork (map pr) ``{
-	string type = Printerlib::getUriType (lookup (pr, "uri", ""));
-	return type == "samba" || type == "novell" || type == "lpd" || type == "ipp" || type == "socket" || type == "filtering";
-    }
-    /**
-     * Is current printer network printer?
-     * @return true if yes
-     */
-    global define boolean isNetwork () ``{
-	return isPrinterNetwork (printer);
-    }
-    /**
-     * Is network available?
-     * @return true if yes
-     */
-    global define boolean isNetAvailable () ``{
-	return true;
-//	return !Mode::cont;
-    }
-    /**
       * does file exist?
       * @param file string filename to test
       * @return true if exists
@@ -1726,7 +1702,7 @@ the selected spooler does not support it.
     global define boolean isPpd (string file) ``{
 	if (! isFile (file))
 	    return false;
-	return SCR::Read (.cups.isppd, file);
+	return SCR::Read (.ppd.file.isppd, file);
     }
     /**
       * Get PPD file info
@@ -1734,7 +1710,7 @@ the selected spooler does not support it.
       * @return map of informations
       */
     global define map ppdInfo (string file) ``{
-	return SCR::Read (.cups.ppdinfo, file);
+	return SCR::Read (.ppd.file.ppdinfo, file);
     }
     /**
       * Add unpresent entries into a map

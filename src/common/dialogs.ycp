@@ -235,7 +235,7 @@ that your serial ports are not properly configured.
 
 	if ("parallel" == type || "serial" == type)
 	{
-	    if (!Mode::conf)
+	    if (!Mode::config)
 	    {
 		details = add (details,
 		    `HBox (`HStretch (), `PushButton (`id ("parallel" == type ? `ppdetails : `spdetails), `opt (`key_F2),
@@ -424,7 +424,7 @@ actually selected.
 	}
 
 	// push button label
-	term test_button = Printer::isNetAvailable () ? `PushButton (`id (`test), `opt (`key_F6), _("&Test remote LPD access")) : `VSpacing (1);
+	term test_button = `PushButton (`id (`test), `opt (`key_F6), _("&Test remote LPD access"));
 	term queue_button = `HSpacing (0);
 	term queue_entry = `TextEntry (`id (`queueent),
 					  // text entry label
@@ -442,12 +442,12 @@ actually selected.
 		// menu button
 		lookup_hosts = `PushButton (`id (`get_hosts), _("&Lookup"));
 		// pushbutton
-		test_button = Printer::isNetAvailable () ? `PushButton (`id (`test), `opt (`key_F6), _("&Test remote Novell access")) : `VSpacing (1);
+		test_button = `PushButton (`id (`test), `opt (`key_F6), _("&Test remote Novell access"));
 	    }
 	if (type == "samba")
 	    {
 		// pushbutton
-		test_button = Printer::isNetAvailable () ? `PushButton (`id (`test), `opt (`key_F6), _("&Test remote SMB access")) : `VSpacing (1);
+		test_button = `PushButton (`id (`test), `opt (`key_F6), _("&Test remote SMB access"));
 		queue_entry = `ComboBox (`id (`queueent), `opt (`editable, `hstretch),
 					    // text entry label
 					    _("Name of the remote &queue:"));
@@ -464,7 +464,7 @@ actually selected.
 	if (type == "ipp")
 	{
 	    // pushbutton
-	    test_button = Printer::isNetAvailable () ? `PushButton (`id (`test), `opt (`key_F6), _("&Test remote IPP access")) : `VSpacing (1);
+	    test_button = `PushButton (`id (`test), `opt (`key_F6), _("&Test remote IPP access"));
 	    queue_entry = `ComboBox (`id (`queueent), `opt (`editable, `hstretch),
                                             // text entry label
                                             _("Name of the remote &queue:"));
@@ -484,7 +484,7 @@ actually selected.
 	    if (port == 0)
 		port = 9100;
 	    // push button
-	    test_button = Printer::isNetAvailable () ? `PushButton (`id (`test), `opt (`key_F6), _("&Test remote socket access")) : `VSpacing (1);
+	    test_button = `PushButton (`id (`test), `opt (`key_F6), _("&Test remote socket access"));
 	    // text entry label
 	    queue_entry = `VBox (`VStretch (), `TextEntry (`id (`port), _("&TCP port number"), sformat("%1", port)));
 	    // menu button
@@ -879,7 +879,7 @@ with the SuSE database of printers only.</B></P>
                 ret = reallyAbort () ? `abort : `cont;
                 if (ret == `abort) break;
             }
-		y2debug ("PDB: %1, MDB: %2", Printer::db, model_db);
+		y2debug ("MDB: %2", model_db);
 	    if (ret == `next && (model_db == "" || model_db == nil))
 	    {
 		// popup
@@ -1711,9 +1711,7 @@ with the SuSE database of printers only.</B></P>
 	string config = lookup (Printer::printer, "config", "");
 	any vals = nil;
 
-	term test_button =(!Printer::isNetAvailable () && Printer::isNetwork ())
-	    ? `VSpacing (1)
-	    : `HWeight (1, `PushButton (`id (`test), `opt (`key_F6),
+	term test_button =`HWeight (1, `PushButton (`id (`test), `opt (`key_F6),
 		// pushbutton
 		_("&Test")));
 
