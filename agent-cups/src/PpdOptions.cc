@@ -14,7 +14,6 @@
  * Unpacks file to temp.
  * @return filename of ungziped temporary file. Must be delete[]d.
  */
-//FIXME remove, is in printerdb agent
 char*unpackGzipped(const char*fn)
 {
     char buf[2048];

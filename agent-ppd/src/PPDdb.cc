@@ -443,168 +443,7 @@ start_from_scratch:
    
     if (! updated)
     { 
-      y2debug ("Reading YaST2 file");
-      char buf[16384];
-      string filename = datadir + "printers.susedb";
-      FILE* f = fopen (filename.c_str(), "r");
-      if (f)
-      {
-	y2milestone ("File with SuSE database entries found, processing...");
-        while (fgets (buf, 16384, f))
-        {
-            unsigned int i = 0;
-            string vendor;
-            string model;
-            string support;
-	    string vendor_comment;
-	    string model_comment;
-            for (; i < strlen (buf) ; i++)
-            {
-                if (buf[i] == '|' || buf[i] == '\n')
-                {
-                    i++;
-                    break;
-                }
-                vendor = vendor + buf[i];
-            }
-            for (; i < strlen (buf) ; i++)
-            {
-                if (buf[i] == '|' || buf[i] == '\n')
-                {
-                    i++;
-                    break;
-                }
-                model = model + buf[i];
-            }
-            for (; i < strlen (buf) ; i++)
-            {
-                if (buf[i] == '|' || buf[i] == '\n')
-                {
-                    i++;
-                    break;
-                }
-                support = support + buf[i];
-            }
-            for (; i < strlen (buf) ; i++)
-            {
-                if (buf[i] == '|' || buf[i] == '\n')
-                {
-                    i++;
-                    break;
-                }
-                vendor_comment = vendor_comment + buf[i];
-            }
-            for (; i < strlen (buf) ; i++)
-            {
-                if (buf[i] == '|' || buf[i] == '\n')
-                {
-                    i++;
-                    break;
-                }
-                model_comment = model_comment + buf[i];
-            }
-	    string mlabel = model;
-	    vendor = getVendorId (vendor);
-	    model = getModelId (vendor, model);
-	    int size = vendor.size () + 1;
-	    if (strupper (mlabel.substr (0,size)) == vendor + " ")
-		mlabel.erase (0, size);
-
-	    VendorInfo vi;
-	    if (db.find (vendor) != db.end ())
-		vi = db[vendor];
-	    ModelInfo mi;
-	    bool updating_model = false;
-	    if (vi.models.find(model) != vi.models.end ())
-	    {
-		mi = vi.models[model];
-		updating_model = true;
-	    }
-	    else
-	    {
-		signed size = vendor.size();
-		if (strupper (model.substr (0, size + 1)) == vendor + " ")
-		    model.erase(0,size);
-		if (vi.models.find(model) != vi.models.end ())
-		{
-		    y2warning (
-			"%s:%s found after removing vendor from model name",
-			vendor.c_str (), model.c_str ());
-		    mi = vi.models[model];
-		}
-		else
-		    y2warning ("Printer %s:%s not found in Foomatic database",
-			vendor.c_str (), model.c_str ());
-	    }
-
-	    string tmp = vendor_comment;
-	    vendor_comment = "";
-	    for (string::const_iterator i = tmp.begin (); i != tmp.end (); i++)
-	    {
-		if (*i == '\\' || *i == '\"')
-		    vendor_comment = vendor_comment + '\\';
-		vendor_comment = vendor_comment + *i;
-	    }
-	    tmp = model_comment;
-	    model_comment = "";
-            for (string::const_iterator i = tmp.begin (); i != tmp.end (); i++)
-            {
-                if (*i == '\\' || *i == '\"')
-                    model_comment = model_comment + '\\';
-                model_comment = model_comment + *i;
-            }
-
-
-	    vi.vcomment = vendor_comment;
-	    mi.mcomment = model_comment;
-            int sup_status = 0;
-            if (support == "problematic")
-                sup_status = 1;
-            else if (support != "full")
-                sup_status = 2;
-	    mi.support = sup_status;
-
-	    mlabel = updateLabel (mlabel);
-            string old_label = mi.label;
-            bool old_fuzzy = mi.fuzzy_label;
-            bool new_fuzzy
-                = modellabels[vendor].find(mlabel) != modellabels[vendor].end();
-            if (new_fuzzy && (old_fuzzy || old_label == ""))
-            {
-                y2error ("Same labels present in multiple PPD files - %s",
-                    mlabel.c_str());
-                bool blank = true;
-                while (modellabels[vendor].find(mlabel)
-                    != modellabels[vendor].end())
-                {
-                    if (blank)
-                    {
-                        blank = false;
-                        mlabel = mlabel + " ";
-                    }
-                    mlabel = mlabel + "I";
-                }
-            }
-            if (old_fuzzy || old_label == "" || ! new_fuzzy)
-            {
-                mi.label = mlabel;
-		mi.fuzzy_label = new_fuzzy;
-                if (modellabels[vendor].find (old_label)
-                    != modellabels[vendor].end()
-                    && updating_model)
-                {
-                    modellabels[vendor].erase(old_label);
-		    y2milestone ("Removed label %s, replacing with %s", old_label.c_str(), mi.label.c_str());
-                }
-                modellabels[vendor].insert(mi.label);
-		y2debug ("Inserted label %s", mi.label.c_str());
-            }
-	    
-	    vi.models[model] = mi;
-	    db[vendor] = vi;
-	}
-	fclose (f);
-      }
+	addAdditionalInfo ();
     }
 
     creation_status = 98;
@@ -674,6 +513,173 @@ start_from_scratch:
     fclose(file);
     creation_status = 100;
     return ret;
+}
+
+void PPD::addAdditionalInfo () {
+    return;//FIXME - add info to unsupported printers without PPD file only
+      y2debug ("Reading YaST2 file");
+      char buf[16384];
+      string filename = datadir + "printers.susedb";
+      FILE* f = fopen (filename.c_str(), "r");
+      if (f)
+      {
+        y2milestone ("File with SuSE database entries found, processing...");
+        while (fgets (buf, 16384, f))
+        {
+            unsigned int i = 0;
+            string vendor;
+            string model;
+            string support;
+            string vendor_comment;
+            string model_comment;
+            for (; i < strlen (buf) ; i++)
+            {
+                if (buf[i] == '|' || buf[i] == '\n')
+                {
+                    i++;
+                    break;
+                }
+                vendor = vendor + buf[i];
+            }
+            for (; i < strlen (buf) ; i++)
+            {
+                if (buf[i] == '|' || buf[i] == '\n')
+                {
+                    i++;
+                    break;
+                }
+                model = model + buf[i];
+            }
+            for (; i < strlen (buf) ; i++)
+            {
+                if (buf[i] == '|' || buf[i] == '\n')
+                {
+                    i++;
+                    break;
+                }
+                support = support + buf[i];
+            }
+            for (; i < strlen (buf) ; i++)
+            {
+                if (buf[i] == '|' || buf[i] == '\n')
+                {
+                    i++;
+                    break;
+                }
+                vendor_comment = vendor_comment + buf[i];
+            }
+            for (; i < strlen (buf) ; i++)
+            {
+                if (buf[i] == '|' || buf[i] == '\n')
+                {
+                    i++;
+                    break;
+                } 
+                model_comment = model_comment + buf[i]; 
+            }
+            string mlabel = model;
+            vendor = getVendorId (vendor);
+            model = getModelId (vendor, model);
+            int size = vendor.size () + 1;
+            if (strupper (mlabel.substr (0,size)) == vendor + " ")
+                mlabel.erase (0, size);
+
+            VendorInfo vi;
+            if (db.find (vendor) != db.end ())
+                vi = db[vendor]; 
+            ModelInfo mi;
+            bool updating_model = false;
+            if (vi.models.find(model) != vi.models.end ())
+            {
+                mi = vi.models[model]; 
+                updating_model = true;
+            }
+            else
+            {
+                signed size = vendor.size();
+                if (strupper (model.substr (0, size + 1)) == vendor + " ")
+                    model.erase(0,size);
+                if (vi.models.find(model) != vi.models.end ())
+                {
+                    y2warning (
+                        "%s:%s found after removing vendor from model name",
+                        vendor.c_str (), model.c_str ());
+                    mi = vi.models[model];
+                }
+                else
+                    y2warning ("Printer %s:%s not found in Foomatic database",
+                        vendor.c_str (), model.c_str ());
+            }
+
+            string tmp = vendor_comment;
+            vendor_comment = "";
+            for (string::const_iterator i = tmp.begin (); i != tmp.end (); i++)
+            {
+                if (*i == '\\' || *i == '\"')
+                    vendor_comment = vendor_comment + '\\';
+                vendor_comment = vendor_comment + *i;
+            }
+            tmp = model_comment;
+            model_comment = "";
+            for (string::const_iterator i = tmp.begin (); i != tmp.end (); i++)
+            {
+                if (*i == '\\' || *i == '\"')
+                    model_comment = model_comment + '\\';
+                model_comment = model_comment + *i;
+            }
+            vi.vcomment = vendor_comment;
+            mi.mcomment = model_comment;
+            int sup_status = 0;
+            if (support == "problematic")
+                sup_status = 1;
+            else if (support != "full")
+                sup_status = 2;
+            mi.support = sup_status;
+
+            mlabel = updateLabel (mlabel);
+            string old_label = mi.label;
+            bool old_fuzzy = mi.fuzzy_label;
+            bool new_fuzzy
+                = modellabels[vendor].find(mlabel) != modellabels[vendor].end();
+            if (new_fuzzy && (old_fuzzy || old_label == ""))
+            {
+                y2error ("Same labels present in multiple PPD files - %s",
+                    mlabel.c_str());
+                bool blank = true;
+                while (modellabels[vendor].find(mlabel)
+                    != modellabels[vendor].end())
+                {
+                    if (blank)
+                    {
+                        blank = false;
+                        mlabel = mlabel + " ";
+                    }
+                    mlabel = mlabel + "I";
+                }
+            }
+            if (old_fuzzy || old_label == "" || ! new_fuzzy)
+            {
+                mi.label = mlabel;
+                mi.fuzzy_label = new_fuzzy;
+                if (modellabels[vendor].find (old_label)
+                    != modellabels[vendor].end()
+                    && updating_model)
+                {
+                    modellabels[vendor].erase(old_label);
+                    y2milestone ("Removed label %s, replacing with %s", old_label.c_str(), mi.label.c_str());
+                }
+                modellabels[vendor].insert(mi.label);
+                y2debug ("Inserted label %s", mi.label.c_str());
+            }
+
+            vi.models[model] = mi;
+            db[vendor] = vi;
+        }
+        fclose (f);
+      }
+
+
+
 }
 
 /**
@@ -944,6 +950,7 @@ bool PPD::process_file(const char *filename, PPDInfo *newinfo) {
     char pnp_vendor[MAX]="";
     char pnp_printer[MAX]="";
     char pnp_id[MAX]="";
+    char filter[MAX]="";
     set<string> products;
 
     y2debug("Processing: %s",filename);
@@ -1010,6 +1017,14 @@ bool PPD::process_file(const char *filename, PPDInfo *newinfo) {
             y2debug("pnp_p: %s",pnp_printer);
             ready++;
         }
+	else if(!strncmp(line, "*cupsFilter:", 12)) {
+	    sscanf(line, "%*[^\"]\"%255[^\"\n]", filter);
+	    char* index = rindex (filter, ' ');
+	    if (index)
+	    {
+		strcpy (&(filter[0]), ++index);
+	    }
+	}
         else if(!strncmp(line, "*1284DeviceID:", 14)) {
             y2debug("%s", filename);
             int ret = sscanf(line, "%*[^\"]\"%255[^\"\n]", pnp_id);
@@ -1088,6 +1103,7 @@ bool PPD::process_file(const char *filename, PPDInfo *newinfo) {
     info.pnp_printer = pnp_printer;
     info.checksum = fileChecksum (filename);
     info.size = fileSize (filename);
+    info.filter = filter;
     preprocess(info, newinfo);
 
     creation_status = (done_files * 80) / (total_files) + 10;
@@ -1109,6 +1125,7 @@ void PPD::preprocess(PPD::PPDInfo info, PPDInfo *newinfo) {
     string shortnick = info.shortnick;
     string pnp_vendor = info.pnp_vendor;
     string pnp_printer = info.pnp_printer;
+    string filter = info.filter;
     string tmp;
     string label;
     string checksum = info.checksum;
@@ -1289,6 +1306,7 @@ void PPD::preprocess(PPD::PPDInfo info, PPDInfo *newinfo) {
         item.pnp_printer = pnp_printer;
 	item.checksum = checksum;
 	item.size = filesize;
+	item.filter = filter;
 	bool updating_model = false;
 	VendorInfo vi;
 	if (db.find (vendor) != db.end ())
@@ -1826,6 +1844,12 @@ off_t PPD::fileSize (const string &filename) {
     if (! lstat (filename.c_str(), &fileinfo))
 	size = fileinfo.st_size;
     return size;
+}
+
+string PPD::fileFilter (const string &filename) {
+    
+
+
 }
 
 bool PPD::setCheckMethod (YCPSymbol method) {

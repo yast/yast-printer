@@ -435,16 +435,20 @@
 	string q_type = Printerlib::getUriType (uri);
 //	y2error ("Q_Type: %1", q_type);
 	string config = lookup (p, "config", "");
+
+
+	string q_filter = Printer::foomatic [p["vendor_db"]:"",
+	    p["model_db"]:"", config, "filter"]:"";
 	foreach (`s, spoolers, ``{
 	    boolean spool_sup = supported;
 	    string key = s + "-state";
 	    boolean s_spool = testSupportedQueueBySpooler (q_type, s);
 //	y2error ("s_spool: %1", s_spool);
-	    boolean s_is_ppd = s == "cups" && p["ownppd"]:"" != "";
+	    boolean s_is_ppd = p["ownppd"]:"" != "";
 //	y2error ("s_is_ppd: %1", s_is_ppd);
 	    boolean s_is_class = q_type == "class" && s == "cups";
 //	y2error ("s_is_class: %1", s_is_class);
-	    boolean s_conf = true;//FIXME according to filter
+	    boolean s_conf = (s == "cups" || q_filter == "foomatic-rip");
 //	y2error ("s_conf: %1", s_conf);
 	    boolean s_is_raw = (p["raw"]:false || q_type == "lpd");
 //	y2error ("s_is_raw: %1", s_is_raw);
@@ -1722,9 +1726,6 @@ the selected spooler does not support it.
     global define boolean isPpd (string file) ``{
 	if (! isFile (file))
 	    return false;
-/*	integer len = size (file);
-	if (!((len >4 && substring (file, len-4) == ".ppd")||(len>7 && substring (file, len-7) == ".ppd.gz")))
-	    return false;*/
 	return SCR::Read (.cups.isppd, file);
     }
     /**
