@@ -59,12 +59,11 @@
 	string ppdfile = "";
 	if (entry["database"]:"" == "foomatic")
 	{
-	    ppdfile = Printer::foomatic[entry["vendor"]:"",
-		entry["device"]:"",
+	    ppdfile = Printer::foomatic[entry["vendor_db"]:"",
+		entry["device_db"]:"",
 		entry["config"]:"", 0]:"";
 	    y2milestone ("Using PPD file %1", ppdfile);
 //	    ppdfile = SCR::Read (.target.string, ppdfile);
-//	    y2error ("Contains %1", ppdfile);
 	}
 	else
             ppdfile = SCR::Write (add (.printerdb.ppd, lookup (entry, "config", "")), lookup (entry, "options", $[]));
@@ -77,7 +76,7 @@
             list ppd_l = splitstring(ppdfile, "\n");
 	    list hacked = filter(`line, ppd_l, ``( substring(line, 0, 1) == "*" ));
 	    ppdfile = mergestring(hacked, "\n") + "\n";
-	    y2error ("File after hacking: %1", ppdfile);
+	    y2debug ("File after hacking: %1", ppdfile);
 	}
         // --
 

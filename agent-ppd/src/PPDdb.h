@@ -66,6 +66,7 @@ class PPD {
 	int  creationStatus ();
         bool changed(int *count);
 	string getVendorId (string vendor);
+	string getModelId (string vendor, string model);
 	bool fileinfo(const char *file, PPDInfo *info);
 
     private:
@@ -98,6 +99,7 @@ class PPD {
         string addbrace(const string s);
         string first(const string s, const string sep = " -/");
         string clean(const char *s);
+	string filterchars(const string s, const string chr);
 };
 
 #endif /* _PPDdb_h */

@@ -942,6 +942,8 @@ that your parallel port is not properly configured.
      * @return symbol `back, `next, `abort
      */
     global define symbol runManufModelDialog () ``{
+	string manuf_db = lookup (Printer::printer, "vendor_db", "");
+	string model_db = lookup (Printer::printer, "device_db", "");
 	string manuf = lookup (Printer::printer, "vendor", "");
 	string model = lookup (Printer::printer, "device", "");
 	string manuf_ieee = lookup (Printer::printer, "vendor_ieee", "");
@@ -952,6 +954,7 @@ that your parallel port is not properly configured.
 	term manufsel = `SelectionBox (`id (`manufsel), `opt (`notify),
 	    _("&Select manufacturer:"),
 	    Printer::db == `foomatic
+// FIXME vendor labels
 		? maplist (`k, `v, Printer::foomatic, ``(k))
 		: SCR::Read (.printerdb.vendors, [ manuf, manuf_ieee ]));
 
@@ -973,14 +976,14 @@ that your parallel port is not properly configured.
 
 	if (Printer::db == `foomatic)
 	{
-	    if (manuf == "" || manuf == nil)
+	    if (manuf_db == "" || manuf_db == nil)
 	    {
 		foreach (`k, `v, Printer::foomatic, ``{
-		    if (manuf == "" || manuf == nil)
-			manuf = k;
+		    if (manuf_db == "" || manuf_db == nil)
+			manuf_db = k;
 		});
 	    }
-	    UI::ChangeWidget (`id (`manufsel), `CurrentItem, manuf);
+	    UI::ChangeWidget (`id (`manufsel), `CurrentItem, manuf_db);
 	}
 
 	symbol ret = `manufsel;
@@ -1008,10 +1011,12 @@ that your parallel port is not properly configured.
 	    {
 		if (Printer::db == `foomatic)
 		{
-		    if (manuf!=UI::QueryWidget (`id (`manufsel), `CurrentItem))
+		    if (manuf_db
+			!= UI::QueryWidget (`id (`manufsel), `CurrentItem))
 		    {
-			manuf = UI::QueryWidget (`id (`manufsel), `CurrentItem);
-			model = "";
+			manuf_db
+			    = UI::QueryWidget (`id (`manufsel), `CurrentItem);
+			model_db = "";
 		    }
 		}
 		else
@@ -1027,7 +1032,7 @@ that your parallel port is not properly configured.
 
 			?
 			    maplist (`kk, `vv, filter (
-				`k, `v, Printer::foomatic[manuf]:$[],
+				`k, `v, Printer::foomatic[manuf_db]:$[],
 				``(is (k, string))),
 				``(`item (`id (kk), vv[`label]:kk)))
 
@@ -1039,14 +1044,14 @@ that your parallel port is not properly configured.
 		UI::ReplaceWidget (`id (`modelsel_rep), modelsel);
 		if (Printer::db == `foomatic)
 		{
-		    if (model == "" || model == nil)
+		    if (model_db == "" || model_db == nil)
 		    {
-			foreach (`k, `v, Printer::foomatic[manuf]:$[], ``{
-			    if (model == "" || model == nil)
-				model = k;
+			foreach (`k, `v, Printer::foomatic[manuf_db]:$[], ``{
+			    if (model_db == "" || model_db == nil)
+				model_db = k;
 			});
 		    }
-		    UI::ChangeWidget (`id (`modelsel), `CurrentItem, model);
+		    UI::ChangeWidget (`id (`modelsel), `CurrentItem, model_db);
 		}
 
 		ret = `modelsel;
@@ -1093,8 +1098,14 @@ that your parallel port is not properly configured.
 	    if (Printer::db == `foomatic)
 		// FIXME
 	    {
-		manuf_ieee = manuf;
-		model_ieee = model;
+		manuf_ieee = manuf_db;
+		model_ieee = model_db;
+		manuf = manuf_ieee;
+		model = model_ieee;
+		Printer::printer = union (Printer::printer, $[
+		    "vendor_db" : manuf_db,
+		    "device_db" : model_db,
+		]);
 	    }
 	    Printer::printer = union (Printer::printer, $[
 		    "vendor_ieee" : manuf_ieee,
@@ -1114,6 +1125,8 @@ that your parallel port is not properly configured.
      * @return symbol for wizard sequencer
      */
     global define symbol runConfigDialog () ``{
+	string manuf_db = lookup (Printer::printer, "vendor_db", "");
+	string model_db = lookup (Printer::printer, "device_db", "");
 	string manuf = lookup (Printer::printer, "vendor", "");
 	string model = lookup (Printer::printer, "device", "");
 	string config = lookup (Printer::printer, "config", "");
@@ -1124,7 +1137,7 @@ that your parallel port is not properly configured.
 //	if (Printer::db == `foomatic)
 	{
 	    loadFoomaticIfNeeded ();
-	    cfgs = maplist (`k, `v, filter (`kk, `vv, Printer::foomatic[manuf, model]:$[], ``(kk != `label)), ``(k));
+	    cfgs = maplist (`k, `v, filter (`kk, `vv, Printer::foomatic[manuf_db, model_db]:$[], ``(kk != `label)), ``(k));
 	}
 	else
 	    cfgs = SCR::Read (add (.printerdb.configsrt,model), Printer::spooler);
@@ -1212,7 +1225,7 @@ that your parallel port is not properly configured.
 	if (foomatic && (config == "" || config == nil))
 	{
             {
-                foreach (`k, `v, Printer::foomatic[manuf, model]:$[], ``{
+                foreach (`k, `v, Printer::foomatic[manuf_db, model_db]:$[], ``{
                     if (is (k, string) && (config == "" || config == nil))
                         config = k;
                 });
@@ -1637,7 +1650,7 @@ that your parallel port is not properly configured.
      * @return symbol for ws
      */
     global define symbol runOptionsDialog () ``{
-	string filename = SCR::Read (.ppd.file.open, [Printer::foomatic[Printer::printer["vendor"]:"", Printer::printer["device"]:"", Printer::printer["config"]:"", 0]:"", "/tmp"]);
+	string filename = SCR::Read (.ppd.file.open, [Printer::foomatic[Printer::printer["vendor_db"]:"", Printer::printer["device_db"]:"", Printer::printer["config"]:"", 0]:"", "/tmp"]);
 
 	Printer::printer = add (Printer::printer, "newer_gs_upp", false);
 	map saved = lookup (Printer::printer, "saved", $[]);
@@ -2298,12 +2311,19 @@ the current configuration.
 	    if ("" != lookup (i, "unique_key", "") && lookup (Printer::printer,"unique_key", "") == lookup (i, "unique_key", ""))
 		already_configured = true;
 	});
-y2error ("Printer: %1", Printer::printer);
+
 	if (Printer::db == `foomatic)
 	{
 	    Printer::printer["vendor"] = Printer::printer["vendor_ieee"]:"";
-		// FIXME
-	    Printer::printer["device"] = toupper (Printer::printer["device_ieee"]:"");
+	    Printer::printer["device"] = Printer::printer["device_ieee"]:"";
+
+	    Printer::printer["vendor_db"] = SCR::Read (.ppd.db.vendorname,
+		Printer::printer["vendor_ieee"]:"");
+	    Printer::printer["device_db"] = SCR::Read (.ppd.db.modelname, [
+                Printer::printer["vendor_db"]:"",
+		Printer::printer["device_ieee"]:""]);
+
+	    info = $[ "type" : 0]; // FIXME
 	    Printer::printer["database"] = "foomatic";
 	}
 	else if (2 == size (detected))
@@ -2385,8 +2405,8 @@ y2error ("Printer: %1", Printer::printer);
 	if (Printer::db == `foomatic)
 	{
 	    map PPDs = Printer::foomatic[
-		Printer::printer["vendor"]:"",
-		Printer::printer["device"]:""]:$[];
+		Printer::printer["vendor_db"]:"",
+		Printer::printer["device_db"]:""]:$[];
 	    PPDs = filter (`k, `v, PPDs, ``(is (k, string)));
 	    if (size (PPDs) < 1)
 	    {
@@ -2513,66 +2533,20 @@ y2error ("Printer: %1", Printer::printer);
 	list forbidden_names = Printer::getForbiddenNames ();
 	list new_queues = [];
 	string first_queue = nil;
+	string default_queue = nil;
 	if (Printer::db == `foomatic)
 	{
-	    string vendor = Printer::printer["vendor"]:"";
-	    string model = Printer::printer["device"]:"";
+	    string vendor = Printer::printer["vendor_db"]:"";
+	    string model = Printer::printer["device_db"]:"";
 	    new_queues = getFoomaticAutoQueues (vendor, model);
-/*	    map ppds = getPpdFiles (vendor, model);
-	    string ppdfile_orig = getAutoPpdFile (ppds, vendor, model);
-	    string config = ppds[ppdfile_orig]:"";
-	    string ppdfile = SCR::Read (.ppd.file.open, [ppdfile_orig, "/tmp"]);
-	    map options = SCR::Read (.ppd.file.options, [ppdfile, ""]);
-	    list opts = options["data"]:$[];
-// FIXME multiple composite options checking ????
-	    integer index = -1;
-	    boolean found = true;
-	    find (`i, opts, ``{
-		index = index + 1;
-		found = i["name"]:"" == "PrintoutMode";
-		return found;
+	    default_queue = new_queues[0, "name"]:nil;
+	    foreach (`q, new_queues, ``{
+		if (regexpmatch (q["name"]:"", "normal[0-9]")
+		    || q["name"]:"" == "normal")
+		{
+		    default_queue = q["name"]:"";
+		}
 	    });
-	    map composite = $[];
-	    if (found)
-		composite = opts[index]:$[];
-	    if (composite != $[])
-	    {
-		foreach (`v, composite["valorder"]:[], ``{
-		string optname = composite["name"]:"";
-		    map new_options = $[
-			optname : v,
-		    ];
-		    new_queues = add (new_queues, $[
-			"config" : config,
-			"name" : tolower (v),
-			"comment" : composite["values", v]:v,
-			"database" : "foomatic",
-			"options" : new_options,
-		    ]);
-
-		});
-	    }
-	    else
-	    {
-		new_queues = [ $[
-		    "config" : config,
-		    "name" : "lp",
-			// table cell
-		    "comment" : _("default configuration"),
-		    "database" : "foomatic",
-		]];
-	    }
-
-            string suffix = Printer::getQueueSuffix (new_queues);
-            new_queues = maplist (`v, new_queues, ``{
-                v = add (v, "name", Printer::adjustQueueName (lookup (v, "name", "lp") + suffix, forbidden_names));
-                if (nil == first_queue)
-                {
-                    first_queue = lookup (v, "name", "");
-                }
-                forbidden_names = add (forbidden_names, lookup (v, "name", ""));
-                return union (Printer::printer, v);
-            });*/
 	}
 	else
 	{
@@ -2625,6 +2599,7 @@ y2error ("Printer: %1", Printer::printer);
 	    );
 	// label of the dialog
 	Wizard::SetContentsButtons (_("Printer overview"), contents, getShowPrinterHelp (), UI::BackButtonLabel (), UI::NextButtonLabel ());
+
 	UI::ChangeWidget (`id (`table), `CurrentItem, first_queue);
 
 	symbol ret = nil;
@@ -2654,12 +2629,19 @@ y2error ("Printer: %1", Printer::printer);
 	}
 	if (`next == ret)
 	{
+	    boolean set_default = Printer::default == ""
+		|| Printer::default == nil;
 	    // add queues...
 	    foreach (`v, new_queues, ``{
 		    Printer::index = -1;
 		    Printer::printer = v;
 		    Printer::storePrinter ();
 		});
+	    if (Printer::db == `foomatic && set_default
+		&& default_queue != nil && default_queue != "")
+	    {
+		Printer::default = default_queue;
+	    }
 	}
 	return ret;
     }
@@ -2842,43 +2824,8 @@ system will be saved.
 
 		if (ret == `add_button)
 		{
-/*		    term cont = `VBox (
-			`Label (_("YaST can try to recognize and configure your new printer automatically")),
-			`Label (_("(recommended) or you can add the printer manually. Please choose:")),
-			`RadioButtonGroup (`id (`add_type), `VBox (
-			    `RadioButton (`id (`auto), _("Automatical recognition and configuration"), true),
-			    `RadioButton (`id (`manual), _("Manual adding and configuration"), false)
-			)),
-			`HBox (
-			    `PushButton (`id (`back), BackButtonLabel ()),
-			    `HStretch (),
-			    `PushButton (`id (`ok), OKButtonLabel ())
-			)
-		    );
-		    UI::OpenDialog (cont);
-		    symbol r = nil;
-		    while (r == nil)
-		    {
-			r = UI::UserInput ();
-			if (r != `back && r != `ok)
-			    r = nil;
-		    }
-		    if (r == `back)
-		    {
-			UI::CloseDialog ();
-			continue;
-		    }
-		    if (UI::QueryWidget (`id (`add_type), `CurrentButton) == `auto)
-		    {
-			UI::CloseDialog ();
-			return `detect;
-		    }
-		    else
-		    {
-			UI::CloseDialog ();*/
-			Printer::selectPrinter (-1);
-			return `add;
-//		    }
+		    Printer::selectPrinter (-1);
+		    return `add;
 		}
 		else if (ret == `edit_button || ret == `delete_button || ret == `setdefault)
 		{
