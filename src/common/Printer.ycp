@@ -489,6 +489,14 @@
 	return p;
     }
     /**
+      * Make states of all queues changed or void
+      * after spooler switch de-facto no queue is really saved
+      */
+    global define void assignAllQueuesChanged () ``{
+	printcap = maplist (`p, printcap, ``(assignStates (p, true)));
+    }
+
+    /**
       * Gets state of printer for choosen spooler
       * @param p map printer
       * @param spooler string spooler (cups or lprng)
@@ -1074,6 +1082,22 @@ Detect your printers?"));
 	});
     }
 
+    /**
+      * Remove queues from YaST2 config. files, that were deleted by other tool
+      * @param nonyast list of non-yast queues
+      */
+    global define void removeDeletedQueues (list nonyast) ``{
+	list nyl = maplist (`e, nonyast, ``{return lookup (e, "name", "");});
+	nyl = filter (`e, nyl, ``(e != ""));
+	if (spooler == "cups")
+	{
+	    printcap = filter (`e, printcap, ``(
+		contains (nyl, e["name"]:"")
+		|| e["cups-state"]:"changed" != "commited"
+	    ));
+	}
+    }
+
     global define void mergeNonYaST (list nonyast) ``{
 	list yast2_queue_names = filter (string f,
 	    maplist (map e, printcap, ``(e["name"]:"")),
@@ -1124,6 +1148,7 @@ Detect your printers?"));
 	list nonyast = spoolerSpecQueuesRead ();
 
 	stateRead ();
+	removeDeletedQueues (nonyast);
 	updateStatesAfterRead (nonyast);
 	mergeNonYaST (nonyast);
 
