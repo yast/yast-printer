@@ -410,7 +410,7 @@
     global define void setDefaultPrinter () ``{
 	if (index < 0 || index >= size (printcap))
 	    return ;
-	default = lookup (printer, "name", "");
+	default = printer["name"]:"";
 	dirty = true;
     }
     /**
@@ -421,7 +421,16 @@
      * @return a list of already used names
      */
     global define list<string> getForbiddenNames() ``{
-	list l = toset (add (flatten (maplist (map entry, printcap, ``(add (lookup (entry, "names", []), lookup (entry, "name", ""))))), "all"));
+	list l = toset (
+	    add (
+		flatten (
+		    maplist (map entry, printcap, ``(
+			add (entry["names"]:[], entry["name"]:"")
+		    ))
+		),
+		"all"
+	    )
+	);
 	list<string> names = maplist (string i, l, ``(tolower (i)));
 	names = toset (names);
 	return names;
@@ -512,17 +521,17 @@
 	// fix default printer
 	if ("" == default || nil == default)
 	{
-	    default = lookup (printer, "name", "");
+	    default = printer["name"]:"";
 	}
 	else
 	{
 	    boolean found = false;
 	    foreach (map i, printcap, ``{
-		    if (!found && lookup (i, "name", "") == default)
+		    if (!found && i["name"]:"" == default)
 			found = true;
 	    });
 	    if (!found)
-		default = lookup (printer, "name", "");
+		default = printer["name"]:"";
 	}
 	dirty = true;
 	y2debug ("Final printcap: %1", printcap);
@@ -1624,7 +1633,7 @@ the selected spooler does not support it."), name));
      * @return List of names.
      */
     global define list DeletedNames () ``{
-	return toset (maplist (map i, deleted, ``(lookup (i, "name", ""))));
+	return toset (maplist (map i, deleted, ``(i["name"]:"")));
 //	return toset (union (deleted, deleted_classes));
     }
 
@@ -1811,11 +1820,11 @@ the selected spooler does not support it."), name));
 	integer highest = 0;
 	integer work = 0;
 	foreach (map v, queues, ``{
-	    integer end = size (lookup (v, "name", ""));
+	    integer end = size (v["name"]:"");
 	    foreach (map i, printcap, ``{
-		if (substring (lookup (i, "name", ""), 0, end) == lookup (v, "name", ""))
+		if (substring (i["name"]:"", 0, end) == v["name"]:"")
 		{
-		    if (regexpmatch (substring (lookup (i, "name", ""), end),
+		    if (regexpmatch (substring (i["name"]:"", end),
 			"^[0-9]*$"))
 		    {
 			string workstr = substring (i["name"]:"", end);

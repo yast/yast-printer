@@ -5,10 +5,11 @@ Read	.probe.has_smp false
 Read	.probe.system []
 Read	.target.size "/etc/install.inf" -1
 Read	.target.tmpdir "/tmp/"
-Log	Pkg::`IsProvided (cups-libs): false
-Execute	.target.bash_output "/usr/bin/awk '/^ServerName/ { print $2 }' /etc/cups/client.conf" $["exit":0, "srderr":"", "stdout":""]
+Return	nil
+Read	.etc.cups.client_conf.value.ServerName ""
 Execute	.target.bash "test -f /etc/init.d/lpd && /etc/init.d/lpd stop" 0
 Execute	.target.bash "test -f /etc/init.d/cups && /etc/init.d/cups stop" 0
+Read	.init.scripts.exists "cups" true
 Read	.init.scripts.exists "cups" true
 Read	.init.scripts.exists "cups" true
 Read	.init.scripts.exists "cups" true
@@ -24,13 +25,16 @@ Execute	.target.bash "test -f /etc/init.d/lpd && /etc/init.d/lpd stop" 0
 Execute	.target.bash "test -f /etc/init.d/cups && /etc/init.d/cups stop" 0
 Return	true
 Dump	====================================================
+Return	nil
 Execute	.target.bash "test -f /etc/init.d/lpd && /etc/init.d/lpd stop" 0
 Execute	.target.bash "test -f /etc/init.d/cups && /etc/init.d/cups stop" 0
 Read	.init.scripts.exists "cups" true
 Read	.init.scripts.exists "cups" true
 Read	.init.scripts.exists "cups" true
+Read	.init.scripts.exists "cups" true
 Read	.init.scripts.runlevel "cups" $[]
 Read	.init.scripts.comment "cups" $[]
+Read	.init.scripts.exists "lpd" true
 Read	.init.scripts.exists "lpd" true
 Read	.init.scripts.exists "lpd" true
 Read	.init.scripts.exists "lpd" true
@@ -54,7 +58,6 @@ Write	.target.string "/etc/lpdfilter/lp/upp" "-sDEVICE=PS\n-sPAPERSIZE=a4\n-r\n"
 Execute	.target.bash "/bin/chmod 644 /etc/lpdfilter/lp/upp" 0
 Write	.target.string "/etc/lpdfilter/lp/post" "foomatic-rip --ppd /etc/lpdfilter/lp/ppd" true
 Execute	.target.bash "/bin/chmod 755 /etc/lpdfilter/lp/post" 0
-Read	.target.size "/tmp/patched_ppd_lp" 555
 Write	.target.string "/etc/lpdfilter/lp/conf" "#\n# for documentation see /usr/lib/lpdfilter/global/optional.options\n#\n\n" true
 Execute	.target.bash "/bin/chmod 660 /etc/lpdfilter/lp/conf ; /bin/chown lp:lp /etc/lpdfilter/lp/conf" 0
 Read	.target.size "/etc/printcap" 555

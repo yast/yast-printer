@@ -13,7 +13,7 @@ unset Y2DEBUGGER
 export HOME=/tmp
 
 shopt -s expand_aliases
-alias kick-debug-lines="fgrep -v ' <0> '"
+alias kick-debug-lines="fgrep -v ' <0> ' | fgrep -v ' <1> '"
 alias kick-empty-lines="grep -v '^$'"
 alias strip-constant-part="sed 's/^....-..-.. ..:..:.. [^)]*) //g'"
 alias mask-line-numbers="sed 's/^\([^ ]* [^)]*):\)[[:digit:]]*/\1XXX/'"
