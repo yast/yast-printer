@@ -51,6 +51,12 @@
 		    restartSpoolerIfNeeded (true);
 		    Printer::Read ();
 		}
+		else
+		{
+		    Printer::do_not_read_cups = true;
+		    Printer::Read ();
+		    Printer::do_not_read_cups = false;
+		}
 //		if (Printer::db == `foomatic)
 //		    loadFoomaticIfNeeded ();
 		// S390/S390x do not have local printers,
@@ -160,7 +166,7 @@ Detect your printers?
 		SCR::Execute (.target.bash, "test -f /var/run/listen_remote_ipp.pid && /bin/rm /var/run/listen_remote_ipp.pid");
 		Printer::Propose ();
 	    }
-	    if (size (Printer::printcap) > 0)
+	    if (size (Printer::printcap) > 0 && ! Printer::tested)
 	    {
 		ret = $[
 		    // warning message (part of richtext)
