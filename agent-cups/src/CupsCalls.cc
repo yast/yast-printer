@@ -709,7 +709,7 @@ bool getRemoteDestinations(const char*host,YCPList&ret,ipp_op_t what_to_get)
             ippDelete(response);
         }
     else
-        Y2_ERROR("cupsDoRequest: NULL response");
+        Y2_WARNING("cupsDoRequest: NULL response - not CUPS server or permission denied???");
     httpClose(http);
     return true;
 }
