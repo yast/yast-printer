@@ -7,7 +7,6 @@ SUBDIRS = autodocs
 htmldir = @docdir@
 
 html_DATA = 			\
-	index.html		\
 	internals.html		\
 	des_common.html		\
 	spec_printconf.html	\
