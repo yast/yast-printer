@@ -183,6 +183,34 @@ ECHO_PID=$!
     }
 
     /**
+      * Get list of all HPLIP devices
+      * @return a list of HPLIP devices
+      */
+    global define list<list<string> > getHplipDevices () ``{
+        if (SCR::Read (.target.size, "/usr/lib/cups/backend/hp") <= 0)
+            return [];
+        map out = (map)SCR::Execute (.target.bash_output,
+            "/usr/lib/cups/backend/hp");
+        list<string> lines = splitstring (out["stdout"]:"", "\n");
+        lines = filter (string l, lines, ``(l != "" && l != nil));
+	list<list<string> > hp_devs = (list<list<string> >) maplist (string l, lines, ``{
+            string hp_model = regexpsub (l, "[^\"]*\"([^\"]*)\".*", "\\1");
+            string hp_dev = regexpsub (l, "direct hp:([^ ]*) .*", "\\1");
+	    if (hp_dev != nil && hp_model != nil)
+		return [hp_dev, hp_model];
+	    else
+		return nil;
+	});
+	hp_devs = filter (list<string> pd, hp_devs, ``(pd != nil));
+	hp_devs = maplist (list<string> pd, hp_devs, {
+	    pd[1] = (string)SCR::Read (.ppd.db.modelname, ["HP", pd[1]:""]);
+	    return pd;
+	});
+	y2milestone ("hp devices: %1", hp_devs);
+	return hp_devs;
+    }
+
+    /**
       * Get URI of ptal device
       * @param model string device model identification
       * @return ptal uri or nil if no ptal device found
@@ -193,6 +221,21 @@ ECHO_PID=$!
 	foreach (list d, devices, ``{
 	    if (d[1]:"" == model)
 		ret = sformat ("ptal:%1", d[0]:"");
+        });
+	return ret;
+    }
+
+    /**
+      * Get URI of HPLIP device
+      * @param model string device model identification
+      * @return ptal uri or nil if no ptal device found
+      */
+    global define string getHplipUri (string model) ``{
+	list<list<string> > devices = getHplipDevices ();
+	string ret = nil;
+	foreach (list d, devices, ``{
+	    if (d[1]:"" == model)
+		ret = sformat ("hp:%1", d[0]:"");
         });
 	return ret;
     }
@@ -559,7 +602,7 @@ ECHO_PID=$!
 	    // USB printer on /dev/lp0
 	    return sformat (_("USB printer on %1"), getUriDevice (uri));
 	}
-	if ("ptal" == type)
+	if ("ptal" == type || "hp" == type)
 	    // HP all-in-one device mlc:usb:HP_LaserJet_1220
 	    return sformat (_("HP All-in-One Device %1"), getUriDevice (uri));
 	if ("pipe" == type)
