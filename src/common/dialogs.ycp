@@ -972,7 +972,7 @@ that your parallel port is not properly configured.
 		    `HBox (
 			`HStretch (),
 			`HWeight (1, `PushButton (`id (`test), _("&Test printing"))),
-			`HWeight (1, `PushButton (`id (`advanced), _("Ad&vanced settings"))),
+			-1 == Printer::index ? `HWeight (1, `PushButton (`id (`advanced), _("Ad&vanced settings"))) : `HSpacing (0),
 			`HStretch ()
 		    ),
 		    `VSpacing (1)
@@ -1257,7 +1257,7 @@ that your parallel port is not properly configured.
                         `VSpacing (0.5),
                         `HSpacing (16),
                         // selection box label
-                        `SelectionBox ( `id (`printers), _("Choose &printer:"), maplist (`i, WFM::printers, ``{return `item (`id(i),i);})),
+                        `SelectionBox ( `id (`printers), _("Choose &printer:"), maplist (`i, Printer::printers, ``{return `item (`id(i),i);})),
                         `HBox (
                             `PushButton (`id (`ok), OKButtonLabel ()),
                             `PushButton (`id (`cancel), CancelButtonLabel ())
@@ -2693,8 +2693,6 @@ the current configuration.
 		`abort : `abort,
 		`advanced : "advanced",
 		`switch : `switch,
-		`advanced : "advanced",
-//		`server : "complex",
 		],
 	    ];
 	map add_printer_sequence = $[
@@ -2802,7 +2800,7 @@ the current configuration.
 		`next : "storeprinter",
 		`abort : `abort,
 		],
-	    "features" : $[ `next : "edit", `abort : `abort, ],
+	    "features" : $[ `next : "edit", `next_cups : "edit", `abort : `abort, ],
 	    "state" : $[ `next : "edit", `abort : `abort, ],
 	    "users" : $[ `next : "edit", `abort : `abort, ],
 	    "add_printer_wz" : $[ `next : "edit", `abort : `abort ],
@@ -2834,7 +2832,6 @@ the current configuration.
 	    "name" : $[ `abort : `abort, `next : "edit", `raw : "edit",],
 	    "filter" : $[ `abort : `abort, `next : "edit", `next_cups : "edit", ],
 	    "useppd" : $[ `abort : `abort, `next : "edit", `db : "model" ],
-//	    "features" : $[ `abort : `abort, `next_cups : "cups_wz", `next : "edit", ],
 	    "members" : $[ `abort : `abort, `next : "edit", ],
 	    "cups_wz" : $[ `abort : `abort, `next : "edit", ],
 	    "ppdetails" : $[ `abort : `abort, `next : "parallel", ],

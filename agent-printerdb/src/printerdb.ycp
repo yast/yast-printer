@@ -9,11 +9,10 @@
  * $Id$
  */
 {
-//    import "Wizard";
+    import "Wizard";
     textdomain "printer";
 
     include "wizard/sequencer.ycp";
-    include "ui/wizard_dialog.ycp";
 
     string current_vendor = "";
     string current_printer = "";
@@ -55,10 +54,11 @@
 
     define vendors () ``{
 	list items = SCR::Read (.printerdb.vendors, current_vendor);
-	UI::SetWizardContents (_("Vendors"), `VBox (
+	Wizard::SetContentsButtons
+/*	UI::SetWizardContents i*/(_("Vendors"), `VBox (
 		    `SelectionBox (`id (`sel), "", items),
 		    `PushButton (`id (`generate), _("&Generate translation strings and test script"))
-		    ), "", true, true);
+		    ), "", BackButtonLabel (), NextButtonLabel ());
 	symbol ret = UI::UserInput ();
 	while (`generate == ret)
 	{
@@ -79,9 +79,10 @@
 
     define printers () ``{
 	list items = SCR::Read (add (.printerdb.models, current_vendor), current_printer);
-	UI::SetWizardContents (_("Printers"), `VBox (
+	Wizard::SetContentsButtons
+/*	UI::SetWizardContents*/ (_("Printers"), `VBox (
 		    `SelectionBox (`id (`sel), "", items)
-		    ), "", true, true);
+		    ), "", BackButtonLabel (), NextButtonLabel ());
 	symbol ret = UI::UserInput ();
 	current_printer = select (UI::QueryWidget (`id (`sel), `CurrentItem), 0, "");
 	return ret;
@@ -89,11 +90,12 @@
 
     define configsrt () ``{
 	list l = SCR::Read (add (.printerdb.configsrt, current_printer), "");
-	UI::SetWizardContents (_("Configs"), `VBox (
+	Wizard::SetContentsButtons
+/*	UI::SetWizardContents*/ (_("Configs"), `VBox (
 		    `RichText (`id (`sel), select (l, 0, "")),
 		    `MenuButton (_("Configurations"), select (l, 1, []))
 		    ),
-		    "", true, true);
+		    "",  BackButtonLabel (), NextButtonLabel ());
 	any ret = "";
 	while (!is (ret, symbol))
 	{
@@ -107,18 +109,20 @@
 	return ret;
     }
     define configs () ``{
-	UI::SetWizardContents (_("Configs"), `VBox (
+	Wizard::SetContentsButtons
+/*	UI::SetWizardContents */(_("Configs"), `VBox (
 		    `Table (`id (`sel), `header ("leaf","name", "id", "queue"), getConfigTree ())
-		    ), "", true, true);
+		    ), "", BackButtonLabel (), NextButtonLabel ());
 	symbol ret = UI::UserInput ();
 	current_config = UI::QueryWidget (`id (`sel), `CurrentItem);
 	return ret;
     }
     define options () ``{
-	UI::SetWizardContents (_("Options"), `VBox (
+	Wizard::SetContentsButtons
+/*	UI::SetWizardContents */(_("Options"), `VBox (
 		    `VWeight (1, `ReplacePoint (`id (`upper), `SelectionBox (`id (`opts), _("&Options"), []))),
 		    `VWeight (1, `ReplacePoint (`id (`lower), `SelectionBox (`id (`vals), _("&Values"), [])))
-		    ), "", true, false);
+		    ), "", BackButtonLabel (), NextButtonLabel ());
 	list opts = SCR::Read (add (.printerdb.options, current_config));
 	UI::ReplaceWidget (`id (`upper), `SelectionBox (`id (`opts), `opt (`notify), _("&Options"), opts));
 	symbol ret = `opts;
@@ -170,13 +174,12 @@
 	return `VStretch ();
     }
 
-    UI::CreateWizardDialog ();
-
+    Wizard::CreateDialog ();
     WizardSequencer (
 	    $[
 	    "vendors" : ``(vendors ()),
 	    "printers" : ``(printers ()),
-//	    "configs" : ``(configs ()),
+	    "configs" : ``(configs ()),
 	    "configs" : ``(configsrt ()),
 	    "options" : ``(options ()),
 	    ],
