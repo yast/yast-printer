@@ -196,6 +196,11 @@
     global symbol confmode = nil;
 
     /**
+      * Configuring printer, which is result of detection?
+      */
+    global boolean conf_detected = false;
+
+    /**
       * Currently queue is edited
       */
     global boolean edit_seq = false;
@@ -433,7 +438,7 @@
 	    string key = s + "-state";
 	    boolean s_spool = testSupportedQueueBySpooler (q_type, s);
 //	y2error ("s_spool: %1", s_spool);
-	    boolean s_raw = s != "cups" || ! lookup (p, "raw", false);
+	    boolean s_raw = true;//s != "cups" || ! lookup (p, "raw", false);
 //	y2error ("s_raw: %1", s_raw);
 	    boolean s_is_ppd = s == "cups" && lookup (p, "ownppd", "") != "";
 //	y2error ("s_is_ppd: %1", s_is_ppd);
@@ -442,7 +447,7 @@
 //	y2error ("s_is_class: %1", s_is_class);
 	    boolean s_conf = lookup (info, s, false);
 //	y2error ("s_conf: %1", s_conf);
-	    boolean s_is_raw = (lookup (p, "raw", false) || q_type == "lpd") && s != "cups";
+	    boolean s_is_raw = (lookup (p, "raw", false) || q_type == "lpd");// && s != "cups";
 //	y2error ("s_is_raw: %1", s_is_raw);
 	    boolean s_pri = s_is_raw || (s_is_class) || (! lookup (p, "raw", false) && (s_is_ppd || s_is_foomatic || (lookup (p, "ownppd", "") == "" && s_conf)));
 //	y2error ("s_pri: %1", s_pri);

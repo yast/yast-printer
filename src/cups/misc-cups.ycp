@@ -79,7 +79,6 @@ printer model again.
 "), name));
 		return false;
 	    }
-//	    ppdfile = SCR::Read (.target.string, ppdfile);
 	}
 	else if (! raw)
             ppdfile = SCR::Write (add (.printerdb.ppd, lookup (entry, "config", "")), lookup (entry, "options", $[]));
@@ -170,6 +169,12 @@ printer model again.
 The specified PPD file does not exist.
 "), name));
 	    return false;
+	}
+	else if (raw)
+	{
+	    // remove the file
+	    SCR::Execute (.target.bash, sformat ("test -f %1 && rm %1",
+		sformat ("/etc/cups/ppd/%1.ppd", entry["name"]:"")));
 	}
         boolean res = SCR::Write (.cups.printers.add, entry);
         if (! res)

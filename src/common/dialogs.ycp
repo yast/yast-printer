@@ -231,7 +231,7 @@ that your USB bus is not properly configured.
 	    }
 	    else if (type == "serial")
 	    {
-		// popup CAUTION: "device" here means /dev/ttyS0, /dev/ttyS1, ...
+		// popup CAUTION: "device" here means /dev/ttyS0, /dev/ttyS1, ..
 		UI::MessagePopup (_("No serial devices (/dev/ttyS?) found. It seems
 that your serial ports are not properly configured.
 "));
@@ -239,10 +239,6 @@ that your serial ports are not properly configured.
 	    }
 	    else if (type == "irda")
 	    {
-/*		// popup CAUTION: "device" here means /dev/lp0, /dev/lp1, ...
-		UI::MessagePopup (_("No parallel devices (/dev/lp?) found. It seems
-that your parallel port is not properly configured.
-"));*/
 		devices = ["/dev/irlpt0", "/dev/irlpt1", "/dev/irlpt2", "/dev/irlpt3"];
 	    }
 	}
@@ -297,23 +293,30 @@ that your parallel port is not properly configured.
 	Wizard::SetContentsButtons (getAskDeviceLabel (type), contents, getAskDeviceHelp (type), BackButtonLabel (), NextButtonLabel ());
 
 	if (problematic_usb)
+	{
+	    if (Printer::conf_detected)
+	    {
 		// message popup
-	    UI::MessagePopup (_("Warning!
-
-USB printer detection results at least two printers
-which have the same identification.
-Do the \"Test\" to make sure which printer is
-actually selected."));
-
-	// message popup
-	string tmp = _("Warning!
+		UI::MessagePopup (_("Warning!
 
 USB printer detection results at least two printers
 which have the same identification.
 You must select and configure them manually.
 Do the \"Test\" to make sure which printer is
-actually selected.");
+actually selected."));
 
+	    }
+	    else
+	    {
+		// message popup
+		UI::MessagePopup (_("Warning!
+
+USB printer detection results at least two printers
+which have the same identification.
+Do the \"Test\" to make sure which printer is
+actually selected."));
+	    }
+	}
 
 	symbol ret = nil;
 	repeat {
@@ -1731,7 +1734,7 @@ with the SuSE database of printers only.</B></P>
 	}
 
 	term insert =
-	    "lpd" == Printer::getUriType ()  || "cups" == Printer::spooler ? `VSpacing (0) :
+	    "lpd" == Printer::getUriType () /*|| "cups" == Printer::spooler*/ ? `VSpacing (0) :
 		// check box
 		`CheckBox (`id (`raw), `opt (`hstretch), _("Ra&w queue"), lookup (Printer::printer, "raw", raw));
 
@@ -1802,10 +1805,10 @@ with the SuSE database of printers only.</B></P>
 	{
 	    UI::ChangeWidget (`id (`prefilter), `ValidChars, "_0123456789abcdefghijklmnopqrstuvwxyz-");
 	}
-	if (-1 != Printer::index && lookup (Printer::printer, "type", "yast2") == "yast2" && Printer::spooler != "cups")
+/*	if (-1 != Printer::index && lookup (Printer::printer, "type", "yast2") == "yast2" && Printer::spooler != "cups")
 	{
 	    UI::ChangeWidget (`id (`raw), `Enabled, false);
-	}
+	}*/
 
 	any ret = nil;
 	string fwd = "";
@@ -1813,15 +1816,15 @@ with the SuSE database of printers only.</B></P>
 	    ret = UI::UserInput ();
 	    if (ret == `next)
 	    {
-//		raw = ("lpd" == Printer::getUriType () ? true : UI::QueryWidget (`id (`raw), `Value));
+		raw = ("lpd" == Printer::getUriType () ? true : UI::QueryWidget (`id (`raw), `Value));
 		if (Printer::spooler != "cups")
 		{
-		    raw = ("lpd" == Printer::getUriType () ? true : UI::QueryWidget (`id (`raw), `Value));
+//		    raw = ("lpd" == Printer::getUriType () ? true : UI::QueryWidget (`id (`raw), `Value));
 		    ff = UI::QueryWidget (`id (`ff), `Value);
 		}
 		else
 		{
-		    raw = false;
+//		    raw = false;
 		    ff = false;
 		}
 		name = tolower (UI::QueryWidget (`id (`name), `Value));
@@ -3538,6 +3541,7 @@ system will be saved.
 	    }
 	    else if (`configure_button == ret)
 	    {
+		Printer::conf_detected = true;
 		runAutoprobedListDialog__current = UI::QueryWidget (`id (`detected_selbox), `CurrentItem);
 		runProbedPrinterDlg__current = `none;
 // comments added to go with other printer through the same sequence
@@ -3631,6 +3635,7 @@ system will be saved.
 		if (ret == `add_button)
 		{
 		    Printer::selectPrinter (-1);
+		    Printer::conf_detected = false;
 		    return `add;
 		}
 		else if (ret == `edit_button || ret == `delete_button || ret == `setdefault)
