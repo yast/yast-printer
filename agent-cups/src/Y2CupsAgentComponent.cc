@@ -29,10 +29,7 @@ YCPValue Y2CupsAgentComponent::evaluate(const YCPValue& value) {
     interpreter = new SCRInterpreter(agent);
   }
 
-    bool flag = interpreter->enableSubclassed (true);
-    YCPValue v = interpreter->evaluate(value);
-    interpreter->enableSubclassed (flag);
-    return v;
+  return interpreter->evaluate(value);
 }
 
 Y2CupsAgentComponent::~Y2CupsAgentComponent() {

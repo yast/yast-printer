@@ -50,10 +50,7 @@ YCPValue Y2PrinterdbAgentComponent::evaluate(const YCPValue& value)
         agent = new PrinterdbAgent();
         interpreter = new SCRInterpreter(agent);
     }
-
-    bool flag = interpreter->enableSubclassed (true);
-    YCPValue v = interpreter->evaluate(value);
-    interpreter->enableSubclassed (flag);
-    return v;
+    
+    return interpreter->evaluate(value);
 }
 
