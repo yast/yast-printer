@@ -76,7 +76,12 @@
     define void wakeUpEpson (string device) ``{
 	string sequence =
 	    "\"\\000\\000\\000\\033\\001\\100\\105\\112\\114\\040\\061\\062\\070\\064\\056\\064\\012\\100\\105\\112\\114\\040\\040\\040\\040\\040\\012\"";
-	SCR::Execute (.target.bash, sformat ("/bin/echo -en %1 > %2", sequence, device));
+	if (haskey (SCR::Read (.proc.modules), "printer"))
+	    SCR::Execute (.target.bash, sformat ("
+MAIN_PID=$$
+{/bin/echo -en %1 > %2 ; kill MAIN_PID} &
+ECHO_PID=$!
+{sleep 2s ; kill $ECHO_PID &>/dev/null ; } &", sequence, device));
     }
 
     /**
@@ -242,6 +247,7 @@
      *   ]
      */
     global define list Detect (boolean cups) ``{
+	boolean have_usb = false;
 	if (Mode::config)
 	{
 	    DisplayUnavailableAIPopup ();
@@ -301,6 +307,9 @@
 	    }
 	    else if  ("USB" == bus)
 	    {
+		have_usb = true;
+		if (! haskey (SCR::Read (.proc.modules), "printer"))
+		    return $[];
 		if ("epson" == tolower (lookup (pr, "sub_vendor", "")))
 		{
 			string sub_dev = getEpsonUsbModel (lookup (pr, "dev_name", ""));
@@ -318,7 +327,6 @@
 		    dev_name = select (getCupsUsbDeviceInfo (class_dev), 0, "");
 		    if (dev_name == "" || Mode::autoinst)
 		    {
-			is_ok = false;
 			dev_name = class_dev;
 		    }
 		}
@@ -335,6 +343,17 @@
 	    }
 	    return record;
 	});
+	if (have_usb)
+	{
+	    if (! haskey (SCR::Read (.proc.modules), "printer"))
+	    {
+		y2error ("USB printer found and printer module not loaded, loading it");
+		SCR::Execute(.target.modprobe, "printer", "");
+		y2error ("Restarting detection");
+		ret = Printerlib::Detect (cups);
+		y2error ("Redetection done");
+	    }
+	}
 	return ret;
     }
     /**
