@@ -419,7 +419,7 @@
      * same name for more printers in /etc/printcap. It was impossible to add printer,
      * because all names were invalid because
      * size (union (forbidden_names, new_names)) != size (forbidden_names) + size (new_names).
-     * @return list set of already used names
+     * @return a list of already used names
      */
     global define list<string> getForbiddenNames() ``{
 	list l = toset (add (flatten (maplist (map entry, printcap, ``(add (lookup (entry, "names", []), lookup (entry, "name", ""))))), "all"));
@@ -578,6 +578,7 @@
     }
     /**
      * read printers from /etc/printcap
+     * @param yast_printcap list of data read from YaST's configuration file
      * @return list of printers
      */
     global define list printcapRead (list yast_printcap) ``{
@@ -857,6 +858,10 @@ to print."));
 	}
     }
 
+    /**
+     * Initialize current spooler
+     * @return boolean true on success
+     */
     global define boolean spoolerInitialize () ``{
 	if (Spooler::Get () == "cups")
 	{
@@ -1146,6 +1151,10 @@ Detect your printers?"));
 	return true;
     }
 
+    /**
+     * Save all queues
+     * @return boolean true on success
+     */
     global define boolean savePrinters () ``{
 	// FIXME error checking
 	list unique_keys = [];
@@ -1231,6 +1240,10 @@ the selected spooler does not support it."), name));
 	return true;
     }
 
+    /**
+     * Save default queue to appropriate location
+     * @return boolean true on success
+     */
     global define boolean saveDefaultQueue () ``{
 	if (Spooler::Get () == "cups")
 	{
