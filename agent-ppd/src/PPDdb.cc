@@ -209,33 +209,58 @@ bool PPD::changed(int *count) {
  * Transform vendor name from PPD file/detection to key in database
  */
 string PPD::getVendorId (string vendor) {
-//    if (verbose) y2error ("Sourcve vendor: %s", vendor.c_str ());
     vendor = strupper (vendor);
-//    if (verbose) y2error ("Uppes: %s", vendor.c_str ());
     if(vendors_map.find(vendor)!=vendors_map.end()) {
-//	if (verbose) y2error ("Found, using %s", vendors_map[vendor].c_str ());
 	vendor = vendors_map[vendor];
     }
     else
     {
 	vendor = filternotchars (vendor, "/. -<>");
     }
-//    y2error ("Result: %s", vendor.c_str ());
     return vendor;
+}
+
+/**
+ * Remove the vendor name from the beginning of the model if present
+ * @param vendor string vendor id
+ * @param model string model label/id
+ * @return string model label/id with removed vendor from the begining
+ */
+string PPD::removeVendorFromModel (string vendor, string model) {
+    int size = vendor.size ();
+    if (strupper (model.substr (0,size+1)) == vendor + " ")
+    {
+	model.erase (0,size);
+    }
+    else
+    {
+	for (VendorsMap::iterator it = vendors_map.begin ();
+	    it != vendors_map.end ();
+	    it++)
+	{
+	    string v_ppd = strupper (it->first);
+	    string v = getVendorId (v_ppd);
+	    int size = v_ppd.size ();
+	    if (v == vendor && strupper (model.substr (0,size + 1)) == v_ppd + " ")
+	    {
+		model.erase (0,size);
+		break;
+	    }
+	}
+    }
+    return model;
 }
 
 /**
  * Transform model name from PPD file/detection to key in database
  */
 string PPD::getModelId (string vendor, string model) {
-
     bool found = false;
     string modres = "";
     model = strupper (model);
+    model = removeVendorFromModel (vendor, model);
     model = filternotchars (model, "/. -<>");
-    int size = vendor.size ();
-    if (strupper (model.substr (0,size)) == vendor)
-	model.erase (0,size);
+
     if (models_map.find (vendor) != models_map.end ())
     {
 	found = true;
@@ -1048,7 +1073,9 @@ bool PPD::process_file(const char *filename, PPDInfo *newinfo) {
     PPDInfo info;
     info.filename = filename;
     info.vendor = clean(vendor);
-    info.printer = clean(printer);
+    info.printer = removeVendorFromModel (
+	getVendorId (info.vendor),
+	clean(printer));
     info.vendor_db = info.vendor;
     info.printer_db = info.printer;
     info.products = products;
