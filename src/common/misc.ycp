@@ -675,7 +675,13 @@ This usually takes one or two minutes")),
         if ("samba" == type)
             hosts = SCR::Read (.net.hostnames.samba);
         else if ("ipp" == type)
+	{
             hosts = SCR::Read (.net.hostnames, 631);
+	    hosts = filter (`h, hosts, ``{
+		list queues = SCR::Read (.cups.remote, h);
+		return size (queues) > 0;
+	    });
+	}
         else if ("lpd" == type || "filtering" == type || "prefilter" == type)
             hosts = SCR::Read (.net.hostnames, 515);
         else if ("socket" == type)

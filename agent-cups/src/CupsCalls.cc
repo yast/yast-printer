@@ -723,3 +723,105 @@ char* TOLOWER(char* src) {
     }
     return src;
 }
+
+YCPValue getPrinters (string hostname) {
+    YCPList ret = YCPList ();;
+    http_t*http = httpConnect(hostname.c_str (), ippPort());
+    ipp_t *request,     /* IPP Request */
+        *response;      /* IPP Response */
+    ipp_attribute_t *attr;      /* Current attribute */
+    cups_lang_t *language;      /* Default language */
+
+    if(http == NULL)
+    {
+        Y2_ERROR("Error while contacting CUPS server occured.");
+        return YCPVoid ();
+    }
+
+    request = ippNew();
+
+    request->request.op.operation_id = CUPS_GET_PRINTERS;
+    request->request.op.request_id   = 1;
+
+    language = cupsLangDefault();
+
+    ippAddString(request, IPP_TAG_OPERATION, IPP_TAG_CHARSET,
+               "attributes-charset", NULL, cupsLangEncoding(language));
+
+    ippAddString(request, IPP_TAG_OPERATION, IPP_TAG_LANGUAGE,
+               "attributes-natural-language", NULL, language->language);
+
+    ippAddString(request, IPP_TAG_OPERATION, IPP_TAG_KEYWORD,
+               "requested-attributes", NULL, "printer-name");
+
+    if ((response = cupsDoRequest(http, request, "/")) != NULL)
+    {
+	for (attr = response->attrs; attr != NULL; attr = attr->next)
+	{
+	    if (attr->name != NULL &&
+		strcasecmp(attr->name, "printer-name") == 0 &&
+		attr->value_tag == IPP_TAG_NAME)
+	    {
+		YCPString name = YCPString (attr->values[0].string.text);
+		ret->add (name);
+	    }
+	}
+
+	ippDelete(response);
+	return ret;
+    }
+
+    return YCPVoid ();
+}
+
+YCPValue getClasses (string hostname) {
+    YCPList ret = YCPList ();;
+    http_t*http = httpConnect(hostname.c_str (), ippPort());
+    ipp_t *request,     /* IPP Request */
+        *response;      /* IPP Response */
+    ipp_attribute_t *attr;      /* Current attribute */
+    cups_lang_t *language;      /* Default language */
+
+    if(http == NULL)
+    {
+        Y2_ERROR("Error while contacting CUPS server occured.");
+        return YCPVoid ();
+    }
+
+    request = ippNew();
+
+    request->request.op.operation_id = CUPS_GET_CLASSES;
+    request->request.op.request_id   = 1;
+
+    language = cupsLangDefault();
+
+    ippAddString(request, IPP_TAG_OPERATION, IPP_TAG_CHARSET,
+               "attributes-charset", NULL, cupsLangEncoding(language));
+
+    ippAddString(request, IPP_TAG_OPERATION, IPP_TAG_LANGUAGE,
+               "attributes-natural-language", NULL, language->language);
+
+    ippAddString(request, IPP_TAG_OPERATION, IPP_TAG_KEYWORD,
+               "requested-attributes", NULL, "printer-name");
+
+    if ((response = cupsDoRequest(http, request, "/")) != NULL)
+    {
+        for (attr = response->attrs; attr != NULL; attr = attr->next)
+        {
+            if (attr->name != NULL &&
+                strcasecmp(attr->name, "printer-name") == 0 &&
+                attr->value_tag == IPP_TAG_NAME)
+            {
+                YCPString name = YCPString (attr->values[0].string.text);
+                ret->add (name);
+            }
+        }
+
+        ippDelete(response);
+        return ret;
+    }
+
+    return YCPVoid ();
+
+}
+
