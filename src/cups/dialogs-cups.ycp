@@ -27,18 +27,68 @@
     include "printer/testpage.ycp";
 
 
+    global define symbol runListenIPPDialog () ``{
+
+	term contents = `HBox (`HStretch (), `VBox (
+	    `VStretch (),
+	    `Left (`Label (
+		_("Local CUPS daemon will be running and listening"))),
+	    `Left (`Label (
+		_("to IPP broadcast packets sent by other servers"))),
+	    `Left (`Label (
+		_("in the network. All boradcasted queues will be"))),
+	    `Left (`Label (
+		_("accessible under the same names as they are"))),
+	    `Left (`Label (
+		_("on the remote host."))),
+	    `VSpacing (2),
+	    `Left (`CheckBox (`id (`listen),
+		_("Listen to IPP broadcast packets"),
+		Printer::cups_server_settings["Browsing"]:"On" == "On")),
+	    `VStretch ()
+	), `HStretch ());
+	Wizard::SetContentsButtons (_("Listening to remote CUPS servers"),
+	    contents, getListenIPPHelp (), BackButtonLabel (),
+	    OKButtonLabel ());
+
+	any ret = nil;
+	while (ret == nil)
+	{
+	    ret = UI::UserInput ();
+	}
+
+	if (ret == `next)
+	{
+	    boolean listen = UI::QueryWidget (`id (`listen), `Value);
+	    Printer::cups_server_settings["Browsing"] = listen ? "On" : "Off";
+y2error ("CSS: %1", Printer::cups_server_settings);
+	}
+
+	return ret;
+    }
 
     /**
-     * Is there only client?
-     * @return symbol for wizard sequencer
-     */
-    global define symbol runClientDialog () ``{
+      * Is there only client?
+      * @param main boolean true if this is used as replacement of the
+      *   "Complex" dialog
+      * @return symbol for wizard sequencer
+      */
+    global define symbol runCupsClientDialog (boolean main) ``{
+	term advanced = main
+	    ? `VBox (
+		`VSpacing (4),
+		// push button
+		`PushButton (`id (`advanced), `opt (`key_F7), _("Ad&vanced"))
+	    )
+	    : `VSpacing (0);
+
         term contents = `VBox (
 	    `HBox (
 		`ReplacePoint (
 		    `id (`hostent_replace),
-		    // Combobox label
-		    `ComboBox (`id (`hostnameent), `opt (`editable, `hstretch), _("&Server name"), [ Printer::server_hostname ] )
+		    `ComboBox (`id (`hostnameent), `opt (`editable, `hstretch),
+			// Combobox label
+			_("&Server name"), [ Printer::server_hostname ] )
 		),
 		`VBox (
 		    `Label (" "),
@@ -50,21 +100,22 @@
                         `item (`id (`get_hosts), _("&All hosts")),
                     ])
 		)
-                ),
+            ),
 	    `VSpacing (2),
 	    `HBox (
 		`HStretch (),
-		// pushbutton
-		`PushButton (`id (`test), `opt (`key_F6), _("&Test remote IPP access")),
+		`PushButton (`id (`test), `opt (`key_F6),
+		    // push button
+		    _("&Test remote IPP access")),
 		`HStretch ()
 	    ),
-            `VSpacing (4),
-	    // pushbutton
-	    `PushButton (`id (`advanced), `opt (`key_F7), _("Ad&vanced")),
+	    advanced,
 	    `VSpacing (2)
             );
         // dialog label
-        Wizard::SetContentsButtons (_("CUPS server"), contents, getCupsClientHelp (), BackButtonLabel (), FinishButtonLabel ());
+        Wizard::SetContentsButtons (_("CUPS server"), contents,
+	    getCupsClientHelp (main), BackButtonLabel (),
+	    main ? FinishButtonLabel () : OKButtonLabel ());
 
         symbol ret = nil;
         while (true)
@@ -87,13 +138,15 @@
 		    UI::MessagePopup (_("Enter a valid server name."));
 		else
 		{
-		    if (Printer::warn_finish && ! Mode::config && !UI::ContinueCancelPopup (_("Now the configuration of the printing 
-system will be saved
-")))
+		    if (main && Printer::warn_finish && ! Mode::config
+			&& !UI::ContinueCancelPopup (
+			    // popup
+			    _("Now the configuration of the printing 
+system will be saved.")))
 		    {
 			continue;
 		    }
-		    Printer::cups_installation = 1;
+		    Printer::cups_installation = `client;
                     break;
 		}
             }
@@ -108,20 +161,21 @@ system will be saved
             }
 	    else if (`back == ret)
 	    {
-		if (reallyExit ())
+		if (! main || reallyExit ())
 		    break;
 	    }
             else if (`get_hosts == ret || `get_hosts_special == ret)
             {
                 // get remote hosts (we always offer list of hosts)
-                list hosts = getHostnames (`get_hosts_special == ret ? "ipp" : "");
+                list hosts = getHostnames (
+		    `get_hosts_special == ret ? "ipp" : "");
                 UI::ReplaceWidget (`id (`hostent_replace),
-                                    `ComboBox (
-                                        `id (`hostnameent),
-                                        `opt (`editable, `hstretch),
-					// combobox label
-                                        _("&Server name"),
-                                        hosts));
+		    `ComboBox (
+			`id (`hostnameent),
+			`opt (`editable, `hstretch),
+			// combobox label
+			_("&Server name"),
+			hosts));
             }
         }
         return ret;
@@ -870,8 +924,6 @@ y2error ("Got Info 2");
      * @return symbol `next or `back
      */
     global define symbol runCupsServerDialog () ``{
-	if (Printer::cups_server_settings == $[])
-	    readCupsSettings ();
 	term contents = `HBox (`HSpacing (2), `VBox (
 	    `VSpacing (1),
 	    // frame
@@ -917,8 +969,6 @@ y2error ("Got Info 2");
 	Wizard::SetContentsButtons (_("CUPS server settings"), contents, getCupsServerHelp (), BackButtonLabel (), NextButtonLabel ());
 
 	list addresses = lookup (Printer::cups_server_settings, "BrowseAddress", []);
-
-y2error ("CSS: %1", Printer::cups_server_settings);
 
 	UI::ChangeWidget (`id (`browsing), `CurrentButton, lookup (Printer::cups_server_settings, "Browsing", "On") == "On" ? `on : `off);
 	// selectionbox
