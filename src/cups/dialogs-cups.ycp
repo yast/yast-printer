@@ -23,6 +23,7 @@
     import "Printerdb";
     import "Printerlib";
     import "Wizard";
+    import "CWMFirewallInterfaces";
 
     include "printer/helps.ycp";
     include "printer/misc.ycp";
@@ -34,48 +35,64 @@
       */
     define symbol runListenIPPDialog () ``{
 
+	map<string,any> firewall_settings = $[
+	    "services" : [ "ipp-udp" ],
+	    "display_details" : true,
+	    // firewall openning help
+	    "help" : _("<p><b><big>Firewall Settings</big></b><br>
+To open the firewall to allow to accept the IPP broadcast packets
+from remote computers, set <b>Open Port in Firewall</b>.<br>
+To select interfaces to open the port on, click <b>Firewall Details</b>.<br>
+This option is available only if the firewall is enabled.</p>"),
+	];
+	map<string,any> firewall_widget =
+	    CWMFirewallInterfaces::CreateOpenFirewallWidget (firewall_settings);
+	string firewall_help = firewall_widget["help"]:"";
+	term firewall_layout = firewall_widget["custom_widget"]:`VBox ();
+
 	term contents = `HBox (`HStretch (), `VBox (
 	    `VStretch (),
 	    `Left (`Label (
-		// label 1/5
-		_("Local CUPS daemon will be running and listening"))),
-	    `Left (`Label (
-		// label 2/5
-		_("to IPP broadcast packets sent by other servers"))),
-	    `Left (`Label (
-		// label 3/5
-		_("in the network. All broadcasted queues will be"))),
-	    `Left (`Label (
-		// label 4/5
-		_("accessible under the same names as they are"))),
-	    `Left (`Label (
-		// label 5/5
-		_("on the remote host."))),
+		// label
+		_("Local CUPS daemon will be running and listening
+to IPP broadcast packets sent by other servers
+in the network. All broadcasted queues will be
+accessible under the same names as they are
+on the remote host."))),
 	    `VSpacing (2),
 	    `Left (`CheckBox (`id (`listen),
 		// check box
 		_("Listen to IPP &Broadcast Packets"),
 		contains (CUPS::cups_server_settings["Browsing"]:["On"],"On"))),
+	    `VSpacing (2),
+	    firewall_layout,
 	    `VStretch ()
 	), `HStretch ());
 	// dialog caption
 	Wizard::SetContentsButtons (_("Listening to Remote CUPS Servers"),
-	    contents, getListenIPPHelp (), Label::BackButton (),
+	    contents, getListenIPPHelp () + firewall_help, Label::BackButton (),
 	    Label::OKButton ());
 
-	symbol ret = nil;
-	while (ret == nil)
+	map event = $[];
+	any ret = nil;
+	CWMFirewallInterfaces::OpenFirewallInit (firewall_widget, "");
+	while (ret != `abort && ret != `next && ret != `back)
 	{
-	    ret = (symbol)UI::UserInput ();
+	    event = UI::WaitForEvent ();
+	    ret = event["ID"]:nil;
+	    CWMFirewallInterfaces::OpenFirewallHandle (firewall_widget, "",
+		event);
 	}
 
 	if (ret == `next)
 	{
 	    boolean listen = (boolean)UI::QueryWidget (`id (`listen), `Value);
 	    CUPS::cups_server_settings["Browsing"] = listen ? ["On"] : ["Off"];
+	    CWMFirewallInterfaces::OpenFirewallStore (firewall_widget, "",
+		event);
 	}
 
-	return ret;
+	return (symbol)ret;
     }
 
     /**
@@ -858,6 +875,16 @@
      * @return symbol `next or `back
      */
     define symbol runCupsServerDialog () ``{
+
+	map<string,any> firewall_settings = $[
+	    "services" : [ "ipp-tcp" ],
+	    "display_details" : true,
+	];
+	map<string,any> firewall_widget
+	  = CWMFirewallInterfaces::CreateOpenFirewallWidget (firewall_settings);
+	string firewall_help = firewall_widget["help"]:"";
+	term firewall_layout = firewall_widget["custom_widget"]:`VBox ();
+
 	term contents = `HBox (`HSpacing (2), `VBox (
 	    `VSpacing (1),
 	    // frame
@@ -898,11 +925,12 @@
 		)),
 		// pushbutton
 		`PushButton (`id (`change), _("Change p&ermissions"))
-	    ))
+	    )),
+	    firewall_layout
 	), `HSpacing (2));
 
 	// dialog caption
-	Wizard::SetContentsButtons (_("CUPS server settings"), contents, getCupsServerHelp (), Label::BackButton (), Label::NextButton ());
+	Wizard::SetContentsButtons (_("CUPS server settings"), contents, getCupsServerHelp () + firewall_help, Label::BackButton (), Label::NextButton ());
 
 	list<string> addresses = CUPS::cups_server_settings["BrowseAddress"]:[];
 
@@ -910,12 +938,18 @@
 	// selectionbox
 	UI::ReplaceWidget (`id (`replace_addr), `SelectionBox (`id (`addr), _("Browse Addre&sses"), addresses));
 
-	symbol ret = nil;
+	CWMFirewallInterfaces::OpenFirewallInit (firewall_widget, "");
+
+	map event = $[];
+	any ret = nil;
 	while (true)
 	{
-	    ret = (symbol)UI::UserInput ();
+	    event = UI::WaitForEvent ();
+	    ret = event["ID"]:nil;
             if (ret == `cancel)
                 ret = `abort;
+	    CWMFirewallInterfaces::OpenFirewallHandle (firewall_widget,
+		"", event);
 	    if (`abort == ret)
 	    {
 		if (reallyAbort ())
@@ -985,11 +1019,15 @@
 	    }
 	}
 	if (ret == `next)
+	{
 	    CUPS::cups_server_settings["Browsing"]
 		= UI::QueryWidget (`id (`browsing), `CurrentButton) == `on
 		    ? ["On"]
 		    : ["Off"];
 	    CUPS::cups_server_settings["BrowseAddress"] = addresses;
-	return ret;
+	    CWMFirewallInterfaces::OpenFirewallStore (firewall_widget,
+		"", event);
+	}
+	return (symbol)ret;
     }
 }

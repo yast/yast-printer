@@ -37,6 +37,7 @@
     import "Report";
     import "Spooler";
     import "Summary";
+    import "SuSEFirewall";
 
 
 
@@ -47,7 +48,7 @@
     /**
       * Version of YaST2 printer module for updates handling
       */
-    global integer version = 256 * 2 + 10; // 2.9
+    global integer version = 256 * 2 + 10; // 2.10
     /**
       * Don't run SuSEconfig, don't restart services if true and possible
       */
@@ -1098,16 +1099,20 @@ Detect your printers?"));
 	    // progress stage, text in dialog (short) (infinitive)
 	    _("Check environment"),
 	    // progress stage, text in dialog (short) (infinitive)
+	    _("Read firewall settings"),
+	    // progress stage, text in dialog (short) (infinitive)
 	    _("Check database of printers"),
 	    // progress stage, text in dialog (short) (infinitive)
 	    _("Load current settings"),
 	];
 	list<string> titles = [
-	    // progress stage, text in dialog (short)
+	    // progress step, text in dialog (short)
 	    _("Checking environment..."),
-	    // progress stage, text in dialog (short)
+	    // progress step, text in dialog (short)
+	    _("Reading firewall settings..."),
+	    // progress step, text in dialog (short)
 	    _("Checking database of printers..."),
-	    // progress stage, text in dialog (short)
+	    // progress step, text in dialog (short)
 	    _("Loading current settings..."),
 	];
 	if (!skip_autodetection)
@@ -1120,7 +1125,7 @@ Detect your printers?"));
 
 	// progress label
 	Progress::New (_("Initializing printers configuration"),
-	    " ", skip_autodetection ? 12 : 16, stages, titles, "");
+	    " ", skip_autodetection ? 16 : 20, stages, titles, "");
 
 	Progress::NextStageStep (0); // step 0 - check root permission
 	if (testAbort ()) return false;
@@ -1150,7 +1155,19 @@ Detect your printers?"));
 	    Spooler::Initialize ();
 	}
 
-	Progress::NextStageStep (4); // step 4-7 - check and load the database
+	Progress::NextStageStep (4); // step 4-7 - read firewall settings
+
+	if (! Mode::test)
+	{
+	    Progress::off ();
+
+y2error ("RUnning SuSEFirewall::Read");
+
+	    SuSEFirewall::Read ();
+	    Progress::on ();
+	}
+
+	Progress::NextStageStep (8); // step 8-11 - check and load the database
 	if (testAbort ()) return false;
 
 	if (Spooler::Get () != "cups" || CUPS::InstallationType () == `server)
@@ -1159,7 +1176,7 @@ Detect your printers?"));
 	    Printerdb::loadFoomaticIfNeeded ();
 	}
 
-	Progress::NextStageStep (8); // step 8-11 - read the settings
+	Progress::NextStageStep (12); // step 12-15 - read the settings
 	if (testAbort ()) return false;
 
 	if (Spooler::Get () == "cups" && CUPS::InstallationType () == `client)
@@ -1176,11 +1193,10 @@ Detect your printers?"));
 
 	printcap = maplist (map<string,any> e, printcap,``{return assignState (e, false);});
 
-	Progress::NextStageStep (12); // step 12-15 - autodetection
-	if (testAbort ()) return false;
-
 	if (!skip_autodetection)
 	{
+	    Progress::NextStageStep (16); // step 16-19 - autodetection
+	    if (testAbort ()) return false;
 	    if (! doPrinterDetection ())
 		return false;
 	}
@@ -1375,9 +1391,10 @@ the selected spooler does not support it."), name));
 	{
 	    // caption of progress
 	    Progress::New (_("Saving printers configuration"),
-		" ", size (printcap) + 6,
+		" ", size (printcap) + 7,
+		[
 		    // progress bar states
-		[ _("Adjust spooler services"),
+		    _("Adjust spooler services"),
 		    // progress stage
 		    _("Delete old queues"),
 		    // progress bar states
@@ -1386,10 +1403,14 @@ the selected spooler does not support it."), name));
 		    _("Set default queue"),
 		    // progress bar stage
 		    _("Save system settings"),
+		    // progress bar stage
+		    _("Save firewall settings"),
 		    // progress bas stage
-		    _("Restart spooler"), ],
+		    _("Restart spooler"),
+		],
+		[
 		    // progress step
-		[ _("Adjusting spooler services..."),
+		    _("Adjusting spooler services..."),
 		    // progress step
 		    _("Deleting old queues..."),
 		    // progress step
@@ -1399,26 +1420,37 @@ the selected spooler does not support it."), name));
 		    // progress step
 		    _("Saving system settings..."),
 		    // progress step
+		    _("Saving firewall settings..."),
+		    // progress step
 		    _("Restarting spooler..."),
 		    // progress step
-		    _("Finished")],
+		    _("Finished")
+		],
 	    "");
 	}
 	else
 	{
 	    // caption of progress
 	    Progress::New (_("Saving printers configuration"),
-		" ", 2,
+		" ", 3,
+		[
 		    // progress stage
-		[ _("Adjust spooler services"),
+		    _("Adjust spooler services"),
                     // progress stage
-		    _("Save system settings"),],
+		    _("Save system settings"),
+		    // progress bar stage
+		    _("Save firewall settings"),
+		],
+		[
 		    // progress step
-		[ _("Adjusting spooler services"),
+		    _("Adjusting spooler services"),
                     // progress step
 		    _("Saving system settings..."),
 		    // progress step
-		    _("Finished")],
+		    _("Saving firewall settings..."),
+		    // progress step
+		    _("Finished")
+		],
 	    "");
 	}
 
@@ -1452,6 +1484,15 @@ the selected spooler does not support it."), name));
 	    if (testAbort ()) return false;
 	    ret = saveTheConfiguration() && ret;
 
+	    Progress::NextStage (); // save firewall settings
+	    if (testAbort ()) return false;
+	    if (! Mode::test)
+	    {
+		Progress::off ();
+		SuSEFirewall::Write ();
+		Progress::on ();
+	    }
+
 	    Progress::NextStage ();// restart spooler
 	    if (testAbort ()) return false;
 	    if (! write_only)
@@ -1464,8 +1505,16 @@ the selected spooler does not support it."), name));
 	    if (testAbort ()) return false;
 	    ret = CUPS::SaveCupsClient (default) && ret;
 	    ret = saveTheConfiguration() && ret;
-	}
 
+	    Progress::NextStage (); // save firewall settings
+	    if (testAbort ()) return false;
+	    if (! Mode::test)
+	    {
+		Progress::off ();
+		SuSEFirewall::Write ();
+		Progress::on ();
+	    }
+	}
 
 	Progress::NextStage (); // finished
 	if (testAbort ()) return false;
