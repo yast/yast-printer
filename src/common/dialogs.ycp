@@ -103,6 +103,7 @@
      */
     define symbol runManufModelDialog () ``{
 	y2milestone ("Manuf/model dialog started for %1", Printer::printer);
+	Printerdb::InstallDrivers ();
 	map ppd_info = Printer::printer["ppd_info"]:$[];
 	string manuf_db = ppd_info["manufacturer_db"]:"";
 	string model_db = ppd_info["model_db"]:"";
@@ -475,6 +476,7 @@ user name, and password.
      */
     define symbol runPpdSelectDialog () ``{
 	y2milestone ("Running config dialog for %1", Printer::printer);
+	Printerdb::InstallDrivers ();
 	map ppd_info = Printer::printer["ppd_info"]:$[];
 	string manuf_db = ppd_info["manufacturer_db"]:"";
 	string model_db = ppd_info["model_db"]:"";
@@ -1821,6 +1823,8 @@ y2error ("CIT: %1", CUPS::InstallationType ());
 	    y2milestone ("Returning %1", `connection);
 	    return `connection;
 	}
+
+	Printerdb::InstallDrivers ();
 
 	string support
 	    = Printerdb::foomatic[Printer::printer["detected", "vendor_db"]:"",

@@ -25,8 +25,10 @@
     import "LPRng";
     import "Mode";
     import "Label";
+    import "Package";
     import "PackageSystem";
     import "Popup";
+    import "Report";
     import "Require";
     import "Service";
 
@@ -36,6 +38,9 @@
       * Currently used spooler, cups or lprng
       */
     string spooler = "unknown";
+
+    boolean are_drivers_installed = nil;
+
 
     /**
      * Printer's name mustn't be the same as a name of one of the files
@@ -201,14 +206,14 @@ This usually takes one or two minutes")),
 	// first try if some of the systems exists.
 	boolean cups_exists = PackageSystem::Installed("cups-client");
 	// for lpd we need to check the file because
-	boolean lpd_exists = (SCR::Read(.target.size, "/etc/init.d/lpd")!=-1);
-	y2milestone ("CUPS exists: %1, LPD exists: %2",
+	boolean lpd_exists = PackageSystem::Installed ("lprng");
+	y2milestone ("CUPS exists: %1, LPRng exists: %2",
 	    cups_exists, lpd_exists);
 	boolean cups_complete = PackageSystem::InstalledAll (
-	    ["cups-drivers", "cups-libs", "cups", "cups-client", "filters",
-	    "foomatic-filters"]);
+	    [/*"cups-drivers", "cups-libs",*/ "cups", "cups-client",/*"filters",
+	    "foomatic-filters"*/]);
 	boolean lpd_complete = PackageSystem::InstalledAll (
-	    ["lpdfilter", "filters", "cups-drivers", "foomatic-filters"]);
+	    [/*"lpdfilter", "filters", "cups-drivers", "foomatic-filters"*/]);
 
 	if (cups_exists && !lpd_exists)
 	    {
@@ -334,6 +339,71 @@ Install them now?"));
 //	Require::DoInstallAndRemove (inst, del);
 
 	sys_forbidden_names = nil;
+    }
+
+    global define boolean AreDriversInstaller () ``{
+	if (are_drivers_installed != nil)
+	    return are_drivers_installed;
+	list<string> packages = [];
+	if (spooler == "cups")
+	{
+	    packages = ["cups-drivers", "cups-drivers-stp", "filters",
+		"foomatic-filters"];
+	}
+	else
+	{
+	    packages = ["lpdfilter", "filters", "cups-drivers",
+		"foomatic-filters"];
+	}
+	y2milestone ("Packages to check for installing: %1", packages);
+	if (Package::InstalledAll (packages))
+	{
+	    are_drivers_installed = true;
+	}
+	else
+	{
+	    packages = filter (string p, packages, ``(
+		Package::Available (p)
+	    ));
+	    if (Package::InstalledAll (packages))
+		are_drivers_installed = true;
+	    else
+		are_drivers_installed = false;
+	}	
+	return are_drivers_installed;
+    }
+
+    global define boolean InstallDrivers () ``{
+	boolean i_result = true;
+	list<string> packages = [];
+	if (spooler == "cups")
+	{
+	    packages = ["cups-drivers", "cups-drivers-stp", "filters",
+		"foomatic-filters"];
+	}
+	else
+	{
+	    packages = ["lpdfilter", "filters", "cups-drivers",
+		"foomatic-filters"];
+	}
+	y2milestone ("Packages to check for installing: %1", packages);
+	if (! Package::InstalledAll (packages))
+	{
+	    packages = filter (string p, packages, ``(
+		Package::Available (p)
+	    ));
+	    y2milestone ("Available packages: %1", packages);
+	    i_result = Require::RequireAndConflictTarget (packages, [],
+		// question popup, %1 is list of package names
+		_("Printer drivers are not installed. YaST will install
+packages %1."));
+	    if (! (i_result || Require::LastOperationCanceled ()))
+	    {
+		// error report
+		Report::Error (_("Installing packages failed."));
+	    }
+	}
+	return i_result;
     }
 
     /**
