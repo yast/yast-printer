@@ -204,8 +204,7 @@
         foreach (`p, Printer::printcap, ``{
             string ukey = p["unique_key"]:"";
             string uri = p["uri"]:"";
-	    string ppd_file = p["ppd"]:"";
-	    map ppd_info = Printer::ppdInfo (ppd_file);
+	    map ppd_info = p["ppd_info"]:$[];
 	    string model = ppd_info["manufacturer"]:"" + ppd_info["model"]:"";
 	    if (model == "")
 	    {
@@ -274,7 +273,6 @@
 	import "PackageCallbacks";
 	Printer::printcap = [];
 	Printer::default = "";
-	Spooler::save_all = false;
 
 	Spooler::StopServices();
 	list to_delete = ["plp", "lprold", "lprng", "cups", "cups-client", "cups-drivers", "cups-drivers-cs", "cups-drivers-de", "cups-drivers-stp",
@@ -639,7 +637,7 @@ All changes will be lost.
 		else
 		    // This printer was not configured using YaST2. Item in table. SHORT!
 		    ret = add (ret, _("- not YaST2 -"));
-		if (Spooler::Get () == "cups" || Printer::spooler == "lprng")
+		if (Spooler::Get () == "cups" || Spooler::Get () == "lprng")
 		{
 		    if ("yast2" == lookup (ent, "type", "yast2"))
 			// table item. SHORT

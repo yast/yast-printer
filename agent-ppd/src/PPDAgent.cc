@@ -109,6 +109,17 @@ YCPValue PPDAgent::Read(const YCPPath &path, const YCPValue& arg)
 	{
 	    return fileops.ppdConstraints (arg->asString());
 	}
+	if (path->component_str (1) == "constraints_list"
+	    && !arg.isNull () && arg->isList ())
+	{	
+	    YCPList l = arg->asList ();
+	    if (l->size () == 2 && l->value(0)->isString ()
+		&& l->value(1)->isMap ())
+	    {
+		return fileops.ppdFailedConstraints (l->value(0)->asString (),
+		    l->value(1)->asMap ());
+	    }
+	}
     }
     // fallback...
     return YCPError(string ("Wrong path '") + path->toString() + string ("' in Read()."));

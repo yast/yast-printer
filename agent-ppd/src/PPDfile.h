@@ -35,6 +35,7 @@ class PPDfile {
 	YCPBoolean isPpd (const char* filename);
 	YCPMap ppdInfo (const char *filename);
 	YCPList ppdConstraints (YCPString filename);
+	YCPList ppdFailedConstraints (YCPString filename, YCPMap options);
 
     private:
 

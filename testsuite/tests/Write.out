@@ -18,7 +18,7 @@ Read	.init.scripts.exists "lpd" true
 Read	.target.size "/etc/printcap" 555
 Execute	.target.bash "/bin/chmod 0644 /etc/printcap" 0
 Execute	.target.bash "/usr/lib/YaST2/bin/assign_printcap_default \"\"" 0
-Write	.target.ycp "/var/lib/YaST2/printers" $["cups_usb_devices":`always, "default":"", "deleted":[], "printers":[], "server_default":true, "version":521] true
+Write	.target.ycp "/var/lib/YaST2/printers" $["cups_usb_devices":`always, "printers":[], "version":521] true
 Execute	.target.bash "/bin/chmod 600 /var/lib/YaST2/printers" 0
 Execute	.target.bash "test -f /etc/init.d/lpd && /etc/init.d/lpd stop" 0
 Execute	.target.bash "test -f /etc/init.d/cups && /etc/init.d/cups stop" 0
@@ -47,20 +47,21 @@ Execute	.target.mkdir "/etc/lpdfilter/lp" true
 Execute	.target.bash "/usr/lib/lpdfilter/bin/lprsetup -lprng -overwrite lp -device /dev/lp0  -driver upp -own -color -sf" 0
 Read	.target.size "/etc/printcap" 555
 Read	.target.tmpdir "/tmp"
-Write	.ppd.file.modify ["filename", "/tmp/ppdfile", $[]] true
-Execute	.target.bash "/bin/cp /tmp/ppdfile /etc/lpdfilter/lp/ppd" 0
+Write	.ppd.file.modify ["filename", "/tmp/patched_ppd_lp", $[]] true
+Execute	.target.remove "filename" 0
+Execute	.target.bash "/bin/cp /tmp/patched_ppd_lp /etc/lpdfilter/lp/ppd" 0
 Execute	.target.bash_output "/usr/lib/YaST2/bin/real_resolution /etc/lpdfilter/lp/ppd" $["exit":0, "srderr":"", "stdout":""]
 Write	.target.string "/etc/lpdfilter/lp/upp" "-sDEVICE=PS\n-sPAPERSIZE=a4\n-r\n" true
 Execute	.target.bash "/bin/chmod 644 /etc/lpdfilter/lp/upp" 0
 Write	.target.string "/etc/lpdfilter/lp/post" "foomatic-rip --ppd /etc/lpdfilter/lp/ppd" true
 Execute	.target.bash "/bin/chmod 755 /etc/lpdfilter/lp/post" 0
-Read	.target.size "/tmp/ppdfile" 555
+Read	.target.size "/tmp/patched_ppd_lp" 555
 Write	.target.string "/etc/lpdfilter/lp/conf" "#\n# for documentation see /usr/lib/lpdfilter/global/optional.options\n#\n\n" true
 Execute	.target.bash "/bin/chmod 660 /etc/lpdfilter/lp/conf ; /bin/chown lp:lp /etc/lpdfilter/lp/conf" 0
 Read	.target.size "/etc/printcap" 555
 Execute	.target.bash "/bin/chmod 0644 /etc/printcap" 0
 Execute	.target.bash "/usr/lib/YaST2/bin/assign_printcap_default lp" 0
-Write	.target.ycp "/var/lib/YaST2/printers" $["cups_usb_devices":`always, "default":"lp", "deleted":[$["name":"lpx", "states":$["cups-state":"changed", "lprng-state":"commited"], "type":"printer"]], "printers":[$["accepting":true, "bannerend":"none", "bannerstart":"none", "lprng-state":"commited", "name":"lp", "state":"idle", "uri":"parallel://dev/lp0"]], "server_default":true, "version":521] true
+Write	.target.ycp "/var/lib/YaST2/printers" $["cups_usb_devices":`always, "printers":[$["name":"lp", "uri":"parallel://dev/lp0"]], "version":521] true
 Execute	.target.bash "/bin/chmod 600 /var/lib/YaST2/printers" 0
 Execute	.target.bash "test -f /etc/init.d/lpd && /etc/init.d/lpd stop" 0
 Execute	.target.bash "test -f /etc/init.d/cups && /etc/init.d/cups stop" 0

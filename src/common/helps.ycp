@@ -319,12 +319,11 @@ For some languages, this choice is important to get correct output from
      * Help text.
      * @param type string type of remote printer
      * @param raw boolean true if is it raw printer?
-     * @param allow_edit boolean true if allow editing help should be shown
      * @return help text
      */
-    global define string getEditHelp (string type, boolean raw, boolean allow_edit) ``{
+    global define string getEditHelp (string type, boolean raw) ``{
 	string help_text = "";
-	if (allow_edit)
+	if (Spooler::Get () != "cups" && Printer::index >= 0)
 	{
 	    // help text 1/4 or 1/7, sometimes missing
 	    help_text = _("<P><B><BIG>Allowing Editing</BIG></B><BR>
@@ -336,9 +335,8 @@ queue settings.</P>");
 	}
 	// help text 2/4 or 2/7
 	help_text = help_text + _("<P><B><BIG>Name:</BIG></B><BR>
-You may change the name under which to access the configuration in the spool system.
- Form feed settings can also be changed here.</P>
-");
+You may change the name under which to access the configuration
+in the spool system.</P>");
 	if (type != "class")
 	{
 	    if (! raw)

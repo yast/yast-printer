@@ -449,6 +449,12 @@ user name, and password.
                     ppd_info["manufacturer"]:"",
                     ppd_info["model"]:"",
 		    Printer::getForbiddenNames ());
+		if (SCR::Read (.target.size, Printer::printer["ppd"]:"") != -1)
+		{
+		    Printer::printer["ppd"] = SCR::Read (.ppd.file.open,
+			[Printer::printer["ppd"]:"",
+			    SCR::Read (.target.tmpdir)]);
+		}
 		break;
 	    }
 	    ret = UI::UserInput ();
@@ -1023,7 +1029,7 @@ and test the queue after the printer model is selected."));
 	    Report::Message (_("Unknown PPD file. Select printer model."));
 	    return `back;
 	}
-	filename = Printer::printer["ppd"]:"";
+	string filename = Printer::printer["ppd"]:"";
 
 	y2milestone ("Modifying PPD file %1", filename);
 
@@ -1054,24 +1060,8 @@ and test the queue after the printer model is selected."));
 	    && o["name"]:"" != "ImageableArea"
 	    && o["mame"]:"" != "PaperDimension"));
 
-	list<string> ppd_options = maplist (map o, optlist, ``(o["name"]:nil));
-	ppd_options = filter (string o, ppd_options, ``(o != nil));
-
-	foreach (string k, any v, selected, ``{
-	    if (contains (ppd_options, k))
-	    {
-		ppd_selected[k] = v;
-		selected[k] = nil;
-	    }
-	});
-	selected = filter (string k, any v, selected, ``(v != nil));
-
-y2error ("Selected: %1", selected);
-y2error ("Selected from PPD: %1", ppd_selected);
-
 	// change the encoding of printable strings
 	map ppdinfo = SCR::Read (.ppd.file.ppdinfo, filename);
-y2error ("PPD file info: %1", ppdinfo);
 	string encoding = ppdinfo["lang_encoding"]:"";
 	if (encoding == "")
 	    encoding = Language2Encoding (ppdinfo["lang_version"]:"");
@@ -1320,6 +1310,11 @@ y2error ("PPD file info: %1", ppdinfo);
 	boolean know = conf_type || lookup (Printer::printer, "type", "yast2") == "non-yast-now";
 	boolean raw = lookup (Printer::printer, "raw", false);
 	string model = lookup (Printer::printer, "device", "");
+	if (Printer::printer["type"]:"" != "yast2"
+	    && Printer::printer["type"]:"" != "non-yast-now")
+	{
+	    raw = true;
+	}
 
 	//
 	// texts
@@ -1336,6 +1331,8 @@ y2error ("PPD file info: %1", ppdinfo);
 		filename = substring (filename, 22);
 	    config_text = config_text + sformat (" (%1)", filename);
 	}
+	if (config_text == "")
+	    config_text = _("unknown");
 
 	string name_text = lookup (Printer::printer, "name", "");
 	string connection_text = "";
@@ -1346,7 +1343,7 @@ y2error ("PPD file info: %1", ppdinfo);
 	items = add (items, `item (`id (`name), _("Name and basic settings"), lookup (Printer::printer, "name", "")));
 	if ("class" != uri_type)
 	{
-	    if (! lookup (Printer::printer, "raw", false))
+	    if (! raw)
 	    {
 		// table entry
 		items = add (items, `item (`id (`model), _("Printer model"), know ? model_text : _("unknown")));
@@ -1367,7 +1364,7 @@ y2error ("PPD file info: %1", ppdinfo);
 	}
 	else
 	{
-	    if (! lookup (Printer::printer, "raw", false))
+	    if (! raw)
 	    {
 	// table entry
 		items = add (items, `item (`id (`settings), _("Printing filter settings"), ""));
@@ -1386,7 +1383,7 @@ y2error ("PPD file info: %1", ppdinfo);
 	    }
 	}
 
-	term allow_cbox = Printer::index >= 0
+	term allow_cbox = Printer::index >= 0 && Spooler::Get () != "cups"
 	    ? `VBox (
 		`Left (`CheckBox (`id (`yast), `opt (`notify),
 		    // check box
@@ -1418,7 +1415,7 @@ y2error ("PPD file info: %1", ppdinfo);
 	);
 
 	// dialog caption
-	Wizard::SetContentsButtons (_("Edit configuration"), contents, getEditHelp (uri_type, raw, Printer::index >= 0),
+	Wizard::SetContentsButtons (_("Edit configuration"), contents, getEditHelp (uri_type, raw),
 	    Label::BackButton (), Label::OKButton ());
 	Wizard::RestoreBackButton ();
     }
@@ -1470,7 +1467,7 @@ y2error ("PPD file info: %1", ppdinfo);
 			// popup
 			if (Popup::YesNo (_("If you forbid editing this queue,\nyou will not be able to change its settings\nusing YaST2. Continue?")))
 			{
-			    Printer::printer = add (Printer::printer, "type", "non-yast-now");
+			    Printer::printer["type"] = "non-yast-now";
 			    ret = `update;
 			}
 			else
@@ -1479,10 +1476,10 @@ y2error ("PPD file info: %1", ppdinfo);
 			    ret = nil;
 			}
 		    }
-		    else if (lookup (Printer::printer, "type", "yast2") == "non-yast-now"
-			|| lookup (Printer::printer, "type", "yast2") == "yast2")
+		    else if (Printer::printer["type"]:"yast2" == "non-yast-now"
+			|| Printer::printer["type"]:"yast2" == "yast2")
 		    {
-			Printer::printer = add (Printer::printer, "type", "yast2");
+			Printer::printer["type"] = "yast2";
 			ret = `update;
 		    }
 		    else
@@ -1494,7 +1491,10 @@ with a prefilled name?
 ")))
 			    ret = `add;
 			else
+			{
+			    UI::ChangeWidget (`id (`yast), `Value, false);
 			    ret = nil;
+			}
 		    }
 		}
 		else if (`connection == ret)
@@ -1571,7 +1571,7 @@ with a prefilled name?
 		    `VStretch (),
 		    // checkbox
 		    `CheckBox (`id (`save), _("&Force saving everything"),
-			Spooler::save_all),
+			Printer::save_all),
 		    `VStretch (),
 		    `HBox (`HWeight (999, `HStretch ()), `VBox (
 			`PushButton (`id (`reinstall), `opt (`hstretch),
@@ -1677,7 +1677,7 @@ All your changes will be lost.
 	}
 	if (`next == ret)
 	{
-	    Spooler::save_all = UI::QueryWidget (`id (`save), `Value);
+	    Printer::save_all = UI::QueryWidget (`id (`save), `Value);
 	    symbol spooler = UI::QueryWidget (`id (`spooler), `CurrentButton);
 	    if (`cups_server == spooler)
 	    {
@@ -1719,12 +1719,13 @@ the current configuration.
 	    {
 		new_spooler = Spooler::Get ();
 	    }
-	    if (Spooler::Get () != new_spooler)
+	    if (Spooler::Get () != new_spooler || (new_spooler == "cups"
+		&& ((spooler == `cups_client
+			&& `client == CUPS::InstallationType ())
+		    || (spooler == `cups_server
+			 && `server == CUPS::InstallationType ()))))
 	    {
-		Spooler::save_all = true;
-		Spooler::reread = false;
 		Spooler::switchTo (new_spooler);
-		Printer::assignAllQueuesChanged ();
 		return `switch;
 	    }
 	}
@@ -2022,12 +2023,10 @@ the current configuration.
 	    {
 		selected = true;
 	    }
-
-y2error ("detected printer: %1", i);
-
-	    if (isPrinterConfigured (i["manuf"]:"", i["model"]:"", i["uri"]:"",
-		i["unique_key"]:""))
+	    if (isPrinterConfigured (i["vendor"]:"", i["device"]:"",
+		i["uri"]:"", i["unique_key"]:""))
 	    {
+		y2debug ("Skipping %1, already configured", i);
 		return nil;
 	    }
 	    else
@@ -2039,6 +2038,7 @@ y2error ("detected printer: %1", i);
 			Printerlib::getUriDevice (i["uri"]:""), true)),
 			    current == current_sel);
 	});
+
 	items = filter (`i, items, ``(i != nil));
 	if (size (getConfiguredPrinters ()) > 0)
 	{
@@ -2046,6 +2046,7 @@ y2error ("detected printer: %1", i);
 		// selection box entry
 		_("New Queue for Already Configured Printer")));
 	}
+
 	// selection box entry
 	return add (items, `item (`id (-1), _("Other (not detected)"),
 	    !selected));
@@ -2065,6 +2066,7 @@ y2error ("detected printer: %1", i);
      * @return symbol for ws
      */
     global define symbol runDetectedDialog () ``{
+	y2milestone ("Starting detected dialog");
 	Printer::confmode = `det;
 	term contents = Wizard_hw::DetectedContent (
 	    // Selectionbox caption
@@ -2128,7 +2130,6 @@ Continue?
 			continue;
 		    else
 		    {
-			Spooler::reread = true;
 			Printer::queuesRead ();
 		    }
 		}
@@ -2318,6 +2319,14 @@ All your changes will be lost.
 	return CUPS::InstallationType ();
     }
 
+    /**
+      * Mark the queue as the queue maintained by YaST
+      * @return symbol `next
+      */
+    global define symbol markQueueYaST () ``{
+	Printer::printer["type"] = "yast2";
+	return `next;
+    }
     /**
      * We need this wrapper because of wizard sequencer.
      * @return `next for wizard sequencer

@@ -35,11 +35,13 @@
 	    // switchers, no dialogs
 	    "detectconftype" :	[ ``(detectConfigType ()), true],
 	    "config_type" :	[ ``(getInstType ()), true, ],
+	    "mark_yast" : 	[ ``(markQueueYaST ()), true ],
 
 	    // sequences
 	    "main_wz" :		``(MainSequence ()),
 	    "add_printer_wz" :	``(AddPrinterSequence ()),
 	    "edit_printer_wz" :	``(EditPrinterSequence ()),
+	    "add_printer_sub_wz":``(AddPrinterSubSequence ()),
 
 	    // real dialogs
 	    "name_auto" :	``(runNameDialog (true)),
@@ -157,7 +159,7 @@
 		`state : "state",
 		`perm : "users",
 		`class_members : "members",
-		`add : "add_printer_wz",
+		`add : "add_printer_sub_wz",
 		`next : "storeprinter",
 		`abort : `abort,
 		],
@@ -167,7 +169,12 @@
 	    ],
 	    "state" : $[ `next : "edit", `abort : `abort, ],
 	    "users" : $[ `next : "edit", `abort : `abort, ],
-	    "add_printer_wz" : $[ `next : "edit", `abort : `abort ],
+	    "add_printer_sub_wz" : $[
+		`next : "mark_yast",
+		`edit : "mark_yast",
+		`abort : `abort
+	    ],
+	    "mark_yast" : $[ `next : "edit" ],
 	    "samba" : $[ `next : "edit", `abort : `abort, ],
 	    "novell" : $[ `next : "edit", `abort : `abort, ],
 	    "ipp" : $[ `next : "edit", `abort : `abort, ],
@@ -232,13 +239,13 @@
       * Workflow for adding a single queue
       * @return sequence result
       */
-    global define symbol AddPrinterSequence () ``{
+    global define symbol AddPrinterSubSequence () ``{
 	map aliases = getAliases ();
 	map sequence = $[
 	    "ws_start"   : "detectconftype",
 	    "detectconftype" : $[
                 `abort : `abort,
-                `quick : "edit_printer_wz",
+                `quick : `edit,
                 `name : "name_auto",
 		`installed_printer : "inst_printer",
 		`connection : "connection_type",
@@ -300,7 +307,7 @@
 	    "listen_ipp_bcast" : $[ `abort : `abort, `next : "storeprinter" ],
 	    "cups_client" : $[ `abort : `abort, `next : "storeprinter" ],
 	    // end of connection types
-	    "inst_printer" : $[ `next : "edit_printer_wz", `abort : `abort, ],
+	    "inst_printer" : $[ `next : `edit, `abort : `abort, ],
 
 	    "name_auto" : $[
 		`abort : `abort,
@@ -310,7 +317,7 @@
 	    ],
 	    "model" : $[
 		`abort : `abort,
-		`next : "edit_printer_wz",
+		`next : `edit,
 		`next_propose_queues : "queues_proposal",
 		`specifyppd : "useppd",
 		`downloadppd : "downloadppd",
@@ -325,20 +332,42 @@
 	    ],
 	    "members" : $[
 		`abort : `abort,
-		`next : "edit_printer_wz",
+		`next : `edit,
 	    ],
 	    "queues_proposal" : $[
 		`abort : `abort,
 		`next : `next,
 	    ],
 
-	    "edit_printer_wz" : $[ `abort : `abort, `next : `next ],
 	    "storeprinter" : $[`next : `next, ],
 	];
 	aliases = filter (string k, any v, aliases, ``(haskey (sequence, k)));
 	return WizardSequencer(aliases, sequence);
     }
 
+    /**
+      * Workflow for adding a single queue
+      * @return sequence result
+      */
+    global define symbol AddPrinterSequence () ``{
+	map aliases = getAliases ();
+	map sequence = $[
+	    "ws_start"   : "add_printer_sub_wz",
+	    "add_printer_sub_wz" : $[
+                `abort : `abort,
+		`next : `next,
+		`edit : "edit_printer_wz"
+//                `quick : "edit_printer_wz",
+//                `name : "name_auto",
+//		`installed_printer : "inst_printer",
+//		`connection : "connection_type",
+	    ],
+
+	    "edit_printer_wz" : $[ `abort : `abort, `next : `next ],
+	];
+	aliases = filter (string k, any v, aliases, ``(haskey (sequence, k)));
+	return WizardSequencer(aliases, sequence);
+    }
 
     /**
       * Main workflow of the printer configuration with detected printers dialog

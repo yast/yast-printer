@@ -232,13 +232,15 @@
         string src_ppd = entry["ppd"]:"";
 	string dst_ppd = SCR::Read (.target.tmpdir) + "/patched_ppd_"
 	    + entry["name"]:"";
-	while (SCR::Read (.target.size, dst_ppd) > 0)
-	    dst_ppd = dst_ppd + "x"; // FIXME this isn't the best solution, but
-				// should work fine
+	if (! Mode::test)
+	{
+	    while (SCR::Read (.target.size, dst_ppd) > 0)
+		dst_ppd = dst_ppd + "x"; // FIXME this isn't the best
+			// solution, but should work fine, EXCEPT TESTSUITES
+	}
         boolean raw = entry["raw"]:false;
         if (raw)
         {
-            ppdfilename = "";
             entry["ppd"] = "";
 	    return entry;
         }
@@ -250,7 +252,7 @@
 
 Incorrect internal data. Try selecting the
 printer model again.
-"), name));
+"), entry["name"]:""));
 	    return nil;
 	}
 

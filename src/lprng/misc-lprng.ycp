@@ -26,6 +26,20 @@
     import "Report";
 
     /**
+     * Write conf file onto disk.
+     * @param fn filename
+     * @param conf file contents
+     */
+    global define void writeConf (string fn, map conf) ``{
+	string s = "#\n# for documentation see /usr/lib/lpdfilter/global/optional.options\n#\n\n";
+	foreach (`k, `v, conf, ``{
+	    s = s + sformat ("%1=\"%2\"\n", k, v);
+	});
+	SCR::Write (.target.string, fn, s);
+	SCR::Execute (.target.bash, sformat ("/bin/chmod 660 %1 ; /bin/chown lp:lp %1", fn));
+    }
+
+    /**
      * Write the .upp file and the configuration.
      * @param entry Entry for printer to save.
      * @return boolean true if successful
@@ -127,8 +141,7 @@ The specified PPD file does not exist."), name));
                     ser_opt = "ixon -imaxbel -ixany -ixoff -crtscts";
                 tail = tail + sformat (" -ty \"%1\"", ser_opt);;
             }
-            if (callLprsetup (sformat ("/usr/lib/lpdfilter/bin/lprsetup -lprng -overwrite %1 -device %2 %3", name, device, baudrate_str) + tail)
-)
+            if (callLprsetup (sformat ("/usr/lib/lpdfilter/bin/lprsetup -lprng -overwrite %1 -device %2 %3", name, device, baudrate_str) + tail))
                 return true;
         }
         else if (con_type == "samba" || con_type == "novell")
