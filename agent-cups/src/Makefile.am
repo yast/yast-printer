@@ -2,7 +2,7 @@
 # Makefile.am for y2a_cups/src
 #
 
-AM_CXXFLAGS = -Wall # -pedantic # -W
+AM_CXXFLAGS = -DY2LOG=\"agent-cups\"
 
 liby2ag_cups_la_LIBADD = -lcups -lz
 libpy2ag_cups_la_LIBADD = -lcups -lz
@@ -41,4 +41,3 @@ libpy2ag_cups_la_SOURCES =		\
 libpy2ag_cups_la_LDFLAGS = -version-info 2:0
 
 INCLUDES = -I$(includedir)
-

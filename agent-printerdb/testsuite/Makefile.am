@@ -4,6 +4,8 @@
 
 SUBDIRS = config lib ag_printerdb.test tests
 
+AM_CXXFLAGS = -DY2LOG=\"agent-printerdb\"
+
 PACKAGE = ag_printerdb
 AUTOMAKE_OPTIONS = dejagnu
 
@@ -19,4 +21,3 @@ runag_printerdb_LDFLAGS = -L$(libdir)	\
 	$(plugindir)/libpy2script.la	\
 	../src/libpy2ag_printerdb.la	\
 	-Xlinker --no-whole-archive
-

@@ -2,8 +2,7 @@
 # Makefile.am for y2a_printerdb/src
 #
 
-
-AM_CXXFLAGS = -Wall # -g # -pedantic # -W
+AM_CXXFLAGS = -DY2LOG=\"agent-printerdb\"
 
 liby2ag_printerdb_la_LIBADD = -lz
 libpy2ag_printerdb_la_LIBADD = -lz
@@ -47,12 +46,10 @@ EXTRA_DIST = parser.yy scanner.ll $(client_DATA) $(ybin_SCRIPTS)
 noinst_PROGRAMS = yhgen
 yhgen_SOURCES = yhgen.cc
 
-yhgen_LDADD = -lscr -ly2 -lycp -lcrypt
+yhgen_LDADD = -lscr -ly2 -lycp
 yhgen_LDFLAGS = -L$(libdir)   \
         -Xlinker --whole-archive        \
         $(plugindir)/libpy2stdio.la     \
         $(plugindir)/libpy2script.la    \
         ../src/libpy2ag_printerdb.la    \
         -Xlinker --no-whole-archive
-
-
