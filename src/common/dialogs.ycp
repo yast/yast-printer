@@ -1585,10 +1585,6 @@ the current configuration.
 	    }
 	    if (Printer::spooler != new_spooler)
 	    {
-		// after switch from CUPS to LPRng printcap with imported queues
-		// can be left. remove it (#29440)
-		if (new_spooler == "lprng")
-		    SCR::Execute (.target.bash, "/bin/rm /etc/printcap");
 		Printer::save_all = true;
 		Printer::reread = false;
 		Printerlib::switchTo (new_spooler);
@@ -2031,7 +2027,11 @@ Continue?
 	    spoolerlabel = "LPRng";
 	}
 	else
-	    spoolerlabel = "any spooler";
+	{
+	    // is %1 in following translation text
+	    // "Printer administration for %1"
+	    spoolerlabel = _("any spooler");
+	}
 	Wizard::SetContentsButtons (
 	// Header of the dilag with all the printers
 	    sformat (_("Printer administration for %1"), spoolerlabel),

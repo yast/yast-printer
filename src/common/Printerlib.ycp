@@ -59,6 +59,14 @@
 	    target_inited = true;
 	}
     };
+
+    global define void reinitTarget () ``{
+	boolean finished = Pkg::TargetFinish ();
+	y2milestone ("Target finished retval: %1", finished);
+	target_inited = false;
+	initTarget ();
+    }
+
     /**
      * Sends sequence to wake up Epson stylus usb printers.
      * @see <a href="http://sdb.suse.de/en/sdb/html/jsmeix_print-stcXXXusb.html">Installing an Epson Stylus Color Printer on USB</a>
@@ -528,6 +536,7 @@ Install it now?"));
      */
     global define integer getSpoolSystem () ``{
 	initTarget ();
+
 	// first try if some of the systems exists.
 	boolean cups_exists = Pkg::IsProvided ("cups-client");
 	// for lpd we need to check the file because
@@ -588,6 +597,7 @@ Install it now?"));
      * @param to Spooler to install. Should be one of "cups" "lprold" "plrng "plp"
      */
     global define void switchTo (string to) ``{
+	y2milestone ("Switching spooler to %1", to);
 	Printer::foomatic = nil;
 	initTarget ();
 	list del = ["plp", "lprold", "lprng", "cups", "cups-client",
@@ -601,7 +611,7 @@ Install it now?"));
 	list inst_other = [ to, "filters", "lpdfilter", "foomatic-filters",
 	    "cups-drivers"];
 
-        if ("cups" == to)
+	if ("cups" == to)
         {
             inst = inst_cups;
         }
@@ -612,6 +622,11 @@ Install it now?"));
         }
         else
         {
+	    // after switch from CUPS to LPRng printcap with imported queues
+	    // can be left. remove it (#29440)
+	    y2milestone ("Removing /etc/printcap");
+	    SCR::Execute (.target.bash,
+		"test -f /etc/printcap && /bin/rm /etc/printcap");
 	    inst = inst_other;
         }
 	del = filter (`e, del, ``(! contains (inst, e)));
@@ -642,10 +657,25 @@ Install them now?"));
 	Pkg::PkgSolve ();
 	Pkg::PkgCommit (0);
 	WFM::CallModule("inst_suseconfig", []);
+	reinitTarget ();
+	if (to == "cups" || to == "cups_client")
+	{
+	    // after switch from CUPS to LPRng printcap with imported queues
+	    // can be left. remove it (#29440)
+	    // deleting when switching to CUPS doesn't break anything
+	    y2milestone ("Removing /etc/printcap");
+	    SCR::Execute (.target.bash,
+		"test -f /etc/printcap && /bin/rm /etc/printcap");
+	}
+	if ("cups" == to)
+        {
+	    // create symlink /etc/printcap -> /etc/cups/printcap (#29671)
+	    y2milestone ("Creating /etc/printcap symlink");
+	    SCR::Execute (.target.bash,
+		"/bin/ln -sf /etc/cups/printcap /etc/printcap");
+        }
 
-
-
-	Require::DoInstallAndRemove (inst, del);
+//	Require::DoInstallAndRemove (inst, del);
 	Printer::save_all = true;
 	Printer::reread = true;
 	Printer::sys_forbidden_names = nil;
