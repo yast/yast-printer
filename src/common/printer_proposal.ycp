@@ -19,51 +19,50 @@
 {
     textdomain "printer";
     import "Printer";
-    import "Printconf";
-    import "Cups";
+    import "Printerlib";
 
     string func  = Args(0);
     map    param = Args(1);
     map    ret   = $[];
 
-    integer spool_sys = Printer::getSpoolSystem ();
+    integer spool_sys = Printerlib::getSpoolSystem ();
 
     if (func == "MakeProposal")
     {
-	boolean force_reset = param["force_reset"]:false;
+	boolean force_reset = lookup (param, "force_reset", false);
 	string proposal = "";
 	string warning = nil;
 	symbol warning_level = nil;
-	if (2 == spool_sys)
+/*	if (2 == spool_sys)
 	{
 	    if (force_reset || !Printer::proposal_valid)
 	    {
 		Printer::proposal_valid = true;
-		Cups::Reset ();
-		Cups::Read ();
-		Cups::Detect ();
-		Cups::Propose ();
+		Printer::Reset ();
+		Printer::Read ();
+		Printer::Detect ();
+		Printer::Propose ();
 	    }
 	    proposal = Cups::Summary ();
 	}
-	else if (1 == spool_sys)
+	else */ if (1 == spool_sys || 2 == spool_sys)
 	{
-	    if (force_reset || !Printer::proposal_valid)
+	    if (force_reset || !Printerlib::proposal_valid)
 	    {
-		Printer::proposal_valid = true;
-		Printconf::Reset ();
-		Printconf::Read ();
-		Printconf::Detect ();
-		Printconf::Propose ();
+		Printerlib::proposal_valid = true;
+		Printer::Reset ();
+		Printer::Read ();
+		Printer::Detect ();
+		Printer::Propose ();
 	    }
-	    if (size (Printconf::printcap) > 0)
+	    if (size (Printer::printcap) > 0)
 	    {
 		ret = $[
 		    "warning" :_("<p><a href=\"printer_conf\">Test</a> your printer configuration before proceeding.</p>"),
 		    "warning_level" : `notice,
 		    ];
 	    }
-	    proposal = Printconf::Summary ([]);
+	    proposal = Printer::Summary ([]);
 	}
 	else
 	{
@@ -78,19 +77,20 @@
     {
 	any saved = nil;
 	any seq = nil;
-	if (2 == spool_sys)
+/*	if (2 == spool_sys)
 	{
 	    saved = Cups::Export ();
 	    seq = CallFunction (`cups (.nocheck, .noio));
 	    if (`next != seq)
 		Cups::Import (saved);
 	}
-	else if (1 == spool_sys)
+	else */ if (1 == spool_sys || 2 == spool_sys)
 	{
-	    saved = Printconf::Export ();
-	    seq = CallFunction (`printconf (.nocheck, .noio));
+	    Printer::spooler = 1 == spool_sys ? "lprng" : "cups";
+	    saved = Printer::Export ();
+	    seq = CallFunction (`printer (.nocheck, .noio));
 	    if (`next != seq)
-		Printconf::Import (saved);
+		Printer::Import (saved);
 	}
 	ret = $[ "workflow_sequence" : seq, ];
     }
@@ -110,15 +110,15 @@
 	 * of printers is empty (there is nothing to save).
 	 */
 	boolean success = true;
-	if (2 == spool_sys)
+/*	if (2 == spool_sys)
 	{
 	    if (0 != size (Cups::printers) + size (Cups::classes))
 	    success = Cups::Write ();
 	}
-	else if (1 == spool_sys)
+	else */ if (1 == spool_sys || 2 == spool_sys)
 	{
-	    if (0 != size (Printconf::printcap))
-	    success = Printconf::Write ();
+	    if (0 != size (Printer::printcap))
+	    success = Printer::Write ();
 	}
         ret = $[ "success" : success ];
     }

@@ -1361,11 +1361,12 @@ and if you do not like the result, just press Back.")
 	Printer::printer = add (Printer::printer, "saved", saved);
 	string config = lookup (Printer::printer, "config", "");
 	any vals = nil;
-	term test_button = (!Printer::isNetAvailable () && Printer::isNetwork ()) ? `VSpacing (1) : `PushButton (`id (`test), _("&Test graphical printing"));
+	term test_button = (!Printer::isNetAvailable () && Printer::isNetwork ()) ? `VSpacing (1) : `HWeight (1, `PushButton (`id (`test), _("&Test graphical printing")));
+	term advanced_button = `HWeight (1, `PushButton (`id (`advanced), _("Advanced settings")));
 	Wizard::SetContentsButtons (_("Configuration options"), `VBox (
 		    `VWeight (1, `ReplacePoint (`id (`upper), `VSpacing (1))),
 		    `VWeight (1, `ReplacePoint (`id (`lower), `VSpacing (1))),
-		    test_button
+		    `HBox (`HStretch (), test_button, advanced_button, `HStretch ())
 		    ), getFilterHelp (), BackButtonLabel (), NextButtonLabel ());
 
 	map selected = lookup (Printer::printer, "options", $[]);
@@ -1403,6 +1404,12 @@ and if you do not like the result, just press Back.")
 		opts = SCR::Read (add (add (.printerdb.options, config), co), selected);
 		UI::ReplaceWidget (`id (`upper), `SelectionBox (`id (`opts), `opt (`notify), _("&Options"), opts));
 	    }
+	    else if (`advanced == ret)
+	    {
+		if (Printer::spooler == "cups")
+		    ret = `adv_cups;
+		break;
+	    }
 	    ret = UI::UserInput ();
 	}
 	if (`next == ret)
@@ -1412,8 +1419,6 @@ and if you do not like the result, just press Back.")
 	    saved = add (saved, "upp", "");
 	    Printer::printer = add (Printer::printer, "options", selected);
 	    Printer::printer = add (Printer::printer, "saved", saved);
-	    if (Printer::spooler == "cups")
-		ret = `next_cups;
 	}
 	return ret;
     }
@@ -1532,7 +1537,7 @@ and if you do not like the result, just press Back.")
 		{
 		    items = add (items, `item (`id (`settings), _("Hardware dependent settings"), ""));
 		}
-		items = add (items, `item (`id (`indep), _("Hardware &independent settings"), ""));
+		items = add (items, `item (`id (`indep), _("Hardware independent settings"), ""));
 	    }
 	}
 
@@ -2645,8 +2650,8 @@ prefilled name?")))
 	    "model" : $[ `abort : `abort, `next : "config", `useppd : "useppd", `dbchange : "dbchange", ],
 	    "dbchange" : $[ `abort : `abort, `next : "model", ],
 	    "config" : $[ `abort : `abort, `next : "filter", ],
-	    "filter" : $[ `abort : `abort, `next_cups : "cups_wz", `next : "features", ],
-	    "useppd" : $[ `abort : `abort, `next : "cups_wz", `db : "model" ],
+	    "filter" : $[ `abort : `abort, `adv_cups : "cups_wz", `advanced : "features", `next : "storeprinter", ],
+	    "useppd" : $[ `abort : `abort, `advanced : "cups_wz", `db : "model", `next: "storeprinter" ],
 	    "features" : $[ `abort : `abort, `next_cups : "cups_wz", `next : "storeprinter", ],
 	    "cups_wz" : $[ `abort : `abort, `next : "storeprinter", ],
 	    "ppdetails" : $[ `abort : `abort, `next : "parallel", ],
@@ -2659,7 +2664,7 @@ prefilled name?")))
 	    "model" : $[ `abort : `abort, `next : "config", `useppd : "useppd", `dbchange : "dbchange", ],
             "dbchange" : $[ `abort : `abort, `next : "model", ],
 	    "config" : $[ `abort : `abort, `next : "filter", ],
-	    "filter" : $[ `abort : `abort, `next_cups : "cups_wz", `next : "features", ],
+	    "filter" : $[ `abort : `abort, `next_cups : "cups_wz", `advanced : "features", `next: "storeprinter", ],
 	    "useppd" : $[ `abort : `abort, `next : "cups_wz", `db : "model" ],
 	    "features" : $[ `abort : `abort, `next_cups : "cups_wz", `next : "storeprinter", ],
 	    "cups_wz" : $[ `abort : `abort, `next : "storeprinter", ],
@@ -2669,7 +2674,7 @@ prefilled name?")))
 	    "ws_start" : "name",
 	    "name" : $[ `abort : `abort, `next : "config", `raw: "storeprinter",],
 	    "config" : $[ `abort : `abort, `next : "filter", ],
-	    "filter" : $[ `abort : `abort, `next_cups : "cups_wz", `next : "features", ],
+	    "filter" : $[ `abort : `abort, `next_cups : "cups_wz", `advanced : "features", `next : "storeprinter" ],
 	    "features" : $[ `abort : `abort, `next_cups : "cups_wz", `next : "storeprinter", ],
 	    "cups_wz" : $[ `abort : `abort, `next : "storeprinter", ],
 	    "storeprinter" : $[`next : `next, ],
@@ -2727,7 +2732,7 @@ prefilled name?")))
 	    "name" : $[ `abort : `abort, `next : "edit", `raw : "edit",],
 	    "filter" : $[ `abort : `abort, `next : "edit", `next_cups : "edit", ],
 	    "useppd" : $[ `abort : `abort, `next : "edit", `db : "model" ],
-	    "features" : $[ `abort : `abort, `next_cups : "cups_wz", `next : "storeprinter", ],
+	    "features" : $[ `abort : `abort, `next_cups : "cups_wz", `next : "edit", ],
 	    "members" : $[ `abort : `abort, `next : "edit", ],
 	    "cups_wz" : $[ `abort : `abort, `next : "edit", ],
 	    "ppdetails" : $[ `abort : `abort, `next : "parallel", ],

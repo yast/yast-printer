@@ -21,7 +21,6 @@
     textdomain "printer";
     import "Printer";
     import "Printerlib";
-//    include "printer/dialogs.ycp";
 
     /**
      * Get list of available banners from /usr/share/cups/banners, adds
@@ -235,6 +234,11 @@ queue you want to use."));
      * @return success?
      */
     global define boolean testPrinter (map printer, integer testpage_type) ``{
+	if (Printer::spooler != "lprng" && Printer::spooler != "cups")
+	{
+	    UI::MessagePopup (_("I'm not able to print a testpage. \n You have to install some spooler \n before printing testpages"));
+	    return true;
+	}
 	// message box
 	if (testpage_type != -1)
 	{
@@ -288,8 +292,8 @@ press the 'OK' button.")),
 		}
 		ret = nil;
 	    }
+	    UI::CloseDialog ();
 	}
-	UI::CloseDialog ();
 
 	// create new name for the printer
 	list forbidden_names = union (Printer::getForbiddenNames (), Printer::DeletedNames ());
