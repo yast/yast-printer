@@ -86,6 +86,8 @@ PPD::PPD(const char *ppddir, const char *ppddb) {
     datadir = yast2_dir + "/data/printer/";
     var_datadir = "/var/lib/YaST2/";
 
+    fast_check = false;
+
     /* Load strings mappings */
     #include "PPDVendors.h"
 
@@ -513,8 +515,12 @@ start_from_scratch:
 	    if (db.find (vendor) != db.end ())
 		vi = db[vendor];
 	    ModelInfo mi;
+	    bool updating_model = false;
 	    if (vi.models.find(model) != vi.models.end ())
+	    {
 		mi = vi.models[model];
+		updating_model = true;
+	    }
 	    else
 	    {
 		signed size = vendor.size();
@@ -558,8 +564,42 @@ start_from_scratch:
             else if (support != "full")
                 sup_status = 2;
 	    mi.support = sup_status;
-	    mi.label = mlabel;
 
+            string old_label = mi.label;
+            bool old_fuzzy = mi.fuzzy_label;
+            bool new_fuzzy
+                = modellabels[vendor].find(mlabel) != modellabels[vendor].end();
+            if (new_fuzzy && (old_fuzzy || old_label == ""))
+            {
+                y2error ("Same labels present in multiple PPD files - %s",
+                    mlabel.c_str());
+                bool blank = true;
+                while (modellabels[vendor].find(mlabel)
+                    != modellabels[vendor].end())
+                {
+                    if (blank)
+                    {
+                        blank = false;
+                        mlabel = mlabel + " ";
+                    }
+                    mlabel = mlabel + "I";
+                }
+            }
+            if (old_fuzzy || old_label == "" || ! new_fuzzy)
+            {
+                mi.label = mlabel;
+		mi.fuzzy_label = new_fuzzy;
+                if (modellabels[vendor].find (old_label)
+                    != modellabels[vendor].end()
+                    && updating_model)
+                {
+                    modellabels[vendor].erase(old_label);
+		    y2milestone ("Removed label %s, replacing with %s", old_label.c_str(), mi.label.c_str());
+                }
+                modellabels[vendor].insert(mi.label);
+		y2debug ("Inserted label %s", mi.label.c_str());
+            }
+	    
 	    vi.models[model] = mi;
 	    db[vendor] = vi;
 	}
@@ -619,6 +659,7 @@ start_from_scratch:
                 fprintf(file,"        \"%s\",\n", (*it3).second.pnp_vendor.c_str());
                 fprintf(file,"        \"%s\",\n", (*it3).second.pnp_printer.c_str());
 		fprintf(file,"        \"%s\",\n", (*it3).second.checksum.c_str());
+		fprintf(file,"        %d,\n", (*it3).second.size);
                 fprintf(file,"      ]");
             }
             fprintf(file,"\n    ]");
@@ -1045,6 +1086,7 @@ bool PPD::process_file(const char *filename, PPDInfo *newinfo) {
     info.pnp_vendor = pnp_vendor;
     info.pnp_printer = pnp_printer;
     info.checksum = fileChecksum (filename);
+    info.size = fileSize (filename);
     preprocess(info, newinfo);
 
     creation_status = (done_files * 80) / (total_files) + 10;
@@ -1069,6 +1111,7 @@ void PPD::preprocess(PPD::PPDInfo info, PPDInfo *newinfo) {
     string tmp;
     string label;
     string checksum = info.checksum;
+    off_t filesize = info.size;
 
     y2debug ("New PPD file");
     y2debug ("Set size: %d", products.size ());
@@ -1244,12 +1287,17 @@ void PPD::preprocess(PPD::PPDInfo info, PPDInfo *newinfo) {
         item.pnp_vendor = pnp_vendor;
         item.pnp_printer = pnp_printer;
 	item.checksum = checksum;
+	item.size = filesize;
+	bool updating_model = false;
 	VendorInfo vi;
 	if (db.find (vendor) != db.end ())
 	    vi = db[vendor];
 	ModelInfo mi;
 	if (vi.models.find(printer) != vi.models.end ())
+	{
+	    updating_model = true;
 	    mi = vi.models[printer];
+	}
 
         /* Set the label */
 	signed size = vendor.size() + 1;
@@ -1258,10 +1306,46 @@ void PPD::preprocess(PPD::PPDInfo info, PPDInfo *newinfo) {
         signed ind = (signed) label.find_last_of("(");
         if(ind!=-1) label.erase(ind, label.size());
         label = killbraces(label);
+	if (label == "")
+	    label = printer;
 
-        if ((mi.label == "" || mi.label.size () > label.size ()))
+        if (((mi.label == "" || mi.label.size () > label.size ()))
+	    && label.size () > 0)
         {
-            mi.label = label;
+	    string old_label = mi.label;
+	    bool old_fuzzy = mi.fuzzy_label;
+	    bool new_fuzzy
+		= modellabels[vendor].find(label) != modellabels[vendor].end();
+	    if (new_fuzzy && (old_fuzzy || old_label == ""))
+	    {
+		y2error ("Same labels present in multiple PPD files - %s",
+		    label.c_str());
+		bool blank = true;
+		while (modellabels[vendor].find(label)
+		    != modellabels[vendor].end())
+		{
+		    if (blank)
+		    {
+			blank = false;
+			label = label + " ";
+		    }
+		    label = label + "I";
+		}
+	    }
+	    if (old_fuzzy || old_label == "" || ! new_fuzzy)
+	    {
+		mi.label = label;
+		mi.fuzzy_label = new_fuzzy;
+		if (modellabels[vendor].find (old_label)
+		    != modellabels[vendor].end()
+		    && updating_model)
+		{
+		    modellabels[vendor].erase(old_label);
+		    y2milestone ("Removed label %s, replacing with %s", old_label.c_str(), mi.label.c_str());
+		}
+		modellabels[vendor].insert(mi.label);
+		y2debug ("Inserted label %s", mi.label.c_str());
+	    }
         }
 
 	mi.drivers[nick] = item;
@@ -1384,6 +1468,12 @@ bool PPD::loadPrebuiltDatabase () {
 				    goto error_exit;
 				}
 			    }
+			    if (info->value(4).isNull()
+                                || ! info->value(4)->isInteger())
+                            {
+                                y2error ("Incorrect database format");
+                                goto error_exit;
+                            }
 			    di.filename
 				= info->value(0)->asString()->value_cstr();
 			    di.pnp_vendor
@@ -1392,6 +1482,8 @@ bool PPD::loadPrebuiltDatabase () {
                                 = info->value(2)->asString()->value_cstr();
 			    di.checksum
 				= info->value(3)->asString()->value_cstr();
+			    di.size
+				= info->value(4)->asInteger()->value();
 			    mi.drivers[config] = di;
 			}
 			else
@@ -1443,7 +1535,8 @@ bool PPD::loadPrebuiltDatabase () {
                                 }
                             }
 			}
-
+			y2debug ("Inserted label %s", mi.label.c_str());
+			modellabels[vk].insert (mi.label);
 		    }
 
 		    vi.models[mk] = mi;
@@ -1586,21 +1679,25 @@ bool PPD::cleanupLists () {
 		{ // no more existing file
 		    (*it2).second.drivers.erase (driver_name);
 		}
-/*		else if (it4->second.file_newer)
-		{ // file changed
-		    (*it2).second.drivers.erase (driver_name);
-		}*/
 		else if (it4->second.dir_newer || it4->second.file_newer)
 		{ // parent dir changed or file changed,
-		  // check MD5 for being sure
-		    string checksum = fileChecksum (filename);
-		    if (checksum != di.checksum)
+		  // check MD5 or size for being sure
+// FIXME filesize
+		    if (fast_check)
 		    {
-			(*it2).second.drivers.erase (driver_name);
+			off_t size = fileSize (filename);
+			if (size != di.size)
+			    (*it2).second.drivers.erase (driver_name);
+			else
+			    ppdfiles[filename].update = false;
 		    }
 		    else
 		    {
-			ppdfiles[filename].update = false;
+			string checksum = fileChecksum (filename);
+			if (checksum != di.checksum)
+			    (*it2).second.drivers.erase (driver_name);
+		        else
+			    ppdfiles[filename].update = false;
 		    }
 		}
 		else
@@ -1672,51 +1769,31 @@ string PPD::fileChecksum (const string &filename) {
 	fclose (f);
     }
     return ret;
+}
 
-/*
-    int fd[2];
+off_t PPD::fileSize (const string &filename) {
+    off_t size = 0;
+    struct stat fileinfo;
+    if (! lstat (filename.c_str(), &fileinfo))
+	size = fileinfo.st_size;
+    return size;
+}
 
-    if (0 != pipe (fd))
-	return "";
-    int f = fork ();
-    if (f == -1)
+bool PPD::setCheckMethod (YCPSymbol method) {
+    string s = method->toString ();
+    if (s == "`size")
     {
-	close (fd[0]);
-	close (fd[1]);
-	return "";
+	y2milestone ("Setting PPD files checking to size only");
+	fast_check = true;
+	return true;
     }
-    if (f)
-    { // parent process
-	close (fd[1]);
-	int status;
-	waitpid (f, &status, 0);
-	char buf[MAX+1];
-	int r = read (fd[0], buf, MAX);
-	if (r <= 0)
-	    buf[0] = 0;
-	else
-	    buf[r] = 0;
-	close (fd[0]);
-	//y2error ("Checksum for %s is %s", filename.c_str(), buf);
-	string csum(buf);
-	int pos = csum.find (" ") + 1;
-	pos = csum.find (" ", pos);
-	csum.erase (pos);
-	return csum;
+    else if (s == "`checksum")
+    {
+	y2milestone ("Setting PPD files checking to checksum");
+	fast_check = false;
+	return true;
     }
-    else
-    { // child process
-	close (fd[0]);
-	close (1);
-	dup2 (fd[1], 1);
-	execl ("/usr/bin/cksum", "/usr/bin/cksum", filename.c_str(), (char*) 0);
-	// this should neveer be reached
-	y2error ("Error executing checksum");
-	exit (-1);
-    }
-
-*/
-    return "";
+    return false;
 }
 
 

@@ -382,40 +382,22 @@ preparation for autoinstallation.
         if (SCR::Read (.ppd.db.changed))
         {
             y2milestone ("Database changed");
-	    boolean initial_ok = false;
-	    if (SCR::Read (.target.size, "/var/lib/YaST2/ppd_db_list") > 0
-		&& SCR::Read (.target.size, "/var/lib/YaST2/ppd_db.ycp") > 0)
+	    boolean fast_update = false;
+	    if (SCR::Read (.target.size, "/var/lib/YaST2/ppd_db_list") != -1)
 	    {
-		y2milestone ("list exists");
-		if (Pkg::IsProvided ("cups-drivers")
-		    && Pkg::IsProvided ("cups-drivers-stp"))
-		{
-		    y2milestone ("packages installed");
-		    integer ret = SCR::Execute (.target.bash, "\
-test `cat /var/lib/YaST2/ppd_db_list | wc -l` -eq `find /usr/share/cups/model/ -follow | wc -l`");
-		    if (ret == 0)
-		    {
-			y2milestone ("DB files installed OK");
-			initial_ok = true;
-			SCR::Execute (.target.bash, "/usr/bin/touch /var/lib/YaST2/ppd_db.ycp");
-		    }
-		    else
-			y2milestone ("Probably not complete drivers installed");
-		}
+		fast_update = true;
+		SCR::Write (.ppd.db.check_method, `size);
 	    }
-	    if (! initial_ok)
-	    {
-		y2milestone ("Database really changed");
-	        SCR::Write (.ppd.db.create, "");
-		UI::OpenDialog (`VBox (
-		    `HSpacing (50),
-		    `ProgressBar (`id(`pr),
+	    SCR::Write (.ppd.db.create, "");
+	    UI::OpenDialog (`VBox (
+		`HSpacing (50),
+		`ProgressBar (`id(`pr),
 			// progress bar label
 			_("The list of installed drivers has changed.
 Building database of drivers..."), 100, 0)));
-		integer result = 0;
-		while (true)
-		{
+	    integer result = 0;
+	    while (true)
+	    {
 		    result = SCR::Read (.ppd.db.creation_status);
 		    if (result < 0)
 		        break;
@@ -423,15 +405,18 @@ Building database of drivers..."), 100, 0)));
 		        break;
 		    UI::ChangeWidget (`id (`pr), `Value, result);
                     sleep (1000);
-                }
-	        UI::CloseDialog ();
-	        if (result < 0)
-	        {
+            }
+	    UI::CloseDialog ();
+	    if (result < 0)
+	    {
 		    // error report
 		    Report::Error (_("An error occurred while creating the database
 of printers.
 "));
-	        }
+	    }
+	    if (fast_update)
+	    {
+		SCR::Write (.ppd.db.check_method, `checksum);
 	    }
         }
 	SCR::Execute (.target.bash, "test -f /var/lib/YaST2/ppd_db_list && rm -f /var/lib/YaST2/ppd_db_list");
