@@ -102,19 +102,26 @@
 	return out_file;
     }
     /**
-     * Prepare test page
-     * @param queue queue name
-     * @param opt_file file with queue options
-     * @param PS_printer is the tested printer PS? Do not print image there.
-     * @return filename of the test page
-     */
-    define string preparePsTestPage (string queue, string opt_file, boolean PS_printer) ``{
+      * Prepare test page
+      * @param queue queue name
+      * @param opt_file file with queue options
+      * @param photo string filename of the photo for the testpage
+      * @return filename of the test page
+      */
+    define string preparePsTestPage (string queue, string opt_file,
+	string photo)
+    ``{
 	string out_file = SCR::Read (.target.tmpdir) + "/testpg.ps";
-	SCR::Execute (.target.bash, sformat (
-	    "/usr/lib/YaST2/bin/prepare_ps_testpage.pl %1 %2",
+	string command = sformat (
+	    "/usr/lib/YaST2/bin/prepare_ps_testpage.pl %1 %2 %3 %4",
 	    opt_file,
-	    out_file
-	));
+	    out_file,
+	    // FIXME point to the theme directory
+	    "/local/testpg/SUSE-logo.eps",
+	    photo
+	);
+	y2milestone ("Testpage prepare command: %1", command);
+	SCR::Execute (.target.bash, command);
 	return out_file;
 	// test the distribution
 	string path_to_testpage = Printerlib::baseDataDir + "/testpg.ps";
@@ -148,7 +155,7 @@ When the whole page is printed, press
       * Saves printer under some new name and tests it.
       * @param printer map of printer to test
       * @param testpage_type type of page.
-      * Supported are `ascii, `postscript, `ask
+      * Supported are `ascii, `postscript, `photo, `ask
       * @return boolean true if success
       */
     global define boolean testPrinter (map printer, symbol testpage_type) ``{
@@ -156,6 +163,18 @@ When the whole page is printed, press
 	{
 	    Printerlib::DisplayUnavailableAIPopup ();
 	    return true;
+	}
+
+	// FIXME point to the theme directory
+	string photo_filename = "/local/testpg/chameleon-photo.eps";
+
+	if (testpage_type == `photo)
+	{
+	    testpage_type = `postscript;
+	}
+	else if (testpage_type == `postscript)
+	{
+	    photo_filename = "";
 	}
 
 	printer = Printer::assignStates (printer, true);
@@ -226,6 +245,8 @@ press 'OK'.
 		    `VSpacing (1),
 		    `RadioButtonGroup (`id (`type), `VBox (
 			// radiobutton
+			`Left (`RadioButton (`id (`photo), _("Test &graphical printing with photo"))),
+			// radiobutton
 			`Left (`RadioButton (`id (`graphic), _("Test &graphical printing"))),
 			// radiobutton
 			`Left (`RadioButton (`id (`ascii), _("Test &text printing")))
@@ -239,7 +260,7 @@ press 'OK'.
 		    )
 		)
 	    );
-	    UI::ChangeWidget (`id (`type), `CurrentButton, `graphic);
+	    UI::ChangeWidget (`id (`type), `CurrentButton, `photo);
 	    symbol ret = nil;
 	    while (nil == ret)
 	    {
@@ -254,7 +275,14 @@ press 'OK'.
 		    if (UI::QueryWidget (`id (`type), `CurrentButton) == `ascii)
 			testpage_type = `ascii;
 		    else
+		    {
 			testpage_type = `postscript;
+			if (UI::QueryWidget (`id (`type), `CurrentButton)
+			    == `graphic)
+			{
+			    photo_filename = "";
+			}
+		    }
 		    break;
 		}
 		ret = nil;
@@ -410,16 +438,39 @@ press 'OK'.
 		_("1 unit = 1 PostScript point = 0.0139 inch = 0.0353 cm."));
 
 // values
-	    os = os + sformat ("----X-SECT1: (%1)\n", "queue name");
-	    os = os + sformat ("----X-SECT2: (%1 %2)\n",
-		printer["vendor_ieee"]:"", printer["device_ieee"]:"");
+	    os = os + sformat ("----X-SECT1: (%1)\n", printer["name"]:"");
+
+	    list<string> sect2_values = [
+		sformat ("%1 %2",
+		    printer["vendor_ieee"]:"", printer["device_ieee"]:""),
+		printer["info"]:"",
+		printer["location"]:"",
+		Printerlib::getUriNiceName (printer["uri"]:""),
+	    ];
+	    sect2_values = filter (string v, sect2_values, ``(
+		v != "" && v != " "
+	    ));
+	    sect2_values = maplist (string v, sect2_values, ``(
+		sformat ("(%1)", v)
+	    ));
+	    os = os + sformat ("----X-SECT2: %1\n",
+		mergestring (sect2_values, " "));
+
+	    if (config == "")
+	    {
+		// TRANSLATORS: keep this short! Only translations in languages
+		// with encodings ISO-8859-[1|2|15] will be used.
+		os = os + sformat ("----X-SECT3-L: (%1)\n", _("Printer URI:"));
+		config = printer["uri"]:"";
+	    }
 	    os = os + sformat ("----X-SECT3: (%1)\n", config);
-            // TRANSLATORS: keep this short! Only translations in languages
-            // with encodings ISO-8859-[1|2|15] will be used.
+
 	    os = os + sformat ("----X-SECT4: %1\n", mergestring (optlist, " "));
 
-
-//	    os = os + mergestring (optlist, "\n");
+	    if (size (optlist) == 0)
+	    {
+		os = os + sformat ("----X-SECT4-L: (%1)\n", "");
+	    }
 
 	    if (ce != "X")
 	    {
@@ -432,7 +483,7 @@ press 'OK'.
 		if (! issubstring (printer["config"]:"", "Postscript"))
 		    is_ps = false;
 	    }
-	    test_page = preparePsTestPage (virtual_name, opts, is_ps);
+	    test_page = preparePsTestPage (virtual_name, opts, photo_filename);
 	}
 	else
 	{
