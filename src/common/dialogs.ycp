@@ -30,6 +30,12 @@
 
 
     /**
+      * for temporary storing of printer model
+      * because of `back button
+      */
+    global map tmp_printer_manuf_model = $[];
+
+    /**
       * Ask user to install requested packages
       * @param list of package names
       * @return boolean true if wants to install
@@ -43,14 +49,6 @@ are needed to be installed.
 Install them now?"), mergestring (packages, ", "));
 	return UI::YesNoPopup (popup);
     }
-
-
-    /**
-      * Current mode of configuration
-      * `det for configuring from detected printers dialog
-      * `adm for configuring from printer administration dialog
-      */
-    global symbol confmode = nil;
 
     /**
       * Casts value type to integer if you know what I am talking about.
@@ -947,6 +945,14 @@ with SuSE database of printers only</B></P>") + info_text;
 	string model = lookup (Printer::printer, "device", "");
 	string manuf_ieee = lookup (Printer::printer, "vendor_ieee", "");
 	string model_ieee = lookup (Printer::printer, "device_ieee", "");
+	if (Printer::edit_seq)
+	{
+	    if (tmp_printer_manuf_model == $[])
+	    {
+		y2debug ("tmp Storing printer %1", Printer::printer);
+		tmp_printer_manuf_model = eval (Printer::printer);
+	    }
+	}
 	map info = $[];
 	boolean info_instead_next = false;
 
@@ -1042,7 +1048,7 @@ with SuSE database of printers only</B></P>") + info_text;
 	    }
 	    if (ret == `manufsel)
 	    {
-		y2milestone ("manufsel changed");
+		y2debug ("manufsel changed");
 		if (Printer::db == `foomatic)
 		{
 		    if (manuf_db
@@ -1121,9 +1127,9 @@ with SuSE database of printers only</B></P>") + info_text;
 	    {
 		if (Printer::db == `foomatic)
 		{
-		    y2milestone ("modelsel changed");
+		    y2debug ("modelsel changed");
 		    model_db = UI::QueryWidget (`id (`modelsel), `CurrentItem);
-		    y2milestone ("To %1", model_db);
+		    y2debug ("To %1", model_db);
 		    info = $[];
 		    string vc
 			 = Printer::foomatic[manuf_db,model_db, `vcomment]:"";
@@ -1167,7 +1173,7 @@ with SuSE database of printers only</B></P>") + info_text;
                 ret = reallyAbort () ? `abort : `cont;
                 if (ret == `abort) break;
             }
-		y2error ("PDB: %1, MDB: %2", Printer::db, model_db);
+		y2debug ("PDB: %1, MDB: %2", Printer::db, model_db);
 	    if (ret == `next && (
 		(Printer::db == `foomatic &&(model_db == "" || model_db == nil))
 		|| (Printer::db != `foomatic && (model == "" || model == nil))
@@ -1214,6 +1220,19 @@ with SuSE database of printers only</B></P>") + info_text;
 		    "ownppd" : "",
 		    "config" : "",
 		    ]);
+	}
+	else if (ret == `back || ret == `abort)
+	{
+	    if (Printer::edit_seq)
+	    {
+	        if (tmp_printer_manuf_model != $[])
+	        {
+		    y2debug ("Setting printer back to %1", tmp_printer_manuf_model);
+	            Printer::printer = eval (tmp_printer_manuf_model);
+		    tmp_printer_manuf_model = $[];
+	        }
+	    }
+
 	}
 	return ret;
     }
@@ -1764,6 +1783,7 @@ with SuSE database of printers only</B></P>") + info_text;
 	    ret = UI::UserInput ();
 	    if (ret == `next)
 	    {
+//		raw = ("lpd" == Printer::getUriType () ? true : UI::QueryWidget (`id (`raw), `Value));
 		if (Printer::spooler != "cups")
 		{
 		    raw = ("lpd" == Printer::getUriType () ? true : UI::QueryWidget (`id (`raw), `Value));
@@ -2181,7 +2201,7 @@ y2error ("Setting raw to %1", raw);
      * @return symbol for ws
      */
     global define symbol runConnectionDialog () ``{
-	y2milestone ("Connection dialog, confmode: %1", confmode);
+	y2milestone ("Connection dialog, confmode: %1", Printer::confmode);
 	boolean show_all = -1 == Printer::index || lookup (Printer::printer, "type", "yast2") != "yast2";
 	string uritype = Printer::getUriType ();
 	if ("" == uritype)
@@ -2194,14 +2214,14 @@ y2error ("Setting raw to %1", raw);
 			// label of the frame
 			_("Select the printer type:"),
 			`VBox (
-			    `RadioButtonGroup (`id (`connections), connectionsRadioButtons (uritype, show_all, confmode == `adm)),
+			    `RadioButtonGroup (`id (`connections), connectionsRadioButtons (uritype, show_all, Printer::confmode == `adm)),
 			    `VSpacing (1))
 			),
 		    `HSpacing (5)),
 		`VSpacing (2));
 
 	boolean new_queue = false;
-	if (size (getConfiguredPrinters ()) != 0 && confmode == `adm)
+	if (size (getConfiguredPrinters ()) != 0 && Printer::confmode == `adm)
 	    new_queue = true;
 	//label of the dialog
 	Wizard::SetContentsButtons (_("Connection for printer:"), contents, show_all ? getConnectionHelp (new_queue) : getLocalConnectionHelp (), BackButtonLabel (), NextButtonLabel ());
@@ -2244,7 +2264,7 @@ y2error ("Setting raw to %1", raw);
                         // label of the frame
                         _("Select the printer type:"),
                         `VBox (
-                            `RadioButtonGroup (`id (`connections), advancedConnectionsRadioButtons (uritype, Arch::s390 && confmode == `adm)),
+                            `RadioButtonGroup (`id (`connections), advancedConnectionsRadioButtons (uritype, Arch::s390 && Printer::confmode == `adm)),
                             `VSpacing (1))
                         ),
                     `HSpacing (5)),
@@ -2256,7 +2276,7 @@ y2error ("Setting raw to %1", raw);
 	if (Printer::spooler == "lprng")
 	    helptype = `lprng;
         boolean new_queue = false;
-        if (size (getConfiguredPrinters ()) != 0 && confmode == `adm && Arch::s390)
+        if (size (getConfiguredPrinters ()) != 0 && Printer::confmode == `adm && Arch::s390)
             new_queue = true;
 
 	//label of the dialog
@@ -2436,6 +2456,8 @@ y2error ("Setting raw to %1", raw);
      * @return symbol for wizard seq.
      */
     global define symbol runEditDialog () ``{
+	Printer::edit_seq = true;
+	tmp_printer_manuf_model = $[];
 	any ret = nil;
 	if (Printer::printer["database"]:nil == "foomatic")
 	{
@@ -2453,9 +2475,6 @@ y2error ("Setting raw to %1", raw);
 	    UI::ChangeWidget (`id (`test), `Enabled, false);
 	    UI::ChangeWidget (`id (`edit), `Enabled, false);
 	}
-	;
-
-
 
 	while (nil == ret)
 	    {
@@ -2553,6 +2572,8 @@ with a prefilled name?
 		    ret = nil;
 		}
 	    }
+	if (ret == `back || ret == `nexy || ret == `abort)
+	    Printer::edit_seq = false;
 	return ret;
     }
 
@@ -2721,7 +2742,7 @@ the current configuration.
      * @return symbol for ws
      */
     global define symbol runProbedPrinterDialog () ``{
-	if (confmode == `adm)
+	if (Printer::confmode == `adm)
 	{
 	    y2milestone ("adm mode, going connection setting");
 	    return `connection;
@@ -3391,7 +3412,7 @@ for proposing new queues.");
      * @return symbol for ws
      */
     global define symbol runDetectedDialog () ``{
-	confmode = `det;
+	Printer::confmode = `det;
 	term contents = Wizard_hw::DetectedContent (
 	    // Selectionbox caption
 	    _("Printers to configure"),
@@ -3465,7 +3486,7 @@ system will be saved.
      * @return symbol for ws
      */
     global define symbol runComplexDialog () ``{
-	confmode = `adm;
+	Printer::confmode = `adm;
 	string spoolerlabel = "";
 	if (Printer::spooler == "cups")
 	{
@@ -3648,14 +3669,14 @@ All your changes will be lost.
     }
 
     global define symbol queueConfType () ``{
-	y2milestone ("Confmode is %1, utirype %2", confmode, Printer::getUriType ());
+	y2milestone ("Confmode is %1, utirype %2", Printer::confmode, Printer::getUriType ());
 	if ("prefilter" == Printer::getUriType ())
 	{
 	    y2milestone ("Prefilter queue, going single");
 	    return `single;
 	}
 	// FIXME if will be needed
-	symbol ret = `all;//confmode == `adm ? `all : `single;
+	symbol ret = `all;//Printer::confmode == `adm ? `all : `single;
 	return ret;
     }
     /**
@@ -3774,55 +3795,17 @@ All your changes will be lost.
 		`configure_button : "add_printer_wz",
 		`restart_button : "redetect",
 		`edit_button : "main_wz",
-//		`add : "add_printer_wz",
 		],
 	    "add_printer_wz" : $[
 		`abort : `abort,
 		`next : "detected",
 		],
-/*	    "configdetected" : $[
-		`abort : `abort,
-		`quick : "quick",
-		`auto : "auto_wz",
-		`manual : "manual_wz",
-//		`devsel : "de"					
-		],*/
-/*	    "quick" : $[
-//		`abort : `abort,
-//		`next : "detected",
-//		`edit : "edit_printer_wz",
-//		`add : "manual_wz",
-		`manual : "manual_wz",
-//		`again : "quick",
-		`choose_ppd : "ppdselect",
-		],*/
-/*	    "ppdselect" : $[
-		`abort : `abort,
-		`next : "quick",
-		],*/
-/*	    "manual_wz" : $[
-		`abort : `abort,
-		`next : "quick",
-		],*/
-/*	    "edit_printer_wz" : $[
-		`abort : `abort,
-		`next : "quick",
-		],
-	    "auto_wz" : $[
-		`abort : `abort,
-		`next : "detected",
-		],*/
 	    "main_wz" : $[
 		`next : `next,
 		`abort : `abort,
 		`switch : `switch,
 		`reinstall : `reinstall,
 		],
-/*	    "add_printer_wz" : $[
-		`next : "detected",
-		`abort : `abort,
-		],*/
-//	    "storeprinter" : $[`next : "detected", ],
 	    ];
 	map main_sequence = $[
 	    "ws_start" : "type",
@@ -3834,9 +3817,7 @@ All your changes will be lost.
 		`abort : `abort,
 		`client : "cups_client",
 		`advanced : "advanced",
-//		`detect : "detected_wz",
 		],
-//	    "detected_wz" : $[`abort : `abort, `next : "complex" ],
 	    "advanced" : $[
 		`next : "type",
 		`this : "advanced",
@@ -3957,17 +3938,6 @@ All your changes will be lost.
 	    "queue_conf" : $[ `abort : `abort, `all : "single_printer_wz", `single : "add_queue_wz" ],
 	    "single_printer_wz" : $[ `abort : `abort, `next : `next ],
 
-	// REQUIRED BECAUSE OF CLASSES
-//	    "name" : $[ `abort : `abort, `next : "add_queue_wz", `raw : "storeprinter", `class : "members", ],
-
-
-//	    "namerem" : $[ `abort : `abort, `next : "storeprinter", ],
-//	    "members" : $[ `abort : `abort, `advanced : "cups_wz", `next : "storeprinter", ],
-//	    "config" : $[ `abort : `abort, `advanced : "filter", `next: "storeprinter", ],
-//	    "filter" : $[ `abort : `abort, `next_cups : "cups_wz", `next : "features", ],
-//	    "features" : $[ `abort : `abort, `next_cups : "cups_wz", `next : "config", ],
-//	    "cups_wz" : $[ `abort : `abort, `next : "c_type", ],
-//	    "c_type" : $[ `db : "config", `class : "members", `ppd : "useppd", ],
 	    "ppdetails" : $[ `abort : `abort, `next : "parallel", ],
 	    "spdetails" : $[ `abort : `abort, `next : "serial", ],
 	    "storeprinter" : $[`next : `next, ],
@@ -3985,30 +3955,6 @@ All your changes will be lost.
 	    "members" : $[ `abort : `abort, `advanced : "cups_wz", `next : `next, ],
 	];
 
-
-/*	map manual_sequence = $[
-	    "ws_start" : "namedet",
-	    "namedet" : $[ `abort : `abort, `next : "config",
-		`raw: "storeprinter", `model: "model"],
-	    "config" : $[ `abort : `abort, `advanced : "filter", `next: "storeprinter", ],
-	    "filter" : $[ `abort : `abort, `next_cups : "cups_wz", `next : "features", ],
-	    "useppd" : $[ `abort : `abort, `advanced : "cups_wz", `db : "model", `next: "storeprinter" ],
-	    "features" : $[ `abort : `abort, `next_cups : "cups_wz", `next : "storeprinter", ],
-	    "cups_wz" : $[ `abort : `abort, `next : "c_type", ],
-	    "c_type" : $[ `db : "config", `class : "members", `ppd : "useppd", ],
-	    "storeprinter" : $[`next : `next, ],
-	    ];
-	map auto_sequence = $[
-	    "ws_start" : "name",
-	    "name" : $[ `abort : `abort, `next : "config", `raw: "storeprinter",],
-	    "config" : $[ `abort : `abort, `advanced : "filter", `next: "storeprinter", ],
-	    "filter" : $[ `abort : `abort, `next_cups : "cups_wz", `next : "features", ],
-	    "useppd" : $[ `abort : `abort, `advanced : "cups_wz", `db : "model", `next: "storeprinter" ],
-	    "features" : $[ `abort : `abort, `next_cups : "cups_wz", `next : "storeprinter", ],
-	    "cups_wz" : $[ `abort : `abort, `next : "c_type", ],
-            "c_type" : $[ `db : "config", `class : "members", `ppd : "useppd", ],
-	    "storeprinter" : $[`next : `next, ],
-	    ];*/
 	map edit_printer_sequence = $[
 	    "ws_start"   : "edit",
 	    "edit" : $[
@@ -4065,10 +4011,8 @@ All your changes will be lost.
 	    "pipe" : $[ `abort : `abort, `next : "edit", ],
 	    "model" : $[ `abort : `abort, `next : "config", `useppd: "useppd",],
 	    "config" : $[ `abort : `abort, `advanced : "filter", `next: "edit", ],
-//	    "name" : $[ `abort : `abort, `next : "edit", `raw : "edit",],
 	    "name" : $[ `abort : `abort, `next : "edit", `raw : "edit", `class : "edit" ],
 	    "filter" : $[ `abort : `abort, `next : "edit", `next_cups : "edit", ],
-//	    "useppd" : $[ `abort : `abort, `next : "edit", `db : "model" ],
 	    "useppd" : $[ `abort : `abort, `advanced : "cups_wz", `db : "model", `next: "edit" ],
 	    "members" : $[ `abort : `abort, `next : "edit", ],
 	    "cups_wz" : $[ `abort : `abort, `next : "edit", ],

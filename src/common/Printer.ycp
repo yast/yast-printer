@@ -181,6 +181,22 @@
       */
     global boolean detection = false;
 
+// variables for UI purproses
+
+    /**
+      * Current mode of configuration
+      * `det for configuring from detected printers dialog
+      * `adm for configuring from printer administration dialog
+      */
+    global symbol confmode = nil;
+
+    /**
+      * Currently queue is edited
+      */
+    global boolean edit_seq = false;
+
+
+
     /**
      * Get list of names that are forbidden because they are used as
      * filenames in /etc/lpdfilter
@@ -1522,6 +1538,7 @@ the selected spooler does not support it.
 		list detected = [];
 		if (Printer::db == `foomatic)
 		{
+		    loadFoomaticIfNeeded ();
 		    detected = [i["vendor"]:"", i["device"]:""];
 		    detected = filter (`d, detected, ``(d != ""));
 		}
