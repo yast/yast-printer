@@ -122,7 +122,7 @@ ECHO_PID=$!
       * @return a list of strings with problematic device names
       */
     global define list<string> getProblematicCupsUsbDevices () ``{
-	list c_devs = maplist (list<string> e, cups_usb_devices, ``(e[0]:""));
+	list<string> c_devs = maplist (list<string> e, cups_usb_devices, ``(e[0]:""));
 	c_devs = filter (string d, c_devs, ``(d != ""));
 	if (size (c_devs) == size (toset (c_devs)))
 	    return [];
@@ -191,7 +191,7 @@ ECHO_PID=$!
     global define string getPtalUri (string model) ``{
 	list<list<string> > devices = getPtalDevices ();
 	string ret = nil;
-	foreach (map d, devices, ``{
+	foreach (list d, devices, ``{
 	    if (d[1]:"" == model)
 		ret = sformat ("ptal:%1", d[0]:"");
         });
@@ -240,7 +240,7 @@ ECHO_PID=$!
      *   ]
      * FIXME this function must be merged with Printer::Detect
      */
-    global define list Detect (boolean cups) ``{
+    global define list<map> Detect (boolean cups) ``{
 	boolean have_usb = false;
 	boolean have_ptal = false;
 	if (Mode::config)
@@ -250,12 +250,12 @@ ECHO_PID=$!
 	}
 	SCR::Execute (.target.bash,
 	    "test -f /etc/init.d/hotplug && (test -d /proc/bus/usb/001 || /etc/init.d/hotplug start)");
-	list aprobe = (list)SCR::Read (.probe.printer);
+	list<map> aprobe = (list<map>)SCR::Read (.probe.printer);
 	if (0 == size (aprobe))
 	    {
 		return [];
 	    }
-	list ret = maplist (map pr, aprobe, ``{
+	list<map> ret = maplist (map pr, aprobe, ``{
 	    map record = $[];
 	    string bus = pr["bus"]:"Parallel";
 	    string unique_key = "";
