@@ -400,8 +400,6 @@ YCPValue PrinterdbAgent::Read(const YCPPath &path, const YCPValue& arg)
     {
 	if (! arg.isNull () && arg->isString ())
 	{
-	    y2error ("Translating %s to %s", arg->asString ()->value_cstr (),
-		_(arg->asString ()->value_cstr ()));
 	    return YCPString (_(arg->asString ()->value_cstr ()));
 	}
 	else
@@ -689,11 +687,9 @@ YCPValue PrinterdbAgent::Read(const YCPPath &path, const YCPValue& arg)
         string ident = path->component_str (1);
         string spooler = "cups";
         Printer**p = (Printer**)findinset (printerset, printersize, (char*)ident.c_str());
-        YCPList l;
+        YCPList ret = YCPList ();
         if (!p)
-            return YCPError (ident + ": Config not found.", l);
-        YCPList ret;
-        ret = YCPList ();
+            return ret;
         getConfigCombo ((*p)->use, ret, "", spooler, false, true);
         return ret;
     }

@@ -1102,9 +1102,11 @@ with the SuSE database of printers only.</B></P>
 		y2debug ("manufsel changed");
 		if (Printer::db == `foomatic)
 		{
+		    y2debug ("Manuf: %1, W: %2", manuf_db, UI::QueryWidget (`id (`manufsel), `CurrentItem));
 		    if (manuf_db
 			!= UI::QueryWidget (`id (`manufsel), `CurrentItem))
 		    {
+			y2debug ("Setting manuf_db");
 			manuf_db
 			    = UI::QueryWidget (`id (`manufsel), `CurrentItem);
 			model_db = "";
@@ -1203,21 +1205,15 @@ with the SuSE database of printers only.</B></P>
 			= Printer::foomatic[manuf_db,model_db, `vcomment]:"";
 		    if (vc != "")
 		    {
-			y2error ("original vc: %1", vc);
 			vc = replaceAll (vc, "\\n", "\n");
-			y2error ("Replaced vc: %1", vc);
 			vc = SCR::Read (.printerdb.translate, vc);
-			y2error ("Translated vc: %1", vc);
 		    }
 		    string mc
 			= Printer::foomatic[manuf_db,model_db, `mcomment]:"";
 		    if (mc != "")
 		    {
-			y2error ("original mc: %1", mc);
                         mc = replaceAll (mc, "\\n", "\n");
-                        y2error ("Replaced mc: %1", mc);
                         mc = SCR::Read (.printerdb.translate, mc);
-                        y2error ("Translated mc: %1", mc);
 		    }
 		    integer type
 			= Printer::foomatic[manuf_db,model_db, `support]:1;
@@ -1273,10 +1269,12 @@ with the SuSE database of printers only.</B></P>
 		    cont = UI::YesNoPopup (getPpdWarning ());
 		ret = cont ? `useppd : `cont;
             }
+	    y2debug ("EOC: V: %1, D: %2", manuf_db, model_db);
 	}
 
 	if (ret == `next)
 	{
+	    y2debug ("SN: V: %1, D: %2", manuf_db, model_db);
 	    boolean model_foomatic = false;
 	    if (Printer::db == `foomatic && size (filter (`k, `v,
                   Printer::foomatic[manuf_db, model_db]:$[],
@@ -1289,6 +1287,9 @@ with the SuSE database of printers only.</B></P>
 		    = Printer::foomatic[manuf_db, model_db, `label]:model_db;;
 		manuf = manuf_ieee;
 		model = model_ieee;
+	    }
+	    if (Printer::db == `foomatic)
+	    {
 		Printer::printer = union (Printer::printer, $[
 		    "vendor_db" : manuf_db,
 		    "device_db" : model_db,
@@ -1305,9 +1306,11 @@ with the SuSE database of printers only.</B></P>
 		    "ownppd" : "",
 		    "config" : "",
 		    ]);
+	    y2debug ("Set printer to %1", Printer::printer);
 	    if (Printer::db == `foomatic && ! model_foomatic)
 	    {
 		y2milestone ("Using model not in Foomatic db, but current db is foomatic");
+		y2debug ("Before update: %1", Printer::printer);
 		addSuSEdbEntries (manuf_db, model_db);
 		manuf = Printer::printer["vendor"]:"";
 		manuf_ieee = Printer::printer["vendor_ieee"]:"";
@@ -2305,7 +2308,7 @@ with the SuSE database of printers only.</B></P>
         {
             map options = SCR::Read (.ppd.file.options, [filename, ""]);
             optlist = options["data"]:[];
-	    y2error ("First option: %1", optlist[0]:$[]);
+	    y2debug ("First option: %1", optlist[0]:$[]);
 	    optlist = filter (`o, optlist, ``(
 		o["name"]:"" != "PageRegion"
 		&& o["name"]:"" != "ImageableArea"
