@@ -607,6 +607,9 @@ void PPD::addAdditionalInfo () {
                 }
                 support = support + buf[i];
             }
+	    // if printer is supported, it should have a PPD file
+	    if (support != "not")
+		continue;
             string mlabel = model;
 	    string vlabel = strupper (vendor);
             vendor = getVendorId (vendor);
@@ -626,6 +629,8 @@ void PPD::addAdditionalInfo () {
             {
                 mi = vi.models[model]; 
                 updating_model = true;
+		// continue - if PPD file exists, printer is supported
+		continue;
             }
             else
             {
