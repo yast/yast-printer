@@ -259,7 +259,12 @@ string PPD::getModelId (string vendor, string model) {
     bool found = false;
     string modres = "";
     model = strupper (model);
+y2error ("M1: %s", model.c_str ());
+y2error ("V: %s", vendor.c_str ());
     model = removeVendorFromModel (vendor, model);
+    vendor = getVendorId (vendor);
+    model = removeVendorFromModel (vendor, model);
+y2error ("M2: %s", model.c_str ());
     model = filternotchars (model, "/. -<>_");
 
     if (models_map.find (vendor) != models_map.end ())
