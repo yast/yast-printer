@@ -1180,6 +1180,67 @@ and test the queue after the printer model is selected."));
 	    ret = UI::UserInput ();
 	    if (ret == `cancel)
 		ret = `abort;
+	    else if (ret == `next)
+	    {
+		y2milestone ("Checking constraints");
+		list<map> constraints
+		    = SCR::Read (.ppd.file.constraints, filename);
+		map options = SCR::Read (.ppd.file.options, [filename, ""]);
+		list optlist = options["data"]:[];
+		map opt2val = $[];
+		map opt2gui = $[];
+		map opt2val_gui = $[];
+		foreach (map o, optlist, ``{
+		    string opt_key = o["name"]:"";
+		    string opt_gui = o["gui"]:opt_key;
+		    string val_key = selected[opt_key]:"";
+		    if (val_key == "")
+		    {
+			val_key = o["current"]:"";
+		    }
+		    if (val_key == "")
+		    {
+			val_key = o["valorder", 0]:"";
+		    }
+		    string val_gui = o["values", val_key]:val_key;
+		    opt2val[opt_key] = val_key;
+		    opt2gui[opt_key] = opt_gui;
+		    opt2val_gui[opt_key] = val_gui;
+		});
+		constraints = maplist (map c, constraints, ``{
+		    if (opt2val[c["option1"]:""]:"" == c["value1"]:" "
+			&& opt2val[c["option2"]:""]:"" == c["value2"]:" ")
+		    {
+			y2debug ("Constraint found between %1 and %2",
+			    c["option1"]:"", c["option2"]:"");
+			return c;
+		    }
+		    else
+		    {
+			return nil;
+		    }
+		});
+		constraints = filter (map c, constraints, ``(c != nil));
+		if (size (constraints) > 0)
+		{
+		    y2milestone ("Failed constraints %1", constraints);
+		    list<string> constlist = toset (flatten (
+			maplist (map c, constraints, ``(
+			    [c["option1"]:"", c["option2"]:""]
+			))
+		    ));
+		    y2debug ("List of failed options: %1", constlist);
+		    constlist = maplist (string c, constlist, ``(opt2gui[c]:c));
+		    y2debug ("Printable list: %1", constlist);
+		    string merged_const = mergestring (constlist, "\n");
+		    y2debug ("Failed constraints: %1", merged_const);
+		    Report::Error (sformat (
+			_("Following options are conflicting:\n\n%1"),
+			merged_const
+		    ));
+		    ret = nil;
+		}
+	    }
 	}
 	if (`next == ret)
 	{
