@@ -5,21 +5,19 @@
 SUBDIRS = autodocs
 
 CATALOG="./catalog.xml"
-BUILD="build/"
+BUILD=html
+STYLESHEET_FO=$(ydatadir)/docbook/stylesheets/customize-fo.xsl
+STYLESHEET_HTML=$(ydatadir)/docbook/stylesheets/customize-html.xsl
 
 htmldir = @docdir@
 
 html_DATA = 			\
 	internals.html		\
-	des_common.html		\
 	spec_printconf.html	\
-	todo.html		\
-	des_local.html		\
 	read.html		\
-	spec_filter.html	\
-	tools.html		\
 	write.html		\
-	errors.html
+	errors.html		\
+	lib.html
 
 xml_files = $(wildcard *.xml)
 
@@ -34,9 +32,9 @@ pdf: printer.pdf
 
 chunks:
 	XML_CATALOG_FILES=$(CATALOG) \
-	xsltproc -stringparam base.dir $(BUILD) \
+	xsltproc -stringparam base.dir "$(BUILD)/" \
 	--xinclude \
-	chunks.xsl \
+	$(STYLESHEET_HTML) \
 	printer.xml
 
 html: chunks
@@ -62,4 +60,4 @@ all: html
 
 install-data-local:
 	install -d -m 755 $(DESTDIR)/@docdir@/html
-	cp -a build/* $(DESTDIR)/@docdir@/html
+	cp -a $(BUILD)/* $(DESTDIR)/@docdir@/html
