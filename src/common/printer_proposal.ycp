@@ -22,6 +22,7 @@
     import "Printerlib";
     import "Arch";
     include "printer/misc.ycp";
+    include "printer/dialogs.ycp";
     import "Mode";
     import "Popup";
     import "Label";
@@ -30,6 +31,9 @@
     string func  = Args(0);
     map    param = Args(1);
     map    ret   = $[];
+
+    // static variables
+    integer runAutoprobedListDialog__current = 0;
 
     integer spool_sys = Printerlib::getSpoolSystem ();
 
@@ -193,9 +197,14 @@ Detect your printers?
 	any saved = nil;
 	any seq = nil;
 	saved = Printer::Export ();
-	seq = CallFunction (`printer (.noio));
+        Wizard::CreateDialog();
+        Wizard::SetContentsButtons(caption, contents, "",
+            Label::BackButton(), Label::NextButton());
+	seq = runWizard (false);
+        UI::CloseDialog();
 	if (`next != seq)
 	    Printer::Import (saved);
+	y2milestone ("Printer WS return: %1", seq);
 	ret = $[ "workflow_sequence" : seq, ];
     }
     else if (func == "Description")
