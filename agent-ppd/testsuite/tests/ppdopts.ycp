@@ -1,0 +1,27 @@
+/**
+ * File:
+ *      vendorname.ycp
+ *
+ * Module:
+ *      Printer
+ *
+ * Summary:
+ *      testsuite for ppd agent
+ *
+ * Authors:
+ *      Jiri Srain <jsrain@suse.cz>
+ *
+ * $Id$
+ *
+ */
+
+{
+    string filename = Read (.file.open, ["tests/Postscript.ppd.gz", "."]);
+    map groupsmap = Read (.file.option_groups, filename);
+    y2error ("groupsmap: %1", groupsmap);
+    list groups = groupsmap["data"]:[];
+    foreach (`g, groups, ``{
+	y2error ("Group %1: %2", g, Read (.file.options, [filename, g]));
+    });
+    y2error ("All groups: %1", Read (.file.options, [filename, ""]));
+}

@@ -1,6 +1,6 @@
 #
-# Makefile.am for y2a_ini/testsuite/tests
+# Makefile.am for printer/agent-ppd/testsuite/tests
 #
 
-EXTRA_DIST = *.ycp *.out *.err runtest.sh
+EXTRA_DIST = *.ycp *.out *.err runtest.sh Postscript.ppd.gz
 
