@@ -40,36 +40,25 @@
 // --------------------------------------------------------------------------
 // --------------------------------- cmd-line handlers
 
+    /**
+      * CommandLine handler for running GUI
+      * @return boolean true if settings were saved
+      */
     define boolean GuiHandler () ``{
-	any ret = nil;
-	boolean cups_running = 0 == SCR::Execute (.target.bash,
-	    "test -f /etc/init.d/cups && /etc/init.d/cups status");
-	boolean lprng_running = 0 == SCR::Execute (.target.bash,
-	    "test -f /etc/init.d/lpd && /etc/init.d/lpd status");
-
+	symbol ret = nil;
 	if (Mode::test)
 	    testDialogs ();
 	else
 	    ret = PrinterSequence ();
 
-	if (ret == `abort || ret == `back)
-	{
-	    if (! cups_running)
-	    {
-		SCR::Execute (.target.bash,
-		    "test -f /etc/init.d/cups && /etc/init.d/cups stop");
-	    }
-	    if (! lprng_running)
-	    {
-		SCR::Execute (.target.bash,
-		    "test -f /etc/init.d/lpd && /etc/init.d/lpd stop");
-	    }
-	}
-	return (boolean)ret;
+	if (ret == `abort || ret == `back || ret == `nil)
+	    return false;
+	return true;
     }
 
     /**
      * Print summary of basic options
+     * @param options a list of parameters passed as args
      * @return boolean false
      */
     global define boolean PrinterSummaryHandler (map options ) ``{
@@ -95,12 +84,46 @@
 	return true;
     }
 
+    /**
+     * Modify a selected queue
+     * @param options a list of parameters passed as args
+     * @return boolean true on success
+     */
     global define boolean ModifyPrinter (map options) ``{
 	boolean recreate_ppd = false;
 	string manufacturer = "";
 	string model = "";
 	string nick = "";
 
+// URI handling
+	if (options["uri"]:"" != "" && options["detected_index"]:nil != nil)
+	{
+	    CommandLine::Print (_("Can not specify URI and detected printer in one command"));
+	    return false;
+	}
+	if (Printer::printer["uri"]:"" == "" && options["uri"]:"" == ""
+	    && options["detected_index"]:nil == nil)
+	{
+	    CommandLine::Print (sformat (_("URI for queue %1 not specified"),
+		options["new_name"]:Printer::printer["name"]:""));
+	    return false;
+	}
+	if (options["uri"]:"" != "")
+	    Printer::printer["uri"] = options["uri"]:"";
+// detected queue handing
+	if (options["detected_index"]:nil != nil)
+	{
+	    string s_index = options["detected_index"]:0;
+	    integer index = tointeger (s_index);
+	    if (0 >= index || size (Printer::autodetected) < index)
+	    {
+		CommandLine::Print (sformat (_("Printer %1 wasn't detected"),
+		    index));
+		return false;
+	    }
+	    index = index - 1;
+	    Printer::editDetected (Printer::autodetected[index]:$[]);
+	}
 // queue name handling
 	if (Printer::printer["name"]:"" == "" && options["new_name"]:"" == "")
 	{
@@ -129,15 +152,6 @@
 	    }
 	    Printer::printer["name"] = options["new_name"]:"";
 	}
-// URI handling
-	if (Printer::printer["uri"]:"" == "" && options["uri"]:"" == "")
-	{
-	    CommandLine::Print (sformat (_("URI for queue %1 not specified"),
-		Printer::printer["name"]:""));
-	    return false;
-	}
-	if (options["uri"]:"" != "")
-	    Printer::printer["uri"] = options["uri"]:"";
 // raw queue handling
 	if (haskey (options, "raw"))
 	{
@@ -248,31 +262,6 @@
 		Printer::printer[key] = split;
 	    }
 	});
-// options handling
-	foreach (string key, ["ppdoptions", "lpoptions"], ``{
-	  if (haskey (options, key))
-	  {
-	    list<string> split = splitstring (options[key]:"", ",");
-	    split = filter (string s, split, ``(s != ""));
-	    map opts = listmap (string s, split, ``{
-		list<string> l = splitstring (s, "= ");
-		l = filter (string x, l, ``(x != ""));
-		string key = l[0]:"";
-		string value = l[1]:"";
-		return $[ key : value ];
-	    });
-	    opts = filter (string k, string v, opts, ``(k != ""));
-	    if (key == "ppdoptions")
-		key = "ppd_options";
-	    else
-		key = "options";
-	    // ensure that the map exists
-	    Printer::printer[key] = Printer::printer[key]:$[];
-	    foreach (string k, string v, opts, ``{
-		Printer::printer[key, k] = v;
-	    });
-	  }
-	});
 
 // default queue handling
 	if (haskey (options, "default"))
@@ -338,6 +327,108 @@
 	return false;
     }
 
+    /**
+     * Edit specified options of a queue
+     * @param options a list of parameters passed as args
+     * @param type string type of options to change
+     * @return always true
+     */
+    global define boolean PrinterOptionsHandler (map options, string type) ``{
+	Printer::printer[type] = union (
+	    Printer::printer[type]:$[], options
+	);
+	return true;
+    }
+
+    /**
+     * Edit options located in /etc/cups/lpoptions of a queue
+     * @param options a list of parameters passed as args
+     * @return always true
+     */
+    global define boolean PrinterLPOptionsHandler (map options) ``{
+	return PrinterOptionsHandler (options, "options");
+    }
+
+    /**
+     * Edit options located in PPF file of a queue
+     * @param options a list of parameters passed as args
+     * @return always true
+     */
+    global define boolean PrinterPPDOptionsHandler (map options) ``{
+	return PrinterOptionsHandler (options, "ppd_options");
+    }
+
+    /**
+     * Change the currently used spooler (or basic attributes)
+     * @param options a list of parameters passed as args
+     * @return boolean true if saving is to be performed
+     */
+    global define boolean PrinterSpoolerhandler (map options) ``{
+	integer found = 0;
+	foreach (string s, ["cups", "lprng", "cups_client"], ``{
+	    if (haskey (options, s))
+		found = found + 1;
+	});
+	if (0 == found)
+	{
+	    Commandline::Print (_("No spooler specified"));
+	    return false;
+	}
+	if (1 < found)
+	{
+	    Commandline::Print (_("More than spooler specified"));
+	    return false;
+	}
+	if (haskey (options, "cups"))
+	{
+	    Spooler::switchTo ("cups");
+	    Printer::Read ();
+	}
+	else if (haskey (options, "lprng"))
+	{
+	    Spooler::switchTo ("lprng");
+	    Printer::Read ();
+	}
+	else if (haskey (options, "cups_client"))
+	{
+	    if (options["server"]:"" == "")
+	    {
+		CommandLine::Print (_("CUPS server not specified"));
+		return false;
+	    }
+	    Spooler::switchTo ("cups_client");
+	    CUPS::server_hostname = options["server"]:"";
+	    Printer::default = options["default_queue"]:"";
+	    CUPS::server_default = Printer::default == "";
+	}
+	else
+	    return false;
+	return true;
+    }
+
+    /**
+     * Test a queue
+     * @param options a list of parameters passed as args
+     * @return boolean true if saving is to be performed
+     */
+    global define boolean PrinterTestHandler (map options) ``{
+	string queue_name = options["queue"]:"";
+	Printer::selectPrinterByName (queue_name);
+	if (Printer::printer == $[])
+	{
+	    CommandLine::Print (sformat (_("Queue %1 does not exist"),
+		queue_name));
+	    return false;
+	}
+	map tp_types = $[
+	    "ascii" : `ascii,
+	    "photo" : `photo,
+	];
+	symbol tp_type = tp_types[options["testpage_type"]:""]:`postscript;
+	PrinterTest::testPrinter(Printer::printer, tp_type);
+	return false;
+    }
+
     /* the command line description map */
     map cmdline = $[
 	"id"		: "printer",
@@ -350,7 +441,7 @@
 	    "summary"	: $[
 		"handler"	: ``(PrinterSummaryHandler()),
 		// command line help text for summary action
-		"help"		: _("Configuration summary of Kerberos client")
+		"help"		: _("Configuration summary of printers")
 	    ],
 	    "delete"	: $[
 		"handler"	: ``(PrinterDeleteHandler ()),
@@ -372,8 +463,32 @@
 		// command line help text for the list action
 		"help"		: _("List detected or configured printers"),
 	    ],
+	    "ppdoptions": $[
+		"handler"	: ``(PrinterPPDOptionsHandler ()),
+		// command line help text for the ppdoptions action
+		"help"		: _("Set options that will be writted directoy to PPD file. Options that are not mentioned stay untouched."),
+	    ],
+	    "lpoptions" : $[
+		"handler"	: ``(PrinterLPOptionsHandler ()),
+		// command line help text for the lpoptions action
+		"help"		: _("Set options that will be written to /etc/cups/lpoptions. Options that are not mentioned stay untouched."),
+	    ],
+	    "spooler"	: $[
+		"handler"	: ``(PrinterSpoolerhandler ()),
+		// command line help text for the spooler action
+		"help"		: _("Switch the currently used spooler")
+	    ],
+	    "test"	: $[
+		"handler"	: ``(PrinterTestHandler ()),
+		// command line help text for the test action
+		"help"		: _("Print test page"),
+	    ],
 	],
 	"options"	: $[
+	    "detected_index"	: $[
+		"help"		: _("Configure detected printer with this index"),
+		"type"		: "string",
+	    ],
 	    "queue"	: $[
 		// command line help text for the queue name option
 		"help"		: _("Queue Name"),
@@ -447,19 +562,32 @@
 	    "default"	: $[
 		"help"		: _("Set the queue to default"),
 	    ],
-	    "ppdoptions": $[
-		"help"		: _("Set options that will be writted directoy to PPD file. Options that are not mentioned stay untouched."),
-		"type"		: "string",
-	    ],
-	    "lpoptions" : $[
-		"help"		: _("Set options that will be written to /etc/cups/lpoptions. Options that are not mentioned stay untouched."),
-		"type"		: "string",
-	    ],
 	    "detected"	: $[
 		"help"		: _("List only detected printers"),
 	    ],
 	    "configured"	: $[
 		"help"		: _("List only configured queues"),
+	    ],
+	    "cups"	: $[
+		"help"		: _("Switch top CUPS server"),
+	    ],
+	    "lprng"	: $[
+		"help"		: _("Switch to LPRng server"),
+	    ],
+	    "cups_client":$[
+		"help"		: _("Switch to CUPS client"),
+	    ],
+	    "server":$[
+		"help"		: _("Specify the remote CUPS server"),
+		"type"		: "string",
+	    ],
+	    "default_queue":$[
+		"help"		: _("Specify the default queue, if not set, default queue of the server will be used"),
+		"type"		: "string"
+	    ],
+	    "testpage_type":$[
+		"help"		: _("Type of the test page, one of ascii, graphic, photo"),
+		"type"		: "string",
 	    ],
 	],
 	"mappings"	: $[
@@ -467,12 +595,12 @@
 	    "list"		: [ "detected", "configured" ],
 	    "delete"		: [ "queue" ],
 	    "add"		: [
-					"queue", "uri", "raw", "manufacturer",
+					"queue", "detected_index",
+					"uri", "raw", "manufacturer",
 					"model", "nick", "info", "location",
 					"ff", "bannerstart", "bannerend",
 					"accepting", "state", "allowusers",
-					"denyusers", "default", "ppdoptions",
-					"lpoptions"
+					"denyusers", "default"
 				  ],
 	    "edit"		: [
 					"queue", "new_name",
@@ -480,9 +608,15 @@
 					"model", "nick", "info", "location",
 					"ff", "bannerstart", "bannerend",
 					"accepting", "state", "allowusers",
-					"denyusers", "default", "ppdoptions",
-					"lpoptions"
+					"denyusers", "default"
 				  ],
+	    "ppdoptions"	: [ "queue"],
+	    "lpoptions"		: [ "queue"],
+	    "spooler"		: [
+					"cups", "lprng", "cups_client",
+					"server", "default_queue"
+				  ],
+	    "test"		: [ "queue", "testpage_type" ],
 	]
     ];
 
@@ -512,7 +646,26 @@
 	i = i + 1;
     }
 
+    boolean cups_running = 0 == SCR::Execute (.target.bash,
+	"test -f /etc/init.d/cups && /etc/init.d/cups status");
+    boolean lprng_running = 0 == SCR::Execute (.target.bash,
+	"test -f /etc/init.d/lpd && /etc/init.d/lpd status");
+
     ret = CommandLineRun (cmdline);
+
+    if (! ret)
+    {
+	if (! cups_running)
+	{
+	    SCR::Execute (.target.bash,
+		"test -f /etc/init.d/cups && /etc/init.d/cups stop");
+	}
+	if (! lprng_running)
+	{
+	    SCR::Execute (.target.bash,
+		"test -f /etc/init.d/lpd && /etc/init.d/lpd stop");
+	}
+    }
 
     Crash::Finish ("printer.ycp");
     return ret;
