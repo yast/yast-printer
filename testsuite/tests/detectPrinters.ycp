@@ -19,6 +19,7 @@
     import "Pkg";
 
     import "Printerlib";
+    import "Printer";
     include "testsuite.ycp";
 
     boolean test_mode = false;
@@ -56,10 +57,20 @@
                 ],
 		"proc" : $[ "modules" : $[ "printer" : ""]],
             ];
+    map EXEC= $[
+	"target" : $[
+	    "bash_output" : $[
+		"exit" : 0,
+		"stdout" : "",
+	    ],
+	],
+    ];
     DUMP ("--- Detection for lprng");
-    TEST (``(Printerlib::Detect (false)), [READ, $[], $[]], true);
+    Printer::spooler = "lprng";
+    TEST (``(Printerlib::Detect (false)), [READ, $[], EXEC], true);
     DUMP ("--- Detection for cups");
-    TEST (``(Printerlib::Detect (true)), [READ, $[], $[]], true);
+    Printer::spooler = "cups";
+    TEST (``(Printerlib::Detect (true)), [READ, $[], EXEC], true);
 
     READ =
         $[
@@ -85,10 +96,11 @@
                 ],
 		"proc" : $[ "modules" : $[ "printer" : ""]],
             ];
-    map EXEC = $[];
     DUMP ("--- Detection for lprng");
+    Printer::spooler = "lprng";
     TEST (``(Printerlib::Detect (false)), [READ, $[], EXEC], true);
     DUMP ("--- Detection for cups");
+    Printer::spooler = "cups";
     TEST (``(Printerlib::Detect (true)), [READ, $[], EXEC], true);
 
     // try to detect for cups but without vendor_id and device_id
@@ -127,5 +139,49 @@ direct usb:/dev/usb/lp2 \"Unknown\" \"USB Printer #3\"",
 	    ],
 	];
     DUMP ("--- Detection for cups");
+    Printer::spooler = "cups";
     TEST (``(Printerlib::Detect (true)), [READ, $[], EXEC], true);
+
+    // try to detect all-in-one device
+    READ =
+        $[
+            "probe" :
+            $[
+                "printer" :
+                [
+                    $[
+                        "bus":"USB",
+                        "class_id":265,
+                        "dev_name":"/dev/usblp0",
+                        "resource":$["baud":[$["speed":1500000]]],
+                        "rev":"1.03",
+                        "sub_class_id":0,
+                        "sub_device":"USB Printer",
+                        "sub_vendor":"Epson",
+                        "unique_key":"Q0jS.ZoQ4aZ8KEv3",
+                        "vendor":"Epson Inc.",
+			"model" : "Hewlett-Packard PSC 2200 Series",
+                        ]
+                    ]
+                ],
+                "proc" : $[ "modules" : $[ "printer" : ""]],
+                "target" : $[ "size" : 555],
+            ];
+
+    EXEC = $[
+	"target" : $[
+	    "bash_output" : $[
+		"exit" : 0,
+		"stderr" : "",
+		"stdout" : "direct ptal:/mlc:usb:PSC_2200_Series \"Hewlett-Packard PSC 2200 Series\" \"PTAL mlc:usb:PSC_2200_Series\"
+"
+	    ],
+	]
+    ];
+
+    DUMP ("--- Detection for cups");
+    Printer::spooler = "cups";
+    TEST (``(Printerlib::Detect (true)), [READ, $[], EXEC], true);
+
+
 }

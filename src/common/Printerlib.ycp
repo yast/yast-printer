@@ -147,6 +147,45 @@ ECHO_PID=$!
     }
 
     /**
+      * Get URI of ptal device
+      * @param model string device model identification
+      * @return ptal uri or nil if no ptal device found
+      */
+    global define string getPtalUri (string model) ``{
+	list(list(string)) devices = getPtalDevices ();
+	string ret = nil;
+	foreach (`d, devices, ``{
+	    if (d[1]:"" == model)
+		ret = sformat ("ptal:%1", d[0]:"");
+        });
+	return ret;
+    }
+
+    /**
+      * Get list of all PTAL devices
+      * @return list of PTAL devices
+      */
+    global define list getPtalDevices () ``{
+        if (SCR::Read (.target.size, "/usr/lib/cups/backend/ptal") <= 0)
+            return [];
+        map out = SCR::Execute (.target.bash_output,
+            "/usr/lib/cups/backend/ptal");
+        list(string) lines = splitstring (out["stdout"]:"", "\n");
+        lines = filter (`l, lines, ``(l != "" && l != nil));
+	list ptal_devs = maplist (`l, lines, ``{
+            string ptal_model = regexpsub (l, "[^\"]*\"([^\"]*)\".*", "\\1");
+            string ptal_dev = regexpsub (l, "direct ptal:([^ ]*) .*", "\\1");
+	    if (ptal_dev != nil && ptal_model != nil)
+		return [ptal_dev, ptal_model];
+	    else
+		return nil;
+	});
+	ptal_devs = filter (`pd, ptal_devs, ``(pd != nil));
+	y2milestone ("ptal devices: %1", ptal_devs);
+	return ptal_devs;
+    }
+
+    /**
       * Get all CUPS-like USB device names
       * @return a list of CUPS USB device names
       */
@@ -265,7 +304,7 @@ ECHO_PID=$!
 		{
 
 		    dev_name = select (getCupsUsbDeviceInfo (class_dev), 0, "");
-		    if (dev_name == "" || Mode::autoinst)
+		    if (dev_name == nil || dev_name == "" || Mode::autoinst)
 		    {
 			dev_name = class_dev;
 		    }
@@ -279,9 +318,33 @@ ECHO_PID=$!
 		    "device_id": lookup (pr, "device_id",0),
 		    "dev_name": dev_name,
 		];
+		if (Printer::spooler == "cups")
+		{
+		    string ptal_uri = getPtalUri (pr["model"]:"");
+		    if (ptal_uri != nil)
+			record["uri"] = ptal_uri;
+		}
 	    }
 	    return record;
 	});
+	if (Printer::spooler == "cups")
+	{
+	    list uris = maplist (`r, ret, ``{
+		return r["uri"]:nil;
+	    });
+	    uris = filter (string u, uris, ``(u != nil));
+	    list(list(string)) ptal_devs = getPtalDevices ();
+	    ptal_devs = filter (map pd, ptal_devs, ``(
+		! contains (uris, sformat ("ptal:%1", pd[0]:""))
+	    ));
+	    foreach (map r, ptal_devs, ``{
+		ret = add (ret, $[
+		    "vendor" : "HP",
+		    "device" : "All-in-one device",
+		    "uri" : sformat ("ptal:%1", r[0]:""),
+		]);
+	    });
+	}
 	if (have_usb)
 	{
 	    if (0 !=  SCR::Execute (.target.bash, "grep '^printer ' /proc/modules"))
@@ -798,11 +861,14 @@ Install them now?"));
 	    // USB printer on /dev/lp0
 	    return sformat (_("USB printer on %1"), getUriDevice (uri));
 	}
+	if ("ptal" == type)
+	    // HP all-in-one device mlc:usb:HP_LaserJet_1220
+	    return sformat (_("HP all-in-one device %1"), getUriDevice (uri));
 	if ("pipe" == type)
 	    // Prograam to get job on stdin
 	    return sformat (_("Program %1"), getUriDevice (uri));
 	if ("irda" == type)
-            // Forwarding queue to QUEUENAME on LPD server SERVERNAME
+            // IrDA printer on /dev/irlpt0
             return sformat (_("IrDA printer on %1"), getUriDevice (uri));
         if ("lpd" == type)
             // Filtering forwarding queue to QUEUENAME on LPD server SERVERNAME
