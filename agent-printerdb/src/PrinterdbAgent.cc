@@ -246,7 +246,7 @@ void PrinterdbAgent::getConfigCombo (List*cfgs, YCPList&l, string pre)
 	if (c) {
 	    c->queue = u->queue;
 	    if (!c->type)
-		getConfigCombo (c->use, l, pre + _(u->text) + ": ");
+		getConfigCombo (c->use, l, pre);// + _(u->text) + ": ");
 	    else {
 		string text = getSupportPrefix (c) + pre;
 		YCPTerm t ("item", true);
@@ -858,7 +858,7 @@ YCPMap PrinterdbAgent::ppdInfo (const char *filename)
 	free (ungzipped);
     return m;
 }*/
-string PrinterdbAgent::getOptions (List*u, YCPMap&selected)
+string PrinterdbAgent::getOptions (List*u, YCPMap&selected, string prefix)
 {
     char buf[200];
     string s ("");
@@ -919,10 +919,15 @@ string PrinterdbAgent::getOptions (List*u, YCPMap&selected)
 			vall = o->vals;
 		    Value*val = (Value*)vall->data;
 		    if (val) {
-			s = s + "(" + _(uo->text) + ": " + _(val->text) + ") mm\n";
+			if (! o->vals->next && val->use && (0 == strcmp (uo -> text, val -> text) || 0 == strcmp ("parameters", val -> text)))
+//			if (0 == strcmp (uo -> text, val -> text))
+//			    {}
+			    s = s + "(" + _(uo->text) + ":" + ") mm\n";
+			else
+			    s = s + "(" + _(uo->text) + ": " + _(val->text) + ") mm\n";
 		    }
 		    if (val->use)
-			s = s + getOptions (val->use, selected);
+			s = s + getOptions (val->use, selected, prefix + "    ");
 		}
 		break;
 	    }
@@ -1014,8 +1019,12 @@ YCPList PrinterdbAgent::getOptionItems (List*u, YCPMap&selected, string indent, 
 			vall = o->vals;
 		    // val is default.
 		    Value*val = (Value*)vall->data;
-		    text = text + ": ";
-		    text = text + _(val->text);
+		    if (!(! o->vals->next && val->use && (0 == strcmp (uo -> text, val -> text) || 0 == strcmp ("parameters", val -> text))))
+//		    if (! val->use)
+		    {
+			text = text + ": ";
+			 text = text + _(val->text);
+		    }
 		    if (val->use)
 			childern = getOptionItems (val->use, selected, indent + "    ", preselect);
 		}
@@ -1192,7 +1201,7 @@ YCPValue PrinterdbAgent::Write (const YCPPath &path, const YCPValue& value, cons
 	    YCPMap m;
 	    if (!arg.isNull () && arg->isMap ())
 		m = arg->asMap ();
-	    s = s + getOptions ((*c)->use, m);
+	    s = s + getOptions ((*c)->use, m, "");
 	}
 	char*vv = (char*)path->component_str (1).c_str();
 	char*mm = (char*)path->component_str (2).c_str();

@@ -391,7 +391,7 @@
      * @param hname host name
      * @param rname name of remote queue
      * @param type queue type
-     * @param port TCP port (for JetDirect)
+     * @param port TCP port
      */
     global define void testRemote (string hname, string rname, string type, integer port) ``{
 	boolean ping_only = "filtering" != type && "lpd" != type && "prefilter" != type && "ipp" != type && "socket" != type && "ipp_server" != type;
@@ -433,6 +433,7 @@
      *  256 is added if the instalation doesn't seem to be complete
      */
     global define integer getSpoolSystem () ``{
+	Pkg::TargetInit ("/", false);
 	// first try if some of the systems exists.
 	boolean cups_exists = Pkg::IsProvided ("cups-client");
 	// for lpd we need to check the file because
@@ -492,6 +493,8 @@
      */
     global define void switchTo (string to) ``{
 	stopServices ();
+	Runlevel::ServiceAdjust ("lpd", "disable");
+	Runlevel::ServiceAdjust ("cups", "disable");
 	map script = $["userInput" : false];
 	list del = ["plp", "lprold", "lprng", "cups", "cups-client", "cups-drivers", "cups-drivers-cs", "cups-drivers-de", "lpdfilter", "filters"];
 	del = filter (`e, del, ``(Pkg::IsProvided (e) == true));
@@ -751,7 +754,7 @@
 	    return sformat (_("Queue %1 on IPP server %2"), getUriRemoteQueue (uri), getUriHost (uri));
 	if ("socket" == type)
 	    // Network printer HOSTNAME
-	    return sformat (_("HP JetDirect printer %1"), getUriHost (uri));
+	    return sformat (_("Direct TCP port printer %1"), getUriHost (uri));
 	if ("class" == type)
 	    // CUPS class
 	    return _("CUPS class");

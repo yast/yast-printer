@@ -16,8 +16,9 @@
  */
 
 {
-    import "Printerlib";
     include "testsuite.ycp";
+    import "Pkg";
+    import "Printerlib";
 
 /*    UI (``{
         global define MessagePopup (string s) ``{
@@ -38,7 +39,7 @@
             "bash" : 0
             ]
         ];
-    map R = $[ "targetpkg" : $[ "installed" : true ] ];
+    Pkg::FAKE (`IsProvided, true);
 /*
     TEST (``(Printerlib::testDevice ("/dev/lp0")), [$[], $[], EXEC], 0);
     y2error ("===== testBaudRate =====");
@@ -68,28 +69,28 @@
         ];
     TEST (``(Printerlib::testRemote ("hname", "rname", true)), [R,$[],EXEC], 0);*/
     y2error ("===== getSpoolSystem =====");
-    R = $[
-	"targetpkg" : $[ "installed" : false ],
+    map R = $[
 	"target" : $[ "size" : -1, "bash" : 1],
 	];
+    Pkg::FAKE (`IsProvided, false);
     map E = R;
     TEST (``(Printerlib::getSpoolSystem ()), [R,$[],E], 0);
     R = $[
-	"targetpkg" : $[ "installed" : true ],
 	"target" : $[ "size" : 1,  "bash" : 0 ]
 	];
+    Pkg::FAKE (`IsProvided, true);
     E = R;
     TEST (``(Printerlib::getSpoolSystem ()), [R,$[],E], 0);
     R = $[
-	"targetpkg" : $[ "installed" : true ],
 	"target" : $[ "size" : -1, "bash" : 0]
 	];
+    Pkg::FAKE (`IsProvided, true);
     E = R;
     TEST (``(Printerlib::getSpoolSystem ()), [R,$[],E], 0);
     R = $[
-	"targetpkg" : $[ "installed" : false],
 	"target" : $[ "size" : 1, "bash" : 1]
 	];
+    Pkg::FAKE (`IsProvided, false);
     E = R;
     TEST (``(Printerlib::getSpoolSystem ()), [R,$[],E], 0);
 /*    y2error ("===== switchTo =====");

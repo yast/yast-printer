@@ -38,7 +38,7 @@ class PrinterdbAgent : public SCRAgent
 	string getConfigRichText (List*cfgs, string spooler);
 	void getConfigCombo (List*cfgs, YCPList&l, string pre);
 	YCPList getOptionItems (List*u, YCPMap&selected, string indent, const char*preselect);
-	string getOptions (List*u, YCPMap&selected);
+	string getOptions (List*u, YCPMap&selected, string prefix);
 	YCPList getAutoQueues (List*cfgs);
 	YCPList getAllQueues (List *cfgs);
 	YCPMap getFirstAutoQueue (Config*c);
