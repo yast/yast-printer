@@ -140,6 +140,8 @@
 		    // menubutton item
 		    `item (`id (`downloadppd), _("&Download PPD File")),
 		]),
+		// push button
+		`PushButton (`id (`select_ppd), _("Select PPD File")),
 //		`HStretch (),
 		// Button which provides information about selected
 		// manufacturer/model
@@ -241,6 +243,10 @@ only if using CUPS spooler"));
                 ret = reallyAbort () ? `abort : `cont;
                 if (ret == `abort) break;
             }
+	    if (ret == `select_ppd)
+	    {
+		break;
+	    }
 	    if (ret == `next && (model_db == "" || model_db == nil))
 	    {
 		// popup
@@ -490,9 +496,10 @@ user name, and password.
 
     /**
      * Dialog for choosing configuration.
+     * @param all_ppds boolean if true all PPD files for all models are shown
      * @return symbol for wizard sequencer
      */
-    define symbol runPpdSelectDialog () ``{
+    define symbol runPpdSelectDialog (boolean all_ppds) ``{
 	y2milestone ("Running config dialog for %1", Printer::printer);
 	Printerdb::InstallDrivers ();
 	map ppd_info = Printer::printer["ppd_info"]:$[];
@@ -508,20 +515,57 @@ user name, and password.
 	map info = $[];
 	list cfgs = [];
 	y2milestone ("Vendor: %1, Model: %2", manuf_db, model_db);
-	if (! ((manuf_db != "" && model_db != "")))
+	if (! (all_ppds || (manuf_db != "" && model_db != "")))
 	{
 	    // message popup
 	    Popup::Message (_("Cannot determine the model of the printer.
-Select the model first.
-"));
+Select the model first."));
 	    return `back;
 	}
 	Printerdb::loadFoomaticIfNeeded ();
 
-	list<string> ppds = Printerdb::sortPpds (manuf_db, model_db);
+	map<string,map<string,string> > all_ppds_list = $[];
 
-	cfgs = [];
-	foreach (string k, ppds, ``{
+	if (all_ppds)
+	{
+	    list<map<string,string> > ppds = Printerdb::ListAllPpds ();
+	    all_ppds_list = listmap (map<string,string> m, ppds, {
+		string filename = m["filename"]:"";
+		string id = filename;
+		string label = m["nickname"]:"";
+		if (filename != "")
+		{
+		    if (substring (filename, 0, 22) == "/usr/share/cups/model/")
+			filename = substring (filename, 22);
+		    label = label + sformat (" (%1)", filename);
+		}
+		string tllabel = tolower (label);
+		return $[tllabel : $["id" : id, "label" : label ]];
+	    });
+	    cfgs = maplist (string tllabel, map<string,string> info,
+		all_ppds_list,
+	    {
+		string label = info["label"]:"";
+		string id= info["id"]:"";
+		return `item (`id (id), label);
+	    });
+/*	    cfgs = maplist (map<string,string> m, ppds, {
+		string filename = m["filename"]:"";
+		string id = filename;
+		string label = m["nickname"]:"";
+		if (filename != "")
+		{
+		    if (substring (filename, 0, 22) == "/usr/share/cups/model/")
+			filename = substring (filename, 22);
+		    label = label + sformat (" (%1)", filename);
+		}
+		return `item (`id (id), label);
+	    });*/
+	}
+	else
+	{
+	  list<string> ppds = Printerdb::sortPpds (manuf_db, model_db);
+	  foreach (string k, ppds, ``{
 	    y2debug ("V: %1, M: %2, K: %3", manuf_db, model_db, k);
 
 	    string filename = k;
@@ -534,17 +578,45 @@ Select the model first.
 		label = label + sformat (" (%1)", filename);
 	    }
 	    cfgs = add (cfgs, `item (`id (k), label));
-	});
+	  });
+	}
+
+	map<string,map<string,string> > displayed_ppds_list = all_ppds_list;
+
+	term filter_box = `VBox ();
+	if (all_ppds)
+	{
+	    filter_box = `VBox (
+		`HBox (
+		    `TextEntry (`id (`filter_str), _("&Filter")),
+		    `VBox (
+			`Label (" "),
+			`HBox (
+			    `PushButton (`id (`filter), _("&Apply")),
+			    `PushButton (`id (`clear_filter), _("&Clear"))
+			)
+		    )
+		),
+		`VSpacing (1)
+	    );
+	}
 
 	term contents = `HBox (
 	    `HSpacing (1),
 	    `VBox (
 		    `VSpacing (1),
-		    // selection box label
-		    `SelectionBox (`id (`selection), `opt (`hstretch), _("&Select PPD File:"), cfgs),
+		    filter_box,
+		    `ReplacePoint (`id (`selection_rp),
+			// selection box label
+			`SelectionBox (`id (`selection), `opt (`hstretch), _("&Select PPD File:"), cfgs)
+		    ),
 		    `VSpacing (1),
 		    `HBox (
 			`HStretch (),
+			all_ppds
+			    // push button
+			    ? `PushButton (`id (`select_model), _("Select &Model"))
+			    : `HSpacing (0),
 			// pushbutton
 			`HWeight (1, `PushButton (`id (`test), `opt (`key_F6), _("&Test printing")))
 		    ),
@@ -554,7 +626,7 @@ Select the model first.
 	);
 	// dialog box label
 	string caption = _("PPD Files");
-	Wizard::SetContentsButtons (caption, contents, getPpdSelectHelp (), Label::BackButton (), Label::OKButton ());
+	Wizard::SetContentsButtons (caption, contents, getPpdSelectHelp (all_ppds), Label::BackButton (), all_ppds ? Label::NextButton () : Label::OKButton ());
 
 	if (file != "" && file != nil)
 	{
@@ -577,8 +649,43 @@ Select the model first.
 
 	any ret = `config;
 	string ppd_file = "";
-	while (`abort != ret && ret != `back && ret != `next && `advanced != ret)
+	while (`abort != ret && ret != `back && ret != `next && `advanced != ret && `select_model != ret)
 	{
+	    if (ret == `filter)
+	    {
+		string f = (string)UI::QueryWidget (`id (`filter_str), `Value);
+		if (f == "")
+		{
+		    ret = `clear_filter;
+		}
+		else
+		{
+		    f = tolower (f);
+		    displayed_ppds_list = filter (string k,
+			map<string,string> v, all_ppds_list,
+		    {
+			return issubstring (k, f);
+		    });
+		}
+	    }
+	    if (ret == `clear_filter)
+	    {
+		displayed_ppds_list = all_ppds_list;
+		UI::ChangeWidget (`id (`filter_str), `Value, "");
+	    }
+	    if (ret == `filter || ret == `clear_filter)
+	    {
+		cfgs = maplist (string tllabel, map<string,string> info,
+		    displayed_ppds_list,
+		{
+		    string label = info["label"]:"";
+		    string id= info["id"]:"";
+		    return `item (`id (id), label);
+		});
+		UI::ReplaceWidget (`selection_rp,
+		    `SelectionBox (`id (`selection), `opt (`hstretch), _("&Select PPD File:"), cfgs));
+
+	    }
 	    if (`info == ret)
 	    {
 		// popup
@@ -1315,11 +1422,11 @@ and test the queue after the printer model is selected."));
 	boolean know = conf_type || lookup (Printer::printer, "type", "yast2") == "non-yast-now";
 	boolean raw = lookup (Printer::printer, "raw", false);
 	string model = lookup (Printer::printer, "device", "");
-	if (Printer::printer["type"]:"" != "yast2"
+/*	if (Printer::printer["type"]:"" != "yast2"
 	    && Printer::printer["type"]:"" != "non-yast-now")
 	{
 	    raw = true;
-	}
+	}*/
 
 	//
 	// texts
@@ -1746,10 +1853,6 @@ the current configuration.
 	    {
 		new_spooler = Spooler::Get ();
 	    }
-y2error ("SG: %1", Spooler::Get ());
-y2error ("NS: %1", new_spooler);
-y2error ("S: %1", spooler);
-y2error ("CIT: %1", CUPS::InstallationType ());
 	    if (Spooler::Get () != new_spooler || (new_spooler == "cups"
 		&& ((spooler == `cups_client
 			&& `server == CUPS::InstallationType ())
