@@ -33,7 +33,11 @@
 	map options = p["options"]:$[];
 	if (haskey (options, "PageSize"))
 	    return p;
-	options["PageSize"] = Printerlib::getDefaultPaperSize () == 0 ? "A4" : "Letter";
+	string pagesize = Printerlib::getDefaultPaperSize () == 0 ? "A4" : "Letter";
+	options["PageSize"] = pagesize;
+	options["PageRegion"] = pagesize;
+	options["ImageableArea"] = pagesize;
+	options["PaperDimension"] = pagesize;
 	p["options"] = options;
 	return p;
     }
@@ -318,9 +322,13 @@ preparation for autoinstallation.
             {
                 foreach (`v, composite["valorder"]:[], ``{
                     string optname = composite["name"]:"";
+		    string pagesize = Printerlib::getDefaultPaperSize () == 0 ? "A4" : "Letter";
                     map new_options = $[
                         optname : v,
-			"PageSize" : Printerlib::getDefaultPaperSize () == 0 ? "A4" : "Letter",
+			"PageSize" : pagesize,
+			"PageRegion" : pagesize,
+			"ImageableArea" : pagesize,
+			"PaperDimension" : pagesize,
                     ];
                     new_queues = add (new_queues, $[
                         "config" : config,
