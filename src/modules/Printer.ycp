@@ -179,6 +179,10 @@
      */
     global string hp_driver = nil;
 
+    /**
+     * Inform user that using different driver may be possible
+     */
+    global boolean inform_about_config = false;
 
 // local functions
 
@@ -1530,6 +1534,7 @@ the selected spooler does not support it."), name));
 	// is clickable link
 	// eg. HP DeskJet configured as lp0 [test]
 	string test_link = _("test");
+	inform_about_config = false;
 
 	if (Spooler::Get () == "cups" && CUPS::InstallationType () == `client)
 	{
@@ -1657,6 +1662,11 @@ the selected spooler does not support it."), name));
 			    model = info["manufacturer"]:"" + " "
 				+ info["model"]:"";
 			}
+			map model_info = Printerdb::foomatic[
+			    i["ppd_info", "manufacturer_db"]:"",
+			    i["ppd_info", "model_db"]:""]:$[];
+			if (size (model_info) > 2) // also contains label
+			    inform_about_config = true;
 		    }
 
 		    i = assignState (i, false);
@@ -1786,6 +1796,7 @@ the selected spooler does not support it."), name));
 		}
 	    }
 	}
+y2internal ("Inform about config: %1", inform_about_config);
 	return Summary::DevicesList (summary);
     }
     /**

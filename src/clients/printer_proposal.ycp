@@ -92,15 +92,12 @@ Detect your printers?"), Label::YesButton (),
 		}
 		Printer::Propose ();
 	    }
-	    if (size (Printer::printcap) > 0 && ! Printer::tested)
+	    if (size (Printer::printcap) > 0 && ! Printer::tested
+		&& Printer::inform_about_config)
 	    {
-	      if (false) {
-		ret = $[
-		    // warning message (part of richtext)
-		    "warning" :_("<p><a href=\"printer_conf\">Test</a> your printer configuration before proceeding.</p>"),
-		    "warning_level" : `notice,
-		    ];
-	      }
+		ret = add (ret, "warning_level", `notice);
+		// info message in the summary
+		ret = add (ret, "warning", _("In case of bad printout quality, try selecting another PPD file for the print queue."));
 	    }
 	    proposal = Printer::Summary ([`test_proposal]);
 	    list<string> queues = maplist (
