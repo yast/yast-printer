@@ -85,37 +85,6 @@ The specified PPD file does not exist.
 
 
     /**
-     * Add a remote printer to the printcap.
-     * @param entry Entry for printer to save.
-     * @return boolean true if successful
-     */
-    global define boolean createRemoteEntry (map entry) ``{
-        string uri = lookup (entry, "uri", "");
-        string hostname = Printerlib::getUriHost (uri);
-        string queue = Printerlib::getUriRemoteQueue (uri);
-        string name = lookup (entry, "name", "");
-        string tail = "";
-        if (!lookup (entry, "ff", false))
-            tail = " -sf";
-
-        y2milestone ("%1", uri);
-        y2milestone ("%1", entry);
-        if (hostname != "" && queue != "" && name != "")
-        {
-            if (callLprsetup (sformat ("/usr/lib/lpdfilter/bin/lprsetup -lprng -overwrite %1 -host %2 -rp %3 -raw -color", name, hostname, queue) + tail))
-                return true;
-        }
-        // message box
-        Report::Error (_("Unable configure a remote
-queue. The internal structure
-is not completed properly.
-"));
-
-        return false;
-    }
-
-
-    /**
      * Add a yast2 printer to the printcap
      * @param entry Entry for printer to save.
      * @return boolean true if successful
@@ -182,7 +151,7 @@ is not completed properly.
             if (callLprsetup (sformat ("/usr/lib/lpdfilter/bin/lprsetup -lprng -overwrite %1 -device '| -$ /usr/bin/lp.cups -d %3 -h %2'", name, Printerlib::getUriHost (uri), queue) + tail))
                 return true;
         }
-        else if (con_type == "filtering")
+        else if (con_type == "lpd")
         {
             if (callLprsetup (sformat ("/usr/lib/lpdfilter/bin/lprsetup -lprng -overwrite %1 -host %2 -rp %3", name, Printerlib::getUriHost (uri), Printerlib::getUriRemoteQueue (uri)) + tail))
                 return true;
@@ -269,7 +238,7 @@ is not completed properly.
         if (printcap_part != "" && !lookup (entry, "recreate", false))
         {
             // We have a part of the printcap from previous configuration...
-            if (lookup (entry, "type", "yast2") == "yast2" && Printerlib::getUriType (uri) != "lpd")
+            if (lookup (entry, "type", "yast2") == "yast2")
             {
                 if ("" != upp_fname && "" != upp_orig)
                 {
@@ -296,17 +265,6 @@ is not completed properly.
             if (lookup (entry, "type", "yast2") == "yast2")
             {
                 SCR::Execute (.target.mkdir, "/etc/lpdfilter/" + name);
-                if (Printerlib::getUriType (uri) == "lpd")
-                {
-                    if (!createRemoteEntry (entry))
-                    {
-			// message box
-                        UI::MessagePopup (sformat (_("Error occurred while saving queue %1."), name));
-                        return false;
-                    }
-                }
-                else
-                {
                     if (!createEntry (entry))
                     {
 			// message box
@@ -331,17 +289,16 @@ is not completed properly.
                             return false;
                         }
                     }
-                }
             }
         }
 
         // conf file...
-        if (lookup (entry, "type", "yast2") == "yast2" && Printerlib::getUriType (uri) != "lpd" || lookup (entry, "type", "") == "aps")
+        if (lookup (entry, "type", "yast2") == "yast2")
         {
             // create rc file name
             string conf_fname = sformat ("/etc/lpdfilter/%1/conf", name);
             // Is it Epson Stylus on USB? Add magic sequence to be printed before each job.
-            if ("usb" == Printerlib::getUriType (uri) && issubstring (tolower (lookup (entry,"vendor","")),"epson"))
+            if ("usb" == Printerlib::getUriType (uri) && issubstring (tolower (lookup (entry,"vendor_ieee","")),"epson"))
             {
                 conf = add (conf, "reset_before",// this must stay as one line
                                   "\\x0\\x0\\x0\\x1b\\x01\\x40\\x45\\x4a\\x4c\\x20\\x31\\x32\\x38\\x34\\x2e\\x34\\x0a\\x40\\x45\\x4a\\x4c\\x20\\x20\\x20\\x20\\x20\\x0a");

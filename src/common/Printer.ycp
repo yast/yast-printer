@@ -29,12 +29,18 @@
     include "printer/misc.ycp";
     include "printer/misc-lprng.ycp";
     include "printer/misc-cups.ycp";
+    include "printer/ppds.ycp";
 
     textdomain "printer";
 
     //////////
     ////////// Module data
     //////////
+
+    /**
+      * Version of YaST2 printer module for updates handling
+      */
+    global integer version = 256 * 2 + 8; // 2.8
     /**
       * Don't run SuSEconfig, don't restart services if true and possible
       */
@@ -113,8 +119,8 @@
      * "unique_key" : string,  // from libhd  -|
      * "vendor_ieee" : string, // detected id -|- these are only present for autodetected printers
      * "device_ieee" : string, // detected id -|
-     * "vendor" : string, // vendor from printer db -|
-     * "device" : string, // device from printer db -|
+     * "vendor_db" : string, // vendor from printer db -|
+     * "device_db" : string, // device from printer db -|
      * "config" : string, // config from printer db -|-only for non-raw queues
      * "options": map,   // options from printer db -|
      * "ff" : boolean, // print formfeed between pages, present only for queues with formfeed
@@ -232,9 +238,9 @@
 	dirty = true;
 	autodetected = Printerlib::Detect (false);
 	autodetected = maplist (`i, autodetected, ``{
-	    i = add (i, "uri", lookup (i, "bus", "parallel") + ":" + lookup (i, "dev_name", ""));
-	    i = add (i, "info", lookup (i, "vendor", "") + " " + lookup (i, "device", ""));
-            i = add (i, "location", Printerlib::getUriNiceName (lookup (i, "uri", "")));
+	    i["uri"] = i["bus"]:"parallel" + ":" + i["dev_name"]:"";
+	    i["info"] = i["vendor"]:"" + " " + i["device"]:"";
+            i["location"] = Printerlib::getUriNiceName (i["uri"]:"");
 	    i["vendor_db"] = SCR::Read (.ppd.db.vendorname, i["vendor"]:"");
 	    i["device_db"] = SCR::Read (.ppd.db.modelname,
 		    [i["vendor_db"]:"", i["device"]:""]);
@@ -417,7 +423,8 @@
     /**
       * Assign states to a printer
       * @param p map printer
-      * @param changed boolean true if queue was changed (to assign correct state)
+      * @param changed boolean true if queue was changed
+      *   (to assign correct state)
       * @return map printer with assigned states
       */
     define map assignStates (map p, boolean changed) ``{
@@ -452,6 +459,8 @@
 	    }
 	}
 	boolean is_class = q_type == "class";
+	if (is_class)
+	    supported = true;
 	foreach (`s, spoolers, ``{
 	    boolean filt_sup = ((s == "cups" || ! is_class)
 		&& (s == "cups" || q_filter == "foomatic-rip"));
@@ -545,18 +554,6 @@
 		default = lookup (printer, "name", "");
 	}
 	dirty = true;
-    }
-    /**
-     * Return list of forwarding queues
-     * @return list names of fwd queues.
-     */
-    global define list ForwardingQueues () ``{
-	list q = [];
-	foreach (`i, printcap, ``{
-	    if ("lpd" == Printerlib::getUriType (lookup (i, "uri", "")))
-		q = add (q, lookup (i, "name", ""));
-	});
-	return q;
     }
     /**
      * Export module settings to map.
@@ -784,13 +781,21 @@ END { if (!used) print \"ServerName %1\" }
 	    {
 		state = $[];
 	    }
+	    integer read_version = state["version"]:0;
 	    printcap = lookup (state, "printers", []);
-	    printcap = maplist (`p, printcap, ``{
-		if (substring (p["uri"]:"", 0, 12) == "prefilter://")
-		    p["uri"] = "filtering://localhost/"
-			+ substring (p["uri"]:"", 12);
-		return p;
-	    });
+	    if (read_version < version)
+	    {
+	        printcap = maplist (`p, printcap, ``{
+		    if (substring (p["uri"]:"", 0, 12) == "prefilter://")
+		        p["uri"] = "filtering://localhost/"
+			    + substring (p["uri"]:"", 12);
+		    if (substring (p["uri"]:"", 0, 6) == "lpd://")
+			p["raw"] = true;
+		    if (substring (p["uri"]:"", 0, 12) == "filtering://")
+			p["uri"] = "lpd://" + substring (p["uri"]:"", 12);
+		    return p;
+		});
+	    }
 	    deleted = lookup (state, "deleted", []);
 	    default = lookup (state, "default", "");
 	    cups_usb_dev_names = state["cups_usb_devices"]:`always;
@@ -1127,10 +1132,13 @@ the selected spooler does not support it.
 
     define boolean saveTheConfiguration () ``{
 	list l = filter (`e, printcap, ``(lookup (e, "type", "yast2") == "yast2"));
-	l = maplist (`e, l, ``(filter (`k, `v, e, ``(k != "changed" && k != "ppd"))));
+	list forbidden_keys = ["changed", "ppd", "auto_propose"];
+	l = maplist (`e, l, ``(filter (`k, `v, e,
+	    ``(! contains (forbidden_keys, k)))));
 	cleanDeletedPrinters ();
 	map save = $["printers" : l, "deleted" : deleted, "default" : default,
 	    "cups_usb_devices" : cups_usb_dev_names ];
+	save["version"] = version;
 	if (! SCR::Write (.target.ycp, "/var/lib/YaST2/printers", save))
 	{
 	    // error report. %1 is filename
@@ -1268,17 +1276,6 @@ the selected spooler does not support it.
 	    string found = "";
 	    string vendor = lookup (i, "vendor", "");
 	    string model = lookup (i, "device", "");
-	    string ppd = lookup (i, "ownppd", "");
-	    if (ppd != "" && ! isPpd (ppd))
-		ppd = lookup (i, "ppd", "");
-	    if ("" != ppd)
-		vendor = "PPD file: ";
-	    if (isPpd (ppd))
-	    {
-		map info = ppdInfo (lookup (i, "ownppd", ""));
-		vendor = lookup (info, "manufacturer", "");
-                model = lookup (info, "model", "");
-	    }
 	    string dev = sformat ("%1 %2: %3", vendor, model, Printerlib::getUriNiceName (lookup (i, "uri", "")));
 	    foreach (`entry, printcap, ``{
 		if (lookup (i, "unique_key", "") == lookup (entry, "unique_key", " "))
@@ -1359,7 +1356,7 @@ the selected spooler does not support it.
 		    string model = "";
 		    if (i["database"]:"" == "foomatic")
 		    {
-			model = i["vendor"]:"" + " " + i["device"]:"";
+			model = i["vendor_ieee"]:"" + " " + i["device_ieee"]:"";
 		    }
 		    string ppd = lookup (i, "ownppd", "");
 	            if (ppd != "" && ! isPpd (ppd))
@@ -1373,7 +1370,7 @@ the selected spooler does not support it.
 	            }
 
 		    i = assignStates (i, false);
-		    boolean raw = lookup (i, "raw", false) || "lpd" == Printerlib::getUriType (lookup (i, "uri", ""));
+		    boolean raw = i["raw"]:false;
 		    string dev = (raw ?
 			// menu item, %1 is URI
 			sformat (_("Raw queue: %1"), Printerlib::getUriNiceName (lookup (i, "uri", "")))
@@ -1483,18 +1480,24 @@ the selected spooler does not support it.
      */
     global define void editDetected (map det) ``{
 	index = -1;
+	y2debug ("Editing printer %1", det);
 	printer = $[
-	    "vendor_ieee" : lookup (det, "vendor", ""),
-	    "device_ieee" : lookup (det, "device", ""),
-	    "unique_key" : lookup (det, "unique_key", ""),
-	    "uri" : lookup (det, "bus", "parallel") + ":" + lookup (det, "dev_name", ""),
-	    "info": lookup (det, "vendor", "") + " " + lookup (det, "device", ""),
-            "location": Printerlib::getUriNiceName (lookup (det, "uri", "")),
-	    "vendor_id": lookup (det, "vendor_id",0),
-	    "device_id": lookup (det, "device_id",0),
+	    "vendor_ieee" : det["vendor"]:"",
+	    "device_ieee" : det["device"]:"",
+	    "vendor_db" : det["vendor_db"]:"",
+	    "device_db" : det["device_db"]:"",
+	    "database" : "foomatic",
+	    "unique_key" : det["unique_key"]:"",
+	    "uri" : det["uri"]:"",
+	    "info": det["info"]:"",
+            "location": det["location"]:"",
+	    "vendor_id": det["vendor_id"]:0,
+	    "device_id": det["device_id"]:0,
             "accepting": true,
             "state": "idle",
+	    "options" : $[],
 	];
+	y2milestone ("Detected printer after editation: %1", printer);
     }
     /**
      * Has the printer been already configured?
@@ -1518,94 +1521,37 @@ the selected spooler does not support it.
 	    Printerlib::setCupsUsbDevicesInfo ();
 	// settings are read and hw is detected
 	list forbidden_names = getForbiddenNames ();
+	symbol page_size = Printerlib::getDefaultPaperSize ();
 	foreach (`i, autodetected, ``{
-	    if (!alreadyConfigured (lookup (i, "unique_key", "")))
+	    if (!alreadyConfigured (i["unique_key"]:""))
 	    {
-		list detected = [];
-		boolean is_foomatic = false;
-		loadFoomaticIfNeeded ();
-		detected = [i["vendor"]:"", i["device"]:""];
-		detected = filter (`d, detected, ``(d != ""));
-
-                string vdb = SCR::Read (.ppd.db.vendorname,
-                        i["vendor"]:"");
-                string mdb = SCR::Read (.ppd.db.modelname,
-                        [vdb, i["device"]:""]);
-
-		map ppd_files = getPpdFiles (vdb, mdb);
-		integer queues_num = size (ppd_files);
-		if (queues_num > 0)
+		editDetected (i);
+		string vdb = printer["vendor_db"]:"";
+		string mdb = printer["device_db"]:"";
+		string ppd_file = getAutoPpdFile (vdb, mdb);
+		boolean configure
+		    = 0 == Printer::foomatic[vdb, mdb, `support]:0;
+		if (ppd_file != nil && configure)
 		{
-			is_foomatic = true;
-		}
-
-		if (Printer::spooler == "cups")
-		{
-		    if (contains (Printerlib::getProblematicCupsUsbDevices (),
-			i["dev_name"]:""))
+		    boolean ok = true;
+		    printer["name"] = generateQueueName (nil, printer["uri"]:"",
+			printer["vendor_ieee"]:"", printer["device_ieee"]:"",
+			getForbiddenNames ());
+		    printer["config"] = ppd_file;
+		    foreach (string paperentry, ["ImageableArea",
+			"PageRegion", "PageSize", "PaperDimension"],
+		    ``{
+			if (page_size == `letter)
+			    printer["options", paperentry] = "Letter";
+			else
+			    printer["options", paperentry] = "A4";
+		    });
+		    if (ok)
 		    {
-			detected = [];
-		    }
-		}
-		if (2 == size (detected))
-		{
-		    map info = $[];
-			string vdb = SCR::Read (.ppd.db.vendorname,
-                            i["vendor"]:"");
-			string mdb = SCR::Read (.ppd.db.modelname,
-                            [vdb, i["device"]:""]);
-			boolean supp = size (filter (`k, `v, Printer::foomatic[vdb, mdb]:$[], ``(is (k, string)))) > 0;
-			integer type = Printer::foomatic[vdb, mdb, `support]:1;
-			if (! supp)
-			    type = 2;
-			info = $["supported":true, "type":type];// FIXME type
-		    y2milestone ("Detected: %1", i);
-		    if (0 == lookup (info, "type", 2))
-		    {
-			editDetected (i);
-			i = printer;
-			if (is_foomatic)
-			{
-			    string v_db = SCR::Read (.ppd.db.vendorname,
-				i["vendor_ieee"]:"");
-			    i = union (i, $[
-				"vendor_db" : v_db,
-				"device_db" : SCR::Read (.ppd.db.modelname,
-				    [v_db, i["device_ieee"]:""]),
-			    ]);
-			}
-			i = union (i, $[
-			    "vendor" : select (detected, 0, ""),
-			    "device" : select (detected, 1, ""),
-			]);
-			list new_queues = [];
-			new_queues = getFoomaticAutoQueues
-			    (i["vendor_db"]:"", i["device_db"]:"", nil);
-			string suffix = getQueueSuffix (new_queues);
-			foreach (`v, new_queues, ``{
-			    symbol page_size
-				= Printerlib::getDefaultPaperSize ();
-			    foreach (string entry, ["ImageableArea",
-				 "PageRegion", "PageSize", "PaperDimension"],
-			    ``{
-				if (page_size == `letter)
-				    v["options", "paper"] = "Letter";
-				else
-				    v["options", "paper"] = "A4";
-			    });
-
-			    forbidden_names = add (forbidden_names, lookup (v, "name", ""));
-
-			    map info = $[];
-			    if (is_foomatic)
-			    {
-// FIXME bellow - LPRng support
-//				info = $["lprng" : false];
-			    }
-			    y2milestone ("Proposing queue %1", union (v, i));
-			    if ((lookup (info, "cups", true) && lookup (info, "lprng", true)))
-				printcap = add (printcap, union (v, i));
-			});
+			printer = assignStates (printer, true);
+			y2milestone ("Configuring autodetected printer %1",
+			    printer);
+			storePrinter ();
 		    }
 		}
 	    }

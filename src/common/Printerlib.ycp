@@ -395,7 +395,7 @@ ECHO_PID=$!
 	    DisplayUnavailableAIPopup ();
             return;
         }
-	boolean ping_only = "filtering" != type && "lpd" != type && "ipp" != type && "socket" != type && "ipp_server" != type;
+	boolean ping_only = "lpd" != type && "ipp" != type && "socket" != type && "ipp_server" != type;
 	UI::OpenDialog (`opt (`decorated), `Label (sformat (textTestRemotePrinter (ping_only), hname)));
 
 	string test_command = sformat ("/bin/ping -c 1 \"%1\"", hname);
@@ -587,7 +587,7 @@ Install them now?"));
     /**
      * Get printer remote queue. Input to this function must be valid
      * because it just takes the part of uri after the last slash.
-     * Should be used for: lpd, filtering, novell, samba, http/ipp.
+     * Should be used for: lpd, novell, samba, http/ipp.
      * @param uri printer uri
      * @return remote queue
      * @see getUriType
@@ -784,13 +784,10 @@ Install them now?"));
 	if ("pipe" == type)
 	    // Prograam to get job on stdin
 	    return sformat (_("Program %1"), getUriDevice (uri));
-	if ("lpd" == type)
-	    // Forwarding queue to QUEUENAME on LPD server SERVERNAME
-	    return sformat (_("Forwarding queue to %1 on LPD server %2"), getUriRemoteQueue (uri), getUriHost (uri));
 	if ("irda" == type)
             // Forwarding queue to QUEUENAME on LPD server SERVERNAME
             return sformat (_("IrDA printer on %1"), getUriDevice (uri));
-        if ("filtering" == type)
+        if ("lpd" == type)
             // Filtering forwarding queue to QUEUENAME on LPD server SERVERNAME
             return sformat (_("Filtering forwarding queue to %1 on LPD server %2"), getUriRemoteQueue (uri), getUriHost (uri));
 	if ("novell" == type)

@@ -117,9 +117,7 @@ preparation for autoinstallation.
         foreach (`p, Printer::printcap, ``{
             string ukey = p["unique_key"]:"";
             string uri = p["uri"]:"";
-	    string model = p["vendor"]:"" + p["device"]:"";
-	    if (p["ownppd"]:"" != "")
-		model = p["ownppd"]:"";
+	    string model = p["ownppd"]:"";
 	    if (model == "")
 		model = p["vendor_ieee"]:"" + p["device_ieee"]:"";
 	    if (model == "")
@@ -128,17 +126,12 @@ preparation for autoinstallation.
 		    && (! contains (uris, uri))
 			|| ! contains (models, model)
 		    )
-		&& (((p["vendor"]:"" != ""
-			    && p["device"]:"" != "")
-			|| p["ownppd"]:"" != ""
-		    )&& p["uri"]:"" != ""))
+		&& (model != "" && uri != ""))
             {
-                if (uri != "")
-                    uris = add (uris, uri);
+                uris = add (uris, uri);
                 if (ukey != "")
                     ukeys = add (ukeys, ukey);
-		if (model != "")
-		    models = add (models, model);
+		models = add (models, model);
                 printers = add (printers, p);
             }
         });
@@ -158,8 +151,7 @@ preparation for autoinstallation.
     ``{
 	list(map) queues = filter (`p, Printer::printcap, ``(
 	    p["uri"]:"" == uri &&
-		((p["vendor"]:"" == vendor && p["device"]:"" == device)
-		||(p["vendor_db"]:"" == vendor && p["device_db"]:"" == device)
+		((p["vendor_db"]:"" == vendor && p["device_db"]:"" == device)
 		||(p["vendor_ieee"]:"" == vendor && p["device_ieee"]:"" == device))
 	    ));
 	return queues;
@@ -173,8 +165,10 @@ preparation for autoinstallation.
       * @return boolean true if already configured
       */
     global define boolean isPrinterConfigured (map printer) ``{
-	string vendor = printer["vendor"]:"";
-	string device = printer["device"]:"";
+	string vendor_db = printer["vendor_db"]:"";
+	string device_db = printer["device_db"]:"";
+	string vendor_ieee = printer["vendor_ieee"]:"";
+	string device_ieee = printer["device_ieee"]:"";
 	string ukey = printer["unique_key"]:"";
 	string uri = printer["uri"]:"";
 	if (uri == "")
@@ -184,12 +178,10 @@ preparation for autoinstallation.
 	foreach (`p, Printer::printcap, ``{
 	    if ((p["unique_key"]:"" == ukey && ukey != "")
 		|| (p["uri"]:"" == uri && uri != ""
-		    && ((p["vendor"]:".." == vendor
-			    && p["device"]:".." == device)
-			|| (p["vendor_db"]:".." == vendor
-			    && p["device_db"]:".." == device)
-			|| (p["vendor_ieee"]:".." == vendor
-			    && p["device_ieee"]:".." == device))
+		    && ((p["vendor_db"]:".." == vendor_db
+			    && p["device_db"]:".." == device_db)
+			|| (p["vendor_ieee"]:".." == vendor_ieee
+			    && p["device_ieee"]:".." == device_ieee))
 		   ))
 	    {
 		exists = true;
@@ -327,7 +319,7 @@ preparation for autoinstallation.
 		return size (queues) > 0;
 	    });
 	}
-        else if ("lpd" == type || "filtering" == type)
+        else if ("lpd" == type)
             hosts = SCR::Read (.net.hostnames, 515);
         else if ("socket" == type)
             hosts = SCR::Read (.net.hostnames, 9100);
@@ -361,8 +353,8 @@ preparation for autoinstallation.
     global define boolean testSupportedQueueBySpooler
 	(string queue, string spooler)
     ``{
-	map supported = $[ "cups" : [ "parallel", "usb", "serial", "filtering", "ipp", "samba", "socket", "irda", "class", "novell", "pipe", ],
-			   "lprng" : [ "parallel", "usb", "serial", "lpd", "samba", "novell", "irda", "filtering", "socket", "pipe", ]];
+	map supported = $[ "cups" : [ "parallel", "usb", "serial", "lpd", "ipp", "samba", "socket", "irda", "class", "novell", "pipe", ],
+			   "lprng" : [ "parallel", "usb", "serial", "lpd", "samba", "novell", "irda", "socket", "pipe", ]];
 	list l = lookup (supported, spooler, []);
 	if (l == [])
 	    return true;
@@ -510,12 +502,46 @@ queue you want to use."));
     }
 
     /**
-     * FIXME: create test case
+     * TODO: create test case
      * @param name printer name
      * @param forbidden_names list of forbidden names
      * @return new queue name
      */
-    global define string generateQueueName (string name, list forbidden_names) ``{
+    global define string generateQueueName (string name, string uri,
+	string vendor_name, string device_name, list forbidden_names)
+    ``{
+	if (name == nil)
+	{
+	    name = "";
+	    if (isRemote (uri) && Printerlib::getUriRemoteQueue (uri) != "")
+	    {
+	        name = Printerlib::getUriRemoteQueue (uri);
+	        integer i = findlastof (name, "/");
+	            if (i != nil)
+		    name = substring (name, i);
+	        name = filterchars (name,
+		    "_0123456789abcdefghijklmnopqrstuvwxyz");
+		if (size (name) >= 20)
+		    name = substring (name, 0, 20);
+	    }
+	    if (name == "" && device_name != "")
+	    {
+	        name = filterchars (
+		    tolower (vendor_name + "_" + device_name),
+		    "_0123456789abcdefghijklmnopqrstuvwxyz");
+		if (size (name) >= 20)
+		{
+		    name = filterchars (
+			tolower (device_name),
+			"_0123456789abcdefghijklmnopqrstuvwxyz");
+		}
+		if (size (name) >= 20)
+		    name = substring (name, 0, 20);
+	    }
+	if (name == "")
+	    name = "printer";
+	}
+
 	integer i = 1;
 	while (contains (forbidden_names, name))
 	{
@@ -525,6 +551,11 @@ queue you want to use."));
 	return name;
     }
 
+    global define boolean isRemote (string uri) ``{
+	string uri_type = Printerlib::getUriType (uri);
+	return contains (["lpd", "ipp", "samba", "novell"], uri_type);
+    }
+
     /**
      * We need this wrapper because of wizard sequencer.
      * @return `next for wizard sequencer
@@ -532,18 +563,6 @@ queue you want to use."));
     global define symbol storePrinter () ``{
 	Printer::storePrinter ();
 	return `next; // because of wizard sequencer
-    }
-
-    /**
-     * Get items for selection box of all fwd queues.
-     * @param queue queue to pre-select in selection box
-     * @return list list of items
-     */
-    global define list getForwardingQueues (string queue) ``{
-	list q = Printer::ForwardingQueues ();
-	return maplist (`i, q, ``((i == queue) ?
-		    `item (`id (i), i, true) :
-		    `item (`id (i), i)));
     }
 
     /**
@@ -608,7 +627,7 @@ All changes will be lost.
      */
     global define boolean knowConnection (string con) ``{
         return (
-            (contains (["parallel", "usb", "serial", "ipp", "lpd", "samba", "socket", "filtering", "irda", "novell", "pipe" ], con)) ?
+            (contains (["parallel", "usb", "serial", "ipp", "lpd", "samba", "socket", "irda", "novell", "pipe" ], con)) ?
             con : ""
             );
     }
@@ -629,7 +648,7 @@ All changes will be lost.
 		    // label
 		    `Label (`opt (`hstretch), _("LPD and IPP network printing:")),
 		    // radiobutton
-                    `RadioButton (`id (`filtering),`opt (`hstretch), _("LPD fil&tering and forwarding queue"), type == "filtering"),
+                    `RadioButton (`id (`lpd),`opt (`hstretch), _("LPD fil&tering and forwarding queue"), type == "lpd"),
 		    // radiobutton
 		    `RadioButton (`id (`ipp), `opt (`hstretch),    _("&IPP filtering and forwarding queue"), type == "ipp"),
 		    // label
@@ -647,13 +666,8 @@ All changes will be lost.
 		    // radiobutton
 		    `RadioButton (`id (`other), `opt (`hstretch),  _("&Other Printer (set URI)"), "" == knowConnection (type) && type != "class"),
 		    // radiobutton
-		    `RadioButton (`id (`class), `opt (`hstretch),  _("CUPS &class"), type == "class"),
-		    // label
-		    `Label (`opt (`hstretch), _("Unsupported printing in CUPS:")),
-		    // radiobutton
-                    `RadioButton (`id (`remote), `opt (`hstretch, `disabled),     _("LPD &forwarding queue"), type == "lpd")
-		    // radiobutton
-		    )
+		    `RadioButton (`id (`class), `opt (`hstretch),  _("CUPS &class"), type == "class")
+		)
 		: Printer::spooler == "lprng" ?
                 `VBox (
 		    // radiobuton
@@ -661,9 +675,7 @@ All changes will be lost.
 		    // label
                     `Label (`opt (`hstretch), _("LPD and IPP network printers:")),
 		    // radiobutton
-                    `RadioButton (`id (`remote), `opt (`hstretch),      _("LPD &forwarding queue"), type == "lpd"),
-		    // radiobutton
-                    `RadioButton (`id (`filtering),`opt (`hstretch), _("LPD fil&tering forwarding queue"), type == "filtering"),
+                    `RadioButton (`id (`lpd),`opt (`hstretch), _("LPD fil&tering forwarding queue"), type == "lpd"),
 		    // label
 		    `Label (`opt (`hstretch), _("Other network printing:")),
 		    // radiobutton
@@ -692,9 +704,7 @@ All changes will be lost.
 		    // label
                     `Label (`opt (`hstretch), _("LPD and IPP network printing:")),
 		    // radiobutton
-                    `RadioButton (`id (`remote), `opt (`hstretch),      _("LPD &forwarding queue"), type == "lpd"),
-		    // radiobutton
-                    `RadioButton (`id (`filtering),`opt (`hstretch), _("LPD fil&tering and forwarding queue"), type == "filtering"),
+                    `RadioButton (`id (`lpd),`opt (`hstretch), _("LPD fil&tering and forwarding queue"), type == "lpd"),
 		    // radiobutton
                     `RadioButton (`id (`ipp), `opt (`hstretch),    _("&IPP filtering and forwarding queue"), type == "ipp"),
 		    // label

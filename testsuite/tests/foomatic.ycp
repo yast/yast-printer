@@ -25,6 +25,7 @@
 	    "db" : $[
 		"vendorname" : "EPSON",
 		"modelname" : "STYLUSPHOTO810",
+		"changed" : false,
 	    ]
 	],
 	"target" : $[
@@ -56,16 +57,18 @@
 
     DUMP ("========================================");
 
-    TEST (``(getAutoPpdFile ($["1" : "P1 (recommended)", "2" : "P2"], "EPSON", "Stylus Photo 810")), [READ, $[], $[]], 0);
-    TEST (``(getAutoPpdFile ($["1" : "P1", "2" : "P2"], "EPSON", "Stylus Photo 810")), [READ, $[], $[]], 0);
-    TEST (``(getAutoPpdFile ($["1" : "P1", "2" : "P2 (recommended)"], "EPSON", "Stylus Photo 810")), [READ, $[], $[]], 0);
+    Printer::spooler = "cups";
+
+    TEST (``(getAutoPpdFile ("EPSON", "Stylus Photo 810", ["P1 (recommended)", "P2"])), [READ, $[], $[]], 0);
+    TEST (``(getAutoPpdFile ("EPSON", "Stylus Photo 810", ["P1", "P2"])), [READ, $[], $[]], 0);
+    TEST (``(getAutoPpdFile ("EPSON", "Stylus Photo 810", ["P1", "P2 (recommended)"])), [READ, $[], $[]], 0);
 
     DUMP ("========================================");
 
-    TEST (``(getAutoPpdFile ($["1" : "XXgimpXX", "2" : "YYhpijsYY", "3" : "ZZpcl3ZZ", "4" : "QQcdj3QQ"], "EPSON", "Stylus Photo 810")), [READ, $[], $[]], 0);
-    TEST (``(getAutoPpdFile ($["1" : "XXgimpXX", "2" : "YYhpijsYY", "3" : "ZZpcl3ZZ (recommended)", "4" : "QQcdj3QQ"], "EPSON", "Stylus Photo 810")), [READ, $[], $[]], 0);
-    TEST (``(getAutoPpdFile ($["1" : "XXgimpXX", "2" : "YYhpijsYY (recommended)", "3" : "ZZpcl3ZZ", "4" : "QQcdj3QQ  (recommended)"], "EPSON", "Stylus Photo 810")), [READ, $[], $[]], 0);
-    TEST (``(getAutoPpdFile ($["1" : "XXgimpXX (recommended)", "2" : "YYhpijsYY (recommended)", "3" : "ZZpcl3ZZ (recommended)", "4" : "QQcdj3QQ (recommended)"], "EPSON", "Stylus Photo 810")), [READ, $[], $[]], 0);
+    TEST (``(getAutoPpdFile ("EPSON", "Stylus Photo 810", ["XXgimpXX", "YYhpijsYY", "ZZpcl3ZZ", "QQcdj3QQ"])), [READ, $[], $[]], 0);
+    TEST (``(getAutoPpdFile ("EPSON", "Stylus Photo 810", ["XXgimpXX", "YYhpijsYY", "ZZpcl3ZZ (recommended)", "QQcdj3QQ"])), [READ, $[], $[]], 0);
+    TEST (``(getAutoPpdFile ("EPSON", "Stylus Photo 810", ["XXgimpXX", "YYhpijsYY (recommended)", "ZZpcl3ZZ", "QQcdj3QQ  (recommended)"])), [READ, $[], $[]], 0);
+    TEST (``(getAutoPpdFile ("EPSON", "Stylus Photo 810", ["XXgimpXX (recommended)", "YYhpijsYY (recommended)", "ZZpcl3ZZ (recommended)", "QQcdj3QQ (recommended)"])), [READ, $[], $[]], 0);
 
     DUMP ("========================================");
 
