@@ -44,9 +44,9 @@ client_DATA = printerdb.ycp
 EXTRA_DIST = parser.yy scanner.ll $(client_DATA) $(ybin_SCRIPTS)
 
 noinst_PROGRAMS = yhgen
-yhgen_SOURCES = yhgen.cc
+yhgen_SOURCES = yhgen.cc		
 
-yhgen_LDADD = -lscr -ly2 -lycp
+yhgen_LDADD = -lscr -ly2 -lycp 
 yhgen_LDFLAGS = -L$(libdir)   \
         -Xlinker --whole-archive        \
         $(plugindir)/libpy2stdio.la     \

@@ -492,7 +492,7 @@ valuetext:
 	    $$->pattern = $4;
 	    $$->chars = $2;
 	}
-
+;
 valuelist:
 	value {
 	      $$ = new List;

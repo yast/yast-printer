@@ -70,12 +70,12 @@
                 }
                 if (!Printer::isFile (file))
                 {
-                    UI::MessagePopup (_("You must enter valid filename"));
+                    UI::MessagePopup (_("Enter a valid file name."));
                     continue;
                 }
                 if (!Printer::changeDb (file))
                 {
-                    UI::MessagePopup (_("Not valid database selected"));
+                    UI::MessagePopup (_("Invalid database selected."));
                     continue;
                 }
                 break;
@@ -165,7 +165,7 @@
 		else
 		{
 		    // message box
-		    UI::MessagePopup (type == file ? _("Enter full path of the file to which to print.") : _("Enter full path of the program to which print through pipe."));
+		    UI::MessagePopup (type == file ? _("Enter the full path of the file to which to print.") : _("Enter full path of the program to which to print through pipe."));
 		}
 	    }
 	    else if (`back == ret)
@@ -530,7 +530,7 @@ that your parallel port is not properly configured.
 	boolean has_user_password = (type == "samba" || type == "novell");
 
 	// label
-	string hent_str = _("&Hostname of the printer server:");
+	string hent_str = _("&Host name of the printer server:");
 	term uspas = `VSpacing (0.2);
 
 	integer i = findlastof (uri, "/");
@@ -787,7 +787,7 @@ that your parallel port is not properly configured.
 		    {
 			ret = nil;
 			// message box
-			UI::MessagePopup (_("You must choose some queue from list."));
+			UI::MessagePopup (_("Select a queue from the list."));
 		    }
 		    else
 		    {
@@ -877,7 +877,7 @@ that your parallel port is not properly configured.
 			  `HWeight (1, `ReplacePoint (`id (`modelsel_rep), `HSpacing ()))),
 		   // Button which provides information about selected manufacturer/model
 		   `HBox (`PushButton (`id (`dbchange), _("&Change database")), `HSpacing(),
-			  `PushButton (`id (`useppd), _("Use non YaST2 &ppd file"))),
+			  `PushButton (`id (`useppd), _("Use non-YaST2 &ppd file"))),
 		   `PushButton (`id (`infobut), _("&Info")));
 	// dialog box label
 	Wizard::SetContentsButtons (_("Manufacturer and model of the printer"), contents, getManufModelHelp (), BackButtonLabel (), NextButtonLabel ());
@@ -887,8 +887,8 @@ that your parallel port is not properly configured.
 	{
 	    if (ret == `infobut)
 	    {
-		string manuf_info = lookup (info, "vendor", _("<P>No info available.</P>"));
-		string model_info = lookup (info, "printer", lookup (info, "config", _("<P>No info available.</P>")));
+		string manuf_info = lookup (info, "vendor", _("<P>No information available.</P>"));
+		string model_info = lookup (info, "printer", lookup (info, "config", _("<P>No information available.</P>")));
 		// Manufacturer: ...info... Model: ...info...  1/2
 		string info_text = _("<P><B>Manufacturer:</B></P>") + manuf_info +
 			// Manufacturer: ...info... Model: ...info...  2/2
@@ -930,7 +930,9 @@ that your parallel port is not properly configured.
             {
 		boolean cont = true;
 		if (Printer::spooler != "cups")
-		    cont = UI::YesNoPopup (getPpdWarning ());//_("PPD files are supported by CUPS only.\n Do you wish to continue?"));
+		    cont = UI::YesNoPopup (getPpdWarning ());//_("PPD files are supported by CUPS only.
+// Continue?
+//"));
 		ret = cont ? `useppd : `cont;
             }
 	    if (`dbchange == ret)
@@ -1048,7 +1050,7 @@ that your parallel port is not properly configured.
 	    }
 	    if (`info == ret)
 	    {
-		string i = lookup (info, "comment", _("<P>No info available.</P>"));
+		string i = lookup (info, "comment", _("<P>No information available.</P>"));
 		UI::LongTextPopup (_("Configuration information"), `RichText (i), 50, 18);
 	    }
 	    if (`abort == ret)
@@ -1451,7 +1453,7 @@ settings changed manually will be lost.
 		`Left (`Label (
 		    // in-dialog text
 		    _("To edit the printer's settings, press Edit.
-Otherwise, press Next or Back to proceed
+Otherwise, press Next or Back to proceed.
 ")
 		    )),
 		`PushButton (`id (`edit), _("&Edit")),
@@ -1722,7 +1724,7 @@ and if you do not like the result, just press Back.")
 	    `HBox (
 		`HSpacing (1),
 		`VBox (
-		    `Left (`CheckBox (`id (`yast), `opt (`notify), _("&Allow to edit this queue"), conf_type)),
+		    `Left (`CheckBox (`id (`yast), `opt (`notify), _("&Allow editing of this queue"), conf_type)),
 		    `VSpacing (1),
 		    `Table (`id (`options), `header ( _("Option area"), _("Current values")), items),
 		    `HBox (
@@ -1799,9 +1801,10 @@ and if you do not like the result, just press Back.")
 		    }
 		    else
 		    {
-			if (UI::YesNoPopup (_("Selected queue wasn't configured 
-using YaST2. Do you want to add printer 
-with prefilled name?")))
+			if (UI::YesNoPopup (_("The selected queue was not configured 
+using YaST2. Do you want to add a printer 
+with a prefilled name?
+")))
 			    ret = `add;
 			else
 			    ret = nil;
@@ -1830,7 +1833,9 @@ with prefilled name?")))
 		{
 		    boolean cont = true;
 		    if (Printer::spooler != "cups")
-			cont = UI::YesNoPopup (getPpdWarning ());//_("PPD files are supported by CUPS only.\n Do you wish to continue?"));
+			cont = UI::YesNoPopup (getPpdWarning ());//_("PPD files are supported by CUPS only.
+// Continue?
+//"));
 		    ret = cont ? `ppd : nil;
 		}
 		if (`update == ret)
@@ -1875,7 +1880,7 @@ with prefilled name?")))
 			`HStretch ()
 		    ),
 		    `VStretch (),
-		    `CheckBox (`id (`save), _("&Force saving everythying"), Printer::save_all),
+		    `CheckBox (`id (`save), _("&Force saving everything"), Printer::save_all),
 		    `VStretch (),
 		    `HWeight (1, `PushButton (`id (`reinstall), _("Re&install printing packages"))),
 		    `VStretch (),
@@ -1896,7 +1901,7 @@ with prefilled name?")))
 	    ret = UI::UserInput ();
 	    if (`scratch == ret)
 	    {
-		if (! UI::AnyQuestionPopup (WarningMsg(), _("Do you really want to discard all your configuration?"), _("&Discard"), CancelButtonLabel (), `focus_no))
+		if (! UI::AnyQuestionPopup (WarningMsg(), _("Really discard your configuration?"), _("&Discard"), CancelButtonLabel (), `focus_no))
 		{
 		    ret = nil;
 		    continue;
@@ -1907,7 +1912,9 @@ with prefilled name?")))
 	    }
 	    else if (`reinstall == ret)
 	    {
-		if (! UI::AnyQuestionPopup(WarningMsg(), _("Do you really want to completely reinstall \nyour printing system? \nAll your changes will be lost."),
+		if (! UI::AnyQuestionPopup(WarningMsg(), _("Really reinstall your printing system? 
+All your changes will be lost.
+"),
 		    _("&Reinstall"), CancelButtonLabel (), `focus_no))
 		{
 		    ret = nil;
@@ -2210,7 +2217,7 @@ the current configuration.
 	    `HBox (
 		`HSpacing (2),
 		// frame label
-		`Frame (_("Following print queues have been configured:"),
+		`Frame (_("The following print queues have been configured:"),
 		    `HBox (
 			`HSpacing (1),
 			`VBox (
@@ -2353,7 +2360,9 @@ the current configuration.
 	    else if (`next == ret) // finish
 	    {
 		// message box
-		if (Printer::warn_finish && !UI::YesNoPopup (_("Now the changes to your printing \nsystem will to be saved.")))
+		if (Printer::warn_finish && !UI::YesNoPopup (_("Now the changes to your printing 
+system will be saved.
+")))
 		{
 		    continue;
 		}
@@ -2474,7 +2483,8 @@ the current configuration.
 			else if (`delete_button == ret)
 			{
 			    // message box, %1 is replaced by printer name
-			    if (UI::YesNoPopup (sformat (_("Do you really want to delete\nthe \"%1\" printer?"), lookup (Printer::printer, "name", ""))))
+			    if (UI::YesNoPopup (sformat (_("Really delete the \"%1\" printer?
+"), lookup (Printer::printer, "name", ""))))
 				Printer::deletePrinter ();
 			    UI::ChangeWidget (`id (`table), `Items, printcapTable ());
 			    UI::ChangeWidget (`id (`table), `CurrentItem, Printer::index);
@@ -2489,7 +2499,7 @@ the current configuration.
 		    else
 		    {
 			// message box
-			UI::MessagePopup (_("You must choose some printer."));
+			UI::MessagePopup (_("Select a printer."));
 		    }
 		}
 		else if (`advanced == ret)
@@ -2512,7 +2522,9 @@ the current configuration.
 		if (`next == ret)
 		{
 		    // message box
-		    if (!Printer::warn_finish || UI::YesNoPopup (Printer::save_all ? _("Now the configuration of printing \nsystem will be saved")
+		    if (!Printer::warn_finish || UI::YesNoPopup (Printer::save_all ? _("Now the configuration of the printing 
+system will be saved
+")
 			: _("Now the changes to your printing \nsystem will be saved.")))
 		    {
 			break;
@@ -2520,7 +2532,9 @@ the current configuration.
 		}
 		if (`scratch == ret)
 		{
-		    if (! UI::AnyQuestionPopup(WarningMsg(), _("Do you really want to completely reinstall \nyour printing system? \nAll your changes will be lost."),
+		    if (! UI::AnyQuestionPopup(WarningMsg(), _("Really reinstall your printing system? 
+All your changes will be lost.
+"),
 			_("&Reinstall"), CancelButtonLabel (), `focus_no))
 			    continue;
 		    boolean success = reinstallAll ();

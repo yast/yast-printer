@@ -532,7 +532,7 @@ void addTranslatableString (FILE*f, const char*c, int cls = 0)
     }
     if (percent)
 	fputs ("// xgettext: no-c-format\n", f);
-    fprintf (f, "_(\"%s\");\n", s.c_str());
+    fprintf (f, "s = _(\"%s\");\n", s.c_str());
 }
 
 
@@ -542,6 +542,7 @@ YCPValue WriteTransStrings (const char*fn, const char*type)
     if (NULL == f)
 	return YCPError (string ("Can not open ") + fn, YCPBoolean (false));
     fprintf (f, "{\n");
+    fprintf (f, "string s = \"\";\n");
     if (0 == strcmp (type, "prg"))
     {
 	fprintf (f, "textdomain \"%s\";\n", PRG_TEXTDOMAIN);

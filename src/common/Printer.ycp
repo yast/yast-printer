@@ -770,9 +770,10 @@ END { if (!used) print \"ServerName %1\" }
             if (0 != cupsInstallationType ())
 	    {
 		saveClientHostName ();
-		boolean delete = SCR::Read (.targetpkg.installed, "cups") && UI::YesNoPopup (_("Some packages you have installed are not needed
-for CUPS client-only installation. Do you want
-to remove them?"));
+		boolean delete = SCR::Read (.targetpkg.installed, "cups") && UI::YesNoPopup (_("Some packages installed are not needed
+for CUPS client-only installation. 
+Remove them?
+"));
 		if (delete)
 		{
 		    Printerlib::stopServices();
@@ -826,7 +827,7 @@ to remove them?"));
 	    Progress::Title (sformat (_("Saving printer %1"), name));
 	    if (name == "")
 	    {
-		Report::Error (sformat (_("Attempting to save printer with no name. Skipping: %1"), ent));
+		Report::Error (sformat (_("Attempting to save unnamed printer. Skipping: %1"), ent));
 		return;
 	    }
 	    string state = Printer::spooler + "-state";
@@ -851,7 +852,9 @@ to remove them?"));
 		    if (writeCupsPrinter (entry))
 			entry = add (entry, "cups-state", "commited");
 		if (lookup (entry, "cups-state", "changed") == "void")
-		    UI::MessagePopup (_("Queue %1 cannot be saved, because\n selected spooler doesn't support it"), name);
+		    UI::MessagePopup (_("Queue %1 cannot be saved because
+the selected spooler does not support it.
+"), name);
 	    }
 	    else if (spooler == "lprng")
 	    {
@@ -859,7 +862,9 @@ to remove them?"));
 		    if (writeLpdPrinter (entry))
 			entry = add (entry, "lprng-state", "commited");
 		if (lookup (entry, "lprng-state", "changed") == "void")
-		    UI::MessagePopup (_("Queue %1 cannot be saved, because\n selected spooler doesn't support it"), name);
+		    UI::MessagePopup (_("Queue %1 cannot be saved because
+the selected spooler does not support it.
+"), name);
 	    }
 	    Progress::NextStep ();
 	    return entry;

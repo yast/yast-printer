@@ -8,12 +8,14 @@
 */
 
 #include "../src/PrinterdbAgent.h"
+#include "suseprinterdb.h"
 
 int
 main (int argc, char *argv[])
 {
     PrinterdbAgent a = PrinterdbAgent ();
-    a.otherCommand (YCPTerm (YCPSymbol ("PrinterdbAgent", true), string ("suse.prdb")));
-    a.Write (YCPPath (".gettext.db"), YCPString ("database.yh"));
-    a.Write (YCPPath (".gettext.prg"), YCPString ("agent.yh"));
+    a.otherCommand (YCPTerm (YCPSymbol ("PrinterdbAgent", false), string ("suse.prdb")));
+    spdbStart ("suse.prdb");
+    a.Write (YCPPath (".gettext.db"), YCPString ("database.ycp"));
+    a.Write (YCPPath (".gettext.prg"), YCPString ("agent.ycp"));
 }
