@@ -45,6 +45,15 @@
         boolean raw = false;//true;
         string ppdfile = SCR::Write (add (.printerdb.ppd, lookup (entry, "config", "")), lookup (entry, "options", $[]));
         string ppdfilename = lookup (entry, "ppd", "");
+
+        // --
+        // Just a hack to avoid strange ends of files
+        // see bug #19354
+        list ppd_l = splitstring(ppdfile, "\n");
+        list hacked = filter(`line, ppd_l, ``( substring(line, 0, 1) == "*" ));
+        ppdfile = mergestring(hacked, "\n") + "\n";
+        // --
+
         string ownppd = lookup (entry, "ownppd", "");
         if (raw)
         {

@@ -1144,6 +1144,9 @@ YCPValue PrinterdbAgent::Write (const YCPPath &path, const YCPValue& value, cons
 	    string ppdFilename = getConfFile ((*c)->use, m, flags, "ppd:file");
 	    if (ppdFilename == "")
 		return YCPError ("PPD file not specified.", YCPString (""));
+        // FIXME:
+        // At the and of string "s" there can appear strange things!
+        // see bug #19354
 	    s = getPatchedPpdFile (ppdFilename.c_str(), s);
 	    if (s == "")
 		return YCPError ("Error while patching PPD file, may be not found", YCPString(""));

@@ -110,7 +110,8 @@ This usually takes one or two minutes")));
 	Printer::save_all = false;
 
 	Printerlib::stopServices();
-	list to_delete = ["plp", "lprold", "lprng", "cups", "cups-client", "cups-drivers", "cups-drivers-cs", "cups-drivers-de",
+    // added "cups-drivers-stp"
+	list to_delete = ["plp", "lprold", "lprng", "cups", "cups-client", "cups-drivers", "cups-drivers-cs", "cups-drivers-de", "cups-drivers-stp",
 	    "cups-libs", "cups-devel", "lpdfilter", "filters", "ghostscript-fonts-other", "ghostscript-x11", "ghostscript-fonts-std", "ghostscript-library",
 	    "ghostscript-fonts-kanji", "ghostscript-serv", "ghostscript-fonts-rus", "ghostscript-library", "a2ps"];
 	to_delete = filter (`e, to_delete, ``(Pkg::IsProvided (e) == true));
@@ -122,6 +123,7 @@ This usually takes one or two minutes")));
 	fn = fn + "/script.sw_single";
 	SCR::Write (.target.ycp, fn, script);*/
 
+    y2milestone("deleting: %1", to_delete);
 	foreach (`e, to_delete, ``{Pkg::PkgDelete (e);});
 	Pkg::PkgCommit (0);
 	SCR::Execute (.target.bash, "/bin/rm -rf /etc/cups/");
@@ -136,6 +138,7 @@ This usually takes one or two minutes")));
     // DoProvide has a list as an argument:
     Pkg::DoProvide (to_install);
     //	foreach (`e, to_install, ``{Pkg::DoProvide (e);});
+    y2milestone("providing: %1", to_install);
 	Pkg::PkgSolve ();
 	Pkg::PkgCommit (0);
 	WFM::CallModule("inst_suseconfig", []);
