@@ -308,7 +308,8 @@ ECHO_PID=$!
 	    else if  ("USB" == bus)
 	    {
 		have_usb = true;
-		if (! haskey (SCR::Read (.proc.modules), "printer"))
+		if (0 !=  SCR::Execute (.target.bash, "grep '^printer ' /proc/modules"))
+//		if (! haskey (SCR::Read (.proc.modules), "printer"))
 		    return $[];
 		if ("epson" == tolower (lookup (pr, "sub_vendor", "")))
 		{
@@ -345,10 +346,10 @@ ECHO_PID=$!
 	});
 	if (have_usb)
 	{
-	    if (! haskey (SCR::Read (.proc.modules), "printer"))
+	    if (0 !=  SCR::Execute (.target.bash, "grep '^printer ' /proc/modules"))
 	    {
 		y2error ("USB printer found and printer module not loaded, loading it");
-		SCR::Execute(.target.modprobe, "printer", "");
+		boolean probe_success = SCR::Execute(.target.modprobe, "printer", "");
 		string hotplug
 		    = SCR::Read (.sysconfig.hotplug.HOTPLUG_USB_STATIC_MODULES);
 		y2debug ("Current hotplug: %1", hotplug);
@@ -363,9 +364,16 @@ ECHO_PID=$!
 		    SCR::Write (.sysconfig.hotplug, nil);
 		}
 		sleep (100);
-		y2milestone ("Restarting detection");
-		ret = Printerlib::Detect (cups);
-		y2debug ("Redetection done");
+		if (probe_success)
+		{
+		    y2milestone ("Restarting detection");
+		    ret = Printerlib::Detect (cups);
+		    y2debug ("Redetection done");
+		}
+		else
+		{
+		    y2error ("Error occured while loading printer.o module");
+		}
 	    }
 	}
 	return ret;
