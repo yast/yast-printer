@@ -139,8 +139,9 @@ Detect your printers?
 				Printer::cups_servers, ``(
 				s != "" && s != nil));
 			}
-			SCR::Execute (.target.bash,
-			    "/bin/rm /var/lib/YaST2/cups_network_server_name");
+// don't do it here because of possibility to run propose repeatedly
+//			SCR::Execute (.target.bash,
+//			    "/bin/rm /var/lib/YaST2/cups_network_server_name");
 		    }
 		    if (size (Printer::cups_servers) > 0)
 		    {
@@ -196,6 +197,10 @@ Detect your printers?
     }
     else if (func == "Write")
     {
+	// remove the result of CUPS server detection
+	SCR::Execute (.target.bash,
+	    "test -f /var/lib/YaST2/cups_network_server_name && /bin/rm /var/lib/YaST2/cups_network_server_name");
+
 	/**
 	 * This is rather evil but should work for this case.
 	 * As proposal is called only on the fresh installation
