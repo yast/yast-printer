@@ -28,16 +28,16 @@
 
 // pre-declare sequences
 
-    global define symbol MainSequence();
-    global define symbol AddPrinterSubSequence ();
-    global define symbol EditPrinterSequence ();
-    global define symbol AddPrinterSequence ();
+    define symbol MainSequence();
+    define symbol AddPrinterSubSequence ();
+    define symbol EditPrinterSequence ();
+    define symbol AddPrinterSequence ();
 
     /**
       * Get map of aliases for wizard sequencer.
       * @return aliases
       */
-    global define map getAliases () ``{
+    define map getAliases () ``{
 	 return $[
 	    // switchers, no dialogs
 	    "detectconftype" :	[ ``(detectConfigType ()), true],
@@ -118,7 +118,7 @@
     /**
      * Show all dialogs with some fake data...
      */
-    global define void testDialogs () ``{
+    define void testDialogs () ``{
 	// FIXME if is really needed
 	Printer::printcap = [
 	    $["conf":$[], "ff":false, "name":"rem", "raw":false, "type":"yast2", "uri":"lpd://printer.suse.de/lp"],
@@ -145,7 +145,7 @@
       * Workflow for editing a single queue
       * @return sequence result
       */
-    global define symbol EditPrinterSequence () ``{
+    define symbol EditPrinterSequence () ``{
 	map aliases = getAliases ();
 	map sequence = $[
 	    "ws_start"   : "edit",
@@ -245,7 +245,7 @@
       * Workflow for adding a single queue
       * @return sequence result
       */
-    global define symbol AddPrinterSubSequence () ``{
+    define symbol AddPrinterSubSequence () ``{
 	map aliases = getAliases ();
 	map sequence = $[
 	    "ws_start"   : "detectconftype",
@@ -355,7 +355,7 @@
       * Workflow for adding a single queue
       * @return sequence result
       */
-    global define symbol AddPrinterSequence () ``{
+    define symbol AddPrinterSequence () ``{
 	map aliases = getAliases ();
 	map sequence = $[
 	    "ws_start"   : "add_printer_sub_wz",
@@ -379,7 +379,7 @@
       * Main workflow of the printer configuration with detected printers dialog
       * @return sequence result
       */
-    global define symbol MainSequence() ``{
+    define symbol MainSequence() ``{
 	map aliases = getAliases ();
 	map sequence = $[
 	    "ws_start" : "config_type",
@@ -456,7 +456,7 @@
       * Main workflow of the printer configuration with detected printers dialog
       * @return sequence result
       */
-    global define symbol DetectedSequence() ``{
+    define symbol DetectedSequence() ``{
 	map aliases = getAliases ();
 	map sequence = $[
 	    "ws_start" : "detected",
@@ -488,7 +488,7 @@
       * For use with autoinstallation.
       * @return sequence result
       */
-    global define symbol PrinterAutoSequence() ``{
+    define symbol PrinterAutoSequence() ``{
 	Wizard::CreateDialog();
         Wizard::SetContentsButtons("", `VBox (), "",
             Label::BackButton(), Label::NextButton());
@@ -501,7 +501,7 @@
       * Whole configuration of dns-server
       * @return sequence result
       */
-    global define symbol PrinterSequence() ``{
+    define symbol PrinterSequence() ``{
 	map aliases = $[
 	    "read"	: [ ``( ReadDialog() ), true ],
 	    "main"	:   ``( DetectedSequence() ),
