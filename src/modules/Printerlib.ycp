@@ -17,28 +17,25 @@
  */
 
 {
-    module "Printerlib";
+module "Printerlib";
 
-    textdomain "printer";
+textdomain "printer";
 
-    import "Mode";
-    import "Popup";
+import "Directory";
+import "Mode";
+import "Popup";
 
-    include "printer/texts.ycp";
+include "printer/texts.ycp";
 
 
 // local variables
 
-    /**
-     * set to true after function Read had been called.
-     */
-    global boolean proposal_valid = false;
-    /**
-     * System paper size, taken from system locales. 0 for a4 and 1 for
-     * letter. -1 for unknown. Use function Printerlib::getDefaultPaperSize
-     * for accessing this function.
-     */
-    symbol paper_size = nil;
+/**
+ * System paper size, taken from system locales. 0 for a4 and 1 for
+ * letter. -1 for unknown. Use function Printerlib::getDefaultPaperSize
+ * for accessing this function.
+ */
+symbol paper_size = nil;
 
 /**
  * Info about USB devices got through CUPS backend
@@ -48,15 +45,20 @@ list<list<string> > cups_usb_devices_info = [];
 
 // global variables
 
-    /**
-      * Base directory of printconf's data files
-      */
-    global string baseDataDir = "/usr/share/YaST2/data/printer";
+/**
+ * set to true after function Read had been called.
+ */
+global boolean proposal_valid = false;
 
-    /**
-     * list of HP all-in-one models
-     */
-    list<string> hp_all_in_one = nil;
+/**
+ * Base directory of printconf's data files
+ */
+global string baseDataDir = Directory::datadir + "/printer";
+
+/**
+ * list of HP all-in-one models
+ */
+list<string> hp_all_in_one = nil;
 
 // local functions
 
@@ -98,13 +100,12 @@ global list<string> GetCupsUsbDeviceInfo (string device) {
     return ret;
 }
 
-    /**
-     * Get the list of all HP all-in-one models
-     */
-    global define list<string> GetHPAllInOneModels () {
-	if (hp_all_in_one != nil)
-	    return hp_all_in_one;
-
+/**
+ * Get the list of all HP all-in-one models
+ */
+global define list<string> GetHPAllInOneModels () {
+    if (hp_all_in_one == nil)
+    {
 	string file = (string)SCR::Read (.target.string,
 	    baseDataDir + "/hp_all_in_one_model_list");
 	list<string> models = splitstring (file, "\n");
@@ -115,19 +116,19 @@ global list<string> GetCupsUsbDeviceInfo (string device) {
 	});
 	hp_all_in_one = models;
 	y2milestone ("Known HP all-in-one devices: %1", hp_all_in_one);
-	return hp_all_in_one;
     }
+    return hp_all_in_one;
+}
 
-    /**
-      * Inform user that function isn't available during preparatino of AI
-      * via a popup
-      */
-    global define void DisplayUnavailableAIPopup () ``{
-	// popup message
-	Popup::Message (_("This function is not available during
-preparation for autoinstallation.
-"));
-    }
+/**
+ * Inform user that function isn't available during preparatino of AI
+ * via a popup
+ */
+global define void DisplayUnavailableAIPopup () {
+    // popup message
+    Popup::Message (_("This function is not available during
+preparation for autoinstallation."));
+}
 
     /**
      * Sends sequence to wake up Epson stylus usb printers.
@@ -137,7 +138,7 @@ preparation for autoinstallation.
     define void wakeUpEpson (string device) ``{
 	string sequence =
 	    "\"\\000\\000\\000\\033\\001\\100\\105\\112\\114\\040\\061\\062\\070\\064\\056\\064\\012\\100\\105\\112\\114\\040\\040\\040\\040\\040\\012\"";
-	if (haskey ((map)SCR::Read (.proc.modules), "printer"))
+	if (haskey ((map)SCR::Read (.proc.modules), "usblp"))
 	    SCR::Execute (.target.bash, sformat ("
 MAIN_PID=$$
 {/bin/echo -en %1 > %2 ; kill MAIN_PID} &

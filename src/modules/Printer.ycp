@@ -210,35 +210,6 @@
     }
 
     /**
-      * does file exist?
-      * @param file string filename to test
-      * @return true if exists
-      */
-    global define boolean isFile (string file) ``{
-	integer filesize = (integer)SCR::Read (.target.size, file);
-	if (filesize < 0)
-	    return false;
-	return true;
-    }
-    /**
-      * Is file a ppd file?
-      * @param file string filename to test
-      * @return true if yes
-      */
-    global define boolean isPpd (string file) ``{
-	if (! isFile (file))
-	    return false;
-	return (boolean)SCR::Read (.ppd.file.isppd, file);
-    }
-    /**
-      * Get PPD file info
-      * @param file string filename to get info from
-      * @return map of informations
-      */
-    global define map ppdInfo (string file) ``{
-	return (map)SCR::Read (.ppd.file.ppdinfo, file);
-    }
-    /**
      * Autodetect printers.
      */
     global define list<map<string,any> > Detect () ``{
@@ -798,7 +769,7 @@ Install it now?
 		SCR::Execute (.target.bash, sformat ("/bin/cp %1 %2",
 		    ppd_filename, tmp_file));
 		p["ppd"] = tmp_file;
-		p["ppd_info"] = Printer::ppdInfo (tmp_file);
+		p["ppd_info"] = Printerdb::PpdInfo (tmp_file);
 	    }
 	    else if (! raw)
 	    {
@@ -836,7 +807,7 @@ Install it now?
 		    e["ppd"] = SCR::Read (.ppd.file.open,
 			[e["ppd"]:"", SCR::Read (.target.tmpdir)]);
 		    SCR::Execute (.target.remove, orig_file);
-		    e["ppd_info"] = Printer::ppdInfo (e["ppd"]:"");
+		    e["ppd_info"] = Printerdb::PpdInfo (e["ppd"]:"");
 		    e["raw"] = false;
 		}
 		else
@@ -1803,7 +1774,21 @@ the selected spooler does not support it."), name));
 	return name;
     }
 
-
+    /**
+      * generate class name
+      * @param forbidden_names list of forbidden names
+      * @return new class name
+      */
+    global string generateClassName (list forbidden_names) ``{
+	string name = "class1";
+	integer i = 2;
+	while (contains (forbidden_names, name))
+	{
+	    name = sformat ("class%1", i);
+	    i = i + 1;
+	}
+	return name;
+    }
 
     /**
      * Prepare detected printer to be configured.
@@ -1835,7 +1820,7 @@ the selected spooler does not support it."), name));
 	    filename = (string)SCR::Read (.ppd.file.open,
 		[filename, SCR::Read (.target.tmpdir)]);
 	    printer["ppd"] =  filename;
-	    printer["ppd_info"] = ppdInfo (filename);
+	    printer["ppd_info"] = Printerdb::PpdInfo (filename);
 	}
 	y2milestone ("Detected printer after editation: %1", printer);
     }
