@@ -154,11 +154,6 @@
     global list sys_forbidden_names = [];//nil;
 
     /**
-      * List of temporarily forbidden names, which are not in current printcap
-      */
-    global list additional_forbidden_names = [];
-
-    /**
      * List of unique keys of the printers read at the beginning.
      * We need this because when writting, we must call
      * Write (.probe.status.configured, "unique_key", `yes | `no)
@@ -421,7 +416,7 @@
     global define list getForbiddenNames() ``{
 	list l = toset (add (flatten (maplist (`entry, printcap, ``(add (lookup (entry, "names", []), lookup (entry, "name", ""))))), "all"));
 	list names = maplist (`i, l, ``(tolower (i)));
-	names = toset (merge (names, additional_forbidden_names));
+	names = toset (names);
 	return names;
     }
     /**
@@ -1122,10 +1117,6 @@ the selected spooler does not support it.
       * Remove from deleted printers list printers which are deleted from both spoolers and which were recreated
       */
     define void cleanDeletedPrinters () ``{
-	//remove currently installed first
-//	list installed = maplist (`e, printcap, ``{return lookup (e, "name", "");});
-//	installed = filter (`e, installed, ``(e != "" && e != nil));
-//	deleted = filter (`e, deleted, ``(! contains (installed, lookup (e, "name", ""))));
 	//remove deleted from all spoolers from list
 	deleted = filter (`e, deleted, ``{
 	    map states = lookup (e, "states", $[]);
@@ -1145,7 +1136,7 @@ the selected spooler does not support it.
     define boolean saveTheConfiguration () ``{
 	list l = filter (`e, printcap, ``(lookup (e, "type", "yast2") == "yast2"));
 	list forbidden_keys = ["changed", "ppd", "auto_propose",
-	    "modelset_required", "composite"];
+	    "modelset_required", "composite", "comment"];
 	l = maplist (`e, l, ``(filter (`k, `v, e,
 	    ``(! contains (forbidden_keys, k)))));
 	cleanDeletedPrinters ();
@@ -1310,12 +1301,6 @@ the selected spooler does not support it.
 		    }
 		    else
 		    {
-			string comment = entry["comment"]:"";
-			if (comment != "" && comment != nil)
-			    comment = "  -  " + comment;
-			else
-			    comment = "";
-
 			string state = "";
 			if (Printer::spooler == "cups")
 			    state = entry["cups-state"]:"changed";
@@ -1343,7 +1328,7 @@ the selected spooler does not support it.
 			    }
 			    else state = "";
 			}
-			found = found + ("" != found ? "<br>" : "") + cache + comment + state;
+			found = found + ("" != found ? "<br>" : "") + cache + state;
 		    }
 		}
 	    });
