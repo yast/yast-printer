@@ -4,7 +4,6 @@
 
 SUBDIRS = autodocs
 
-docdir = @DOCDIR@
 htmldir = $(docdir)
 
 html_DATA = 			\
@@ -26,4 +25,3 @@ html_DATA = 			\
 	errors.html
 
 EXTRA_DIST = $(html_DATA)
-
