@@ -240,6 +240,7 @@ ECHO_PID=$!
      */
     global define list Detect (boolean cups) ``{
 	boolean have_usb = false;
+	boolean have_ptal = false;
 	if (Mode::config)
 	{
 	    DisplayUnavailableAIPopup ();
@@ -353,6 +354,7 @@ Install it now?
 			    // error report
 			    Report::Error (_("Failed to install required package."));
 			}
+			have_ptal = true;
 			string ptal_uri = getPtalUri (pr["model"]:"");
 			if (ptal_uri != nil)
 			{
@@ -421,6 +423,10 @@ Install it now?
 		    y2error ("Error occured while loading printer.o module");
 		}
 	    }
+	}
+	if (have_ptal)
+	{
+	    SCR::Execute (.target.bash, "test -x /etc/init.d/cups && /etc/init.d/cups status && /etc/init.d/cups restart");
 	}
 	return ret;
     }
