@@ -1,0 +1,126 @@
+/**
+ * File:
+ *   clients/proposal_printer.ycp
+ *
+ * Package:
+ *   Configuration of printer
+ *
+ * Summary:
+ *   Proposal function dispatcher.
+ *
+ * Authors:
+ *   Petr Blahos <pblahos@suse.cz>
+ *
+ * $Id$
+ *
+ * Proposal function dispatcher for printer configuration.
+ */
+
+{
+    textdomain "printer";
+    import "Printer";
+    import "Printconf";
+    import "Cups";
+
+    string func  = Args(0);
+    map    param = Args(1);
+    map    ret   = $[];
+
+    integer spool_sys = Printer::getSpoolSystem ();
+
+    if (func == "MakeProposal")
+    {
+	boolean force_reset = param["force_reset"]:false;
+	string proposal = "";
+	string warning = nil;
+	symbol warning_level = nil;
+	if (2 == spool_sys)
+	{
+	    if (force_reset || !Printer::proposal_valid)
+	    {
+		Printer::proposal_valid = true;
+		Cups::Reset ();
+		Cups::Read ();
+		Cups::Detect ();
+		Cups::Propose ();
+	    }
+	    proposal = Cups::Summary ();
+	}
+	else if (1 == spool_sys)
+	{
+	    if (force_reset || !Printer::proposal_valid)
+	    {
+		Printer::proposal_valid = true;
+		Printconf::Reset ();
+		Printconf::Read ();
+		Printconf::Detect ();
+		Printconf::Propose ();
+	    }
+	    if (size (Printconf::printcap) > 0)
+	    {
+		ret = $[
+		    "warning" :_("<p><a href=\"printer_conf\">Test</a> your printer configuration before proceeding.</p>"),
+		    "warning_level" : `notice,
+		    ];
+	    }
+	    proposal = Printconf::Summary ([]);
+	}
+	else
+	{
+	    ret = $[
+		"warning" : _("Print spooler is not installed properly."),
+		"warning_level" : `error,
+	    ];
+	}
+	ret = add (ret, "preformatted_proposal", proposal);
+    }
+    else if (func == "AskUser")
+    {
+	any saved = nil;
+	any seq = nil;
+	if (2 == spool_sys)
+	{
+	    saved = Cups::Export ();
+	    seq = CallFunction (`cups (.nocheck, .noio));
+	    if (`next != seq)
+		Cups::Import (saved);
+	}
+	else if (1 == spool_sys)
+	{
+	    saved = Printconf::Export ();
+	    seq = CallFunction (`printconf (.nocheck, .noio));
+	    if (`next != seq)
+		Printconf::Import (saved);
+	}
+	ret = $[ "workflow_sequence" : seq, ];
+    }
+    else if (func == "Description")
+    {
+	ret = $[ "rich_text_title" :	_("Printers"),
+		 "menu_title" :		_("&Printers"),
+		 "id" :			"printer_conf",
+		 ];
+    }
+    else if (func == "Write")
+    {
+	/**
+	 * This is rather evil but should work for this case.
+	 * As proposal is called only on the fresh installation
+	 * with nothing configured, we may just check if the list
+	 * of printers is empty (there is nothing to save).
+	 */
+	boolean success = true;
+	if (2 == spool_sys)
+	{
+	    if (0 != size (Cups::printers) + size (Cups::classes))
+	    success = Cups::Write ();
+	}
+	else if (1 == spool_sys)
+	{
+	    if (0 != size (Printconf::printcap))
+	    success = Printconf::Write ();
+	}
+        ret = $[ "success" : success ];
+    }
+    return ret;
+}

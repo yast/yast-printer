@@ -1,0 +1,73 @@
+<HTML>
+<HEAD>
+   <TITLE>Printconf Test Page</TITLE>
+   <STYLE type="text/css">
+   BODY { 
+     color: black;
+     background: white
+   }
+   </STYLE>
+</HEAD>
+<BODY>
+<TABLE BORDER WIDTH="100%">
+  <TR>
+    <TD>Document</TD>
+    <TD>Printconf Test Page</TD>
+  </TR>
+  <TR>
+    <TD>Author</TD>
+    <TD>Jan Holesovsky, &lt;kendy@suse.cz&gt;, Petr Blahos &lt;pblahos@suse.cz&gt;</TD>
+  </TR>
+  <TR>
+    <TD>Id</TD>
+    <TD>$Id$</TD>
+  </TR>
+</TABLE>
+<H2>Overwiev</H2>
+<P>Module <TT>printconf_test_page.ycp </TT> prints ascii or postscript test page on
+selected printer. <TT>printconf_test_page</TT> is called from
+<TT>princonf_write</TT>.
+</P>
+<H2>Input</H2>
+<P>
+printconf_test_page.ycp takes following arguments:
+<ol>
+<li><TT>string</TT> printer name</li>
+<li><TT>string</TT> type of test page: "ascii" | "ps"</li>
+<li><TT>string</TT> type of connection: "parallel"|"usb"|"serial"|...</li>
+<li><TT>string</TT> device of printer</li>
+</ol>
+</P>
+<H2>Printing of test page</H2>
+<P>
+<b>Postscript page</b><br>
+String <tt>~the~specified~paper~</tt> is replaced by paper size
+(e.g. a4dj) so test page is scaled properly.  String
+<tt>~the~lpr~parameter~</tt> is replaced by switch to <tt>lpr</tt> command
+(e.q. -Pprintername) so it is visible on printed page, what command is to be
+used to print on current device. 
+</P>
+<P>
+<b>ASCII page</b><br>
+Ascii page contains some ISO-8859-1 and ISO-8859-2 characters so it should
+reflect current encoding settings for ascii printing (note that ascii printing
+is done via a2ps so it is not ascii printing in fact).
+</P>
+<P>
+Finally fest pages are printed via lpd.
+</P>
+<H2>Canceling of printing</H2>
+<P>
+If printing goes wrong way, it can be stopped by user. Then an attempt to force
+printer stop is made:
+<ul>
+<li><TT>lpd</TT> is stopped</li>
+<li>if printer is parallel, serial or usb, currently printing process is killed
+(via <TT>fuser -k</TT>)</li>
+<li>if printer is parallel, parallel port is reset (<TT>reset_parport</TT>)</li>
+<li>all spooled jobs are deleted</li>
+<li><TT>lpd</TT> is started again</li>
+</ul>
+</P>
+</BODY>
+</HTML>

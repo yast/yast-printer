@@ -1,0 +1,102 @@
+
+{
+    import "Printerlib";
+    include "testsuite.ycp";
+
+/*    UI (``{
+        global define MessagePopup (string s) ``{
+            y2error ("Message Popup: %1", s);
+        }
+        global define OpenDialog (any a, any b) ``{
+            y2error ("OpenDialog %1", a);
+        }
+        global define CloseDialog () ``{
+            y2error ("CloseDialog");
+        }
+    });
+
+    y2error ("===== testDevice =====");
+*/    map EXEC = $[
+        "target":
+        $[
+            "bash" : 0
+            ]
+        ];
+    map R = $[ "targetpkg" : $[ "installed" : true ] ];
+/*
+    TEST (``(Printerlib::testDevice ("/dev/lp0")), [$[], $[], EXEC], 0);
+    y2error ("===== testBaudRate =====");
+    TEST (``(Printerlib::testBaudRate (0)), [$[], $[], $[]], 0);
+    TEST (``(Printerlib::testBaudRate (10)), [$[], $[], $[]], 0);
+    y2error ("===== checkHostName =====");
+    TEST (``(Printerlib::checkHostName ("good")), [$[], $[], $[]], 0);
+    TEST (``(Printerlib::checkHostName ("yes-go_od.1")), [$[], $[], $[]], 0);
+    TEST (``(Printerlib::checkHostName ("not so good")), [$[], $[], $[]], 0);
+    TEST (``(Printerlib::checkHostName ("too_long_too_long_too_long_too_long_too_long_too_long_too_long_too_long_too_long_")), [$[], $[], $[]], 0);
+    y2error ("===== checkRemotePrinter =====");
+    TEST (``(Printerlib::checkRemotePrinter ("")), [$[], $[], $[]], 0);
+    TEST (``(Printerlib::checkRemotePrinter ("remote")), [$[], $[], $[]], 0);
+    y2error ("===== testRemote =====");
+    EXEC = $[
+        "target":
+        $[
+            "bash_output" : $["exit": 0, "stdout" : "stdout", "stderr" : "stderr" ]
+            ]
+        ];
+    TEST (``(Printerlib::testRemote ("hname", "rname", true)), [R,$[],EXEC], 0);
+    EXEC = $[
+        "target":
+        $[
+            "bash_output" : $["exit": 1, "stdout" : "stdout", "stderr" : "stderr" ]
+            ]
+        ];
+    TEST (``(Printerlib::testRemote ("hname", "rname", true)), [R,$[],EXEC], 0);*/
+    y2error ("===== getSpoolSystem =====");
+    R = $[
+	"targetpkg" : $[ "installed" : false ],
+	"target" : $[ "size" : -1, "bash" : 1],
+	];
+    map E = R;
+    TEST (``(Printerlib::getSpoolSystem ()), [R,$[],E], 0);
+    R = $[
+	"targetpkg" : $[ "installed" : true ],
+	"target" : $[ "size" : 1,  "bash" : 0 ]
+	];
+    E = R;
+    TEST (``(Printerlib::getSpoolSystem ()), [R,$[],E], 0);
+    R = $[
+	"targetpkg" : $[ "installed" : true ],
+	"target" : $[ "size" : -1, "bash" : 0]
+	];
+    E = R;
+    TEST (``(Printerlib::getSpoolSystem ()), [R,$[],E], 0);
+    R = $[
+	"targetpkg" : $[ "installed" : false],
+	"target" : $[ "size" : 1, "bash" : 1]
+	];
+    E = R;
+    TEST (``(Printerlib::getSpoolSystem ()), [R,$[],E], 0);
+/*    y2error ("===== switchTo =====");
+    define CallFunction (any a) ``{
+        y2debug ("Calling function %1", a);
+    }
+
+    map READ = $[
+        "target": $[ "tmpdir" : "/tmp" ]
+        ];
+    EXEC = $[
+        "target" : $[
+            "bash" : 0
+            ]
+        ];
+    TEST (``(Printerlib::switchTo ("cups")),[READ,$[],EXEC], 0);
+    TEST (``(Printerlib::switchTo ("lprold")),[READ,$[],EXEC], 0);
+    EXEC = $[
+        "target" : $[
+            "bash" : 1
+            ]
+        ];
+    TEST (``(Printerlib::switchTo ("cups")),[READ,$[],EXEC], 0);
+    TEST (``(Printerlib::switchTo ("lprold")),[READ,$[],EXEC], 0);
+*/
+}

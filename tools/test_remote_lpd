@@ -1,0 +1,77 @@
+#! /bin/bash
+#
+# Send RFC1179 commands to the port 515 (lpd) on remote host $1 regarding queue $2
+# and test whether queue $2 on remote host $1 would accept print jobs.
+# Remote host $1 and queue $2 are required parameters.
+# If no timeout $3 is given it is set to 10 seconds.
+#
+# Exits:   0 doesn't seem to have a problem
+#          1 remote host $1 or queue $2 not set
+#          2 the remote host $1 is unreachable
+#          3 no connection possible to port 515 on host $1 (no lpd running ?)
+#          4 queue does not accept a print job (queue does not exist or queueing disabled ?)
+#
+# Johannes Meixner <jsmeix@suse.de>, 2000, 2002
+# Jan Holesovsky <kendy@suse.cz>, 2000
+# Jiri Srain <jsrain@suse.cz>, 2002
+# $Id$
+
+#set -x
+MY_NAME=${0##*/}
+HOST="$1"
+QUEUE="$2"
+[ -z "$HOST" -o -z "$QUEUE" ] && { echo -en "\nUsage:\n$MY_NAME HOST QUEUE [TIMEOUT]\n" 1>&2 ; exit 1 ; }
+TIMEOUT="$3"
+[ -z "$TIMEOUT" ] && TIMEOUT=10
+
+# test whether the remote host is accessible
+ping -c 1 -w $TIMEOUT $HOST || { echo -en "\nHost $HOST unreachable\n" ; exit 2 ; }
+
+# test whether connection is possible to port 515 (lpd) on the remote host
+netcat -w $TIMEOUT -z $HOST 515 || { echo -en "\nNo connection possible to port 515 (lpd)\n" ; exit 3 ; }
+
+# Find an available local port for connecting
+PORT=$(for I in 721 722 723 724 725 726 727 728 729 730 731
+       do
+         fuser -n tcp $I &>/dev/null || { echo $I ; break ; }
+       done)
+
+# Create temporary fifos
+TMP_IN=$(mktemp -u /tmp/$MY_NAME.in.XXXXXX)
+TMP_OUT=$(mktemp -u /tmp/$MY_NAME.out.XXXXXX)
+mkfifo $TMP_IN
+mkfifo $TMP_OUT
+
+# Test the queue:
+# Use source port $PORT and destination port 515 (lpd)
+# "\002$QUEUE\n" is a request to receive a new job for $QUEUE
+# The remote lpd sends '\000' if it accepts the request. Then we must
+# send "\001\n" back which is a request to cancel the new job.
+# After $TIMEOUT netcat would close the connection provided stdin of netcat
+# was closed too which would happen if there is any response from the remote port.
+# But as there may be no response from the remote port we have additionally
+# a time bomb which would kill the netcat process after $TIMEOUT.
+
+netcat -w $TIMEOUT -p $PORT $HOST 515 <$TMP_IN >$TMP_OUT 2>/dev/null &
+NETCAT_PID=$!
+{ sleep ${TIMEOUT}s ; kill $NETCAT_PID &>/dev/null ; } &
+
+RESULT=""
+{ echo -en "\002$QUEUE\n" ; \
+  RESULT=$(head --bytes=1 <$TMP_OUT | tr '\000' '0') ; \
+  [ "$RESULT" = "0" ] && echo -en "\001\n" ; } >$TMP_IN
+
+rm $TMP_IN
+rm $TMP_OUT
+
+[ "$RESULT" = "0" ] \
+  && { echo -en "\nQueue $QUEUE on host $HOST accepts print jobs\n" ; exit 0 ; } \
+  || echo -en "\nQueue $QUEUE on host $HOST does not accept print jobs\n"
+
+# If $QUEUE does not accept jobs, print $QUEUE status in long format.
+# "\004$QUEUE\n" is a request to receive $QUEUE status (very long output in case of LPRng).
+
+echo -en "\nStatus of the queue $QUEUE\n"
+echo -en "\004$QUEUE\n" | netcat -w $TIMEOUT -p $PORT $HOST 515
+exit 4
+

@@ -1,0 +1,706 @@
+<HTML>
+<HEAD>
+<TITLE>Printerdb agent description</TITLE>
+<!-- $Id$ -->
+</HEAD>
+<BODY>
+<h2>Format of printer database</h2>
+<p>
+The printer database consists of Manufacturers, Printers, Configurations and
+Options. Thier mutual relation is as follows:<ul>
+<li>Configuration can contain a tree of options or a tree of configuration. Not
+both. Trees may be empty but it usually has no use.</li>
+<li>If a configuration is empty (has no Configurations niether Options), it is
+unsupported configuration and cannot be used for setup.</li>
+<li>Printer can contain a list of Configurations. The list can empty but it
+has no practical use.</li>
+<li>Manufacturer can contain a list of Printers. The list can empty but it
+has no practical use.</li>
+<li>There is a list of top-level manufacturers which are defined in the
+database.</li>
+</ul>
+The common structure of the database entities is:<pre>
+# definition of Something
+Something { identifier }
+	Comment { text } # optional
+	OtherParameters
+	UseSomething { identifier } Text { text } OtherOption { text }
+	UseSomethingElse { identifier } Text { text } OtherOption { text }
+	PasteSomething { identifier }
+EndSomething { identifier }
+</pre>
+Examples:<pre>
+Option { gs-stp-Quality-canon-1440-high }
+        Value { -sQuality=1440x720dpi } Text { 1440x720 dpi }
+        Value { -sQuality=1440dpi } Text { 1440x1440 dpi }
+EndOption { gs-stp-Quality-canon-1440-high }
+
+Option { papersize-example }
+        PasteOption { papersize-circa-a4 }
+        PasteOption { papersize-circa-a4-inkjet }
+        Value { -sPAPERSIZE=legal } Text { 'Legal' }
+        Value { -sPAPERSIZE=note } Text { 'Note' }
+EndOption { papersize-all-laser }
+
+Config { generic-postscript-pdf }
+        UseConfig { generic-postscript } Text { PostScript }
+        UseConfig { generic-pdf } Text { PDF }
+EndConfig { generic-postscript-pdf } 
+
+Config { generic-pdf } 
+        UseOption { pdf } Text { PDF }
+        UseOption { papersize-all } Text { paper size }
+EndConfig { generic-pdf }
+
+Printer { gs-hl1240-hl1250 }
+        UseConfig { gs-hl1240 } Text { Ghostscript driver 'hl1240' }
+        UseConfig { gs-hl1250 } Text { Ghostscript driver 'hl1250' }
+EndPrinter { gs-hl1240-hl1250 }
+
+Manufacturer { epson }
+        UsePrinter { epson-stc-c40ux } IEEE { Stylus C40UX } Text { Stylus C40UX }
+        UsePrinter { epson-stc } IEEE { Stylus Color I } Text { Stylus Color I }
+EndManufacturer { epson }
+</pre>
+Top level list of manufacturers is an exception, there is only a list of:
+<pre>
+UseManufacturer { canon } IEEE { Canon } Text { Canon }
+</pre>
+The reason for having Texts separated from the entity definition is the fact
+that one entity can be used at several places in different meaning. For
+example a Config can be used as high quality monochrome configuration
+for one printer but a low quality monochrome configuration for other printer.
+Text for user would be different in both cases. This mechanism is necessary
+for top-level list too, because we want to have the same list e.g. for
+<tt>Hewlett-Packard</tt> and for <tt>HP</tt>.<br>
+Namespaces are separated. There may be the same name used for printer and
+configuration.
+</p>
+<h2>One by one</h2>
+<h3>Options</h3>
+<p>
+<hr width="20%" align="left">
+<pre>
+Option { my-option }
+	Comment { This is viewed when option is selected }
+	Value { val1 } Text { text1 }
+	Value { val2 } Text { text2 }
+	Value { val3 } Text { text3 }
+EndOption { my-option }
+</pre>
+This is the most common form of option. Option my-option (the user-friendly
+text is specified when option is used) may have one of 3 values. Default value
+is the first (that one with index 0). If second value is selected - text2,
+value val2 will be written to upp file when generating upp file. There are
+other types of options:
+<hr width="20%" align="left">
+<pre>
+Option { int-option }
+	ValueInt { 0 2 1 0 } Pattern { -sOption=% }
+EndOption {int-option }
+
+Option { gs-cdj670-et-al-MasterGamma }
+        ValueFloat { 1.1 9.9 0.1 1.1 } Pattern { -dMasterGamma=% }
+EndOption { gs-cdj670-et-al-MasterGamma }
+</pre>
+The numbers are: minimum, maximum, step, default. % in pattern are replaced by
+the selected value.
+<pre>
+Option { text-number }
+        ValueText { [0-9]* } Pattern { % }
+EndOption { text-number }
+</pre>
+That cryptic string which is an argument to <tt>ValueText</tt> is a regular
+expression. Entered text must match the regular expression. A danger exists.
+There is no way to force user to add anything. Hence it is necessary that the
+option accepts an empty value for the text option.
+<hr width="20%" align="left">
+<pre>
+Option { papersize-less-than-circa-a4 }
+        Value { -sPAPERSIZE=a5 } Text { 'A5' }
+        Value { -sPAPERSIZE=a6 } Text { 'A6' }
+        Value { -sPAPERSIZE=a7 } Text { 'A7' }
+EndOption { papersize-less-than-circa-a4 }
+
+Option { papersize-circa-a4-inkjet }
+        Value { -sPAPERSIZE=a4dj } Text { 'A4' for inkjet printers (using 'a4dj' which has bigger margins than 'A4') }
+        Value { -sPAPERSIZE=letterdj } Text { 'Letter' for inkjet printers (using 'letterdj' which has bigger margins than 'Letter') }
+EndOption { papersize-circa-a4-inkjet }
+
+Option { papersize-circa-a4 }
+        Value { -sPAPERSIZE=a4 } Text { 'A4' }
+        Value { -sPAPERSIZE=letter } Text { 'Letter' }
+EndOption { papersize-circa-a4 }
+
+Option { papersize-all-inkjet }
+        PasteOption { papersize-circa-a4-inkjet }
+        PasteOption { papersize-circa-a4 }
+        Value { } Text { paper size less than a4 or letter }
+                UseOption { papersize-less-than-circa-a4 } Text { paper size }
+EndOption { papersize-all-inkjet }
+</pre>
+Pasting options and sub-options can be seen here. PasteOption works exactly
+how the name suggests. It pastes option defined elsewhere. The result is the
+same as if the option was written once more at the place where PasteOption
+occures.<pre>
+Option { papersize-all-inkjet }
+        PasteOption { papersize-circa-a4-inkjet }
+EndOption { papersize-all-inkjet }
+# is equivalent to:
+Option { papersize-all-inkjet }
+        Value { -sPAPERSIZE=a4dj } Text { 'A4' for inkjet printers (using 'a4dj' which has bigger margins than 'A4') }
+        Value { -sPAPERSIZE=letterdj } Text { 'Letter' for inkjet printers (using 'letterdj' which has bigger margins than 'Letter') }
+EndOption { papersize-all-inkjet }
+</pre>
+Suboption is an option associated with particular value. In above mentioned
+<tt>papersize-all-inkjet</tt> option <tt>papersize-less-than-circa-a4</tt> is
+a suboption of value labeled by text <tt>paper size less than a4 or
+letter</tt>. Only if this value is selected, the suboption is accessible.
+There is no constraint of depth of suboption tree but option mustn't have
+itself as a suboption (tree is checked for circles). The same constraint is
+valid for PasteOption.
+<hr width="20%" align="left">
+<pre>
+Option { paper-size }
+        Pattern { -sPAPERSIZE=% } Text { free definition of paper size (using '-sPAPERSIZE=...') }
+                UseOption { text-lowercase-number }  Text { paper size }
+EndOption { paper-size }
+
+Option { paper-size }
+	Pattern { First(%)Second(%) } Text { Compund from 2 options }
+		UseOption { text-lowercase-number } Text { Number }
+		UseOption { text-letters } Text { Word }
+EndOption { paper-size }
+</pre>
+Pattern is used to compund a value from following values. Each % in Pattern is
+replaced by value of following options. In principle following options do not
+need to be suboptions but it is better, because in this case db creator will
+see that the "suboptions" belong to the pattern. 
+<hr width="20%" align="left">
+As there is a possibility to create generic options like "string containing
+only numbers", "string containing only letters", and as the options identifier
+is the only way to identify the option as far, we may have a problem.<pre>
+Option { conflict }
+	Pattern { -s2strings%,% } Text { 2 strings }
+		UseOption { text } Text { 1st string }
+		UseOption { text } Text { 2nd string }
+EndOption { conflict }
+</pre>
+If user specifies 1st string we have no chance to know if it is really the
+first or if it is the second one. Hence we added a keyword as and the correct
+examples will be:<pre>
+Option { conflict }
+	Pattern { -s2strings%,% } Text { 2 strings }
+		UseOption { text } As { conflict-text-1 } Text { 1st string }
+		UseOption { text } As { conflict-text-2 } Text { 2nd string }
+EndOption { conflict }
+</pre>
+Now we can recognize which is which. 
+<hr width="20%" align="left">
+</p>
+<h3>Configurations</h3>
+<p>
+Configuration is a chizophrenic term. There are 2 types of configurations:
+left configurations that contain options and configurations that contain other
+configurations. These 2 types of configurations should have been separated to
+2 keywords. Never mind.
+<pre>
+Config { postscript-2 }
+        UseOption { postscript-2 } Text { PostScript 'level 2' }
+        UseOption { papersize-all } Text { paper size }
+EndConfig { postscript-2 }
+
+Config { postscript-1 } 
+        UseOption { postscript-1 } Text { PostScript 'level 1' }
+        UseOption { papersize-all } Text { paper size }
+EndConfig { postscript-1 }
+
+Config { postscript } 
+        UseConfig { postscript-2 } Text { PostScript 'level 2' }
+        UseConfig { postscript-1 } Text { PostScript 'level 1' }
+EndConfig { postscript }
+
+Config { pdf } 
+        UseOption { pdf } Text { PDF }
+        UseOption { papersize-all } Text { paper size }
+EndConfig { pdf }
+
+Config { postscript-pdf }
+        UseConfig { postscript } Text { PostScript }
+        UseConfig { pdf } Text { PDF }
+EndConfig { postscript-pdf } 
+</pre>
+Configuration tree for postscript printers is defined in this example. There
+are 3 leaf-configs: <tt>pdf</tt>, <tt>postscript-1</tt> and
+<tt>postscript-2</tt>, which can be used for configuration of printer
+queue. The other configurations are there to build a configuration tree:<pre>
+--- postscript-pdf --- postscript --- postscript-1
+                    |              |
+                    |               - postscript-2
+                    |
+                     - pdf
+</pre>
+And this tree has to be somehow offered to user so that the user can select
+only leafs. The tree can be used for autoconfiguration as well. For example in
+YaST2 printconf we create a RichText widget with leaf-configs as
+hyperlinks.<br>
+<img src="conftree.png"><br>
+The goal of these config-trees is autoconfiguration. Lets imagine a tree like
+this, which could be quite common for photo inkjets printers:<pre>
+--- mono ---- mono-low
+           |
+            - mono-high
+
+--- color --- color-stp
+           |
+            - color-hpijs
+           |
+            - color-uniprint
+
+--- photo --- photo-stp-1440
+           |
+            - photo-stp-720
+           |
+            - photo-hpijs-1440
+</pre>
+As you see there could be different configurations for different resolutions,
+diffrent ghostscript drivers, different color depths. Bot how is it related
+with autoconfiguration? In ideal case, when the printer is fully supported,
+there is one queue for each root configuration. For each such configuration
+the first leaf configuration is found and used. So for this printer, three
+queues would be automaticly configured: <tt>mono</tt> using <tt>mono-low</tt>,
+<tt>color</tt> using <tt>color-stp</tt> and <tt>photo</tt> using
+<tt>photo-stp-1440</tt>. (Note that these are not real values and real
+configuration names used in SuSE printer database. For this kind of
+printers we would also define <tt>high</tt> or <tt>best</tt> queue for highest
+possible quality colour printing.
+</p>
+<p>
+There is a keyword <tt>PasteConfig</tt> which works the same as already known
+<tt>PasteOption</tt>. <tt>PasteConfig</tt> hasn't been used in SuSE printer
+database yet. <font color="red">FIXME: add an example of PasteConfig</font>
+</p>
+<h3>Printers</h3>
+<p>
+Now we are moving to a simple stuff. Structure of printer is much easier than
+Config or Option.<tt>Printer</tt> contains list of the top-most configurations
+used for a printer. In our example of typical ink-jet printer is would look:
+<pre>
+Printer { ink-jet }
+	UseConfig { mono  } Text { monochrome } Queue { lp    }
+	UseConfig { color } Text { color      } Queue { color }
+	UseConfig { photo } Text { photo      } Queue { photo }
+EndPrinter { ink-jet }
+</pre>
+Keyword <tt>Queue</tt> defines the name of the queue created by
+autoconfiguration. Only configurations that have <tt>Queue</tt> name defined
+may be used for autoconfiguration. Real world example:<pre>
+Printer { standard-pcl5e-color }
+        Comment { For 600 dpi the printer should have at least 4MB built-in memory.<BR>
+                  Otherwise use low resolution to print complex documents. }
+        UseConfig { gs-ljet4-low } Text { monochrome 300 dpi (using driver 'ljet4') } Queue { lp }
+        UseConfig { gs-ljet4-medium } Text { monochrome 600 dpi (using driver 'ljet4') }
+EndPrinter { standard-pcl5e-color }
+
+Printer { hp-deskjet-660c }
+        UseConfig { gs-hpijs-dj670-mono-low } Text { grayscale 300 dpi (using driver 'hpijs') } Queue { lp }
+        UseConfig { gs-pcl3-hpdj660c-mono-low } Text { monochrome 300 dpi (using driver 'pcl3') }
+        UseConfig { gs-hpijs-dj670-color-low } Text { color 300 dpi (using driver 'hpijs') } Queue { color }
+        UseConfig { gs-pcl3-hpdj660c-color-low } Text { color 300 dpi (using driver 'pcl3') }
+        UseConfig { gs-stp-hp-pcl-601-color-medium } Text { color 600 dpi (using driver 'stp') } Queue { high }
+        UseConfig { gs-cdj670-medium } Text { color 600 dpi (using driver 'cdj670') }
+EndPrinter { hp-deskjet-660c }
+</pre>
+As you can see, for printer <tt>hp-deskjet-660c</tt> there would be 3
+autoconfigured queues, <tt>gs-hpijs-dj670-mono-low</tt> as <tt>lp</tt>,
+<tt>gs-hpijs-dj670-color-low</tt> as <tt>color</tt> and
+<tt>gs-stp-hp-pcl-601-color-medium</tt> as <tt>high</tt>.
+</p>
+<h3>Manufacturers</h3>
+<p>
+There is just a list of printers with ieee identifier and user-friendly name.
+Example:<pre>
+Manufacturer { hp }
+        Comment { For most HP OfficeJet printers there is a special driver package "hp-officeJet".<BR>
+                  Printing on a HP OfficeJet should work without this special package but
+                  for scanning you need to install and configure this special package.<BR>
+                  The package is already compiled for SuSE Linux.
+                  Therefore you don't need to compile the software by yourself.<BR>
+                  For documentation see:<BR>
+                  file:/usr/share/doc/packages/hp-officeJet/index.html<BR>
+                  or online under<BR>
+                  http://hpoj.sourceforge.net/ }
+        UsePrinter { generic-postscript-pdf } IEEE { HP PostScript } Text { PostScript or PDF printer }
+        UsePrinter { hp-deskjet } IEEE { DeskJet } Text { DeskJet }
+        UsePrinter { hp-deskjet-310 } IEEE { DeskJet 310 } Text { DeskJet 310 }
+        UsePrinter { hp-deskjet-500 } IEEE { DeskJet 500 } Text { DeskJet 500 }
+        UsePrinter { hp-deskjet-690c } IEEE { DeskJet 610C } Text { DeskJet 610C }
+        UsePrinter { hp-deskjet-690c } IEEE { DeskJet 612C } Text { DeskJet 612C }
+        UsePrinter { hp-deskjet-690c } IEEE { DeskJet 640C } Text { DeskJet 640C }
+        UsePrinter { hp-deskjet-690c } IEEE { DeskJet 648C } Text { DeskJet 648C }
+        UsePrinter { hp-deskjet-690c } IEEE { DeskJet 690C } Text { DeskJet 690C }
+        UsePrinter { hp-deskjet-690c } IEEE { DeskJet 692C } Text { DeskJet 692C }
+        UsePrinter { hp-deskjet-690c } IEEE { DeskJet 693C } Text { DeskJet 693C }
+        UsePrinter { hp-deskjet-690c } IEEE { DeskJet 694C } Text { DeskJet 694C }
+        UsePrinter { hp-deskjet-690c } IEEE { DeskJet 695C } Text { DeskJet 695C }
+        UsePrinter { hp-deskjet-690c } IEEE { DeskJet 697C } Text { DeskJet 697C }
+EndManufacturer { hp }
+</pre>
+In this example, many printers can be configured using one printer definition
+<tt>hp-deskjet-690c</tt>.
+</p>
+<h3>Top level list</h3>
+<p>
+It is a list of manufacturers. <pre>
+UseManufacturer { canon } IEEE { Canon } Text { Canon }
+UseManufacturer { epson } IEEE { Epson } Text { Epson }
+
+UseManufacturer { hewlett-packard } IEEE { Hewlett-Packard } Text { Hewlett-Packard }
+UseManufacturer { hewlett-packard } Text { HP }
+
+UseManufacturer { kyocera } IEEE { Kyocera } Text { Kyocera }
+UseManufacturer { kyocera } IEEE { Kyocera Mita } Text { Kyocera Mita }
+
+UseManufacturer { lexmark } IEEE { Lexmark } Text { Lexmark }
+</pre>
+As you see one manufacturer can be used twice with different text and ieee. In
+principle it is possible to repeat the Text or/and IEEE but such entries
+wouldn't be distinguishable. 
+</p>
+<p>
+See also file <a href="grammar.txt">grammar.txt</a>.
+</p>
+<h2>How configuration works</h2>
+<p>
+Hopefully we know what the database is. Now we should explain how the process
+of getting a <tt>upp</tt> file from the database for connected printer. Lets
+start with autodetection. When printer is autodetected, hwinfo tells its
+IEEE1284 identifiers for vendor and model. Identifier of manufacturer is used
+for choosing manufacturer from the top-level list. In the list of printers
+defined in <tt>Manufacturer { found-identifier }</tt> we look for a ieee
+identifier of model. From it we get an identifier of a printer which we find
+somewhere is <tt>Printer { found-printer-identifier }</tt>. From this printer
+definition we get a configuration tree. Now it is on user to choose the
+configuration they want. Configuration defines options to use. Options are
+exactly what we need.
+</p>
+<p>
+OK, so we have the Configuration. What information do we need to be able to
+track down the printer's manufacturer and model? One would think that
+manufacturer, printer and configuration identifiers could be enough. But look
+to the examples above. Manufacturer <tt>hewlett-packard</tt> is used for
+manufacturers <tt>Hewlett-Packard</tt> and <tt>HP</tt>. The similar with
+configuration. Configuration <tt>hp-deskjet-690c</tt> is used for bunch of
+printers. It is obvious that using only these identifiers is insufficient.
+Lets add <tt>IEEE</tt> identifiers to it. They are the information which
+differentiates various printers so using it is enough to identify printer
+unambigiously. So for each configured printer we store following
+information:<table>
+<tr><td>manufacturer identifier</td></tr>
+<tr><td>manufacturer ieee</td></tr>
+<tr><td>model identifier</td></tr>
+<tr><td>model ieee</td></tr>
+<tr><td>configuration</td></tr>
+</table>
+</p>
+<h2>Caveats</h2>
+<p>
+<ul>
+<li>Do not cycle options/configs.<pre>
+Option { a }
+	PasteOption { b }
+EndOption { a }
+Option { b }
+	PasteOption { a }
+EndOption { b }
+</pre>This won't work. The only which it could result in is an infinite loop. But
+do not worry, parsed will tell you there is something wrong.
+</li>
+<li>Do not use Paste* in bad places. Using PasteOption in numerical option is
+not only nonsense but also syntax error. The same with PasteConfig in printer
+definition. But pasting leaf-config (that really contains printer definition,
+not only other configs) into config is syntacticly correct but it is a bug.
+Parser will inform you.
+</li>
+<li>You may paste options/configs that are defined later in text. This is true
+for all Paste* and Use* commands. Files are read at first and then processed
+and searched for undefined symbols.
+</li>
+<li>Of course you will be informed about undefined options that you are
+trying to paste or use.
+</li>
+<li>Always watch /var/log/y2log. Do <br>
+<tt>grep \&lt;3\&gt; /var/log/y2log | grep ag_printerdb</tt><br> to see
+what the problem is.</li>
+</ul>
+</p>
+<h2>Syntactic elements</h2>
+<p>
+In addition to Keywords, printer database contain variable values:
+identifiers, texts, patterns. They are enclosed in curly brackets in general.
+Lets look at them in detail:<ul>
+<li>text containing only [a-zA-Z_][a-zA-Z_0-9-]* is returned by lexical
+analyzer as identifier, even if it is enclosed in curly brackets.
+</li>
+<li>other text must be enclosed in curly brackets and are returned as texts.
+</li>
+</ul>
+</p>
+<h2>Rules for parsing the text</h2>
+<p>
+Texts in printer database files are parsed like this: 
+<ul>
+<li>Spaces from the beginning of each line are removed. They are not 
+necessary anyway. We may use multiline strings only in some comments
+or parameters for gs. Comments are shown in richtext control which 
+does not care about spaces anyway and gs parameters are written to 
+upp file that does not need spaces at the beginning of lines. Line breaks are
+preserved. Similar as for spaces applies here: In rich-text it doesn't matter
+and in upp file it is important to have exactly what we have in db.
+</li>
+<li>Escaping: there is only one special character that needs to be escaped: 
+it is '}'. If \} appears in the text, output is }. But no other character
+is interpreted by parser. It means that Text { "\027\033\000\n\r\}\\" } is
+parsed into "\027\033\000\n\r}\\" (including doublequotes).
+</li>
+<li>% is handled specialy in patterns for numerical values but parser 
+does not care about it. So if you write \% in database, it is parsed into
+\%. At the end, when options are saved into upp file, % is replaced by
+selected number and \% is replaced by % in patterns. Here we have a problem:
+What if we want \&lt;value&gt; in the output? We must not use \% because % is
+escaped and is never replaced by value in this case. So we will also escape
+\ here. Then \\% becomes \&gt;value&gt;, \\\% becomes \%.
+</li>
+</ul>
+</p>
+
+<h2>Translation</h2>
+<h3>Gettext part of the job</h3>
+<p>
+There are many texts which have to be translated in the database. Printer 
+names, configuration names, comments, option names, ... Agent generates a 
+file which contains all the strings for translation. Use scr call <br>
+    <tt>Write(.gettext,"file_path_and_name");</tt><br>
+to write the file. This file is used in <tt>yast2-trans-printerdb</tt>. As we
+want to categorize strings, there are comments:<ul>
+<li><tt>//class-comments</tt> which denote that following text is any kind of
+comment (manufacturer, model, config, option comment). We may want to separate
+comments because they are the only longer texts in the database and it is
+the most necessary to translate them.</li>
+<li><tt>//class-options</tt> which tells that following text is an option. We
+want to separate options because they are the most volatile part of the
+database. They may change in the very hard text freeze and it is usually waste
+of time to translate them in beta-phases. If translators are bored, they may
+try but we lived without translated options in 8.0, we lived with poorly
+translated database in 7.3 and I suppose we will live with untranslated
+options in future. Another reason not to translate options is that options are
+detailed/expert settings and we suppose that most of customers will never see
+them. BTW, option-comments fall in class <tt>//class-comments</tt></li>
+</ul>
+</p>
+<h3>Inside the agent</h3>
+<p>
+Translation inside the agent is done by gettext and there is nothing to tell
+about.
+</p>
+<h3>Test page</h3>
+<p>
+Localization of the test page is rather complicated. There are 2 two types of
+text: static and dynamic. Static texts are text like "Queue name:", "Printer",
+"YaST2 test page", ... and dynamic texts are names of printer manufacturer,
+model, configuration, queue and options. These text can be translated to any
+language in encodings: <tt>ascii</tt>, <tt>iso-8859-1</tt>,
+<tt>iso-8859-2</tt> and <tt>iso-8859-15</tt>. <font color="red">FIXME: how
+about iso-8859-15 font? Can we safely use it? I believe we can because there
+is no Euro on the test page. Besides I read that std. gs. fonts contain Euro
+so there shouldn't be problems anyway.</font> If other encoding is requested,
+test page is left untranslated and and in iso-8859-1. Lets see the scr
+call:<br><tt>
+Write (.testpg_options.vendor.model.config.encoding, "file"); 
+</tt></br>
+For example:<br><tt>
+Write (.testpg_options.hp.deskjet-910c.deskjet-910c-stp-300.iso-8859-2,"/tmp/opts.txt"); 
+</tt></br>
+Agent writes the file that contains table of strings and options. Example of
+the file:<pre>
+----X-ENCODING: h02
+----X-VENDOR: (Hewlett-Packard: DeskJet 920C)
+----X-CONFIG: (barevný tisk, 300 dpi (pomocí ovladaèe 'stp'))
+----X-QUEUE-L: (Tisková fronta:)
+----X-PRINTER-L: (Tiskárna:)
+----X-CONFIG-L: (Nastavení:)
+----X-OPTION-L: (Volby:)
+----X-HEAD: (Testovací stránka YaST2)
+unit 2 div f02
+(Ghostscript ovladaè 'stp': driver 'stp' (using '-sDEVICE=stp -sModel=pcl-900')) mm
+(driver parameters: driver parameters) mm
+(quality: 300x300 dpi (using '-sQuality=300dpi')) mm
+(model dependent special parameters: parameters) mm
+(ink type: nenastaveno (pou¾ívá se výchozí ovladaè)) mm
+(media type: nenastaveno (pou¾ívá se výchozí ovladaè)) mm
+(input slot type: nenastaveno (pou¾ívá se výchozí ovladaè)) mm
+(resolution: 300x300 dpi) mm
+(barevný: nenastaveno (pou¾ívá se výchozí ovladaè)) mm
+(special parameters: special parameters) mm
+(color balancing: nenastaveno (pou¾ívá se výchozí ovladaè)) mm
+(dithering: hybrid Floyd-Steinberg (using '-sDither=Floyd')) mm
+(image type: continuous-tone photographs (using '-dImageType=2')) mm
+(printer specific paper size: nenastaveno (pou¾ívá se výchozí ovladaè)) mm
+(velikost papíru: 'A4' for inkjet printers (using 'a4dj' which has bigger margins than 'A4')) mm
+</pre>
+This table of strings and options is patched into the test page. See
+<tt>yast2-lib-printer::Printer::preparePsTestPage</tt> for details.
+</p>
+
+<h2>Agent internals</h2>
+<p>
+Data structures related to the database are placed in file <tt>structs.h</tt>
+and operations over them in <tt>structs.cc</tt> of course. Some variables:
+<table border=1>
+<tr><td colspan=2>Linked lists</td></tr>
+	<tr><td><tt>mains</tt></td>
+		<td>top level list of used manufacturers</td></tr>
+	<tr><td><tt>vendors</tt></td>
+		<td>list of manufacturers</td></tr>
+	<tr><td><tt>printers</tt></td>
+		<td>list of printers</td></tr>
+	<tr><td><tt>configs</tt></td>
+		<td>list of configs</td></tr>
+	<tr><td><tt>options</tt></td>
+		<td>list of options</td></tr>
+<tr><td colspan=2>Arrays</td></tr>
+	<tr><td><tt>vendorset</tt>, <tt>vendorsize</tt></td>
+		<td>sorted set of vendors and size</td></tr>
+	<tr><td><tt>printerset</tt>, <tt>printersize</tt></td>
+		<td>sorted set of printers and size</td></tr>
+	<tr><td><tt>configset</tt>, <tt>configsize</tt></td>
+		<td>sorted set of configs and size</td></tr>
+	<tr><td><tt>optionset</tt>, <tt>optionsize</tt></td>
+		<td>sorted set of options and size</td></tr>
+</table>
+Linked lists can be used for contents of the selection boxes creation, 
+arrays for fast lookup of identifier. If we want to lookup a config with
+identifier <tt>canon-bjc6100-mono</tt> we use <tt>findinset
+(configset, configsize, "canon-bjc6100-mono");</tt>. When doing lookup in
+these sets, we suppose that their first member is <tt>ident</tt>. <font
+color="red">FIXME: Vendor, Printer, Config, Option should be inherited from
+the same base-class with the only member - ident</font>.
+</p>
+<h3>Parsing and preprocessing</h3>
+<p>
+See function <tt>suseprinterdb.c::spdbStart ()</tt>. Reading the database 
+happens in 2 steps.
+<ol>
+<li><b>Reading the database file</b> during which linked lists are built.
+There is a dirty hack according to <tt>Paste*</tt> keywords. We permit use
+prior to definition, se we can't paste values during the process of reading.
+So we have to interpret <tt>Paste*</tt> or really copy the values during
+preprocessing. As we want to keep the runtime structure less complicated, we
+decided to perform the copying. Therefore paste command has short life time,
+it lives from the time of parsing the database file to the time of
+preprocessing. So we use corresponding <tt>Value/Use*</tt> structure for
+keeping the identifier of an entity to paste. <tt>Value/Use*</tt> structure is
+marked "as paste" by settings its member <tt>text</tt> to 0. Example:<pre>
+parser.yy:
+value:
+	...
+|	PASTEOPTION _IDENT {
+	      $$ = new Value;
+	      $$-&gt;val = $2;
+	      $$-&gt;text = 0;
+	      $$-&gt;use = 0;
+	}
+	...
+
+structs.cc:
+void PasteOptions (Option*opt, const char*current_option)
+{
+    List*walk = opt-&gt;vals;
+    while (walk) {
+	if (!((Value*)walk-&gt;data)-&gt;text) // <font color="red">THIS IS PASTEOPTION COMMAND</font>
+	    break;
+	walk = walk-&gt;next;
+    }
+    if (!walk) // no PasteOptions found
+	return ;
+...
+
+</pre>
+</li>
+<li><b>Preprocessing</b> consists of couple of steps:<ul>
+<li><b>Reversing lists:</b> as the database is read, new lists items are 
+       added at the beginnig of the list. Therefore the lists have to be
+       reversed to get the real order.</li>
+<li><b>Creating sorted arrays:</b> besides of lists, sorted arrays of 
+       database entities are created because of fast access. For searching
+       in the arrays, we use binary search (function <tt>findinset</tt>).</li>
+<li><b>Creating links:</b> after the database file is parsed, the <tt>Use*</tt>
+       data structures contain valid member <tt>ident</tt> which identifies 
+       which entity should be used. In this step, pointer to that entity is 
+       assigned to member <tt>use</tt>. It also works as a check of the 
+       database consistency. (see <tt>structs.cc::parse()</tt>)</li>
+<li><b>Interpreting Paste*:</b> see then comments in <b>Reading the database 
+       file</b></li>
+</ul>
+</li>
+</ol>
+<font color="red">TODO/FIXME: find out how it is possible that inner lists 
+(lists <tt>use</tt> in <tt>Config, Printer, Vendor</tt> and <tt>vals</tt> in 
+<tt>Options</tt>) do not need reversing</font>
+</p>
+
+<h3>Check for deep conflicts</h3>
+<p>
+This is related to keyword <tt>As</tt> in the database, which was described 
+in this file too. With introduction of keyword <tt>Pattern</tt> there is a 
+danger of repeated option identifiers in one option tree. For example:<pre>
+PasteOption { % % }
+    UseOption { letters-numbers } Text { First }
+    UseOption { letters-numbers } Text { Second }
+</pre>
+Function <tt>structs.cc::check_deep_conflicts</tt> checks for such kind of 
+conflicts. Let's see more complicated example:<pre>
+Option text-number
+    ValueText { [0-9]* } Pattern { % }
+EndOption
+
+Option option-1
+    Value { } Text { v1 }
+	UseOption text-number Text { text1 }
+    Value { } Text { v2 }
+	UseOption text-number Text { text2 }
+EndOption
+
+Option option-2
+    Value { } Text { v3 }
+	UseOption text-number Text { text3 }
+	UseOption text-number Text { text4 }
+EndOption
+
+Config cfg-1
+    UseOption option-1 Text { t1 }
+    UseOption option-2 Text { t2 }
+EndConfig
+</pre>
+There is no conflict in option <tt>option-1</tt> because values v1 and v2 
+can't be selected simultaneously. Conflict in <tt>option-2</tt> is obvious.
+<tt>check_deep_conflicts</tt> checks for both types of conflicts.
+</p>
+
+<H2>Purpose</H2> 
+<p>
+As we all know YaST2 is terribly slow. Printer database agent is trying to
+make some tasks that would have to be done in YCP. Contents of lists are of
+manufacturers, printers, configs are created directly in the agent. Agent as
+able to generate upp file. Agent creates and localizes options for the test
+page. 
+</p>
+
+
+<ADDRESS>
+Petr Blahos &lt;pblahos@suse.cz&gt;<BR>
+</ADDRESS>
+
+
+</BODY>
+</HTML>

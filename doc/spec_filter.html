@@ -1,0 +1,114 @@
+<HTML>
+<HEAD>
+   <TITLE>Filter requirements</TITLE>
+   <STYLE type="text/css">
+   BODY { 
+     color: black;
+     background: white
+   }
+   </STYLE>
+</HEAD>
+<BODY>
+<TABLE BORDER WIDTH="100%">
+  <TR>
+    <TD>Document</TD>
+    <TD>Filter requirements</TD>
+  </TR>
+  <TR>
+    <TD>Author</TD>
+    <TD>Jan Holesovsky &lt;kendy@suse.cz&gt;</TD>
+  </TR>
+  <TR>
+    <TD>Id</TD>
+    <TD>$Id$</TD>
+  </TR>
+</TABLE>
+
+<H3 align=center>Introduction</H3>
+<P>Printing is processed via spooling utility, commonly <B>lpd</B>. It reads
+its configuration from <TT>/etc/printcap</TT>. In this file, you can specify
+<I>filters</I> to use when printing.</P>
+
+<H3 align=center>Filters</H3>
+<P>Filters basically provide three functions:
+<OL>
+  <LI>Converting of various file types into PostScript.
+  <LI>Converting of PostScript files to printer specific format (for
+    non-PostScript printers).
+  <LI>(Optionally) Sending of files in printer-specific format to programs
+    which print over network.
+</OL>
+
+<P>Currently, in SuSE distribution, filter <B>apsfilter</B> is used. It can
+manage only first two functions. Its configurator can configure
+<A HREF="spec_connection.html#parallel">parallel</A>,
+<A HREF="spec_connection.html#serial">serial</A> and
+<A HREF="spec_connection.html#remote">remote</A> printers. As you can see in
+document "<A HREF="spec_connection.html">Possible printer connection</A>", it is not
+enough in these days.</P>
+
+<H3 align=center>The future</H3>
+<P>With the new printer configurator, the following must change:</P>
+<OL>
+  <LI>The filter must cooperate with the new Configurator. It must be able to
+    read its configuration files. It is currently done using <TT>.upp</TT>
+    files stored in <TT>/etc/gs.upp</TT>.
+  <!--LI>Configuration of the filter should be divided into two parts:
+    <OL type=i>
+      <LI><A HREF="spec_printconf.html#configurator">Printer configuration</A>.
+        <I>Configures, how many printers the user has, how they are connected,
+	etc.</I>
+      <LI><A HREF="#filt_setup">The Filter Setup</A>. <I>Configures printer
+        related settings. e.g. resolution, paper size, paper tray...</I>
+    </OL-->
+  <LI>The support of network printing must be added.
+</OL>
+
+<H3><A NAME="database">The Printer Database</A></H3>
+<P>A printer database should be provided. In it, each printer should have a
+record that consists of this info:</P>
+<UL>
+  <LI>Manufacturer of the printer
+  <LI>Model name
+  <LI>Data for autoprobing (according to IEEE 1284)
+  <LI>Settings for <TT>ghostscript</TT> (necessary for all configurations).
+  <LI><TT>apsfilter</TT> and <TT>ghostscript</TT> options and their possible
+  values (resolution, paper size, paper tray, ...)
+</UL>
+
+<P>
+Of course, the database should contain the <B>Generic printer</B> and
+<B>Ghostscript driver</B> (the user is free to define everything by himself)
+sections.
+</P>
+
+<H3><A NAME="config_file">Configuration Files</A></H3>
+<P>
+There are two configturation files for each configured printer. The first one
+is for the <TT>apsfilter</TT>. It is a
+<TT>/etc/gs.upp/y2prn_<B>printername</B>.upp</TT> file. This one contains the
+apsfilter and ghostscript switches.
+</P>
+
+<P>
+The second one is <TT>/etc/gs.upp/y2prn_<B>printername</B>.y2</TT>. It
+contains the complete information about the configured printer (connection
+type, printer manufacturer and model, even the ghostscript switches and their
+possible values). This one is used as the source for the *.upp file.
+</P>
+
+<H2 align=center><A NAME="filt_setup">The Filter Setup Tool</A></H2>
+<P>The Filter Setup Tool should:</P>
+<OL>
+  <LI>Read the printer configuration file
+  <TT>/etc/gs.upp/y2prn_<B>printername</B>.y2</TT>.
+  <LI>Create the dialog where the user can change these settings.
+  Each choice has a default value read from the configuration file.
+  <LI>When the user wishes to print a sample page, write a temporary
+  <TT>/etc/gs.upp/y2prn_<B>printername</B>.upp</TT>, print the sample page and
+  restore the original one.
+  <LI>In the end, write the new configuration file.
+</OL>
+
+</BODY>
+</HTML>

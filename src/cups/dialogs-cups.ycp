@@ -1,0 +1,683 @@
+/**
+ * File:
+ *  dialogs-cups.ycp
+ * Module:
+ *  Printer configurator
+ * Summary:
+ *  Main dialogs.
+ * Authors:
+ *  Petr Blahos <pblahos@suse.cz>
+ *
+ * $Id$
+ * Main dialogs.
+ */
+{
+    textdomain "printer";
+
+    import "Wizard_hw";
+    import "Printerlib";
+    import "Printer";
+
+    include "printer/misc.ycp";
+    include "printer/helps.ycp";
+    include "ui/common_popups.ycp";
+    include "ui/file_popups.ycp";
+    include "wizard/sequencer.ycp";
+
+
+    /**
+     * Is there only client?
+     * @return symbol for wizard sequencer
+     */
+    global define symbol runClientDialog () ``{
+        term contents = `VBox (
+	    `HBox (
+		`ReplacePoint (
+		    `id (`hostent_replace),
+		    `ComboBox (`id (`hostnameent), `opt (`editable, `hstretch), _("&Server name"), [ Printer::server_hostname ] )
+		),
+		`VBox (
+		    `Label (" "),
+                    `MenuButton (_("&Lookup"), [
+                        `item (`id (`get_hosts_special), _("&IPP servers")),
+                        `item (`id (`get_hosts), _("&All hosts")),
+                    ])
+		)
+                ),
+	    `VSpacing (2),
+	    `HBox (
+		`HStretch (),
+		`PushButton (`id (`test), _("&Test remote IPP access")),
+		`HStretch ()
+	    ),
+            `VSpacing (4),
+	    `PushButton (`id (`server), _("&Configure full server installation")),
+	    `VSpacing (2)
+            );
+        // dialog label
+        Wizard::SetContentsButtons (_("CUPS server"), contents, getCupsClientHelp (), BackButtonLabel (), FinishButtonLabel ());
+
+        symbol ret = nil;
+        while (true)
+        {
+            ret = UI::UserInput ();
+	    if (`test == ret)
+	    {
+		string n = UI::QueryWidget (`id(`hostnameent), `Value);
+		Printerlib::testRemote (n, "", "ipp_server", 0);
+	    }
+            else if (`next == ret)
+            {
+                string n = UI::QueryWidget (`id(`hostnameent), `Value);
+                Printer::dirty = true;
+                Printer::server_hostname = n;
+                if (nil == n || "" == n)
+		    UI::MessagePopup (_("You must enter valid server name"));
+		else
+		{
+		    Printer::cups_installation = 1;
+                    break;
+		}
+            }
+	    else if (`server == ret)
+	    {
+		Printer::cups_installation = 0;
+		string n = UI::QueryWidget (`id(`hostnameent), `Value);
+		Printer::server_hostname = n;
+		if (Printerlib::getSpoolSystem () != 2)
+		{
+		    Printer::server_hostname = "";
+		    Printer::saveClientHostName ();
+		    Printerlib::switchTo ("cups");
+		    ret = `switch;
+		    Printer::cups_installation = -1;
+		    break;
+		}
+		else if (Printer::read_done == false)
+		{
+		    if (!Printer::Read ())
+		    {
+			// message box
+			UI::MessagePopup (_("ERROR: Unable to read
+the current configuration.
+"));
+			continue;
+		    }
+		    break;
+		}
+		break;
+	    }
+            else if (`back == ret || `abort == ret)
+            {
+//FIXME: message box
+                break;
+            }
+            else if (`get_hosts == ret || `get_hosts_special == ret)
+            {
+                // get remote hosts (we always offer list of hosts)
+                list hosts = getHostnames (`get_hosts_special == ret ? "ipp" : "");
+                UI::ReplaceWidget (`id (`hostent_replace),
+                                    `ComboBox (
+                                        `id (`hostnameent),
+                                        `opt (`editable, `hstretch),
+                                        _("&Server name"),
+                                        hosts));
+            }
+        }
+        return ret;
+    }
+    /**
+     * Choose PPD file
+     * @return symbol `next, `abort or `back
+     */
+    global define symbol runSelectPpdFile () ``{
+
+	string file = lookup (Printer::printer, "ownppd", "");
+	string manuf = "";
+	string model = "";
+	string nick = "";
+
+	term contents = `HBox (
+	    `HSpacing (5),
+	    `VBox (
+		`HBox (
+		    `TextEntry (`id(`name), `opt (`notify), _("&File name:"), file),
+		    `VBox (
+			`Label (" "),
+			`PushButton (`id (`browse), _("&Browse..."))
+		    )
+		),
+		`VSpacing (3),
+		`Frame ( _("File info"),
+		    `HBox (
+			`HSpacing (4),
+			`VBox (
+			    `VSpacing (1),
+			    `Label (`id (`manuf), `opt (`hstretch), sformat (_("Manufacturer: %1"), _("file deosn't exisist"))),
+			    `Label (`id (`model), `opt (`hstretch), sformat (_("Model: %1"), _("file deosn't exisist"))),
+			    `Label (`id (`nick), `opt (`hstretch), sformat (_("Description: %1"), _("file deosn't exisist"))),
+			    `VSpacing (1)
+			),
+			`HSpacing (4)
+		    )
+		),
+		`VSpacing (2),
+		`HBox (
+		    `HStretch (),
+		    `PushButton (`id (`test), _("&Test graphical printing")),
+		    `HStretch ()
+		),
+		`VSpacing (2),
+		`HBox (
+		    `HStretch (),
+		    `PushButton (`id (`db), _("Use driver from printer database"))
+		)
+	    )
+	);
+
+	Wizard::SetContentsButtons (_("Select PPD file"), contents, getPpdFileHelp (), BackButtonLabel (), NextButtonLabel ());
+
+	if (Printer::isFile (file))
+	{
+	    if (Printer::isPpd (file))
+	    {
+		map info = Printer::ppdInfo(file);
+		manuf = lookup (info, "manufacturer", "");
+		model = lookup (info, "model", "");
+		nick = lookup (info, "nick", "");
+		UI::ChangeWidget (`id (`manuf), `Value, sformat (_("Manufacturer: %1"), manuf));
+		UI::ChangeWidget (`id (`model), `Value, sformat (_("Model: %1"), model));
+		UI::ChangeWidget (`id (`nick), `Value, sformat (_("Description: %1"), nick));
+	    }
+	    else
+	    {
+		UI::ChangeWidget (`id (`manuf), `Value, sformat (_("Manufacturer: %1"), _("not PPD file")));
+		UI::ChangeWidget (`id (`model), `Value, sformat (_("Model: %1"), _("not PPD file")));
+		UI::ChangeWidget (`id (`nick), `Value, sformat (_("Description: %1"), _("not PPD file")));
+	    }
+	}
+
+	symbol ret = nil;
+	while (true){
+	    ret = UI::UserInput ();
+	    if (`test == ret)
+	    {
+		file = UI::QueryWidget (`id (`name), `Value);
+		if (!is (file, string))
+		    file = "";
+		if (!Printer::isFile (file))
+		{
+		    UI::MessagePopup (_("You must enter valid filename"));
+		    continue;
+		}
+		if (!Printer::isPpd (file))
+		{
+		    UI::MessagePopup (_("Selected file is not valid PPD file."));
+		    continue;
+		}
+		Printer::printer = add (Printer::printer, "vendor_ieee", manuf);
+		Printer::printer = add (Printer::printer, "device_ieee", model);
+		Printer::printer = add (Printer::printer, "ownppd", file);
+		testPrinter (Printer::printer, 0);
+	    }
+	    else if (`next == ret)
+	    {
+		file = UI::QueryWidget (`id (`name), `Value);
+		if (!is (file, string))
+		    file = "";
+		if (!Printer::isFile (file))
+		{
+		    UI::MessagePopup (_("You must enter valid filename"));
+		    continue;
+		}
+		if (!Printer::isPpd (file))
+		{
+		    UI::MessagePopup (_("Selected file is not valid PPD file."));
+		    continue;
+		}
+		Printer::printer = add (Printer::printer, "ownppd", file);
+		Printer::printer = add (Printer::printer, "vendor_ieee", manuf);
+		Printer::printer = add (Printer::printer, "device_ieee", model);
+		break;
+	    }
+	    else if (`db == ret)
+	    {
+		break;
+	    }
+	    else if (`back == ret)
+	    {
+		break;
+	    }
+	    else if (`abort == ret)
+	    {
+		if (reallyAbort ())
+		    break;
+	    }
+	    else if (`browse == ret)
+	    {
+		list mask = ["*.ppd", "*.ppd.gz"];
+		string new_name = UI::QueryWidget (`id (`name), `Value);
+		new_name = substring (new_name, 0, findlastof(new_name, "/")) + "/";
+		if (new_name == "")
+		    new_name = "/";
+		new_name = PopupFileWithMask(new_name, mask);
+		if (new_name != "")
+		    UI::ChangeWidget (`id (`name), `Value, new_name);
+		ret = `name;
+	    }
+	    if (`name == ret)
+	    {
+		file = UI::QueryWidget (`id (`name), `Value);
+		if (! Printer::isFile (file))
+		{
+		    UI::ChangeWidget (`id (`manuf), `Value, sformat (_("Manufacturer: %1"), _("file deosn't exisist")));
+		    UI::ChangeWidget (`id (`model), `Value, sformat (_("Model: %1"), _("file deosn't exisist")));
+		    UI::ChangeWidget (`id (`nick), `Value, sformat (_("Description: %1"), _("file deosn't exisist")));
+		}
+		else if (Printer::isPpd (file))
+		{
+		    map info = Printer::ppdInfo(file);
+		    manuf = lookup (info, "manufacturer", "");
+		    model = lookup (info, "model", "");
+		    nick = lookup (info, "nick", "");
+		    UI::ChangeWidget (`id (`manuf), `Value, sformat (_("Manufacturer: %1"), manuf));
+                    UI::ChangeWidget (`id (`model), `Value, sformat (_("Model: %1"), model));
+		    UI::ChangeWidget (`id (`nick), `Value, sformat (_("Description: %1"), nick));
+		}
+		else
+		{
+		    UI::ChangeWidget (`id (`manuf), `Value, sformat (_("Manufacturer: %1"), _("not PPD file")));
+		    UI::ChangeWidget (`id (`model), `Value, sformat (_("Model: %1"), _("not PPD file")));
+		    UI::ChangeWidget (`id (`nick), `Value, sformat (_("Description: %1"), _("not PPD file")));
+		}
+	    }
+
+	}
+        return ret;
+    }
+    /**
+     * Choose an user.
+     * @return list list of selected users
+     */
+    global define list chooseUser () ``{
+        UI (``{
+            list users = SCR::Read (.etc.passwd);
+            users = maplist (`i, users, ``{
+                return lookup (i, "username", "");
+            });
+            users = maplist (`i, users, ``{
+                return `item (`id (i), i);
+            });
+
+            OpenDialog (
+                `HBox (
+                    `HSpacing (0.7),
+                    `VSpacing (16),
+                    `VBox (
+                        `VSpacing (0.5),
+                        `HSpacing (16),
+                        // selection box label
+                        `SelectionBox ( `id (`users), _("&Select user:"), users),
+                        // text entry label
+                        `TextEntry (`id (`user), _("Or type &username:"), ""),
+                        `HBox (
+                            `PushButton (`id (`ok), OKButtonLabel()),
+                            `PushButton (`id (`cancel), CancelButtonLabel ())
+                            ),
+                        `VSpacing (0.3)
+                        ),
+                    `HSpacing (0.7)
+                    )
+                );
+        });
+        symbol ret = nil;
+        list users = [];
+        while (true)
+            {
+                ret = UI::UserInput ();
+                if (`ok == ret)
+                    {
+                        string user2 = UI::QueryWidget (`id (`users), `CurrentItem);
+                        string user1 = UI::QueryWidget (`id (`user), `Value);
+                        if ("" != user1)
+                            {
+                                users = add (users, user1);
+				user2 = "";
+                            }
+                        if ("" != user2)
+                            {
+                                users = add (users, user2);
+                            }
+                        break;
+                    }
+                else if (`cancel == ret)
+                    {
+                        break;
+                    }
+            }
+        UI::CloseDialog ();
+        return users;
+    }
+
+    /**
+     * Show dialog with users that can/can not use printer/class.
+     * @return symbol `next or `back
+     */
+    global define symbol runUsersDialog () ``{
+        //
+        // parse settings...
+        //
+        symbol style = `all;
+        list users = lookup (Printer::printer, "allowusers", []);
+        if ([] == users)
+        {
+            users = lookup (Printer::printer, "denyusers", []);
+            style = (([] == users) ? `all : `cannot);
+        }
+        else
+        {
+            style = `can;
+        }
+
+        users = toset (users);
+        list items = ((lookup (Printer::printer, "uri", "class") != "class") ?
+            [
+                // items in combobox
+                `item ( `id (`all),    _("All users can use this printer"), `all == style),
+                `item ( `id (`can),    _("Following users can use this printer"), `can == style),
+                `item ( `id (`cannot), _("Following users can not use this printer"), `cannot == style)
+            ] :
+            [
+                // items in combobox
+                `item ( `id (`all),    _("All users can use this class"), `all == style),
+                `item ( `id (`can),    _("Following users can use this class"), `can == style),
+                `item ( `id (`cannot), _("Following users can not use this class"), `cannot == style)
+            ]);
+        term contents = `VBox (
+		`ComboBox (`id (`type), `opt (`notify),  "", items),
+		`ReplacePoint (`id( `replace_users), `SelectionBox (`id (`users), _("&Users"), maplist (`i, users, ``{return `item (`id (i), i);}))),
+		`HBox (`PushButton (`id (`add), _("A&dd")), `PushButton (`id (`delete), _("De&lete")))
+	    );
+
+        // dialog label
+        Wizard::SetContentsButtons (_("Restrictions"), contents, getUsersHelp (), BackButtonLabel (), NextButtonLabel ());
+
+        symbol ret = `type;
+        while (true)
+        {
+            if (`type == ret)
+            {
+                UI (``{
+                    symbol type = QueryWidget (`id (`type), `Value);
+                    if (`can == type || `cannot == type)
+                        {
+                            ChangeWidget (`id(`users), `Enabled, true);
+                            ChangeWidget (`id(`add), `Enabled, true);
+                            ChangeWidget (`id(`delete), `Enabled, true);
+                        }
+                    else
+                        {
+                            ChangeWidget (`id(`users), `Enabled, false);
+                            ChangeWidget (`id(`add), `Enabled, false);
+                            ChangeWidget (`id(`delete), `Enabled, false);
+                        }
+                });
+            }
+            if (`add == ret)
+            {
+                list users_to_add = chooseUser ();
+                users = toset (flatten ( [users, users_to_add]));
+                UI::ReplaceWidget (`id (`replace_users), `SelectionBox (`id (`users), _("&Users"),maplist (`i, users, ``{return `item (`id (i), i);})));
+            }
+            if (`delete == ret)
+            {
+                string user_to_delete = UI::QueryWidget (`id (`users), `CurrentItem);
+                users = DeleteItem (users, user_to_delete);
+                UI::ReplaceWidget (`id (`replace_users), `SelectionBox (`id (`users), _("&Users"),maplist (`i, users, ``{return `item (`id (i), i);})));
+            }
+            if (`back == ret)
+            {
+                break;
+            }
+            if (`next == ret)
+            {
+                // read values
+                symbol type = UI::QueryWidget (`id (`type), `Value);
+                if (`all == type)
+                    {
+                        Printer::printer = add (Printer::printer, "allowusers", []);
+                        Printer::printer = add (Printer::printer, "denyusers", []);
+                        break;
+                    }
+                else if (`can == type)
+                    {
+                        Printer::printer = add (Printer::printer, "allowusers", users);
+                        Printer::printer = add (Printer::printer, "denyusers", []);
+                        if (0 == size (users))
+                            {
+                                // message box
+                                UI::MessagePopup (_("You must specify at least one user"));
+                            }
+                        else
+                            {
+                                break;
+                            }
+                    }
+                else if (`cannot == type)
+                    {
+                        Printer::printer = add (Printer::printer, "allowusers", []);
+                        Printer::printer = add (Printer::printer, "denyusers", users);
+                        if (0 == size (users))
+                            {
+                                // message box
+                                UI::MessagePopup (_("You must specify at least one user"));
+                            }
+                        else
+                            {
+                                break;
+                            }
+                    }
+            }
+            else if (`abort == ret)
+            {
+                if (reallyAbort ())
+                    {
+                        break;
+                    }
+            }
+            ret = UI::UserInput ();
+        }
+        return ret;
+    }
+
+    /**
+     * State of printer/class.
+     * @return symbol `next or `back
+     */
+    global define symbol runStateDialog () ``{
+	boolean is_class = lookup (Printer::printer, "uri", "class") == "class";
+        // get state
+        boolean accept = lookup (Printer::printer, "accepting", true);
+        boolean idle = !(lookup (Printer::printer, "state", "idle") == "stopped");
+
+        string caption_state = (!is_class ? _("Printer is idle or &printing") : _("Class is idle or &printing"));
+        string caption_avail = (!is_class ? _("Printer is accepting &jobs") : _("Class is accepting &jobs"));
+        string caption = (!is_class ? _("State and banners of the printer") : _("State and banners of the class"));
+	string state_caption = (!is_class ? _("State of the printer") : _("State of the class"));
+	string banners_caption = (!is_class ? _("Banners of the printer") : _("Banners of the class"));
+
+        // read list of banners
+        list banners = getBannerList ();
+        banners = sort (banners);
+        // read current settings
+        string banner_start = lookup (Printer::printer, "bannerstart", "none");
+        string banner_end = lookup (Printer::printer, "bannerend", "none");
+
+        if ("" == banner_start)
+        {
+            banner_start = "none";
+        }
+        if ("" == banner_end)
+        {
+            banner_end = "none";
+        }
+
+
+
+	term contents = `HBox (`HStretch (), `VBox (
+	    `VStretch (),
+	    `Frame (state_caption,
+                `VBox (
+                    `Left (`CheckBox (`id (`state), caption_state, idle)),
+                    `VSpacing (0.2),
+                    `Left (`CheckBox (`id (`accept), caption_avail, accept)),
+                    `VSpacing (0.2)
+                )
+	    ),
+            `VStretch (),
+	    `Frame (banners_caption,
+	      `HBox (
+		`HStretch (),
+                `VBox (
+                    `ComboBox ( `id (`banner_start),
+                        // combo box label
+                        _("&Starting banner"),
+                        maplist (`i, banners, ``{
+                            return `item (`id (i), i, i == banner_start);
+                        })
+                    ),
+                    `ComboBox( `id (`banner_end),
+                        // combo box label
+                        _("&Ending banner"),
+                        maplist (`i, banners, ``{
+                            return `item (`id (i), i, i == banner_end);
+                       })
+                    )
+                ),
+		`HStretch ()
+	      )
+	    ),
+	    `VStretch ()
+            ), `HStretch ());
+
+
+        // dialog label
+        Wizard::SetContentsButtons (caption, contents, getStateHelp (), BackButtonLabel (), NextButtonLabel ());
+
+        symbol ret = nil;
+        while (true)
+            {
+                ret = UI::UserInput ();
+                if (`next == ret)
+                {
+                    idle = !(`state_stop == UI::QueryWidget (`id (`state), `CurrentButton));
+                    accept = !(`accept_no == UI::QueryWidget (`id (`accept), `CurrentButton));
+                    Printer::printer = add (Printer::printer, "accepting", accept);
+                    Printer::printer = add (Printer::printer, "state", idle ? "idle" : "stopped");
+
+                    banner_end = UI::QueryWidget (`id (`banner_end), `Value);
+                    banner_start = UI::QueryWidget (`id (`banner_start), `Value);
+                    if ("" == banner_start)
+                    {
+                        banner_start = "none";
+                    }
+                    if ("" == banner_end)
+                    {
+                        banner_end = "none";
+                    }
+                    Printer::printer = add (Printer::printer, "bannerstart", banner_start);
+                    Printer::printer = add (Printer::printer, "bannerend", banner_end);
+                    break;
+                }
+                else if (`back == ret)
+                {
+                    break;
+                }
+                else if (`abort == ret)
+                {
+                    if (reallyAbort ())
+                    {
+                        break;
+                    }
+                }
+            }
+	return ret;
+    }
+
+    /**
+     * Banners dialog
+     * @return symbol `next or `back
+     */
+/*    global define symbol runBannersDialog () ``{
+        // read list of banners
+        list banners = getBannerList ();
+        banners = sort (banners);
+        // read current settings
+        string banner_start = lookup (Printer::printer, "bannerstart", "none");
+        string banner_end = lookup (Printer::printer, "bannerend", "none");
+
+        if ("" == banner_start)
+        {
+            banner_start = "none";
+        }
+        if ("" == banner_end)
+        {
+            banner_end = "none";
+        }
+
+        term contents = `VBox (
+            `ComboBox ( `id (`banner_start),
+                        // combo box label
+                        _("&Starting banner"),
+                        maplist (`i, banners, ``{
+                            return `item (`id (i), i, i == banner_start);
+                        })
+                ),
+            `ComboBox( `id (`banner_end),
+                       // combo box label
+                       _("&Ending banner"),
+                       maplist (`i, banners, ``{
+                           return `item (`id (i), i, i == banner_end);
+                       })
+                ),
+            `VSpacing (2)
+            );
+        // dialog label
+        Wizard::SetContentsButtons (_("Banners"), contents, getBannersHelp (), BackButtonLabel (), NextButtonLabel ());
+
+        symbol ret = nil;
+        while (true)
+        {
+            ret = UI::UserInput ();
+            if (`next == ret)
+            {
+                banner_end = UI::QueryWidget (`id (`banner_end), `Value);
+                banner_start = UI::QueryWidget (`id (`banner_start), `Value);
+                if ("" == banner_start)
+                {
+                    banner_start = "none";
+                }
+                if ("" == banner_end)
+                {
+                    banner_end = "none";
+                }
+                Printer::printer = add (Printer::printer, "bannerstart", banner_start);
+                Printer::printer = add (Printer::printer, "bannerend", banner_end);
+                break;
+            }
+            else if (`back == ret)
+            {
+                break;
+            }
+           else if (`abort == ret)
+            {
+                if (reallyAbort ())
+                {
+                    break;
+                }
+            }
+        }
+        return ret;
+    }
+*/
+}

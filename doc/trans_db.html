@@ -1,0 +1,48 @@
+<html><head>
+</head><body>
+<H3>New process of localization database of printers</H3>
+<h4>Disadvantage of actual solution</h4>
+<p>
+Too big, too slow. Non-localized db of printers is about 500KB long. Localized
+takes about 2MB. Loading and translating of db takes about 35s on
+K6-450MHz. <br><i>
+Note that texts in localized database have form: "name" : $[ "default" :
+"english text", "cs": "cesky text", "en": "english text", "de" .... ]. When
+localizing, file is parsed and maps are replaced with single value.
+</i>
+</p>
+<h4>Usage of gettext</h4>
+<p>
+<pre>
+any db = SCR (`Read (.target.yast2, "database.ycp.noloc"));
+textdomain "module_db";
+db = UI (db);
+textdomain "module";
+</pre>
+It is all, it is fast and it works perfectly.
+</p>
+<h4>Changes to <tt>y2d_prnt</tt></h4>
+<p>
+<ul>
+<li><i>mo files must be generated</i><ul>
+Add <tt>$(MODULE_mo)</tt> to <tt>GENERATED = </tt>
+</ul></li>
+<li><i>mo files must be installed</i><ul>
+Add <tt>$(bindir)/installmo $(DESTDIR)$(YAST2DIR)</tt> to
+<tt>install-data-local:</tt>.
+</ul></li>
+<li><i>ycp.noloc files must be installed</i><ul>
+Add <tt>install -m 644 printers.ycp.noloc $(DESTDIR)$(YAST2DIR)</tt> and <br>
+<tt>install -m 644 printer_macros.ycp.noloc $(DESTDIR)$(YAST2DIR)</tt>
+to <tt>install-data-local:</tt>.
+</ul></li>
+<li><i>update spec</i><ul>
+spec file must install right files...</ul></li>
+</ul>
+</p>
+<h4>Conclusion</h4>
+<p>
+All mo-files for printconf have 1.335 MB. Non-localized database has about
+500kB. Loading takes about 5s. 
+</p>
+</body></html>

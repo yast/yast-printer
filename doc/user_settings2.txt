@@ -1,0 +1,53 @@
+User settings structure in YaST2 printconf in SuSE linux since version 8.0
+==========================================================================
+
+$[
+"default" : <string>, // name of default printer
+"printcap" : [        // list of printers with map for each printer
+]];
+
+Printer map: we are going nearer to cups
+$[
+"unique_key" : <string>,	      // unique key
+"name" : <string>,                    // primary printer name
+"names": [ <string>, <string>, ... ], // names in printcap
+"name_orig" : <string>,               // if name changed, here is the original name
+"newer_gs_upp": <boolean>,            // true if .upp file is newer that corresponding .yast2 file
+"uri" : <string>,                     // printer's device
+"manuf" : <string>, 		      // manufacturer
+"model" : <string>,		      // model
+"ps2printer" : $[...],
+"apsfilterrc" : $[...],
+				      // saved info for faster saving
+"saved" : $[ "printcap_part" : <string>, // what is written in the printcap
+	     "apsfilterrc_fname" : <string>,
+	     "apsfilterrc" : <string>
+	     "upp_fname" : <string>,
+	     "upp" : <string> ],
+"create_remote_queue" : <boolean>,    // if we are adding prefilter queue, this says 
+                                      // whether to create new fwd. queue
+]
+
+Printer uri: if printer was not created by yast2, its uri is not specified.
+parallel:/dev/lp0
+usb:/dev/usb/lp0
+serial:/dev/ttyS0?baud=9600
+samba://user:pass@samba.suse.de/queue
+novell://user:pass@novell.suse.de/queue
+lpd://lpd.suse.de/queue
+prefilter://lpdqueue
+
+We will not bother with ps2printer and such things now because printer db
+will change.
+
+Printer names: there are more than one name in printcap for each printer. 
+We will use the first as primary. FIXME: parse_printcap script does not know 
+that last name is not printer name but some kind of comment. List names will 
+contain all the names. names_orig is necessary for renaming printer.
+
+There is special info for prefilter queue if new fwd queue will be created for it:
+"create_remote_queue" : <boolean>
+"remote_printer" : <string>
+"remote_host" : <string>
+
+

@@ -1,0 +1,105 @@
+Changes to add the possibility to delete and edit
+=================================================
+
+Changes in the internal representation of the printers
+------------------------------------------------------
+
+Since now, only the new printers were internally stored in the structure
+"known_printers". This must change to store _all_ information about the
+printer configuration in the printconf module.
+
+So:
+---
+
+The name of the structure will internally change to user_settings, just to be
+compatible with other modules. This structure will be a map:
+
+$[ "default" : <string>,                         // name of the default queue
+//   "parports_io": [ <string>, <string>, ... ],   // io for each parallel port read from .probe.byclass.comm.par
+// removed, since 7.2 printer conf. tool does not probe parallel ports
+   "printcap" : [
+     $[ "type" : "printcap"|"aps"|"aps_remote"|"aps_yast2",
+        "unique_key": <string>,                  // unique_key for autodetected printers
+        "names" : [ <string>, <string>, ... ],   // names in printcap for this queue
+        "names_orig" : [ <string>,<string>, ...],// names of printers when
+                                                 // printconf was started. Used for printer rename detection
+        "newer_gs_upp" : <boolean>,              // true if .upp file was changed later than corresponding .yast2
+        "saved" : $[ "printcap_part" : <string>, // what is written in the printcap
+	             "apsfilterrc_fname" : <string>,
+	             "apsfilterrc" : <string>
+	             "upp_fname" : <string>,
+	             "upp" : <string> ],
+        ...settings... ],                        // depend on the type
+     $[ "type" : "printcap"|"aps"|"aps_remote"|"aps_yast2",
+        "unique_key": <string>,                  // unique_key for autodetected printers
+        "names" : [ <string>, <string>, ... ],   // names in printcap for this queue
+        "newer_gs_upp" : <boolean>,              // true if .upp file was changed later than corresponding .yast2
+	"saved" : $[ "printcap_part" : <string>, // what is written in the printcap
+	             "apsfilterrc_fname" : <string>,
+	             "apsfilterrc" : <string>
+	             "upp_fname" : <string>,
+	             "upp" : <string> ],
+        ...settings... ],                        // depend on the type
+     ...
+   ]
+]
+
+explanation to "newer_gs_upp", "upp_fname", "upp":
+--------------------------------------------------
+"newer_gs_upp": if /etc/gs.upp/...upp file if newer than corresponding
+                /etc/gs.upp/...yast2, this variable is set to true by
+                printconf_parse_printcap. Otherwise it is not defined at all.
+                Later it is used in printconf_filter to determine if it is safe
+                to edit printer options. Always when options are changed, this
+                value is set to false.
+"upp_fname", "upp": printconf_parse_printcap always saves upp file (and name) to
+                these variables. If settings are changed these values are
+                cleared. When printconf_write finds "upp_fname" and "upp" are
+                not "", than it saves these settings, otherwise it generates
+                file again.
+Why upp file is saved even if it was not changed? Because printer can be renamed
+(not implemented yet) and then upp file must be created with new printer name.
+
+Why "upp_fname" is stored?!? To keep consistency with "apsfilterrc(_fname)". It
+will be changed because renaming of printers will be implemented.
+
+settings for different types:
+-----------------------------
+type printcap:
+type aps:
+ no specific settings
+
+type aps_remote:
+ "hostname" : "hp.suse.cz",
+ "queue"    : "lp"
+ 
+type aps_yast2:
+ "pnp_manufacturer" : "Hewlett-Packard", // only for the autodetected
+ "pnp_model":"LaserJet 4050N",
+ "connection": $[ "type" :"jetdirect",
+                  "non_filtered":"remote" ],
+ "manufacturer":"Hewlett-Packard",
+ "model":"LaserJet 4050N",
+ "ps2printer": $["params": [],
+                 "options":[$["comment":"", "default":"-sCOLOR=mono\n-sDEVICE=PS", "name":"monochrome or color printing", "values":[$["name":"mono", "value":"-sCOLOR=mono\n-sDEVICE=PS"], $["name":"color", "value":"-sCOLOR=color\n-sDEVICE=PS"]]], $["comment":"", "default":"-r300x300", "name":"resolution", "values":[$["name":"300x300", "value":"-r300x300"], $["name":"400x400", "value":"-r400x400"], $["name":"600x600", "value":"-r600x600"], $["name":"800x800", "value":"-r800x800"], $["name":"1200x1200", "value":"-r1200x1200"]]], $["comment":"", "default":"-sPAPERSIZE=a4", "name":"paper size", "values":[$["name":"a4 for inkjet printers (a4dj using bigger margins)", "value":"-sPAPERSIZE=a4dj"], $["name":"a4", "value":"-sPAPERSIZE=a4"], $["name":"letter for inkjet printers (letterdj using bigger margins)", "value":"-sPAPERSIZE=letterdj"], $["name":"letter", "value":"-sPAPERSIZE=letter"], $["name":"a5", "value":"-sPAPERSIZE=a5"], $["name":"a6", "value":"-sPAPERSIZE=a6"], $["name":"a7", "value":"-sPAPERSIZE=a7"], $["name":"a8", "value":"-sPAPERSIZE=a8"], $["name":"a9", "value":"-sPAPERSIZE=a9"], $["name":"a10", "value":"-sPAPERSIZE=a10"], $["name":"archA", "value":"-sPAPERSIZE=archA"], $["name":"b4", "value":"-sPAPERSIZE=b4"], $["name":"b5", "value":"-sPAPERSIZE=b5"], $["name":"flsa", "value":"-sPAPERSIZE=flsa"], $["name":"flse", "value":"-sPAPERSIZE=flse"], $["name":"halfletter", "value":"-sPAPERSIZE=halfletter"], $["name":"legal", "value":"-sPAPERSIZE=legal"], $["name":"note", "value":"-sPAPERSIZE=note"]]]]],
+ "suppressff":false,
+ "apsfilterrc":$[ "ENCODING": "",             // Settings of some vars
+                  "FEATURE" : "1n"]
+
+
+type asp_yast2::connection
+--------------------------
+ $[ "type" : "parallel"|"serial"|"usb"|"samba"|"novell"|"jetdirect",
+     <connetion dependent keys and their values> ]
+
+"parallel"
+ $[ "type" : "parallel",
+    "device" : <string> ]
+
+"prefilter"
+ $[ "type" : "prefilter",
+    "create_queue": <boolean>,    // Should be a new forwarding queue created for this?
+    "forwarding_name": <string>,  // Used/created forwarding queue
+    "hostname" : <string>,        // if creating a new one
+    "queue" : <string> ]          // if creating a new one
+

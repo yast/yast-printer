@@ -1,0 +1,856 @@
+/**
+ * File:
+ *   modules/Printerlib.ycp
+ *
+ * Package:
+ *   Printer library.
+ *
+ * Summary:
+ *   Some utility functions for printer conf. tools.
+ *
+ * Authors:
+ *   Petr Blahos <pblahos@suse.cz>
+ *
+ * $Id$
+ *
+ * Printer library exported functions. What else?!?
+ */
+
+{
+    module "Printerlib";
+    textdomain "printer";
+    include "printer/texts.ycp";
+    include "ui/common_messages.ycp";
+
+    /**
+     * set to true after function Read had been called.
+     */
+    global boolean proposal_valid = false;
+    /**
+     * System paper size, taken from system locales. 0 for a4 and 1 for
+     * letter. -1 for unknown. Use function Printerlib::getDefaultPaperSize
+     * for accessing this function.
+     */
+    integer paper_size = -1;
+    /**
+     * Returns haxadecimal value of input number
+     * @param i number to be converted
+     * @return string number
+     */
+    define string tohexWithout0x4digits (integer i) ``{
+	string hex = substring (tohexstring (i), 2);
+	if (size (hex) < 4)
+	    hex = "0000" + hex;
+	if (size (hex) > 4)
+	    hex = substring (hex, size (hex) - 4);
+	return hex;
+    }
+    /**
+     * Sends sequence to wake up Epson stylus usb printers.
+     * @see <a href="http://sdb.suse.de/en/sdb/html/jsmeix_print-stcXXXusb.html">Installing an Epson Stylus Color Printer on USB</a>
+     * @param device Device to send sequence to. Should be /dev/usblp? (or /dev/usb/lp?)
+     */
+    define void wakeUpEpson (string device) ``{
+	string sequence =
+	    "\"\\000\\000\\000\\033\\001\\100\\105\\112\\114\\040\\061\\062\\070\\064\\056\\064\\012\\100\\105\\112\\114\\040\\040\\040\\040\\040\\012\"";
+	SCR::Execute (.target.bash, sformat ("/bin/echo -en %1 > %2", sequence, device));
+    }
+
+    /**
+     * Calls escputil to find out exact model of Epson stylus printer.
+     * @param device USB Device to examine.
+     * @return string Printer model. If unsuccessful, returns "Stylus".
+     */
+    define string getEpsonUsbModel (string device) ``{
+	// we must wake Epson first
+	wakeUpEpson (device);
+	// now we can run escputil
+	map esc = SCR::Execute (.target.bash_output, sformat ("/usr/bin/escputil -q -u -r %1 -d", device));
+	if (0 != lookup (esc, "exit", ""))
+	    {
+		return "Stylus";
+	    }
+	// get model from output
+	string out = lookup (esc, "stdout", "");
+	integer i = 0;
+	integer len = size (out);
+	while (i < len)
+	    {
+		if (substring (out, 0, 10) == "DES:EPSON ")
+		    {
+			out = substring (out, 10);
+			integer x = findfirstof (out, ";");
+			if (nil != x)
+			    {
+				out = substring (out, 0, x);
+			    }
+			return out;
+		    }
+		i = i + 1;
+		out = substring (out, 1);
+	    }
+	return "Stylus Color";
+    }
+
+    /**
+     * Returns special device string for cups in form:
+     * /dev/usb/lp?vendor=04a9&prod_id=1052
+     * @param device_id device_id from hwinfo
+     * @param vendor_id vendor_id from hwinfo
+     * @param orig_device Device file the printer is connected to (/dev/usblp0). Used in case device_id or vendor_id are 0.
+     * @return string device uri as specified
+     */
+    global define string getCupsUsbDevice (integer device_id, integer vendor_id, string orig_device)``{
+	device_id = device_id & 0xFFFF;
+	vendor_id = vendor_id & 0xFFFF;
+	if (0 == device_id || 0 == vendor_id)
+	    {
+		return orig_device;
+	    }
+	return sformat ("/dev/usb/lp?vendor=%1&prod_id=%2", tohexWithout0x4digits (device_id), tohexWithout0x4digits (vendor_id));
+    }
+
+    /**
+     * Finally detection of hardware
+     * @param cups true if usb devices should be in form /dev/usb/lp?vendor=04a9&prod_id=1052
+     * @return list Detected printers. See example.
+     * @example
+     *  Return:
+     *   [
+     *       $[
+     *           "vendor"       : "...",
+     *           "device"       : "...",
+     *           "unique_key"   : "...",
+     *           "dev_name"     : "...", // "/dev/lp0", "/dev/usblp0", ...
+     *           "bus"          : "...", // "usb", "parallel"
+     *       ], ...
+     *   ]
+     */
+    global define list Detect (boolean cups) ``{
+	// load hotplug if it is not (there is no way to find out whether hotplug is runing so just start it)
+	SCR::Execute (.target.bash, "/etc/init.d/hotplug start");
+	list aprobe = SCR::Read (.probe.printer);
+/*		aprobe = [
+		    $[ "bus" : "Parallel",      // recognized, found in db
+		     "dev_name" : "/dev/lp0",
+		     "vendor" : "Hewlett-Packard",
+		     "device" : "HP LaSerJeT 4050",
+		     "unique_key"   : "lp0_hp" ],
+		    $[ "bus" : "USB",      // not found in db
+		     "dev_name" : "/dev/usblp1",
+		     "sub_vendor" : "Epson",
+		     "sub_device" : "BJC-6100x",
+		     "unique_key"   : "usb_canon" ],
+		    $["bus" : "Parallel",	// in db, GDI, but supported
+		    "dev_name" : "/dev/lp1",
+		    "vendor" : "HEWLETT-PACKARD",
+		    "device" : "DeskJet 820C",
+		    "unique_key" : "lp1_hp_gdi",
+		    ],
+		    $[ "bus" : "Parallel",      // found in db but GDI, so not configurable
+		     "dev_name" : "/dev/lp2",
+		     "vendor" : "Lexmark",
+		     "device" : "Lexmark Z12",
+		     "unique_key" : "lp2_canon" ],
+		    ];*/
+	if (0 == size (aprobe))
+	    {
+		return [];
+	    }
+	return maplist (`pr, aprobe, ``{
+	    map record = $[];
+	    string bus = lookup (pr, "bus", "");
+	    string unique_key = "";
+
+	    if ("Parallel" == bus)
+	    {
+		record = $[
+		    "vendor" : lookup (pr, "vendor", ""),
+		    "device" : lookup (pr, "device", ""),
+		    "unique_key": lookup (pr,"unique_key",""),
+		    "bus" : "parallel",
+		    "dev_name": lookup (pr, "dev_name", ""), // device <dev>
+		    ];
+	    }
+	    else if  ("USB" == bus)
+	    {
+		if ("epson" == tolower (lookup (pr, "sub_vendor", "")))
+		    {
+			pr = add (pr, "sub_device", getEpsonUsbModel (lookup (pr, "dev_name", "")));
+		    }
+		record = $[
+		    "vendor" : lookup (pr, "sub_vendor", ""),
+		    "device" : lookup (pr, "sub_device", ""),
+		    "unique_key": lookup (pr,"unique_key",""),
+		    "bus" : "usb",
+		    "vendor_id": lookup (pr, "vendor_id",0),
+		    "device_id": lookup (pr, "device_id",0),
+//		    "cups_dev_name" : getCupsUsbDevice (lookup (pr, "vendor_id",0), lookup (pr, "device_id",0), lookup (pr, "dev_name", "")),
+		    "dev_name": lookup (pr, "dev_name", ""),
+		    ];
+	    }
+	    return record;
+	});
+    }
+    /**
+     * Prepare ascii test page. Insert localized string into it.
+     * @return string path+filename to updated test page.
+     */
+    global define string prepareAsciiTestPage () ``{
+	// TRANSLATORS:
+	// You may add some text to ascii test page if you want.
+	// Fill in your encoding here! (e.g. iso-8859-2 for czech)
+	string encoding = UI (_("!!!  YOUR  ENCODING  !!!"));
+	// TRANSLATORS:
+	// This text will be added at the end of your test-page if
+	// user chooses your language. Write anything you want here.
+	// Long multiline text can be here, please break your lines
+	// at 80 characters.
+	// This text will be visible only if user chooses your
+	// language!!! If you want some text to be added in common
+	// section, send me an e-mail to <pblahos@suse.cz>. Your
+	// text must contain encoding and text. e.g.:
+	// ISO-8859-1: Some text in your language.
+	// ONLY ONE LINE PLEASE
+	string special_text = UI (_("!!!  YOUR  TEXT  !!!"));
+	// TRANSLATORS:
+	// Ascii Test Page now contains only English explanation:
+	// Following lines contain characters in various encodings.  You can check if your
+	// selection works properly.
+	// If you are English, do not translate it!
+	// If you translate it, it must be in encoding "!!!  YOUR  ENCODING !!!".
+	// Please break lines at 80 characters. DO NOT USE DIACRITICS (UMLAUTS/ACCENTS).
+	// It is possible, that proper encoding is not chosen when printing the
+	// test page.
+	// ONLY ONE LINE PLEASE. IF YOU WANT MORE LINES, PLEASE USE \\n
+	string common_text = UI (_("!!! COMMON  EXPLANATION !!!"));
+
+
+	string out_file = SCR::Read (.target.tmpdir) + "/testpg.ascii";
+	string c_text = "";
+	string s_text = "";
+	if ("!!!  YOUR  ENCODING  !!!" != encoding && "" != encoding)
+	    {
+		if ("!!!  YOUR  TEXT  !!!" != special_text && "" != special_text)
+		    {
+			s_text = UI::Recode ("utf-8", encoding, special_text);
+			s_text = mergestring (splitstring (s_text, "\n"), " ");
+		    }
+		if ("!!! COMMON  EXPLANATION !!!" != common_text && "" != common_text)
+		    {
+			c_text = UI::Recode ("utf-8", encoding, common_text);
+			c_text = mergestring (splitstring (c_text, "\n"), " ");
+		    }
+	    }
+	// now we have texts to replace.
+	SCR::Execute (
+	    .target.bash,
+	    sformat (
+		"/bin/cat /usr/lib/YaST2/suse_testpg.ascii | /bin/sed -e \"s/~common~explanation~/%1/\" -e \"s/~special~text~/%2/\" > %3",
+		c_text, s_text, out_file));
+	return out_file;
+    }
+    /**
+     * Prepare test page
+     * @param queue queue name
+     * @param opt_file file with options got from printerdb agent, Write (.testpg_options, ...)
+     * @param PS_printer is the tested printer PS? Do not print image there.
+     * @return filename of the test page
+     */
+    global define string preparePsTestPage (string queue, string opt_file, boolean PS_printer) ``{
+	string out_file = SCR::Read (.target.tmpdir) + "/testpg.ps";
+
+	SCR::Execute (.target.bash, sformat (
+"awk -v SKIPPICTURE=\"%4\" '
+      BEGIN { COPY = 1 }
+      /^----X-VENDOR:/		{ $1 = \"\"; ARRAY[\"vendor\"] = $0; 	next;	}
+      /^----X-QUEUE-L:/		{ $1 = \"\"; ARRAY[\"queue\"] = $0; 	next;	}
+      /^----X-PRINTER-L:/ 	{ $1 = \"\"; ARRAY[\"printer\"] = $0; 	next;	}
+      /^----X-CONFIG-L:/ 	{ $1 = \"\"; ARRAY[\"configl\"] = $0;	next;	}
+      /^----X-OPTION-L:/ 	{ $1 = \"\"; ARRAY[\"option\"] = $0; 	next;	}
+      /^----X-HEAD:/ 		{ $1 = \"\"; ARRAY[\"head\"] = $0;	next;	}
+      /^----X-ENCODING:/ 	{ $1 = \"\"; ARRAY[\"encoding\"] = $0;	next;	}
+      /^----X-CONFIG:/ 		{ $1 = \"\"; ARRAY[\"config\"] = $0; 	next;	}
+ 
+      // { if (FILENAME !~ /suse_testpg.ps$/)
+      		next;
+      }
+      /\~\~BEGIN\~\~OPTIONAL\~\~PICTURE\~\~/ { COPY=0 }
+      /\~\~END\~\~OPTIONAL\~\~PICTURE\~\~/   { COPY=1 }
+      COPY == 0 && SKIPPICTURE == \"true\"   { next } 
+
+      /\~\~QUEUE\~\~/ { sub (/\~\~QUEUE\~\~/, \"%1\", $0); print $0; next; }
+      /\~\~MODEL\~\~/ {
+      		if (length (ARRAY[\"vendor\"]) > 0)	print ARRAY[\"vendor\"];
+		else					print $0;
+		next;
+      }
+      /\~\~QUEUE\~L\~\~/ {
+      		if (length (ARRAY[\"queue\"]) > 0)	print ARRAY[\"queue\"];
+		else					print $0;
+		next;
+      }
+      /\~\~PRINTER\~L\~\~/ {
+      		if (length (ARRAY[\"printer\"]) > 0)	print ARRAY[\"printer\"];
+		else					print $0;
+		next;
+      }
+      /\~\~CONFIG\~L\~\~/ {
+      		if (length (ARRAY[\"configl\"]) > 0)	print ARRAY[\"configl\"];
+		else					print $0;
+		next;
+      }
+      /\~\~OPTIONS\~L\~\~/ {
+      		if (length (ARRAY[\"option\"]) > 0)	print ARRAY[\"option\"];
+		else					print $0;
+		next;
+      }
+      /\~\~Y2TP\~L\~\~/ {
+      		if (length (ARRAY[\"head\"]) > 0)	print ARRAY[\"head\"];
+		else					print $0;
+		next;
+      }
+      /\~\~CHANGE\~ENCODING\~\~/ {
+      		if (length (ARRAY[\"encoding\"]) > 0)	print ARRAY[\"encoding\"];
+		else					print $0;
+		next;
+      }
+      /\~\~CONFIG\~\~/ {
+      		if (length (ARRAY[\"config\"]) > 0)	print ARRAY[\"config\"];
+		else					print $0;
+		next;
+      }
+      /\~\~\~PASTE\~OPTIONS\~HERE\~\~\~/ {
+          system (\"/usr/bin/grep -v -e ^----X- %2\");
+          next;
+      }
+      { print $0; }
+' %2 /usr/lib/YaST2/suse_testpg.ps > %3", queue, opt_file, out_file, PS_printer));
+	return out_file;
+    }
+
+    /**
+     * Return true if user id is 0 (user is root).
+     * @return true if yast2 was run by root.
+     */
+    global define boolean amIRoot () ``{
+	map ret = SCR::Execute (.target.bash_output, "/usr/bin/whoami");
+	if (0 == lookup (ret,"exit", 0))
+	    {
+		return lookup (ret, "stdout", "") == "root\n";
+	    }
+	// otherwise there was a trouble running whoami so we assume we are root
+	// so user can continue
+	return true;
+    }
+
+    /**
+     * Test device by sending hello world to it. See test_device for details.
+     * @param dev device to test (/dev/lp0)
+     */
+    global define void testDevice (string dev) ``{
+	UI::MessagePopup (sformat (textTestDevice (), 10));
+	integer tst = SCR::Execute (.target.bash,
+				   sformat ("/usr/lib/YaST2/bin/test_device \"\\rHello, world\\r\\f\" %1 %2", dev, 10));
+
+	UI::MessagePopup (textTestDeviceResult (tst));
+    };
+
+    global define void testRemoteUP (string hname, string rname, string user, string pass, string type) ``{
+	UI::OpenDialog (`opt (`decorated), `Label (sformat (textTestRemotePrinter (false), hname)));
+	map test_return = $[];
+	if ("samba" == type)
+	    test_return = SCR::Execute (.target.bash_output, sformat ("/usr/lib/YaST2/bin/test_remote_smb \"%1\" \"%2\" \"%3\" \"%4\" 5", hname, rname, user, pass));
+	else if ("novell" == type)
+	    test_return = SCR::Execute (.target.bash_output, sformat ("/usr/lib/YaST2/bin/test_remote_novell \"%1\" \"%2\" \"%3\" \"%4\" 5", hname, rname, user, pass));
+	integer tst = lookup (test_return, "exit", 0);
+	string message = textTestRemotePrinterResult (tst);
+	if (4 == tst)
+	{
+	    message = message + lookup (test_return, "stdout", "");
+	}
+	UI::CloseDialog ();
+	UI::MessagePopup (message);
+    };
+
+    /**
+     * Test of the connection. See test_remote_lpd for details.
+     * @param hname host name
+     * @param rname name of remote queue
+     * @param type queue type
+     * @param port TCP port (for JetDirect)
+     */
+    global define void testRemote (string hname, string rname, string type, integer port) ``{
+	boolean ping_only = "filtering" != type && "lpd" != type && "prefilter" != type && "ipp" != type && "socket" != type && "ipp_server" != type;
+	UI::OpenDialog (`opt (`decorated), `Label (sformat (textTestRemotePrinter (ping_only), hname)));
+
+	string test_command = sformat ("/bin/ping -c 1 \"%1\"", hname);
+	if (!ping_only)
+	{
+	    if (type == "ipp_server")
+		test_command = sformat ("/usr/lib/YaST2/bin/test_remote_ipp \"%1\" \"%2\" 5", hname, "unexistent");
+	    else if (type == "ipp")
+		test_command = sformat ("/usr/lib/YaST2/bin/test_remote_ipp \"%1\" \"%2\" 5", hname, rname);
+	    else if (type == "socket")
+		test_command = sformat ("/usr/lib/YaST2/bin/test_remote_socket \"%1\" %2 5", hname, port);
+	    else
+		test_command = sformat ("/usr/lib/YaST2/bin/test_remote_lpd \"%1\" \"%2\" 5", hname, rname);
+	}
+
+	map test_return = SCR::Execute (.target.bash_output, test_command);
+	integer tst = lookup (test_return, "exit", 0);
+	if (4 == tst && type == "ipp_server")
+	    tst = 0;
+	string message = textTestRemotePrinterResult (tst);
+	if (4 == tst)
+	    {
+		message = message + lookup (test_return, "stdout", "");
+	    }
+	UI::CloseDialog ();
+	UI::MessagePopup (message);
+    }
+
+    /**
+     * Test which spooling system is most probably used.
+     * @return integer with some bits set:<br>
+     *    1 if lpd is installed<br>
+     *    2 if cups is installed<br>
+     *      (therefore 0 if none is installed)<br>
+     *      (therefore 3 if both are installed)<br>
+     *  256 is added if the instalation doesn't seem to be complete
+     */
+    global define integer getSpoolSystem () ``{
+	// first try if some of the systems exists.
+	boolean cups_exists = SCR::Read (.targetpkg.installed, "cups-client");
+	// for lpd we need to check the file because
+	boolean lpd_exists = (SCR::Read(.target.size, "/etc/init.d/lpd")!=-1);
+	boolean cups_complete = SCR::Read (.targetpkg.installed, "cups-drivers")
+            && SCR::Read (.targetpkg.installed, "cups-drivers-stp")
+	    && SCR::Read (.targetpkg.installed, "cups-libs")
+	    && SCR::Read (.targetpkg.installed, "cups")
+	    && SCR::Read (.targetpkg.installed, "cups-client");
+	boolean lpd_complete = SCR::Read (.targetpkg.installed, "lpdfilter")
+            && SCR::Read (.targetpkg.installed, "filters");
+
+	if (cups_exists && !lpd_exists)
+	    {
+		if (cups_complete)
+		    return 2;
+		else
+		{
+		    boolean cups_client = SCR::Read (.targetpkg.installed, "cups-libs");
+		    if (cups_client)
+			return 512 + 2;
+		    else
+			return 256 + 2;
+		}
+	    }
+	if (!cups_exists && lpd_exists)
+	    {
+		if (lpd_complete)
+		    return 1;
+		else
+		    return 256 + 1;
+	    }
+	if (cups_exists && lpd_exists)
+	    {
+		return 3;
+	    }
+	return 0;
+    }
+
+    global define void stopServices () ``{
+	if (SCR::Read (.targetpkg.installed, "plp"))
+	    SCR::Execute (.target.bash, "/etc/init.d/lpd stop");
+	if (SCR::Read (.targetpkg.installed, "lprold"))
+	    SCR::Execute (.target.bash, "/etc/init.d/lpd stop");
+	if (SCR::Read (.targetpkg.installed, "lprng"))
+	    SCR::Execute (.target.bash, "/etc/init.d/lpd stop");
+	if (SCR::Read (.targetpkg.installed, "cups"))
+	    SCR::Execute (.target.bash, "/etc/init.d/cups stop");
+    }
+
+    /**
+     * Uninstalls print spoolers and installs selected one.
+     * Stops all spoolers before installation.
+     * @param to Spooler to install. Should be one of "cups" "lprold" "plrng "plp"
+     */
+    global define void switchTo (string to) ``{
+	stopServices ();
+	map script = $["userInput" : false];
+	list del = ["plp", "lprold", "lprng", "cups", "cups-client", "cups-drivers", "cups-drivers-cs", "cups-drivers-de", "lpdfilter", "filters"];
+	del = filter (`e, del, ``(SCR::Read (.targetpkg.installed, e) == true));
+	list inst = [];
+
+	if ("cups" == to)
+	{
+	    inst = [ "cups", "cups-drivers", "cups-client", "cups-drivers-stp"];
+	}
+	else
+	{
+	    inst = [ to, "filters", "lpdfilter"];
+	}
+	del = filter (`e, del, ``(! contains (inst, e)));
+	script = add (script, "install", inst);
+	script = add (script, "delete", del);
+	string fn = SCR::Read (.target.tmpdir);
+	fn = fn + "/script.sw_single";
+	SCR::Write (.target.ycp, fn, script);
+	CallFunction (`sw_single (fn));
+    }
+    /**
+     * Printer uri = type://device
+     * where type is one of parallel, serial, usb, file, lpd, prefilter, novell,
+     *   samba, ipp, socket, http
+     * and device is depending on the type. For parallel, serial, usb, file
+     * it is file name. For lpd it is server/queue. For prefilter it is queue.
+     * For socket it is server, for ipp, http it is server/path_to_queue, for
+     * samba, novell it is user:pass@server/queuename (user, pass is
+     * optional).
+     *
+     * Get type of printer from uri. (First part of uri before colon)
+     * @param uri printer uri (file://tmp/pr.tmp, lpd://d11.suse.de)
+     * @return string type of printer or ""
+     */
+    global define string getUriType (string uri) ``{
+	if ("" == uri || nil == uri)
+	    return "";
+	string s = select (splitstring (uri, ":"), 0, "");
+	if ("http" == s)
+	    s = "ipp";
+	return s;
+    }
+    /**
+     * Get printer device from its uri.
+     * @param uri printer uri
+     * @return string device
+     * @see getUriType
+     */
+    global define string getUriDevice (string uri) ``{
+	if ("" == uri || nil == uri || nil == findfirstof (uri, ":"))
+	    return "";
+	integer i = findfirstof (uri, ":");
+	if (nil == i)
+	    return "";
+	uri = substring (uri, i + 1);
+	while ("//" == substring (uri, 0, 2))
+	    uri = substring (uri, 1);
+	i = findfirstof (uri, "?");
+	if (nil != i)
+	    uri = substring (uri, 0, i);
+	return uri;
+    }
+    /**
+     * Get printer remote queue. Input to this function must be valid
+     * because it just takes the part of uri after the last slash.
+     * Should be used for: lpd, prefilter, novell, samba, http/ipp.
+     * For prefilter it works, but is misnamed.
+     * @param uri printer uri
+     * @return remote queue
+     * @see getUriType
+     */
+    global define string getUriRemoteQueue (string uri) ``{
+	if (nil == uri || "" == uri)
+	    return "";
+	integer i = findfirstof (uri, "/");
+	if (nil == i)
+		return "";
+	string s = substring (uri, i + 1);
+        if (substring (s, 0, 1) == "/")
+            s = substring (s, 1);
+        i = findfirstof (s, "/");
+        if (nil == i)
+            return s;
+        return substring (s, i + 1);
+    }
+    /**
+      * Get port number from URI.
+      * @param uri printer uri
+      * @return integer port
+      */
+    global define integer getUriPort (string uri) ``{
+	integer port = 0;
+        string dev = getUriDevice (uri);
+        if ("" == dev)
+            return "";
+        dev = substring (dev, 1);
+        // is there a user@pass?
+        integer i = findfirstof (dev, "@");
+        if (nil != i)
+            dev = substring (dev, i + 1);
+        i = findfirstof (dev, "/");
+        if (nil != i)
+            dev = substring (dev, 0, i);
+        i = findfirstof (dev, ":");
+        if (nil != i)
+	{
+            dev = substring (dev, i + 1);
+	    while ("0" == substring (dev, 0, 1))
+		dev = substring (dev, 1);
+	    if (dev == "")
+		dev = 0;
+	    port = tointeger (dev);
+	}
+        return port;
+
+
+    }
+    /**
+     * Get printer baud rate from uri. Applies to serial printers only.
+     * Does not check if passed uri belongs to serial printer.
+     * @param uri printer uri
+     * @return baud rate
+     * @see getUriType
+     */
+    global define integer getUriBaudrate (string uri) ``{
+	return tointeger (getUriValue (uri, "baudrate"));
+    }
+    /**
+     * Get any parameter from uri. Suppose uri has form:
+     * method://user:pass@address/path?key=value+key=value+key=value
+     * @param uri printer uri
+     * @param key key to extract
+     * @return value
+     */
+    global define string getUriValue (string uri, string key) ``{
+	key = key + "=";
+	integer i = find (uri, "+" + key);
+	if (-1 == i)
+	    i = find (uri, "?" + key);
+	if (-1 == i)
+	    return "";
+	string val = substring (uri, i + size (key) + 1);
+	i = findfirstof (val, "+");
+	if (nil != i)
+	    val = substring (val, 0, i);
+	return val;
+    }
+    /**
+     * Get host name from uri. Applies to lpd, novell, samba, ipp/http,
+     *   socket
+     * @param uri printer uri
+     * @return hostname
+     * @see getUriType
+     */
+    global define string getUriHost (string uri) ``{
+	string dev = getUriDevice (uri);
+	if ("" == dev)
+	    return "";
+	dev = substring (dev, 1);
+	// is there a user@pass?
+	integer i = findfirstof (dev, "@");
+	if (nil != i)
+	    dev = substring (dev, i + 1);
+	i = findfirstof (dev, "/");
+	if (nil != i)
+	    dev = substring (dev, 0, i);
+	i = findfirstof (dev, ":");
+        if (nil != i)
+            dev = substring (dev, 0, i);
+
+	return dev;
+    }
+    /**
+     * Get uri user name and password. Applies to samba, novell.
+     * @param uri printer uri
+     * @return [ username, password ]
+     * @see getUriType
+     */
+    global define list getUriUsernamePass (string uri) ``{
+	if (size (uri) < 8)
+	    return [ "", "" ];
+	uri = substring (uri, 8);
+	while ("/" == substring (uri, 0, 1))
+	    uri = substring (uri, 1);
+	integer len = findfirstof (uri, "@");
+	if (nil == len)
+	    return [ "", "" ];
+	string user = substring (uri, 0, len);
+	string pass = "";
+	len = findfirstof (user, ":");
+	if (nil != len)
+	{
+	    pass = substring (user, len + 1);
+	    user = substring (user, 0, len);
+	}
+	return [ user, pass, ];
+    }
+    /**
+     * Get nice name for printer uri
+     * @param uri printer uri
+     * @return nice name of printer uri (device, network printer...)
+     */
+    global define string getUriNiceName (string uri) ``{
+	string type = getUriType (uri);
+	if ("parallel" == type)
+	    // Parallel printer on /dev/lp0
+	    return sformat (_("Parallel printer on %1"), getUriDevice (uri));
+	if ("serial" == type)
+	{
+	    string dev = getUriDevice (uri);
+	    integer i = findfirstof (dev, "?");
+	    if (nil != i)
+		dev = substring (dev, 0, i);
+	    // Serial printer on /dev/lp0
+	    return sformat (_("Serial printer on %1"), dev);
+	}
+	if ("usb" == type)
+	{
+	    string dev = getUriDevice (uri);
+	    integer i = findfirstof (dev, "?");
+	    if (nil != i)
+		dev = substring (dev, 0, i);
+	    // USB printer on /dev/lp0
+	    return sformat (_("USB printer on %1"), getUriDevice (uri));
+	}
+	if ("file" == type)
+	    // Disk file /tmp/printer.pdf
+	    return sformat (_("Disk file %1"), getUriDevice (uri));
+	if ("pipe" == type)
+	    // Prograam to get job on stdin
+	    return sformat (_("Program %1"), getUriDevice (uri));
+	if ("lpd" == type)
+	    // Forwarding queue to QUEUENAME on LPD server SERVERNAME
+	    return sformat (_("Forwarding queue to %1 on LPD server %2"), getUriRemoteQueue (uri), getUriHost (uri));
+	if ("irda" == type)
+            // Forwarding queue to QUEUENAME on LPD server SERVERNAME
+            return sformat (_("IrDA printer on %1"), getUriDevice (uri));
+	if ("prefilter" == type)
+	    // Prefilter queue for QUEUENAME
+	    return sformat (_("Prefilter queue for %1"), getUriRemoteQueue (uri));
+        if ("filtering" == type)
+            // Prefilter queue for QUEUENAME
+            return sformat (_("Filtering forwarding queue to %1 on LPD server %2"), getUriRemoteQueue (uri), getUriHost (uri));
+	if ("novell" == type)
+	    // Queue QUEUENAME on novell server SERVERNAME
+	    return sformat (_("Queue %1 on Novell server %2"), getUriRemoteQueue (uri), getUriHost (uri));
+	if ("samba" == type)
+	    // Queue QUEUENAME on SMB server SERVERNAME
+	    return sformat (_("Queue %1 on SMB server %2"), getUriRemoteQueue (uri), getUriHost (uri));
+	if ("ipp" == type || "http" == type)
+	    // Queue QUEUENAME on IPP server SERVERNAME
+	    return sformat (_("Queue %1 on IPP server %2"), getUriRemoteQueue (uri), getUriHost (uri));
+	if ("socket" == type)
+	    // Network printer HOSTNAME
+	    return sformat (_("HP JetDirect printer %1"), getUriHost (uri));
+	if ("class" == type)
+	    // CUPS class
+	    return _("CUPS class");
+	// Unknown printer AnYtHiNg
+	return sformat (_("Unknown printer %1"), uri);
+    }
+    /**
+     * Get nice name of some device.
+     * @param dev device
+     * @return device nice name
+     */
+    global define string getDeviceNiceName (string dev) ``{
+	return lookup ($[
+	    // Names of devices. Labels in dialog
+	    "/dev/lp0" : _("First parallel port (/dev/lp0)"),
+	    "/dev/lp1" : _("Second parallel port (/dev/lp1)"),
+	    "/dev/lp2" : _("Third parallel port (/dev/lp2)"),
+	    "/dev/lp3" : _("Fourth parallel port (/dev/lp3)"),
+
+	    "/dev/ttyS0" : _("First serial port (/dev/ttyS0)"),
+	    "/dev/ttyS1" : _("Second serial port (/dev/ttyS1)"),
+	    "/dev/ttyS2" : _("Third serial port (/dev/ttyS2)"),
+	    "/dev/ttyS3" : _("Fourth serial port (/dev/ttyS3)"),
+
+	    "/dev/usb/lp0" : _("First USB printer (/dev/usb/lp0)"),
+	    "/dev/usb/lp1" : _("Second USB printer (/dev/usb/lp1)"),
+	    "/dev/usb/lp2" : _("Third USB printer (/dev/usb/lp2)"),
+	    "/dev/usb/lp3" : _("Fourth USB printer (/dev/usb/lp3)"),
+	    "/dev/usb/lp4" : _("Fifth USB printer (/dev/usb/lp4)"),
+	    "/dev/usb/lp5" : _("Sixth USB printer (/dev/usb/lp5)"),
+	    "/dev/usb/lp6" : _("Seventh USB printer (/dev/usb/lp6)"),
+	    "/dev/usb/lp7" : _("Eighth USB printer (/dev/usb/lp7)"),
+	    ], dev, dev);
+    }
+    /**
+     * Change parallel port settings. This function must be called when
+     * wizard dialog has been set up. Hence it suppose Wizard library to
+     * be imported.
+     * @return symbol for wizard sequencer
+     */
+    global define symbol editParallelPort () ``{
+	map params = SCR::Read (.modules.options, "parport_pc");
+	Wizard::SetContentsButtons (_("Parallel port settings"), `VBox (
+		    `VStretch (),
+		    `TextEntry (`id (`io), _("IO &Ports of parallel ports:"), lookup (params, "io", "")),
+		    `VSpacing (2),
+		    `VStretch ()
+		    ),
+		textEditParallelPort (), BackButtonLabel (), OKButtonLabel ());
+	symbol r = UI::UserInput ();
+	if (`next == r)
+	{
+	    string s = UI::QueryWidget (`id (`io), `Value);
+	    if (nil == s || "" == s)
+	    {
+		params = filter (`k, `v, params, ``("io" != k));
+	    }
+	    else
+	    {
+		params = add (params, "io", s);
+	    }
+	    SCR::Write (.modules.options, 0 == size (params) ? nil : params, "parport_pc");
+	}
+	return r;
+    }
+    /**
+     * Change serial port settings. This function must be called when
+     * wizard dialog has been set up. Hence it suppose Wizard library to
+     * be imported.
+     * @return symbol for wizard sequencer
+     */
+    global define symbol editSerialPort () ``{
+	string uri = lookup (Printer::printer, "tmpuri", "parallel");
+	integer baudrate = Printerlib::getUriBaudrate (uri);
+	string ser_settings = Printerlib::getUriValue (uri, "ty");
+
+	term contents = `VBox (
+                                `ComboBox (`id (`baudent), `opt (`editable, `hstretch), _("Baud &rate:"),
+                                      [ sformat ("%1", baudrate),
+                                      "1200","2400", "4800", "9600", "19200", "38400", "57600", "115200"
+                                      ]),
+                                `TextEntry (`id (`ser_settings), `opt (`hstretch), _("Serial port settings"), ser_settings)
+                        );
+
+
+        Wizard::SetContentsButtons (_("Other settings"), contents,  textEditSerialPort (), BackButtonLabel (), NextButtonLabel ());
+	symbol r = nil;
+	while (r != `back && r != `abort)
+	{
+            r = UI::UserInput ();
+
+	    ser_settings = UI::QueryWidget (`id (`ser_settings), `Value);
+	    string tmp = UI::QueryWidget (`id (`baudent), `Value);
+	    baudrate = tointeger (tmp);
+	    if (`next == ret && !testBaudRate (baudrate))
+		ret = nil;
+
+            if (`next == r)
+            {
+		uri = "serial:" + getUriDevice (uri) + sformat ("?baudrate=%1+ty=%2", baudrate, ser_settings);
+		Printer::printer = add (Printer::printer, "tmpuri", uri);
+		return r;
+	    }
+	    if (`abort == r && ! reallyAbort ())
+		r = nil;
+        }
+	return r;
+    }
+    /**
+     * get paper size from system and returns 0 for a4 or 1 for letter
+     * @return 0 for a4, 1 for letter
+     */
+    global define getDefaultPaperSize () ``{
+	if (-1 != paper_size)
+	    return paper_size;
+	paper_size = SCR::Execute (.target.bash, "/usr/bin/locale -k LC_PAPER | /usr/bin/grep width=210");
+	if (paper_size != 0 && paper_size != 1)
+	    paper_size = 0;
+	return paper_size;
+    }
+}

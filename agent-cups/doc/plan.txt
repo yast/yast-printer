@@ -1,0 +1,104 @@
+Plan for cups configurator in YaST2
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+Background
+==========
+
+It is possible to configure printers, classes, mime types and conversion rules,
+and cups daemon settings in CUPS.
+
+In first stage we implement printers and classes configuration. Printers
+configuration will have similar functionality to current printconf. There are
+some differences: in cups we can define set of users which can or can not access
+the printer, we can define some additional comments, ...
+
+Class is a collection of printers or classes. Classes are necessary to be
+implemented, because they may affect behaviour of printers. Example: Class
+contains printers "Cannon1" and "Cannon2" and printing is disabled for that
+class. If user can not configure classes, he will not be able to enable these
+printers, all will seem to be OK in configuration and he will not know why it
+does not print and how to make it print.
+
+Cups daemon is in fact http server and its configuration requires quite deep
+knowledge. If we will implement cupsd configurator, we should have several (2)
+preset configurations and allow user to choose one of them ("Standalone
+computer", "Computer in network"). Anyway I think it is quite complicated and
+user should understand to cups setup before he will set up cups daemon.
+Conclusion: We should not implement cupsd settings.
+
+There is no need to configure mime types and conversion rules. They should be
+set up properly after installation. Additional mime types&rules should be
+installed from rpm with additional software (when user installs rpm with
+e.g. T602 filter, it will contain /etc/cups/t602.types and /etc/cups/t602.conv
+and user will not need add anything).
+
+Reference
+=========
+
+Printer settings
+
+Name         | Level  | Type   | Description
+-------------+--------+--------+-----------------------------
+Name         | basic  | string | printer name
+Info         | basic  | string | printer info (optional)
+Location     | basic  | string | printer location (optional)
+Uri          | basic  | string | printer device (e.g. ipp://server/path)
+State        | basic  | string | idle|stopped
+StateMessage | basic  | string | why printer is in state State?
+Accepting    | basic  | bool   | is printer accepting jobs?
+BannerStart  | expert | string | name of the banner
+BannerEnd    | expert | string | name of the banner
+AllowUsers   | expert | list   | users that can use the printer
+DenyUsers    | expert | list   | users that can not use the printer
+             |        |        | only one of (Allow|Deny)Users can be used
+ppd          | basic  | string | postscript printer description file that is
+             |        |        | based on Manufacturer and Model
+options      | expert | map    | map of option:value like:
+             |        |        | papersize: a4, colorprinting: no, ...
+
+
+Class settings
+
+Name         | Level  | Type   | Description
+-------------+--------+--------+-----------------------------
+Name         | basic  | string | class name
+Info         | basic  | string | class info (optional)
+Location     | basic  | string | class location (optional)
+State        | basic  | string | idle|stopped
+StateMessage | basic  | string | why class is in state State?
+Accepting    | basic  | bool   | is class accepting jobs?
+BannerStart  | expert | string | name of the banner
+BannerEnd    | expert | string | name of the banner
+AllowUsers   | expert | list   | users that can use the printer
+DenyUsers    | expert | list   | users that can not use the printer
+             |        |        | only one of (Allow|Deny)Users can be used
+ppd          | basic  | string | postscript printer description file that is
+             |        |        | based on Manufacturer and Model
+             |        |        | TODO: cups returns ppd for class even if there
+             |        |        | are more printer types in class. Is it valid?
+options      | expert | map    | map of option:value
+Printers     | basic  | list   | list of printers or classes that are members of
+             |        |        | this class
+
+Default destination
+
+It can be priter or class.
+
+Workflow
+========
+
+The main question is: will printers and classes be in one table?
+Why yes: printer and class have almost the same options to set. For user who
+  wants to print, there is no difference between class and printer, he just
+  prints to the destination. Default destination can be printer or class, so if
+  dialogs are separated, we will need to have some text field with default
+  destination. 
+Why not: It can be a little puzzling. I want to see my printers but there is
+  something that is _not_ printer.
+
+Another possibility is having classes and printer in tree. There are top-level
+classes and printers that belong to no class in root level and each class have
+subitems-members. I think this is the worst solution, look at picture
+printerstree.png.
+
+I would prefere having printers and classes in one table.

@@ -1,0 +1,107 @@
+
+{
+    import "Printerlib";
+    include "testsuite.ycp";
+
+    boolean test_mode = false;
+
+    map READ =
+        $[
+            "probe" :
+            $[
+                "printer" :
+                [
+                    $[
+                        "bus":"Parallel",
+                        "class_id":265,
+                        "dev_name":"/dev/lp0",
+                        "device":"BJC-6100",
+                        "sub_class_id":0,
+                        "unique_key":"xVOt.CRhzf0_Mb88",
+                        "vendor":"Canon"
+                        ],
+                    $[
+                        "bus":"USB",
+                        "class_id":265,
+                        "dev_name":"/dev/usblp0",
+                        "device_id":200786,
+                        "resource":$["baud":[$["speed":1500000]]],
+                        "rev":"1.03",
+                        "sub_class_id":0,
+                        "sub_device":"BJC-6100",
+                        "sub_vendor":"Canon",
+                        "unique_key":"Q0jS.ZoQ4aZ8KEv3",
+                        "vendor":"Canon Inc.",
+                        "vendor_id":197801
+                        ]
+                    ]
+                ]
+            ];
+    DUMP ("--- Detection for printconf");
+    TEST (``(Printerlib::Detect (false)), [READ, $[], $[]], true);
+    DUMP ("--- Detection for cups");
+    TEST (``(Printerlib::Detect (true)), [READ, $[], $[]], true);
+
+    READ =
+        $[
+            "probe" :
+            $[
+                "printer" :
+                [
+                    $[
+                        "bus":"USB",
+                        "class_id":265,
+                        "dev_name":"/dev/usblp0",
+                        "device_id":200786,
+                        "resource":$["baud":[$["speed":1500000]]],
+                        "rev":"1.03",
+                        "sub_class_id":0,
+                        "sub_device":"USB Printer",
+                        "sub_vendor":"Epson",
+                        "unique_key":"Q0jS.ZoQ4aZ8KEv3",
+                        "vendor":"Epson Inc.",
+                        "vendor_id":197801
+                        ]
+                    ]
+                ]
+            ];
+    map EXEC = $[
+            "target" : $[
+                "bash_output" :
+                $[
+                    "exit" : 0,
+                    "stdout" : "@EJL ID\nMFG:EPSON;CMD:ESCPL2,PRPXL24,BDC;MDL:Stylus COLOR 900;CLS:PRINTER;DES:EPSON Stylus COLOR 900;",
+                    "stderr" : ""
+                    ],
+                ],
+        ];
+    DUMP ("--- Detection for printconf");
+    TEST (``(Printerlib::Detect (false)), [READ, $[], EXEC], true);
+    DUMP ("--- Detection for cups");
+    TEST (``(Printerlib::Detect (true)), [READ, $[], EXEC], true);
+
+    // try to detect for cups but without vendor_id and device_id
+    READ =
+        $[
+            "probe" :
+            $[
+                "printer" :
+                [
+                    $[
+                        "bus":"USB",
+                        "class_id":265,
+                        "dev_name":"/dev/usblp0",
+                        "resource":$["baud":[$["speed":1500000]]],
+                        "rev":"1.03",
+                        "sub_class_id":0,
+                        "sub_device":"USB Printer",
+                        "sub_vendor":"Epson",
+                        "unique_key":"Q0jS.ZoQ4aZ8KEv3",
+                        "vendor":"Epson Inc.",
+                        ]
+                    ]
+                ]
+            ];
+    DUMP ("--- Detection for cups");
+    TEST (``(Printerlib::Detect (true)), [READ, $[], EXEC], true);
+}

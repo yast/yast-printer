@@ -1,0 +1,29 @@
+/**
+ * File:
+ *  trans1.ycp
+ *
+ * Module:
+ *  Printer configurator
+ *
+ * Summary:
+ *  Tests for basic translation functions.
+ *
+ * Authors:
+ *  Petr Blahos <blahos@suse.cz>, 2001
+ *
+ * $Id$
+ *
+ * Tests simple translation functions.
+ */
+{
+    global define UI::OpenDialog(term t)``{}
+    global define UI::CloseDialog()``{}
+    global define term UI::UserInput()``{return `lprng ;}
+
+    include "testsuite.ycp";
+    include "printer/misc.ycp";
+
+    TEST (``(filter1284 ("abcdefghijklmnopqrstuvwxyz0123456789_-+")), [], false);
+    TEST (``(filter1284 ("!@#$%^&*()")), [], false);
+    TEST (``(filter1284 ("text with unallowed characters: \"/[]{}.'`")), [], false);
+}

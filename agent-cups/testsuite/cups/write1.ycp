@@ -1,0 +1,66 @@
+
+{
+    list pr = [];
+    SCR::Write (.cups.printers, []);
+    SCR::Write (.cups.classes, []);
+    pr = [
+	$[
+	    "Accepting":true,
+	    "AllowUsers":[],
+	    "Default":true,
+	    "DenyUsers":[],
+	    "Info":"Canon BJC-6100",
+	    "Location":"First parallel port (/dev/lp0)",
+	    "Name":"lp",
+	    "State":"idle",
+	    "StateMessage":"",
+	    "Uri":"parallel:/dev/lp0",
+	    "options":$[],
+	    "ppd":"/usr/share/cups/model/epson9.ppd",
+	    ]
+	];
+
+    SCR::Write (.cups.printers, pr);
+    pr = SCR::Read (.cups.printers);
+    pr = maplist (`i, pr, ``{
+	return add (add (i, "ppd", ""), "options", $[]);
+    });
+    y2error ("%1", pr);
+    
+    pr = [
+	$[
+	    "Accepting":true,
+	    "AllowUsers":[],
+	    "Default":true,
+	    "DenyUsers":[],
+	    "Info":"Canon BJC-6100",
+	    "Location":"First parallel port (/dev/lp0)",
+	    "Name":"lp",
+	    "State":"idle",
+	    "StateMessage":"",
+	    "Uri":"parallel:/dev/lp0",
+	    "options":$[],
+	    "ppd":"/usr/share/cups/model/epson9.ppd",
+	    ],
+	$[
+	    "Accepting":true,
+	    "AllowUsers":[],
+	    "Default":true,
+	    "DenyUsers":[],
+	    "Info":"Canon BJC-6100",
+	    "Location":"First parallel port (/dev/lp0)",
+	    "Name":"badppd",
+	    "State":"idle",
+	    "StateMessage":"",
+	    "Uri":"parallel:/dev/lp0",
+	    "options":$[],
+	    "ppd":"/usr/share/cups/model/XXX.ppd",
+	    ],
+	];
+    SCR::Write (.cups.printers, pr);
+    pr = SCR::Read (.cups.printers);
+    pr = maplist (`i, pr, ``{
+	return add (add (i, "ppd", ""), "options", $[]);
+    });
+    y2error ("%1", pr);
+}

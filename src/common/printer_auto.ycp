@@ -1,0 +1,118 @@
+/**
+ * File:
+ *  printer_auto.ycp
+ *
+ * Module:
+ *  Printer configurator
+ *
+ * Summary:
+ *  Autoconfiguration preparation.
+ *
+ * Authors:
+ *  Petr Blahos <pblahos@suse.cz>, 2001
+ *
+ * $Id$
+ *
+ * Client for preparation of autoinstalation data.
+ */
+
+{
+    textdomain "printer";
+    import "Printer";
+    import "Wizard";
+    import "Installation";
+    import "Mode";
+    import "Summary";
+    include "printer/misc.ycp";
+    include "printer/dialogs.ycp";
+    include "printer/helps.ycp";
+    include "ui/common_popups.ycp";
+
+    // global variables
+    boolean do_abort_now = false;	// abort now
+    boolean auto_mode = true;		// preparing data for autoinstallation?
+    map settings = $[];
+//    Printer::spooler = checkSpoolSystemNoDialog ();
+    Mode::config = true;
+    /**
+     * Test for abort.
+     * @return true if abort was pressed
+     */
+    define boolean testAbort () ``{
+	if (`abort == UI::PollInput ())
+	{
+	    UI::CloseDialog ();
+	    return true;
+	}
+	return false;
+    }
+    // ===== arguments ================================================
+
+    boolean test_mode = false;
+
+    // static variables
+    symbol runProbedPrinterDlg__current = `none;
+    integer runAutoprobedListDialog__current = 0;
+
+    Printer::warn_finish = false;
+
+
+    {
+	integer i = 0;
+	while (i < size (Args()))
+	{
+	    if (is (Args (i), map) && nil != Args (i))	settings = Args (i);
+	    if (.test == Args (i))             test_mode = true;
+	    i = i + 1;
+	}
+    }
+
+    define set_contents() ``{
+        term contents =
+	    `VBox(
+		  `VSpacing(1),
+		  `RichText( `id(`summary), Printer::Summary([])),
+		  `VSpacing(),
+		  `HBox(
+			`PushButton(`id(`configure), _("&Configure Printer")),
+			`HStretch(),
+			`PushButton(`id(`reset), _("&Reset Configuration"))
+			)
+		  );
+
+	Wizard::SetContents(_("Printer Configuration"),
+			    contents, "", true, true);
+    }
+
+    // Create Summary and buttons for launching
+    // in auto mode
+
+    set_contents();
+    any result = nil;
+    any ret = nil;
+    repeat {
+	ret = UI::UserInput();
+	if (ret == `configure)
+	{
+	        Wizard::CreateDialog ();
+		result = runWizard (true);
+		UI::CloseDialog ();
+		if (result == `next || result == `finish)
+		{
+		     settings = Printer::Export ();
+		}
+		Printer::Import(settings);
+		set_contents();
+	}
+	else if ( ret == `reset)
+	{
+	    settings= $[];
+	    Printer::Import(settings);
+	    set_contents();
+	}
+    } until (ret == `back || ret == `next || ret ==`key);
+
+    return [ret, settings];
+
+}
+

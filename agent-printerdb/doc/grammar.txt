@@ -1,0 +1,265 @@
+##
+## grammar for printer database...
+##
+## $Id$
+##
+
+################################################################
+# main.ascii
+# top-level
+################################################################
+START -> USEMANUFACTURER START
+      |  USEMANUFACTURER
+
+USEMANUFACTURER -> UseManufacturer { ident }
+                     IEEE { ident }
+                     Text { text }
+                |  UseManufacturer { ident }
+                     Text { text }
+                    [IEEE { ident }]
+
+# we do not need some End... here.
+# Example:
+# UseManufacturer kyocera
+#  IEEE { kyocera }
+#  Text { Kyocera }
+#
+
+################################################################
+# manufacturers.ascii
+# definition of manufacturers
+################################################################
+START -> MANUFACTURER START
+      |  MANUFACTURER
+
+MANUFACTURER -> Manufacturer { ident }
+                 [Comment { text } ]
+                 USEPRINTERLIST
+               EndManufacturer { ident }
+
+USEPRINTERLIST -> USEPRINTER USEPRINTERLIST
+               |  USEPRINTER
+
+USEPRINTER -> UsePrinter { ident }
+                IEEE { text }
+                Text { text }
+           |  UsePrinter { ident }
+                Text { text }
+               [IEEE { text }]
+
+# Example:
+# Manufacturer { kyocera } 
+#  Comment { some comment }
+#  UsePrinter { kyocera-someprinter-1 }
+#    IEEE { someprinter-1 }
+#    Name { Super Color }
+#  UsePrinter { kyocera-someprinter-2 }
+#    Name { Super Mono }  
+# EndManufacturer { kyocera }
+
+################################################################
+# printers.ascii
+# definition of printers
+################################################################
+START -> PRINTER START
+      |  PRINTER
+
+PRINTER -> Printer { ident }
+            [Comment { text }]
+             USECONFIGLIST
+           EndPrinter { ident }
+
+USECONFIGLIST -> USECONFIG USECONFIGLIST
+              |  USECONFIG
+
+USECONFIG -> UseConfig { ident }
+             Text { text }
+	     Queue { text }
+
+# Example:
+#  Printer { canon-bjc-6100 }
+#    Comment { There is nothing interesting about this printer }
+#    UseConfig { canon-bjc-mono } Text { Monochromatic queue } Queue { mono }
+#    UseConfig { canon-bjc6100-color } Text { Color queue } Queue { color }
+#  EndPrinter { canon-bjc-6100 }
+
+################################################################
+# configs.ascii
+################################################################
+START -> CONFIG START
+      |  CONFIG
+
+CONFIG -> Config { ident }
+           [Comment { text } ]
+            USELIST
+          EndConfig { ident }
+
+USELIST -> Param { text }
+           USEOPTIONLIST
+        |  USECONFIGLIST
+
+USECONFIGLIST -> USECONFIG USECONFIGLIST
+              |  USECONFIG
+              
+USECONFIG -> UseConfig { ident } Text { text }
+	  |  PasteConfig { ident }
+
+USEOPTIONLIST -> USEOPTION USEOPTIONLIST
+              |  USEOPTION
+
+USEOPTION -> UseOption { ident }
+               Text { text }
+
+# Example: 
+#   Config { canon-bjc-mono }
+#     Param { -sDEVICE=bjc600 -sBPP=1 -sCOLOR=mono }
+#     UseOption { papersizemaxa4 }
+#       Text { Paper size }
+#   EndConfig { canon-bjc-mono }
+#
+#   Config { canon-bjc6100-color }
+#     UseConfig { canon-uniprint-bjc6000a }
+#       Text { Low quality queue }
+#	Queue { color }
+#     UseConfig { canon-stp-bjc6100 }
+#       Text { High quality queue }
+#	Queue { high }
+#   EndConfig { canon-bjc6100-color }
+#
+#   Config { canon-uniprint-bjc6000a }
+#     Param { -sDEVICE=uniprint @bjc6000a.upp }
+#     UseOption { uniprint-resolution }
+#       Text { Resolution }
+#     UseOption { uniprint-quality }
+#       Text { Quality }
+#     UseOption { papersizemaxa4 }
+#       Text { Paper size }
+#   EndConfig { canon-uniprint-bjc6000a }
+#
+# ...
+
+################################################################
+# options.ascii
+################################################################
+START -> OPTION START
+      |  OPTION
+
+OPTION -> Option { ident }
+           [Comment { text }]
+            VALUESPEC
+          EndOption { ident }      
+
+VALUESPEC -> NUMERIC
+          |  VALUELIST
+
+
+                    #   lowest  highst  step    default
+NUMERIC -> ValueInt {   integer integer integer [integer] } Pattern { text }
+        |  ValueFloat { float   float   float   [float] }   Pattern { text }
+	            # allowed chars
+	|  ValueText { text }                               Pattern { text }
+
+VALUELIST -> VALUE VALUELIST
+          |  PASTE VALUELIST
+          |  PATTERN VALUELIST
+          |  VALUE
+          |  PASTE
+	  |  PATTERN
+
+PATTERN -> Pattern { text } Text { text } [ OPTIONDEFLIST ]
+
+PASTE -> PasteOption { ident } [ OPTIONDEFLIST ]
+
+VALUE -> Value { text }
+           Text { text }
+          [OPTIONDEFLIST]
+
+OPTIONDEFLIST -> OPTIONDEF OPTIONDEFLIST
+              |  OPTIONDEF
+          
+OPTIONDEF -> UseOption { indent }
+               Text { text }
+
+# pattern in NUMERIC values:
+# any string in which % is replaced by selected value (e.g. -sVALUE=%)
+#
+# PasteOption pastes option to into place. It may be used to paste group
+# of values -- pasted option is not understood as a suboption, but 
+# its values are pasted in place. It is possible to follow with suboptions:
+# PasteOption { option-ident }
+#    UseOption { option } Text { as text }
+#    UseOption { option } Text { as text }
+# Such suboptions are added to suboptions already present at the last option
+# of the options pasted.
+#
+# Example:
+#  Option { papersizemaxa4 }
+#    Value { -sPAPER=a4 } Text { A4 }
+#    Value { -sPAPER=a5 } Text { A5 }
+#    Value { -sPAPER=a6 } Text { A6 }
+#    PasteOption { very_small_papers }
+#    PasteOption { b_papers }
+#  EndOption { papersizemaxa4 }
+#
+#  Option { bitsperpixel }
+#    Comment { this will be visible to user }
+#    Value { -sBPP=1 } Text { 1 bit per pixel }
+#    Value { -sBPP=2 } Text { 2 bits per pixel }
+#    Value { -sBPP=4 } Text { 4 bits per pixel }
+#    Value { -sBPP=8 } Text { 8 bits per pixel }
+#  EndOption { bitsperpixel }
+#
+#  Option { driver }
+#    Value { -sDRIVER=bjc600 } Text { Monochromatic driver for BJC600 }
+#    Value { -sDRIVER=uniprint @bjc6100a.upp }
+#      Text { Uniprint with bjc6100a.upp }
+#      UseOption { bitsperpixel } Text { Bits per pixel }
+#    Value { -sDRIVER=uniprint @bjc6100b.upp }
+#      Text { Uniprint with bjc6100b.upp }
+#      UseOption { bitsperpixel } Text { Bits per pixel }
+#    Value { -sDRIVER=stp } Text { Driver stp }
+#      UseOption { bitsperpixel } Text { Bits per pixel }
+#      UseOption { stphue } Text { Hue }
+#  EndOption { driver }
+#
+#  Option { stphue }
+#    Comment { Hue for stp. }
+#    ValueFloat { 0.0 1.0 0.1 } Pattern { -sStpHue=% }
+#  EndOption { stphue }
+#
+#  Option { textual }
+#    Value { regexp } Pattern { -sStpHue=% }
+#  EndOption { textual }
+#  - regexp is libc regexp, see man 7 regex. Do not use subexpressions
+#    here (expression enclosed in brackets), they have no sense anyway.
+#    examples:	[123-]*		any number of characters 1,2,3,-
+#             	[]1-5]*		any number of characters ],1,2,3,4,5
+#	      	[a-zA-Z0-9]*	alphanumeric string
+#		[.]*		any number of .
+#		[-_~!%+,./:;=0-9A-Za-z]* ...
+#		
+###
+#
+# Pattern and As
+# Pattern { -sSOMETHING1=% -sSOMETHING2=% } Text { 2 options into one }
+# 2 following options will be used to fill the pattern. Example:
+# Pattern { -sFIRST=% -sSECOND=% } Text { Compund options }
+#   UseOption { first-text } Text { First }
+#   UseOption { second-text} Text { Second }
+#
+# Pattern { -sFIRST=% -sSECOND=% } Text { Compund options }
+#   UseOption { text } As { xx-text-1 } Text { First }
+#   UseOption { text } As { xx-text-2 } Text { second }
+#
+# But what if we want to use the same option more times in the pattern?
+# There would be a conflict because we would have the same option
+# identifier twice. And as the options are identified by these identifiers,
+# we would have no chance to distinquish them and the result would be:
+# the same values for all options with the same identifier. Hence keyword
+# As was introduced. It defined a replacement-identifier which must be
+# unique. Parser checks if identifiers do not conflict in options and
+# reports in the log file, if they do.
+#
+#
+#
+#

@@ -1,0 +1,46 @@
+/**
+ * File:
+ *   proc_parport_devices.scr
+ * Summary:
+ *   SCR Agent for reading autoprobe information from 
+ *   /proc/parport (2.2) or /proc/sys/dev/parport (2.4)
+ * Access:
+ *   read-only
+ * Authors:
+ *   Unknown <yast2-hacker@suse.de>
+ * See:
+ *   anyagent
+ *   libscr
+ * Example:
+ *   Read(.proc.parport.devices)
+ *   (["/dev/lp0"])
+ * 
+ * $Id$
+ *
+ * Returns a <b>list</b> of parallel port device-files (/dev/lp*) 
+ *
+ * Used in printer configuration tools to get available parallel ports.
+ */
+.proc.parport.devices
+
+# ---------------------------------------------------------------
+# file:         proc_parport_devices.scr
+# 
+# $Id$
+#
+# Used in printer configuration tools to get available parallel
+# ports.
+# 
+# ---------------------------------------------------------------
+
+`ag_anyagent(
+  Description (
+      ``(Run("if [ 2.4 = `uname -r | cut -b0-3 -` ] ; then for I in `ls /proc/sys/dev/parport 2>/dev/null | grep parport | sed 's/parport/\\/dev\\/lp/g'`; do echo \"$I\"; done; else for I in `ls /proc/parport 2> /dev/null`; do echo \"/dev/lp$I\"; done; fi")),
+      "",			// Comment
+      true,			// read-only
+      ``(List(
+        String("^\n"),
+        "\n"
+    ))
+  )
+)

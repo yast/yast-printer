@@ -1,0 +1,576 @@
+/**
+ * File:
+ *  helps.ycp
+ * Module:
+ *  Printer configurator
+ * Summary:
+ *  Help texts.
+ * Authors:
+ *  Petr Blahos <pblahos@suse.cz>
+ *
+ * $Id$
+ * Help texts.
+ */
+{
+    textdomain "printer";
+
+    /**
+     * Label.
+     * @param type parallel|serial|usb
+     * @return help text
+     */
+    global define string getAskDeviceLabel (string type) ``{
+	return lookup ($[
+		// Dialog label - parallel
+		"parallel" : _("Parallel printer connection"),
+		// Dialog label - serial
+		"serial" :   _("Serial printer connection"),
+		// Dialog label - USB
+		"usb" :      _("USB printer connection"),
+		// Dialog label - lpd
+		"lpd" :      _("Forwarding queue to a remote LPD"),
+		// Dialog label - samba
+		"samba" :    _("Samba/Windows printer"),
+		// Dialog label - novell
+		"novell" :    _("Novell printer"),
+                // Dialog label - ipp
+                "ipp" :    _("IPP printer"),
+                // Dialog label - socket
+                "socket" :    _("Direct TCP port printer"),
+		], type, _("Connection"));
+    }
+
+    /**
+      * Get warning message before using PPD file
+      * @return string message
+      */
+    global define string getPpdWarning () ``{
+	return _("PPD files are supported by CUPS only.\n Do you wish to continue?");
+    }
+
+    /**
+     * Help text.
+     * @param type parallel|usb|serial
+     * @return help text
+     */
+    global define string getAskDeviceHelp (string type) ``{
+	string help_text = "";
+	if (type == "parallel")
+	    {
+		// Help, parallel printer part
+		help_text = _("<P><B><BIG>Parallel port:</BIG></B><BR>
+If you have multiple parallel ports, choose the parallel port to
+ which your printer is connected.</P>
+");
+	    }
+	if (type == "usb")
+	    {
+		// Help, USB printer part
+		help_text = _("<P><B><BIG>USB port:</BIG></B><BR>Select the device for your USB printer.</P>");
+	    }
+	if (type == "serial")
+	    {
+		// Help, serial printer part
+		help_text = _("<P><B><BIG>Serial port:</BIG></B><BR>
+Select the device for your serial printer.
+ You can also set the baud rate.</P>");
+	    }
+	// Help, common part 1/2
+	help_text = help_text + _("<P><B><BIG>Other:</BIG></B><BR>
+To enter another device, press <b>Other</b>.</P>");
+
+	// Help, common part 2/2
+	help_text = help_text + _("<P><B><BIG>Testing connection:</BIG></B><BR>
+To be sure the printer is properly connected,
+use the <B>Test</B> button.</P>
+");
+
+	// help last part only for parallel printers
+	if (type == "parallel")
+	    {
+		// Help, parallel printer part
+		help_text = help_text + _("<P><B><BIG>Parallel port details:</BIG></B><BR>If your
+ parallel port does not work, set its IO ports here.</P>
+") +
+		    _("<p>Be careful when selecting a custom device or changing
+ IO port settings. Improper values may damage your system.</p>
+");
+	    }
+	if (type == "serial")
+            {
+                // Help, parallel printer part
+                help_text = help_text + _("<P><B><BIG>Serial port details:</BIG></B><BR>You
+can set advanced settings of serial port here.</P>
+") +
+                    _("<p>Be careful when selecting a custom device or changing
+serial port settings. Improper values may damage your system.</p>
+");
+            }
+
+	return help_text;
+    }
+
+    /**
+     * Help text.
+     * @return help text
+     */
+    global define string getManufModelHelp () ``{
+	return
+	// Help, 1/5
+	_("<P><B><BIG>Manufacturer:</BIG></B><BR>Select manufacturer of your printer.</P>")
+	+
+	// Help, 2/5
+	_("<P><B><BIG>Model:</BIG></B><BR>
+After a manufacturer is selected,
+ the list of models is updated with printers made
+ by the selected manufacturer. Choose one.</P>
+")
+	+
+	// Help, 3/5
+	_("<P>If you cannot find your printer,
+try the Generic printers or Ghostscript devices.
+If you do not know which protocol your printer uses,
+consult the printer's manual or contact the manufacturer.</P>
+")
+	+
+	//Help 4/5
+	_("<P><B><BIG>Changing database:</BIG></B><BR>
+If you have another printer drivers database, you can use driver from it.
+Push <B>Change database</B> to select other database.</p>")
+	+
+	// Help 5/5
+	_("<P><B><BIG>non-YaST PPD files:</BIG></B><BR>
+If your printer manufacturer  provides PPD files, then you can use PPD
+file from your printer manufacturer. PPD files can be used only with 
+CUPS spooler.</P>");
+    }
+
+    /**
+     * Help text.
+     * @param more_names there are more names to show/edit
+     * @param raw include help text for raw printer
+     * @return help text
+     */
+    global define string getSpoolInfoHelp (boolean more_names, boolean raw) ``{
+	string t =
+	    // Help, 1 of 6
+	    _("<P><B><BIG>Name for printing:</BIG></B><BR>To print with this configuration, use this name as the queue name.</P>");
+	if (Printer::spooler != "lprng")
+	{
+	    // Help text 2/6
+	    t = t + _("<p><b><big>Description of printer:</big></b><br>You can enter description of this printer. 
+You can leave this field empty</p>");
+	    // Help text 3/6
+	    t = t + _("<p><b><big>Location of printer:</big></b><br>You can enter description of location of this printer.
+You can leave this field empty.</p>");
+	}
+	if (Printer::spooler != "cups")
+	{
+	// help text 4/6
+	    if (raw)
+		t = t + _("<p><b><big>Raw queue:</big></b><br>With this option set, no filtering is done.
+ It means that data will be sent to the printer as is.
+ This option cannot be changed when editing the printer.</p>
+");
+	// help text 5/6
+	    t = t + _("<p><b><big>Print form feed between jobs:</big></b><br>Some printers need this
+ option to eject the last paper of the print job.</p>");
+	}
+	if (more_names)
+	{
+	    // help text 6/6
+	    t = t + _("<P><B><BIG>Name for TCP/IP forwarding queue:</BIG></B><BR>
+Name of the queue created for this prefilter queue.</P>");
+	}
+	return t;
+    }
+    /**
+     * Help text.
+     * @return help text
+     */
+    global define string getFilterHelp () ``{
+	return
+	// Help, 1 of 3
+	_("<P><B><BIG>Current settings:</BIG></B><BR>
+There is a list of current settings in the upper box.</P>")
+	// help 2 of 3
+	+ _("<P><B><BIG>Values:</BIG></B><BR>
+If you select options in the upper box, a list of values appears in the lower box.
+ Select a new value by clicking it.</P>
+")
+	// Help, 3 of 3
+	+ _("<P>Some of the settings may not work together properly.
+ If you want to try printing with the current configuration,
+ click the <B>Test</B> button.</P>");
+    }
+    /**
+     * Help text.
+     * @return help text
+     */
+    global define string getFilterUppHelp () ``{
+	return _("<P><B>Printer settings</B> are located in files with <i>.upp</i>
+ extension located in directory <i>/etc/gs.upp</i>.</P>");
+    }
+    /**
+     * Help text.
+     * @return help text
+     */
+    global define string getFeaturesHelp () ``{
+	return
+	// help text 1/2
+	_("<P><B><BIG>Printing of ascii text:</BIG></B><BR>
+Adjust the page layout. For this configuration to print all files
+ as text, select <b>Force ascii printing</b>.</P>
+")
+	// help text 2/2
+	+ _("<P><B><BIG>Encoding of printed documents:</BIG></B><BR>
+For some languages, this choice is important to get correct output from
+ <I>Netscape</I> and some other programs. By default,
+ the encoding is set to fit the language chosen
+ at the time of the installation.</P>");
+    }
+    /**
+     * Help text.
+     * @return help text
+     */
+    global define string getConnectionHelp () ``{
+	return _("<P><B><BIG>Parallel, USB, Serial, IrDA port:</BIG></B><BR>
+Printers connected to local port.</P>")
+	// Help text 2/5
+	+ _("<P><B><BIG>Forwarding queue to remote LPD:</BIG></B><BR>
+Files to print are sent directly to the remote printer.</P>")
+	// Help text 3/5
+	+ _("<P><B><BIG>Prefilter queue for a LPD forwarding queue:</BIG></B><BR>
+Files are prepared on the local computer. Raw data is sent to the remote host with the printer.</P>
+")
+	// Help text 4/5
+	+ _("<P><B><BIG>Samba/Windows Printer:</BIG></B><BR>
+Remote printer connected to Samba server or Windows.</P>")
+	// Help text 5/5
+	+ _("<P><B><BIG>Novell Printer:</BIG></B><BR>
+Remote printer connected to Novell Netware print server.</P>");
+    }
+    /**
+     * Help text.
+     * @param type type of remote printer
+     * @param raw is it raw printer?
+     * @return help text
+     */
+    global define string getEditHelp (string type, boolean raw) ``{
+	// help text 2/5 or 2/2
+	string help_text = _("<P><B><BIG>Name:</BIG></B><BR>
+You may change the name under which to access the configuration in the spool system.
+ Form feed settings can also be changed here.</P>
+");
+	if (raw)
+	{
+	    // help text 1/2
+	    return _("<P><B><BIG>Connection:</BIG></B><BR>You can change connection for this printer.</P>") + help_text;
+	}
+	else if ("lpd" == type || "filtering" == type || "ipp" == type)
+	{
+	    // help text 1/2
+	    return _("<P><B><BIG>Connection:</BIG></B><BR>
+Choose the remote host name and queue name for this remote printer.</P>
+") + help_text;
+	}
+	else if ("samba" == type)
+	{
+	    // help text 1/5
+	    help_text = _("<P><B><BIG>Connection:</BIG></B><BR>
+You can change host name and queue name for the remote
+ printer and the user name and password.</P>
+") + help_text;
+	}
+	else if ("novell" == type)
+	{
+	    // help text 1/5
+	    help_text = _("<P><B><BIG>Connection:</BIG></B><BR>
+You can change host name and queue name for the remote
+ printer and the user name and password.</P>
+") + help_text;
+	}
+	else if ("prefilter" == type)
+	{
+	    // help text 1/5
+	    help_text = _("<P><B><BIG>Connection:</BIG></B><BR>
+Choose forwarding queue that will be used for this printer.</P>") + help_text;
+	}
+	else
+	{
+	    // help text 1/5
+	    help_text = _("<P><B><BIG>Connection:</BIG></B><BR>You can change connection for this printer.</P>") + help_text;
+	}
+	// help text 3/5
+	help_text = help_text + _("<P><B><BIG>Model:</BIG></B><BR>
+To try your printer with another driver, choose it here.</P>
+") +
+	// help text 4/5
+	_("<P><B><BIG>Model dependent settings:</BIG></B><BR>
+Edit filter options here. These options differ for various printer models.</P>
+") +
+	// help text 5/5
+	_("<P><B><BIG>Hardware-independent settings:</BIG></B><BR>
+Edit the settings for text printing here.</P>
+");
+	return help_text;
+    }
+    /**
+     * Help text.
+     * @param supported is printer found in db and editable?
+     * @return help text
+     */
+    global define string getProbedPrinterHelp (boolean supported) ``{
+	string help_text = "";
+	if (supported)
+	    {
+		// Help, part 1 of 4, branch 1
+		help_text = _("<P><B><BIG>New printer:</BIG></B><BR>
+The printer was found in the printer database.
+ You can use <B>quick automatic setup</B>.</P>");
+	    }
+	else
+	    {
+		// Help, part 1 of 4, branch 2
+		help_text = _("<P><B><BIG>New printer:</BIG></B><BR>
+Printer model could not be autodetected in printer database,
+ therefore you must use <B>advanced setup</B> to configure it.</P>");
+	    }
+	// Help, part 2 of 4
+	help_text = help_text + _("<P><B><BIG>Quick automatic setup:</BIG></B><BR>
+Printing configuration will be set up for this printer using default settings.</P>
+");
+	// Help, part 3 of 4
+	help_text = help_text + _("<P><B><BIG>Normal setup:</BIG></B><BR>
+Detected model information will be used. Choose the name and options for the created configuration.</P>
+");
+	// Help, part 4 of 4
+	help_text = help_text + _("<P><B><BIG>Advanced setup:</BIG></B><BR>
+Choose another printer model or try a generic driver.</P>
+");
+	return help_text;
+    }
+    /**
+     * Help text.
+     * @return help text
+     */
+    global define string getShowPrinterHelp () ``{
+	return _("<P><B><BIG>Printer information:</BIG></B><BR>
+New print configurations have been configured.
+ Later, edit settings for these configurations.</P>
+")
+	    +
+	_("<P>If you want to try printing with
+a new configuration, select a print queue from list and
+click the <B>Test</B> button.</P>
+");
+    }
+    /**
+     * Help text.
+     * @return help text
+     */
+    global define string getDetectedHelp () ``{
+	return _("<P><B><BIG>Printers to configure:</BIG></B><BR>
+Select a printer from the list and press <B>Configure</B> to
+ create a print configuration for the selected printer.
+ To restart autodetection, press <B>Restart detection</B>.</P>
+") + _("<P>If your printer was not detected, choose
+ <B>Other</B> in the list then press <B>Configure</B> to set up
+ the print configuration manually.</P>
+") +
+	    // Help text 3/3
+	    _("<P>There is a list of configured queues in the lower
+box. If you want to edit them, press <B>Edit</B></P>
+")
+	    ;
+    }
+    /**
+     * Help text.
+     * @return help text
+     */
+    global define string getComplexHelp () ``{
+	// ===== help text ================================================
+	// Help text 1/6
+	return _("<P><B><BIG>Printers:</BIG></B><BR>In this dialog, manage printers on your system.</P>")
+	// Help text 2/6
+	+ _("<P><B><BIG>Adding new configuration:</BIG></B><BR>
+By pressing <B>Add</B>, you will be provided
+ with a list of available connections.</P>
+")
+	// Help text 3/6
+	+ _("<P><B><BIG>Deleting, editing, setting configuration as default:</BIG></B><BR>
+Select the printer in the table and press the appropriate button.
+ You can only edit configurations created with YaST2. Change of
+ default printer will take in effect after next login.</P>
+")
+	// Help text 4/6
+	+ _("<P><B><BIG>Advanced settings:</BIG></B><BR>Press <B>Advanced</B> to modify
+advanced spooler settings and for switching between CUPS and LPRng spooler</P>")
+	// Help text 5/6
+	+ _("<P><B><BIG>Saving changes:</BIG></B><BR>Press <b>Finish</b> to save changes.</P>")
+	// Help text 6/6
+	+ _("<P><B><BIG>Discarding changes:</BIG></B><BR>
+Press <b>Cancel</b> if you do not want to save changes.</P>
+");
+    }
+    /**
+     * Help text.
+     * @return help text
+     */
+    global define string getInitProgressHelp () ``{
+	// Help text shown during progress 1/1
+	return _("<P><BIG><B>Printer configuration tool</B></BIG><BR>
+Change the settings of printers on your system.
+ You can set up both local and network printers.</P>");
+    }
+    /**
+     * Help text.
+     * @param type type of remote printer
+     * @return help text
+     */
+    global define string getAskRemoteHelp (string type) ``{
+	string help_text = _("<P><B><BIG>Host name:</BIG></B><BR>
+Enter the host name of your print server.</P>
+");
+	// Help, 2 of 5
+	help_text = help_text + _("<P><B><BIG>Remote queue:</BIG></B><BR>Enter the name of the remote printer.</P>");
+
+	if ("samba" == type || "novell" == type)
+	    {
+		// Help, 3 of 5
+		help_text = help_text + _("<P><B><BIG>User, password:</BIG></B><BR>
+Enter the user name and password to access the print server.</P>
+");
+	    }
+	else
+	    {
+		if (type == "prefilter")
+		    {
+			// Help, 4 of 5
+			help_text = help_text + _("<P>Alternatively, you can use an already configured forwarding queue.</P>");
+		    }
+		// Help, 5 of 5
+		help_text = help_text + _("<P>To verify the name, use <B>Test</B>.</P>");
+	    }
+	return help_text;
+    }
+    /**
+     * Help text.
+     * @return help text
+     */
+    global define string getChooseRemoteHelp () ``{
+	return _("<P><B><BIG>Queues:</BIG></B><BR>
+Choose the forwarding queue to use
+for this prefilter queue.</P>
+");
+    }
+    /**
+     * Help text.
+     * @return help text
+     */
+    global define string getWriteProgressHelp () ``{
+	return
+	    // help text: save settings (1/1)
+	    _("<P><B><BIG>Saving:</BIG></B><BR>
+Wait while YaST2 saves the printer configuration.
+ The time required depends on the number of printers in the system.</P>
+")
+	    ;
+    }
+    /**
+     * Get help text.
+     * @return string help text
+     */
+    global define string getDiskFileHelp () ``{
+	// Help text 1/1
+	string help_text = _("<P><B><BIG>File name:</BIG></B><BR>
+Name of the file to which to write printing output.</P>
+");
+	return help_text;
+    }
+    /**
+     * Get help text for configuration selection.
+     * @return help text
+     */
+    global define string getConfigHelp () ``{
+	return _("<P><B><BIG>Printer configurations:</BIG></B><BR>
+Several various configuration may exist for a printer. The configurations
+usually differ in resolution, bit depth, quality, or speed. Choose the one
+that best matches your needs. You will be able to edit some settings,
+like paper size, later.</P>
+");
+    }
+    /**
+     * Get help text.
+     * @return string help text
+     */
+    global define string getUsersHelp () ``{
+        // Help text 1/1
+        string help_text = _("<P><B><BIG>Restrictions:</BIG></B><BR>
+You can specify users that can or can not use this printer/class.</P>");
+        return help_text;
+    }
+    /**
+     * Get help text.
+     * @return string help text
+     */
+    global define string getStateHelp () ``{
+        // Help text 1/3
+        string help_text = _("<P>Printer can not print if it is stopped or rejecting jobs.
+ Select requested state for printer here.</P>");
+	// Help text 2/3
+	help_text = help_text + _("<P><B><BIG>Starting banner:</BIG></B><BR>
+Page that is printed before each job.</P>");
+	//Help text 3/3
+	help_text = help_text + _("<P><B><BIG>Ending banner:</BIG></B><BR>
+Page that is printed after each job.</P>");
+        return help_text;
+    }
+    /**
+     * Get help text.
+     * @return string help text
+     */
+/*    global define string getBannersHelp () ``{
+        // Help text 1/2
+        string help_text = _("<P><B><BIG>Starting banner:</BIG></B><BR>
+Page that is printed before each job.</P>");
+        // Help text 2/2
+        help_text = help_text + _("<P><B><BIG>Ending banner:</BIG></B><BR>
+Page that is printed after each job.</P>");
+        return help_text;
+    }*/
+    /**
+     * Get help text.
+     * @return string help text
+     */
+    global define string getMembersHelp () ``{
+        // Help text 1/1
+        string help_text = _("<P><B><BIG>Members of class:</BIG></B><BR>
+List of printers that belong to class.
+ If you print to class, job is sent to one of its members.</P>");
+        return help_text;
+    }
+    /**
+      * Get help text
+      * @return string help text
+      */
+    global define string getCupsClientHelp () ``{
+	// Help text 1/6
+	string help_text = _("<P>This module allows you to configure your CUPS printing system as client of other network server")
+	// Help text 2/6
+	+ _("<P><B><BIG>Host name:</BIG></B><BR>
+Enter the host name of your CUPS server.</P>")
+	// Help text 3/6
+	+ _("<P>To verify the name, use <B>Test</B>.</P>")
+	// Help text 4/6
+	+ _("<P><B><BIG>Full server installation:</BIG></B><BR>
+Click <B>Configure full server installation</B> if you don't want client installation, but standalone CUPS printing system. <P>")
+	// Help text 5/6
+	+ _("<P><B><BIG>Saving changes:</BIG></B><BR>Press <b>Finish</b> to save changes.</P>")
+        // Help text 6/6
+        + _("<P><B><BIG>Discarding changes:</BIG></B><BR>
+Press <b>Cancel</b> if you do not want to save changes.</P>");
+	return help_text;
+    }
+
+}

@@ -1,0 +1,91 @@
+The database of printers
+========================
+Jan Holesovsky <kendy@suse.cz>
+
+The source of the printer database is in YaST2 cvs as
+(yast2/source)/general/printers.ycp.in. In this file, there is not the final
+database there, because of localization and because of ability of defining
+macros that should make your work simplier.
+
+The main structure of the database:
+----------------------------------
+It is in YCP. The database is a list of Manufacaturer records:
+[ manuf1, manuf2, manuf3 ]
+
+Each manufacturer is a map:
+$[ "name" : _("Manufacturer's name"),      // _() means localization
+   "1284id" : "identification", // <- this is optional
+   "printers: [ printer1, printer2, printer3 ]
+]
+If you know IEEE1284 manufacturer id, write it. It is for the
+autodetection. If you don't, do not write "1284id" line at all.
+
+Each printer is a map:
+$[ "name" : _("Printer's name"),
+   "1284id" : "identif", // <- this is optional
+   "ps2printer" : $[ "params" : [ param1, param2, param3 ],
+                     "options" : [ option1, option2, option3 ] ]
+]
+
+"params" is a list of strings that will be copied to the .upp file. So
+here you can specify options that are necessary for printer's
+functionality but they cannot be modified by user. For example
+"-sDEVICE=???" should be one of the parameters.
+
+option? is a map. It lets user to choose:
+$[ "name" : _("General name, like Quality"),
+   "default" : "-r300x300",
+   "values" : $[ "-r300x300" : _("Name of this option"),
+                 "-r600x600" : _("Great quality") ]
+]
+The selection will be copied to .upp file too.
+
+See the current printers.ycp.in for an example.
+
+CAUTION:
+For each printer, there must be set -r???x???, -sPAPERSIZE=???
+and -sCOLOR=(mono|color). This is necessary for apsfilter.setup.
+See apsfilter.setup --help, section -upp.
+
+Macros
+------
+
+_("string") means, that the "string" will be localized. Don't bother with
+it, just write _() after every "name" and in every "values". Files for
+transtators will be generated.
+
+There are two meanings of $(some identifier):
+ 1) in the header (that ends with line "#HEADER_ENDS") it defines a macro
+ 2) after header's end, it will replace itself with the definition
+
+example:
+--------------------
+// Some comment
+$(anything)
+  // non-comment. Is in the macro
+This is the macro
+
+// Another comment
+$(22)
+twenty-two.
+#HEADER_ENDS
+$(anything)
+$(anything)
+22 is $(22)
+--------------------
+
+This will do :
+--------------------
+  // non-comment, is in the macro
+This is the macro
+
+  // non-comment, is in the macro
+This is the macro
+
+22 is twenty-two.
+--------------------
+
+Simple, but should help.
+
+When you want to see the final database, do "make" in the
+(yast2/source)/po/printers and look at printers.ycp file.

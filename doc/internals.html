@@ -1,0 +1,220 @@
+<html><head><title>
+YaST2 printconf internals
+</title></head>
+<body>
+<h2>Internal structures</h2>
+<p>
+All relevant internal structures are located in module <tt>Printconf</tt>.
+There is a list of all printers <tt>printcap</tt>, default destination
+<tt>default</tt> and dirty flag <tt>dirty</tt>. For printer editation there is
+a map <tt>printer</tt> and <tt>index</tt> of currently edited printer. There
+is a list of deleted printers - <tt>deleted</tt> because at the end we must
+wipe them from system. <tt>autodetected</tt> contain list of autodetected
+printers. List <tt>sys_forbidden_names</tt> contains all the file names
+present in <tt>/etc/lpdfilter/</tt>. These names mustn't be used for queue
+name because directory is created for each queue in <tt>/etc/lpdfilter/</tt>.
+For database handling there are variables <tt>default_database</tt> and
+<tt>current_database</tt>. Their meaning will be explained later.
+</p>
+<h3>Map printer</h3>
+<p>
+<table border="1">
+<tr><td colspan=2><b>Keys and values:</b></td></tr>
+<tr><td> name </td>		<td> Name of the queue</td></tr>
+<tr><td> uri </td>		<td> Printer device uri. See module Printer documentation for the explanation of uri.</td></tr>
+<tr><td> ff </td>		<td> Print formfeed between pages? Default is false</td></tr>
+<tr><td> raw </td>		<td> Skip filtering at all</td></tr>
+<tr><td> ascii </td>		<td> Prints text </td></tr>
+<tr><td> conf </td>		<td> Map of value from <tt>/etc/lpdfilter/$QUEUE/conf</tt> </td></tr>
+<tr><td> vendor </td>		<td> Name of manufacturer in printer db</td></tr>
+<tr><td> device </td>		<td> Name of model in printer db</td></tr>
+<tr><td> config </td>		<td> Name of configuration in printer db</td></tr>
+<tr><td> options </td>		<td> Map of options for filter.</td></tr>
+<tr><td> vendor_ieee </td>	<td> IEEE ident of vendor in printer db</td></tr>
+<tr><td> device_ieee </td>	<td> IEEE ident of printer in printer db</td></tr>
+<tr><td> database </td>		<td> Path to database or nil for default</td></tr>
+<tr><td> unique_key </td>	<td> Unique key of printer by libhd</td></tr>
+<tr><td colspan=2><b>Runtime values:</b> (created in runtime)</td></tr>
+<tr><td> newer_gs_upp </td>	<td> Was upp file changed externaly later then yast2 file?</td></tr>
+<tr><td> saved </td>		<td> Saved upp and conf file and relevant part of printcap for faster saving</td></tr>
+<tr><td> recreate </td>		<td> Some of crutial properties changed. Forget "saved" and recreate queue using lprsetup</td></tr>
+<tr><td> remote_printer </td>	<td> When creating pre-filter queue, remote queue name is here</td></tr>
+<tr><td> remote_host</td>	<td> When creating pre-filter queue, hostname of the remote printer is here. We don't
+				     need to store the name of the forwarding queue sepatately because it is in uri
+				     (prefilter://fwd_queue).</td></tr>
+<tr><td> create_remote_queue</td><td>Create remote queue for this newly created prefilter queue?</td></tr>
+<tr><td> type </td>		<td> "yast2" for queues created by yast2</td></tr>
+</table>
+<ul>
+<li>All queues have the <tt>name</tt>, <tt>uri</tt> and <tt>ff</tt>. They should
+have key <tt>raw</tt> set properly but for forwarding queue it isn't necessary
+because they are always raw. </li>
+<li>Queues that do filtering also have
+<tt>ascii</tt>, <tt>vendor-device-config-options</tt>, <tt>conf</tt>,
+<tt>database</tt>, <tt>vendor_ieee</tt> and <tt>device_ieee</tt>.</li>
+<li>Queues which were created upon autodetected printers have
+<tt>unique_key</tt>.</li>
+</ul>
+</p>
+<h3>Database switching</h3>
+<p>
+Printconf is able to cope with more then one printer databases. If you want to
+make printconf use other database, run it with an argument
+<tt>`db("/usr/lib/YaST2/lib/printerdb/otherdatabasefile")'</tt>. Printer will
+be autodetected and configured using this database. When such a queue will be
+edited, the proper database will be loaded. It is impossible to switch to
+other database when editing queue in SuSE Linux 8.0. If you want to choose
+driver from different database, you must delete the queue and configure it
+again with the database you want.</p>
+<p>
+Internal implementation is simple. Variable <tt>default_database</tt> contains
+filename of the database supplied on the command line (or nil for main suse
+db). Variable <tt>current_database</tt> contains database currently loaded. If
+new queue is created, <tt>current_database</tt> must be the same as
+<tt>default_database</tt>, if queue is edited, <tt>current_database</tt> must
+be the same as the database in <tt>Queue::database</tt>.
+</p>
+<h2>Printconf - The program</h2>
+<h3>Loading</h3>
+<p>
+Reading the settings is done by agent <tt>.etc.printcap</tt>. Sources of
+information:<ol>
+<li>/etc/printcap - all queue names</li>
+<li>/etc/lpdfilter/$QUEUE/yast2 - stored map <tt>printer</tt>.</li>
+<li>/etc/lpdfilter/$QUEUE/conf - ascii printing settings</li>
+</ol>
+See the agent for details, it is simple and easy to understand.
+</p>
+<h3>Detection</h3>
+<p>
+For printer autodetection module <tt>Printer</tt> is used. See function
+<tt>Detect</tt>. Proposal based on detected printer can be found in function
+<tt>Propose</tt>. <font color="red">TODO/FIXME: Proposal needs improvments.
+Now is only able to scan through all printers and make proposal for the new
+ones. It should be able to make proposals "on demand", i.e. function
+<tt>MakeProposal (unique_key)</tt> or <tt>MakeProposal (select (autodetected,
+i, $[]))</tt></font>
+</p>
+<h3>Writting</h3>
+<p>
+When writting printers, deleted printers are wiped from disk at first, which
+means that files <tt>/etc/lpdfilter/$QUEUE</tt> and
+<tt>/var/spool/lpd/$QUEUE</tt> are recursively deleted.
+</p>
+<p>
+Then for each printer following is made:<br>
+Printcap entry is created. If printer was already present on disk and
+re-creation isn't necessary, printcap part and upp file cached in
+<tt>printer["saved"]</tt> will be saved. Otherwise new upp file is created and
+<tt>lprsetup</tt> is used for printer creation. Note that if queue hadn't been
+created by printconf, it is never re-created by <tt>lprsetup</tt>, it is
+always re-created by saving stored settings. Editation of such queues is
+disabled by printconf.<br>
+If printer is created by yast2, map <tt>printer</tt> is saved into
+<tt>/etc/lpdfilter/$QUEUE/yast2</tt>.<br>
+Finally <tt>/etc/lpdfilter/$QUEUE/conf</tt> file is saved. If the printer is
+Epson connected on USB, a wake-up sequence is written into
+<tt>reset_before</tt>.
+</p>
+<p>
+At the end <tt>/etc/printcap</tt> permissions are changed and status of unique
+keys is updated (.probe.status.configured, unique_key --&gt; `yes or `no).<br>
+Default destination is written into
+<tt>.sysconfig.printer.DEFAULT_PRINTER</tt> and service <tt>lpd</tt> is
+enabled.<br>
+Please note that it is necessary to change permission of files although
+lprsetup is doing it. We needn't call lprsetup in all cases. Some printers may
+be written using <tt>printer["saved"]</tt>.
+</p>
+<h3>Writting various types of printers using lprsetup</h3>
+<p>
+<b>Common parameters to lprsetup:</b>
+<ul>
+<li>For all filtering queues <tt>-driver upp
+-own -color</tt> is added.</li>
+<li>For raw queue, <tt>-raw</tt> is added. (such queues do not perform
+filtering)</li>
+<li>For ascii queues, <tt>-ascii</tt>. (such queue must perform filtering)</li>
+<li> If formfeed has to be suppressed, <tt>-sf</tt> is added.</li>
+</ul>
+<b>Parallel</b>, <b>USB</b> and <b>serial</b> printers:<ul><tt>
+lprsetup -lprng -add QUEUE -device DEVICE BAUDRATE
+</tt><br>
+<tt>BAUDRATE</tt> is specified only for serial printers.
+</ul>
+Printing to <b>disk file</b>:<ul><tt>
+lprsetup -lprng -add QUEUE -redirect '/bin/cat &gt; FILE' -device /dev/null
+</tt></ul>
+<b>Prefilter</b> queue:<ul><tt>
+lprsetup -lprng -add QUEUE -device /dev/null -redirect REMOTEQUEUE
+</tt></ul>
+<b>Forwarding</b> queue:<ul><tt>
+lprsetup -lprng -add QUEUE -host HOST -rp REMOTEQ -raw -color
+</tt><br>
+As you can see, forwarding queue is always raw, hence the only common
+parameter that can be added is <tt>-sf</tt>.</ul>
+<b>Novell</b> or <b>Samba</b> printers: <ul><tt>
+lprsetup -lprng -add QUEUE -device /dev/null
+</tt>
+Script <tt>/etc/lpdfiler/QUEUE/redirect</tt> which calls
+<tt>/usr/lib/lpdfilter/redirect/(novell|samba)_print</tt> is created.
+It is possible to specify the redirect script directly in
+<tt>/etc/printcap</tt> in LPRng but printcap must be word-readable and there
+would be a samba or novell password. Hence we must create file
+<tt>redirect</tt> and give it permissions <tt>lp:lp 0750</tt>.<br>
+Content of the file is: <br><tt>
+/usr/lib/lpdfilter/redirect/novell_print -S HOST USER PASS -q \"QUEUE\" -\n
+</tt><br> or <br><tt>
+/usr/lib/lpdfilter/redirect/samba_print //HOST/\"QUEUE\" PASS USER -N -P\n
+</tt>
+</ul>
+<h3>Testing the printer</h3>
+<p>
+In pre-SuSE-linux-8.0 versions, configuration of all queues were saved before
+testing particular printer. It was very slow.
+</p>
+<p>
+Now, when testing printer, we only save the printer being tested (when it is
+prefilter queue we also save relevant forwarding queue). The names of these
+saved queues are <tt>y2test</tt>, or <tt>y2testNUMBER</tt>. The problem may
+occure when tested printer is somehow connected to other printer that hasn't
+been saved yet. The situation: You want to test the prefilter queue that
+forwards jobs to remote queue <tt>printforwarder.suse.de:lp</tt>. But
+<tt>printforwarder.suse.de:lp</tt> forwards the job back to your computer to a
+queue that hasn't been saved yet.
+</p>
+<p>
+So our queue is saved and we may send a test page to it. The test pages and
+the routines for test page preparation are places in
+<tt>yast2-lib-printer</tt>. There is nothing
+interesting about testing ascii printing. A file is just sent to the printer.
+Postscript printing has more issues to remember:<ul>
+<li><b>Hi-color image:</b> the high-color chameleon in the upper-right corner
+of can make problem to some postscript printers. Printers with less memory may
+have problems to process the picture. Hence if there is <tt>-sDEVICE=PS</tt>
+in the upp file, high color chameleon picture is removed from the test page.
+Other printers are processed by ghostscript and we have never encountered any
+problems with it.</li>
+<li><b>Variable texts:</b> if you view <tt>suse_testpg.ps</tt> in ghostscript,
+you can see a few places that will be replaced with real values: Queue name,
+Printer vendor and model, Printer configuration, and Options. These values are
+taken from the database of printers. There is a tight cooperation between
+printconf and the database, printconf asks database for the texts for given
+vendor/model/configuration and also tells the language and encoding. Printer
+database writes a file which is a table of informations that are pasted into
+the test page. This file is used by <tt>lib-printer</tt>. Exact SCR call is
+described in <tt>yast2-agent-printerdb</tt> documentation. <font color="red">
+FIXME: there is an in-line script for patching the test page. It should be
+agent.</font></li>
+<li><b>Localization:</b> test page can be translated to any language in
+principle but currently we support only encodings <tt>ascii</tt>,
+<tt>iso-8859-1/2/15</tt>. If the database is asked for strings in other
+encodings, it will stick back to English and ascii. Note: common texts like
+"YaST2 test page", "Print queue:", ... are also translated in printer
+database.</li>
+<li><b>Extra page:</b> en error occured during the development of 8.0: for
+some printers, an extra empty page was printed after the test page. It wasn't
+postscript error! It was an error in handling form feed.</li>
+</ul>
+</p>
+</body></html>

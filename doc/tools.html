@@ -1,0 +1,72 @@
+<HTML>
+<HEAD>
+   <TITLE>Tools used by printconf</TITLE>
+   <STYLE type="text/css">
+   BODY { 
+     color: black;
+     background: white
+   }
+   </STYLE>
+</HEAD>
+<BODY>
+<TABLE BORDER WIDTH="100%">
+  <TR>
+    <TD>Document</TD>
+    <TD>Tools used by printconf</TD>
+  </TR>
+  <TR>
+    <TD>Author</TD>
+    <TD>Jan Holesovsky, &lt;kendy@suse.cz&gt;, Petr Blahos &lt;pblahos@suse.cz&gt;</TD>
+  </TR>
+  <TR>
+    <TD>Id</TD>
+    <TD>$Id$</TD>
+  </TR>
+</TABLE>
+<h3>reset_parport.c</h3>
+<P>
+Usage: <TT>reset_parport /dev/lp?</TT><br>
+Sends ioctl LPRESET to parallel port.<br>
+Used when stopping printing of test page.
+</P>
+<h3>test_device</h3>
+<p>
+Usage: <TT>test_device Message device timeout</TT> Example: <TT>test_device
+Hello /dev/lp0 10</TT><br>
+Sends message to device. Returns 0 if successfully finished. Returs 1 if timed
+out. Returns 2 if there were problems writing to device.<br>
+Used in <TT>printconf_ask_device.ycp</TT> for testing the device user selected.
+</p>
+<h3>test_remote_lpd</h3>
+<p>
+Usage: <TT>test_remote_lpd host queue timeout</TT> Example: <TT>test_remote_lpd
+printservers.suse.de lp 20</TT><br>
+See  RFC1179 for details.<br>
+Returns 0 if there does not seem to be problem. Returns 1 if operation timed
+out. Returns 2 if queue does not exist or does not accept jobs.<br>
+Used in <TT>printconf_ask_remote.ycp</TT> for testing remote lpd connection user
+selected.
+</p>
+<h3>printconf_backup</h3>
+<P>
+Usage: <TT>printconf_backup</TT><br>
+Used to back up apsfilter settings. Backs up <TT>/etc/printcap</TT>,
+<TT>/etc/gs.upp/*</TT>, <TT>/etc/apsfilterrc*</TT>. If <TT>/etc/printcap</TT>
+does not exist before backup, it is created.<br>
+Used in <TT>printconf_write.ycp</TT>. Files are backed up before new settings
+are written. If testpage is printed, backed up settings are restored. If final
+save is done, backed up files are deleted.
+</P>
+<h3>printconf_parse_printcap</h3>
+<p>
+Usage: <TT>printconf_parse_printcap</TT><br>
+For each printer found in <TT>/etc/printcap</TT> creates map from:
+<TT>/etc/apsfilterrc.y2prn_&lt;printer_name&gt;.y2save</TT>,
+<TT>/etc/gs.upp/y2prn_&lt;printer_name&gt;.y2save</TT>, and part of printcap
+relative to that printer. Creates list from those maps and prints to stdout:<br>
+<TT>result(&lt;list&gt;)</TT><br>
+Used in <TT>printconf.ycp</TT> for reading of saved printers. (Initial fill
+of user_settings).
+</p>
+</body>
+</html>

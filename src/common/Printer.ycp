@@ -1,0 +1,1662 @@
+/**
+ * File:
+ *   modules/Printer.ycp
+ *
+ * Package:
+ *   printer configuration tool
+ *
+ * Summary:
+ *   Module for printer.
+ *
+ * Authors:
+ *  Petr Blahos <pblahos@suse.cz>
+ *  Jiri Srain <jsrain@suse.cz>
+ *
+ * $Id$
+ *
+ * Well we all know what modules are for.
+ */
+
+{
+    module "Printer";
+    import "Printerlib";
+    import "Progress";
+    import "Runlevel";
+    import "Report";
+    import "Summary";
+    import "Mode";
+    include "printer/misc.ycp";
+//    include "printer/misc-lprng.ycp";
+//    include "printer/misc-cups.ycp";
+
+    textdomain "printer";
+
+    //////////
+    ////////// Module data
+    //////////
+    /**
+     * Type of cups installation.
+     * -1: unknown
+     * 0:  server
+     * !0: client
+     */  // FIXME: ambigious definition. Changing it to symbols would be the best idea
+    global integer cups_installation = -1;
+    /**
+     * If this is only cups client station,
+     * server host name is here.
+     */
+    global string server_hostname = "";
+    /**
+     * Database passed on command line (or nil
+     * in case flobal db should be used)
+     */
+    string default_database = nil;
+
+    /**
+     * Database currently loaded.
+     */
+    global string current_database = nil;
+
+    /**
+     * List of print queues. See description of map printer
+     * for members structure.
+     */
+    global list printcap = [];
+    /**
+     * Default printer
+     */
+    global string default = "";
+    /**
+     * Were settings changed?
+     */
+    global boolean dirty = false;
+    /**
+      * Has to be saved all?
+      */
+    global boolean save_all = false;
+    /**
+      * Were settings read?
+      */
+    global boolean read_done = false;
+    /**
+     * Print queue we are currently working with.
+     * @example
+     * $[
+     * "name" : string, //queue name
+     * "uri" : string, //printer uri
+     * "unique_key" : string,  // from libhd  -|
+     * "vendor_ieee" : string, // detected id -|- these are only present for autodetected printers
+     * "device_ieee" : string, // detected id -|
+     * "vendor" : string, // vendor from printer db -|
+     * "device" : string, // device from printer db -|
+     * "config" : string, // config from printer db -|-only for non-raw queues
+     * "options": map,   // options from printer db -|
+     * "ff" : boolean, // print formfeed between pages, present only for queues with formfeed
+     * "raw": boolean, // raw queue, present only for raw queues
+     * "database" : string, // filename of the database used for this printer configuration. nil for main db.
+     * ]
+     */
+    global map printer = $[];
+    /**
+      * Type of printer map, 1 == printer, 0 == class
+      */
+    global integer type = 1;
+    /**
+     * Index of printer we are working with.
+     */
+    global integer index = 0;
+    /**
+     * List of printers that were deleted during this configuration
+     * session.
+     */
+    global list deleted = [];
+    /**
+     * List of autodetected printers. For documentation see
+     * yast2-lib-printer.
+     */
+    global list autodetected = [];
+
+    /**
+     * Printer's name mustn't be the same as a name of one of the files
+     * in the /etc/lpdfilter directory. These are the files. If it is nil,
+     * the list hasn't been initialized yet. Use function
+     * getSystemForbiddenNames for accessing this list.
+     */
+    list sys_forbidden_names = nil;
+
+    /**
+     * List of unique keys of the printers read at the beginning.
+     * We need this because when writting, we must call
+     * Write (.probe.status.configured, "unique_key", `yes | `no)
+     * It is map of $[ unique_key : true ]. When saving, unique keys that
+     * are still configured are replaced by $[ unique_key : false ]
+     */
+    map original_unique_keys = $[];
+
+    /**
+     * Should we warn before saving settings?
+     * (false for proposal and auto modes)
+     */
+    global boolean warn_finish = true;
+
+    /**
+      * Currently used spooler, cups or lprng
+      */
+    global string spooler = "unknown";
+
+    /**
+      * Type of start, true if autodetection
+      */
+    global boolean detection = false;
+
+    /**
+     * Get list of names that are forbidden because they are used as
+     * filenames in /etc/lpdfilter
+     * @return list of strings -- these strings are not allowed as queue
+     * names.
+     */
+    global define list getSystemForbiddenNames () ``{
+	if (nil == sys_forbidden_names)
+	{
+	    if (0 != SCR::Read (.target.bash, "test -d /etc/lpdfilter"))
+		sys_forbidden_names = [];
+	    else
+		sys_forbidden_names = SCR::Read (.etc.printcap.sysnames);
+	    if (nil == sys_forbidden_names)
+		sys_forbidden_names = [];
+	}
+	return sys_forbidden_names;
+    }
+    /**
+     * Autodetect printers.
+     */
+    global define void Detect () ``{
+	autodetected = Printerlib::Detect (false);
+	autodetected = maplist (`i, autodetected, ``{
+	    i = add (i, "uri", lookup (i, "bus", "parallel") + ":" + lookup (i, "dev_name", ""));
+	    i = add (i, "info", lookup (i, "vendor", "") + " " + lookup (i, "device", ""));
+            i = add (i, "location", Printerlib::getUriNiceName (lookup (i, "uri", "")));
+	    return i;
+	});
+    }
+
+    /**
+     * Select printer to edit or something.
+     * @param i printer to select. Pass nil if you do not want to select
+     *		printer, e.g. if printer is going to be added.
+     */
+    global define void selectPrinter (integer i) ``{
+	if (nil == i || i < 0 || i >= size (printcap))
+	{
+	    index = -1;
+	    printer = $[];
+	    return ;
+	}
+	index = i;
+	printer = select (printcap, index, $[]);
+    }
+    /**
+     * Let print queue named name be currently edited.
+     * If printer is not found, then queue will be $[] and index -1
+     * @param name name of the queue to find
+     */
+    global define void selectPrinterByName (string name) ``{
+	index = -1;
+	integer j = -1;
+	foreach (`i, printcap, ``{
+	    j = j + 1;
+	    if (name == lookup (i, "name", ""))
+	    {
+		index = j;
+	    }
+	});
+	printer = select (printcap, index, $[]);
+    }
+
+    /**
+     * Delete currently selected printer.
+     */
+    global define void deletePrinter () ``{
+	if (index < 0 || index >= size (printcap))
+	    return ;
+	printer = select (printcap, index, $[]);
+	if (nil == printer)
+	    printer = $[];
+	string printer_type = lookup (printer, "type", "yast2") == "lprng" ? "printer" : lookup (printer, "uri", "class") == "class" ? "class" : "printer";
+	addToDeleted (lookup (printer, "name", ""), printer_type);
+	printcap = remove (printcap, index);
+	if (index >= size (printcap))
+	    index = index - 1;
+	dirty = true;
+    }
+    /**
+     * Set current printer as default printer
+     */
+    global define void setDefaultPrinter () ``{
+	if (index < 0 || index >= size (printcap))
+	    return ;
+	default = lookup (printer, "name", "");
+	dirty = true;
+    }
+    /**
+     * Return list(set) of names that can not be used as printer name. There can be
+     * same name for more printers in /etc/printcap. It was impossible to add printer,
+     * because all names were invalid because
+     * size (union (forbidden_names, new_names)) != size (forbidden_names) + size (new_names).
+     * @return list set of already used names
+     */
+    global define list getForbiddenNames() ``{
+	list l = toset (add (flatten (maplist (`entry, printcap, ``(add (lookup (entry, "names", []), lookup (entry, "name", ""))))), "all"));
+	return maplist (`i, l, ``(tolower (i)));
+    }
+    /**
+      * Assign states to a printer
+      * @param map printer
+      * @return map printer with assigned states
+      */
+    define map assignStates (map p, boolean changed) ``{
+//	y2error ("Name: %1", lookup (p, "name", ""));
+	list spoolers = ["cups", "lprng"];
+	string uri = lookup (p, "uri", "");
+//	y2error ("uri: %1", uri);
+	string q_type = Printerlib::getUriType (uri);
+//	y2error ("Q_Type: %1", q_type);
+	string config = lookup (p, "config", "");
+	map info = config == "" ? $[] : SCR::Read (.printerdb.configinfo, config);
+	foreach (`s, spoolers, ``{
+	    string key = s + "-state";
+	    boolean s_spool = testSupportedQueueBySpooler (q_type, s);
+//	y2error ("s_spool: %1", s_spool);
+	    boolean s_raw = s != "cups" || ! lookup (p, "raw", false);
+//	y2error ("s_raw: %1", s_raw);
+	    boolean s_is_ppd = s == "cups" && lookup (p, "ownppd", "") != "";
+//	y2error ("s_is_ppd: %1", s_is_ppd);
+	    boolean s_conf = lookup (info, s, false);
+//	y2error ("s_conf: %1", s_conf);
+	    boolean s_is_raw = lookup (p, "raw", false) && s != "cups";
+//	y2error ("s_is_raw: %1", s_is_raw);
+	    boolean s_pri = s_is_raw || (! lookup (p, "raw", false) && (s_is_ppd || (lookup (p, "ownppd", "") == "" && s_conf)));
+//	y2error ("s_pri: %1", s_pri);
+	    boolean sup = s_spool && s_pri;
+	    p = add (p, key, sup ? (changed ? "changed" : (lookup (p, key, "changed") == "void" ? "changed" : lookup (p, key, "changed"))) : "void");
+	});
+	return p;
+    }
+    /**
+      * Gets state of printer for choosen spooler
+      * @param map printer
+      * @param string spooler
+      * @return string state
+      */
+    global define string getPrinterState (map p, string spooler) ``{
+	string s = spooler + "-state";
+	return lookup (p, s, "changed");
+    }
+    /**
+      * Adds a queue to the deleted list
+      * @param string name
+      * @param string type "printer" or "class"
+      */
+    global define void addToDeleted (string name, string printer_type) ``{
+	deleted = add (deleted, $[ "name" : name, "type" : printer_type, "states" : $["cups-state" : "changed", "lprng-state" : "changed"]]);
+    }
+    /**
+     * Save currently edited printer.
+     */
+    global define void storePrinter () ``{
+	printer = assignStates (printer, true);
+	if (-1 == index)
+	{
+	    if (lookup (printer, "create_remote_queue", false))
+	    {
+		printer = add (printer, "create_remote_queue", false);
+		map r_printer = $[
+		    "name" : Printerlib::getUriRemoteQueue (lookup (printer, "uri", "")),
+		    "uri" : "lpd://" + lookup (printer, "remote_host", "") + "/" + lookup (printer, "remote_printer", ""),
+		];
+		r_printer = assignStates (r_printer, true);
+		printcap = add (printcap, r_printer);
+	    }
+	    printcap = add (printcap, printer);
+	    index = size (printcap) - 1;
+	}
+	else
+	{
+	    // we do not need care about creating new remote queue, it is
+	    // impossible in this situation
+	    integer c = -1;
+	    printcap = maplist (`i, printcap, ``{
+		    c = c + 1;
+		    if (c == index)
+		    {
+			if (lookup (printer, "uri", "") != lookup (i, "uri", "") ||
+			    lookup (printer, "name","") != lookup (i, "name","") ||
+			    lookup (printer, "ff", false) != lookup (i, "ff", false) ||
+			    lookup (printer, "ascii", false) != lookup (i, "ascii", false))
+			{
+			    printer = add (printer, "recreate", true);
+			}
+			return printer;
+		    }
+		    return i;
+	    });
+	}
+	// fix default printer
+	if ("" == default || nil == default)
+	{
+	    default = lookup (printer, "name", "");
+	}
+	else
+	{
+	    boolean found = false;
+	    foreach (`i, printcap, ``{
+		    if (!found && lookup (i, "name", "") == default)
+			found = true;
+	    });
+	    if (!found)
+		default = lookup (printer, "name", "");
+	}
+	dirty = true;
+    }
+    /**
+     * Return list of forwarding queues
+     * @return list names of fwd queues.
+     */
+    global define list ForwardingQueues () ``{
+	list q = [];
+	foreach (`i, printcap, ``{
+	    if ("lpd" == Printerlib::getUriType (lookup (i, "uri", "")))
+		q = add (q, lookup (i, "name", ""));
+	});
+	return q;
+    }
+    /**
+     * Export module settings to map.
+     * @return Map of module settings.
+     */
+    global define map Export () ``{
+	return $[ "printcap" : printcap, "default"  : default, ];
+    }
+    /**
+     * Import module settings.
+     * @param settings module settings
+     */
+    global define void Import (map settings) ``{
+	dirty = true;
+	default = lookup (settings, "default", "");
+	printcap = lookup (settings, "printcap", []);
+	index = -1;
+	deleted = [];
+    }
+    /**
+     * Reset all settings...
+     */
+    global define void Reset () ``{
+	dirty = false;
+	default = "";
+	printcap = [];
+	index = -1;
+	deleted = [];
+	autodetected = [];
+    }
+    /** read printers from /etc/printcap
+     * @return list of printers
+     */
+    global define list printcapRead () ``{
+	SCR::Execute (.target.bash, "test -d /etc/lpdfilter || mkdir /etc/lpdfilter");
+	list ret = SCR::Read (.etc.printcap);
+	default = SCR::Read (.sysconfig.printer.DEFAULT_PRINTER);
+	if (nil == ret)
+	    return [];
+	return ret;
+    }
+    /**
+     * Read client.conf host name to server_hostname
+     */
+    define void loadClientHostName () ``{
+        // grep /etc/cups/client.conf for ServerName
+        server_hostname = "";
+        map e = SCR::Execute (.target.bash_output, "/usr/bin/awk '/^ServerName/ { print $2 }' /etc/cups/client.conf");
+        if (0 == lookup (e, "exit", 1))
+        {
+            server_hostname = select (splitstring (lookup (e, "stdout", ""), "\n"), 0, "");
+            if (nil == server_hostname || "" == server_hostname ||
+                "localhost" == server_hostname || "127.0.0.1" == server_hostname)
+                server_hostname = "";
+        }
+    }
+    /**
+     * Save client.conf host name host name
+     */
+    global define void saveClientHostName () ``{
+        SCR::Execute (.target.bash,
+                      sformat ("/usr/bin/awk '
+BEGIN { used = 0 }
+/^ServerName/ { print \"ServerName %1\"; used = 1; next }
+{ print $0; }
+END { if (!used) print \"ServerName %1\" }
+' /etc/cups/client.conf > /etc/cups/client.conf.yast2; mv /etc/cups/client.conf.yast2 /etc/cups/client.conf", server_hostname));
+	SCR::Write (.sysconfig.printer.CUPS_SERVER, server_hostname);
+	SCR::Write (.sysconfig.printer, nil);
+	SCR::Execute (.target.bash, "/sbin/SuSEconfig --module profiles");
+    }
+    /**
+     * If only client is installed or remote server to use is set,
+     * returns 1, if this is real server installation, returns 0
+     * Also sets server_hostname and cups_installation
+     * @return integer client or server?
+     */
+    global define integer cupsInstallationType () ``{
+        if (-1 != cups_installation)
+            return cups_installation;
+
+        if (SCR::Read (.targetpkg.installed, "cups-client") &&
+            !SCR::Read (.targetpkg.installed, "cups"))
+        {
+            loadClientHostName ();
+            cups_installation = 1;
+	    y2error ("Installation type: client");
+            return 1;
+        }
+        loadClientHostName ();
+        cups_installation = (("" != server_hostname) ? 1 : 0);
+	y2error ("Installation type: %1", cups_installation);
+        return cups_installation;
+    }
+    /**
+     * Read the CUPS settings.
+     * @return list of printers
+     */
+    global define list cupsRead () ``{
+        if (0 == cupsInstallationType ())
+        {
+            list ret = SCR::Read (.cups.printers);
+	y2error ("CUPS: %1", ret);
+            list classes = SCR::Read (.cups.classes);
+	    if (nil == ret) ret = [];
+	    if (nil == classes)  classes = [];
+	    classes = maplist (`e, classes, ``(add (e, "uri", "class")));
+	    ret = ret + classes;
+	    default = SCR::Read (.cups.default_dest);
+	    return ret;
+        }
+        return [];
+    }
+    /**
+      * Sorts entries of printcap
+      */
+    global define void sortPrinters () ``{
+	list yast = filter (`e, printcap, ``(lookup (e, "type", "yast2") == "yast2"));
+	list non_yast = filter (`e, printcap, ``(lookup (e, "type", "yast2") != "yast2"));
+	list classes = filter (`e, yast, ``(lookup (e, "uri", "class") == "class"));
+	list printers = filter (`e, yast, ``(lookup (e, "uri", "class") != "class"));
+	map sorted = $[];
+	list locals = filter (`e, printers, ``(contains (["parallel", "serial", "irda", "file", "usb", "pipe"], Printerlib::getUriType (lookup (e, "uri", "")))));
+	list remote = filter (`e, printers, ``(! contains (["parallel", "serial", "irda", "file", "usb", "pipe"], Printerlib::getUriType (lookup (e, "uri", "")))));
+
+//	locals = sort (`x, `y, locals, ``(lookup (x, "uri", "") <= lookup (y, "uri", "")));
+
+	foreach (`e, locals, ``{
+//	    string suffix = filterchars (lookup (e, "name", ""), "1234567890");
+	    string uri = lookup (e, "uri", "");
+	    list s = lookup (sorted, uri, []);
+	    s = add (s, e);
+	    sorted = add (sorted, uri, s);
+	});
+	locals = [];
+	foreach (`k, `v, sorted, ``{locals = merge (locals, v);});
+	sorted = $[];
+	foreach (`e, remote, ``{
+//	    string suffix = filterchars (lookup (e, "name", ""), "1234567890");
+	    string uri = lookup (e, "uri", "");
+	    list s = lookup (sorted, uri, []);
+	    s = add (s, e);
+	    sorted = add (sorted, uri, s);
+	});
+        remote = [];
+        foreach (`k, `v, sorted, ``{remote = merge (remote, v);});
+
+	printcap = merge (locals, remote);
+	classes = sort (`x, `y, classes, ``(lookup (x, "name", "") <= lookup (y, "name", "")));
+	printcap = merge (printcap, classes);
+	non_yast = sort (`x, `y, non_yast, ``(lookup (x, "name", "") <= lookup (y, "name", "")));
+	printcap = merge (printcap, non_yast);
+    }
+    /**
+     * Read settings from disk or where.
+     * @return boolean success?
+     */
+    global define boolean Read () ``{
+	list tmplist = [];
+	list tmpdellist = [];
+	boolean ret = true;
+	list nonyast = [];
+	string old_default = default;
+
+	if (spooler == "cups")
+        {
+            nonyast = cupsRead();
+        }
+        else
+        {
+            nonyast = printcapRead();
+        }
+	if (save_all)
+	{
+	    printcap = filter (`e, printcap, ``(lookup (e, "type", "yast2") == "yast2" && lookup (e, "uri", "class") != "class"));
+	    foreach (`e, printcap, ``{
+		string name = lookup (e, "name", "");
+		if ("" != name)
+		    tmplist = add (tmplist, name);
+	    });
+	    foreach (`e, deleted, ``{
+		string name = lookup (e, "name", "");
+		if ("" != name)
+		    tmpdellist = add (tmpdellist, name);
+	    });
+	}
+	else
+	{
+	    printcap = [];
+	    SCR::Execute (.target.bash, "touch /var/lib/YaST2/printers");
+	    map state = SCR::Read (.target.ycp, "/var/lib/YaST2/printers");
+	    printcap = lookup (state, "printers", []);
+	    deleted = lookup (state, "deleted", []);
+	    if (nil == printcap)
+		printcap = [];
+	    printcap = maplist (`e, printcap, ``(
+		add (e, "type", "yast2")
+	    ));
+	    foreach (`e, printcap, ``{
+		string name = lookup (e, "name", "");
+		if ("" != name)
+		    tmplist = add (tmplist, name);
+	    });
+	    foreach (`e, deleted, ``{
+		string name = lookup (e, "name", "");
+		if ("" != name)
+		    tmpdellist = add (tmpdellist, name);
+	    });
+	}
+	printcap = maplist (`e, printcap, ``{return assignStates (e, false);});
+	if (old_default != "" && old_default != nil)
+	    default = old_default;
+        foreach (`e, nonyast, ``{
+            string name = lookup (e, "name", "");
+	    if (! contains (tmpdellist, name))
+	    {
+                if (! contains (tmplist, name))
+                {
+		    string uri = lookup (e, "uri", "");
+		    e = add (e, "type", uri == "class" ? "yast2" : spooler);
+                    printcap = add (printcap, e);
+                }
+	        else if (spooler == "cups")
+	        {
+		    printcap = maplist (`ye, printcap, ``(
+		        lookup (ye, "name", "") == name
+		        ?
+			    lookup (e, "ppd", "") == ""
+			    ?
+			        ye
+			    :
+			        add (ye, "ppd", lookup (e, "ppd", ""))
+		        :
+			    ye
+
+		    ));
+	        }
+	    }
+        });
+        original_unique_keys = $[];
+        foreach (`i, printcap, ``{
+            if (haskey (i, "unique_key"))
+                original_unique_keys = add (original_unique_keys, lookup (i, "unique_key", ""), true);
+        });
+	read_done = true;
+        return ret;
+     }
+    /**
+      * deletes printers
+      * @param list of strings representing names
+      * @return success state
+      */
+    global define boolean deletePrinters (list l) ``{
+	if (size (l) > 0)
+	{
+	    string command = "";
+	    foreach (`printer, l, ``{
+		string name = lookup (printer, "name", "");
+		string p_type = lookup (printer, "type", "class");
+		map states = lookup (printer, "states", $[]);
+		if ("" != name)
+		{
+		    if (spooler == "cups")
+		    {
+			if (lookup (states, "cups-state", "changed") != "commited")
+			{
+			    if (p_type == "class")
+			    {
+				SCR::Write (.cups.classes.remove, name);
+			    }
+			    else
+			    {
+				SCR::Write (.cups.printers.remove, name);
+			    }
+			}
+		    }
+		    else
+		    {
+			if (p_type != "class" && lookup (states, "lprng-state", "changed") != "commited")
+			{
+			    command = command +
+				sformat ("/bin/rm -r /etc/lpdfilter/%1 /var/spool/lpd/%1; \n", name);
+			    callLprsetup (sformat ("/usr/lib/lpdfilter/bin/lprsetup -lprng -delete %1", name));
+			}
+		    }
+		}
+	    });
+	    if (command != "")
+		SCR::Execute (.target.bash, command);
+	}
+	return true;
+    }
+
+    /**
+     * Write settings.
+     * @return success state
+     */
+    global define boolean Write () ``{
+	if (Printer::spooler == "cups")
+	{
+	    if (0 == cupsInstallationType ())
+		Printer::server_hostname = "";
+	    saveClientHostName ();
+            if (0 != cupsInstallationType ())
+	    {
+		boolean delete = SCR::Read (.targetpkg.installed, "cups") && UI::YesNoPopup (_("Some packages you have installed are not needed 
+for CUPS client-only installation. Do you want
+to remove them?"));
+		if (delete)
+		{
+		    Printerlib::stopServices();
+		    list del = ["cups", "cups-drivers", "cups-drivers-stp", "cups-drivers-de", "cups-drivrers-cs"];
+		    del = filter (`e, del, ``(SCR::Read (.targetpkg.installed, e) == true));
+		    map script = $["userInput" : false, "install" : "", "delete" : del];
+		    string fn = SCR::Read (.target.tmpdir);
+		    fn = fn + "/script.sw_single";
+		    SCR::Write (.target.ycp, fn, script);
+		    CallFunction (`sw_single (fn));
+		}
+		return true;
+	    }
+	}
+	// caption of progress
+	Progress::New (_("Saving settings of printers. Please wait..."),
+		       // progress stages, short texts
+		       " ", size (printcap) + 3,
+		       [ _("Delete old printers"), _("Save printers"), _("Save system settings") ],
+		       [ _("Deleting old printers..."), _("Saving printer..."), _("Saving system settings...")],
+		       "");
+	Progress::NextStage ();
+
+	deletePrinters (deleted);
+	deleted = maplist (`e, deleted, ``{
+	    map states = lookup (e, "states", $[]);
+	    if (spooler == "cups")
+	    {
+		states = add (states, "cups-state", "commited");
+	    }
+	    else if (spooler == "lprng")
+	    {
+		states = add (states, "lprng-state", "commited");
+	    }
+	    e = add (e, "states", states);
+	    return e;
+	});
+
+	Progress::NextStage ();
+	list unique_keys = [];
+	//
+	// We are not sure if default printer exists, someone could have deleted it.
+	// If default printer does not exist, set default printer to "".
+	//
+	boolean default_printer_found = false;
+	printcap = maplist (`entry, printcap, ``{
+	    string uri = lookup (entry, "uri", "");
+	    string name = lookup (entry, "name", "");
+	    Progress::Title (sformat (_("Saving printer %1"), name));
+	    if (name == "")
+	    {
+		Report::Error (sformat (_("Attempting to save printer with no name. Skipping: %1"), ent));
+		return;
+	    }
+	    if (name == default)
+		default_printer_found = true;
+
+	    string unique_key = lookup (entry,"unique_key", nil);
+	    if (nil != unique_key)
+	    {
+		unique_keys = add (unique_keys, unique_key);
+		original_unique_keys = add (original_unique_keys, unique_key, false);
+	    }
+	    entry = fixPrinter(entry);
+	    if (! Printer::changeDb (lookup (entry, "database", nil)))
+	    {
+		y2error ("Error selecting database, using default");
+		continue;
+	    }
+	    if (spooler == "cups")
+	    {
+		if ((lookup (entry, "cups-state", "changed") == "changed" || Printer::save_all) && (lookup (entry, "type", "yast2") == "yast2"))
+		    if (writeCupsPrinter (entry))
+			entry = add (entry, "cups-state", "commited");
+	    }
+	    else if (spooler == "lprng")
+	    {
+		if ((lookup (entry, "lprng-state", "changed") == "changed" || Printer::save_all) && (lookup (entry, "type", "yast2") == "yast2"))
+		    if (writeLpdPrinter (entry))
+			entry = add (entry, "lprng-state", "commited");
+	    }
+	    Progress::NextStep ();
+	    return entry;
+	});
+	Progress::NextStage ();
+	saveTheConfiguration();
+	if (spooler == "cups")
+	{
+	}
+	else
+	{
+	    // set 0644 mode to /etc/printcap (file does not exist if there is no printer)
+	    if (-1 != SCR::Read(.target.size, "/etc/printcap"))
+		SCR::Execute (.target.bash, "/bin/chmod 0644 /etc/printcap");
+	}
+
+	// Save unique_keys for autedetected printers to libhd
+	foreach (`k, `v, original_unique_keys, ``{
+	    SCR::Write (.probe.status.configured, k, v ? `no : `yes);
+	});
+	if (spooler == "cups")
+	{
+	    SCR::Write (.sysconfig.printer.DEFAULT_PRINTER, default_printer_found ? default : "");
+	    SCR::Write (.sysconfig.printer, nil);
+	    SCR::Write (.cups.default_dest, default_printer_found ? default : "");
+	    Runlevel::ServiceAdjust ("cups", "enable");
+	}
+	else
+	{
+	    SCR::Write (.sysconfig.printer.DEFAULT_PRINTER, default_printer_found ? default : "");
+	    SCR::Write (.sysconfig.printer, nil);
+
+	    Runlevel::ServiceAdjust ("lpd", "enable");
+	}
+	    Progress::NextStage ();
+	return true;
+    }
+    /**
+     * Write one printer.
+     * Only for LPRng
+     * @param entry printer to write.
+     * @return boolean success?
+     */
+    global define boolean writeLpdPrinter (map entry) ``{
+	map saved = lookup (entry, "saved", $[]);
+	string printcap_part =     lookup (saved, "printcap_part", "");
+	map conf = lookup (entry, "conf", $[]);
+	string upp_fname = lookup (saved, "upp_fname", "");
+	string upp_orig =  lookup (saved, "upp", "");
+	string uri = lookup (entry, "uri", "");
+	string name = lookup (entry, "name", "");
+	string uri_type = Printerlib::getUriType (uri);
+
+	if (lookup (entry, "type", "yast2") != "yast2")
+            return false;
+	if (lookup (entry, "uri", "class") == "class")
+	{
+	    UI::MessagePopup (_("LPRng doesn't support CUPS classes.\n Class %1 will not be saved"), name);
+	    return false;
+	}
+	if ("void" == lookup (entry, "lprng-state", "changed"))
+//	if (! testSupportedQueue (uri_type))
+	{
+	    UI::MessagePopup (_("Queue %1 cannot be saved, because\n selected spooler doesn't support it"), name);
+            return false;
+	}
+
+	//
+	// new or renamed printer?
+	//
+	if (printcap_part != "" && !lookup (entry, "recreate", false))
+	{
+	    // We have a part of the printcap from previous configuration...
+	    if (lookup (entry, "type", "yast2") == "yast2" && Printerlib::getUriType (uri) != "lpd")
+	    {
+		if ("" != upp_fname && "" != upp_orig)
+		{
+		    // We have saved upp file. Save it.
+		    // Why do we save it when it was already saved? Because printer could be renamed.
+		    SCR::Write (.target.string, upp_fname, upp_orig);
+		}
+		else
+		{
+		    // upp file changed (or did not exist). Save it again.
+		    if (!createUppFile (entry))
+		    {
+			UI::MessagePopup (_("Error occured while saving queue %1"), name);
+			return false;
+		    }
+		}
+	    }
+	    SCR::Execute (.target.bash, sformat ("/bin/echo -n '%1' >> /etc/printcap", printcap_part));
+	}
+	else
+	{
+	    // New entry - we must do everything
+	    if (lookup (entry, "type", "yast2") == "yast2")
+	    {
+		SCR::Execute (.target.mkdir, "/etc/lpdfilter/" + name);
+		if (Printerlib::getUriType (uri) == "lpd")
+		{
+		    if (!createRemoteEntry (entry))
+		    {
+			UI::MessagePopup (_("Error occured while saving queue %1"), name);
+			return false;
+		    }
+		}
+		else
+		{
+		    if (!createEntry (entry))
+		    {
+			UI::MessagePopup (_("Error occured while saving queue %1"), name);
+			return false;
+		    }
+		    if ("" != upp_orig)
+		    {
+			// create rc file name
+			upp_fname = sformat ("/etc/lpdfilter/%1/upp", name);
+			// We have saved upp file. Save it.
+			// Why do we save it when it was already saved? Because printer could be renamed.
+			SCR::Write (.target.string, upp_fname, upp_orig);
+		    }
+		    else
+		    {
+			// upp file changed (or did not exist). Save it again.
+			if (!createUppFile (entry))
+			{
+			    UI::MessagePopup (_("Error occured while saving queue %1"), name);
+			    return false;
+			}
+		    }
+		}
+	    }
+	}
+
+	// conf file...
+	if (lookup (entry, "type", "yast2") == "yast2" && Printerlib::getUriType (uri) != "lpd" || lookup (entry, "type", "") == "aps")
+	{
+	    // create rc file name
+	    string conf_fname = sformat ("/etc/lpdfilter/%1/conf", name);
+	    // Is it Epson Stylus on USB? Add magic sequence to be printed before each job.
+	    if ("usb" == Printerlib::getUriType (uri) && issubstring (tolower (lookup (entry,"vendor","")),"epson"))
+	    {
+		conf = add (conf, "reset_before",
+				  "\\x0\\x0\\x0\\x1b\\x01\\x40\\x45\\x4a\\x4c\\x20\\x31\\x32\\x38\\x34\\x2e\\x34\\x0a\\x40\\x45\\x4a\\x4c\\x20\\x20\\x20\\x20\\x20\\x0a");
+	    }
+	    writeConf (conf_fname, conf);
+	}
+	return true;
+    }
+
+    /**
+      * Remove from deleted printers list printers which are deleted from both spoolers and which were recreated
+      */
+    define void cleanDeletedPrinters () ``{
+	//remove currently installed first
+//	list installed = maplist (`e, printcap, ``{return lookup (e, "name", "");});
+//	installed = filter (`e, installed, ``(e != "" && e != nil));
+//	deleted = filter (`e, deleted, ``(! contains (installed, lookup (e, "name", ""))));
+	//remove deleted from all spoolers from list
+	deleted = filter (`e, deleted, ``{
+	    map states = lookup (e, "states", $[]);
+	    boolean res = false;
+	    foreach (`k, `v, states, ``{
+		if (v != "commited")
+		    res = true;
+	    });
+	    return res;
+	});
+    }
+    /**
+     * Write /var/lib/yast2/printers/<name>
+     * @param entry  Entry for printer to save
+     * @return boolean true if successful
+     */
+
+    define boolean saveTheConfiguration () ``{
+	list l = filter (`e, printcap, ``(lookup (e, "type", "yast2") == "yast2"));
+	l = maplist (`e, l, ``(filter (`k, `v, e, ``(k != "changed" && k != "ppd"))));
+	cleanDeletedPrinters ();
+	map save = $["printers" : l, "deleted" : deleted];
+	if (! SCR::Write (.target.ycp, "/var/lib/YaST2/printers", save))
+	{
+	    Report::Error (sformat (_("Cannot write %1."), "/var/lib/YaST2/printers"));
+	    return false;
+	}
+	// It can contain Samba/Novell passwords...
+	SCR::Execute (.target.bash, sformat ("/bin/chmod 600 %1", "/var/lib/YaST2/printers"));
+	return true;
+    }
+
+    /**
+      * Write configuration to CUPS
+      * @param list of entries
+      * @return boolean true if successfull
+      */
+    global define boolean writeCupsPrinter (map entry) ``{
+	string name = lookup (entry, "name", "");
+	if (lookup (entry, "type", "yast2") != "yast2")
+            return false;
+	if (lookup (entry, "uri", "class") == "class")
+	{
+	    return SCR::Write (.cups.classes.add, entry);
+	}
+	string uri = lookup (entry, "uri", "");
+        string uri_type = Printerlib::getUriType (uri);
+        if ("void" == lookup (entry, "cups-state", "changed"))
+	{
+	    UI::MessagePopup (_("Queue %1 cannot be saved, because\n selected spooler doesn't support it"), name);
+            return false;
+	}
+
+	boolean raw = false;//true;
+	string ppdfile = SCR::Write (add (.printerdb.ppd, lookup (entry, "config", "")), lookup (entry, "options", $[]));
+	string ppdfilename = lookup (entry, "ppd", "");
+	string ownppd = lookup (entry, "ownppd", "");
+	if (raw)
+	{
+	    ppdfilename = "";
+	    ownppd = "";
+	}
+	else if (ppdfilename == "" && ownppd == "")
+	{
+	    ppdfilename = SCR::Read (.target.tmpdir);
+	    ppdfilename = ppdfilename + "/ppdfile";
+	}
+
+	if (Printerlib::getUriType (uri) == "usb")
+	{
+	    string dev_name = Printerlib::getCupsUsbDevice (lookup (entry, "vendor_id",0), lookup (entry, "device_id",0), "");
+	    if (dev_name != "")
+		entry = add (entry, "uri", "usb:" + dev_name);
+	}
+	else if (Printerlib::getUriType (uri) == "serial")
+	{
+	    string dev_name = Printerlib::getUriDevice (uri);
+	    integer baudrate = Printerlib::getUriBaudrate (uri);
+	    string ty = Printerlib::getUriValue (uri, "ty");
+	    string br_string = baudrate == 0 ? "" : sformat ("baud=%1", baudrate);
+	    string ty_string = filterchars (ty, "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890-") == "" ? "" : sformat ("%1", ty);
+	    string uri = "serial:" + dev_name;
+	    if (ty_string != "")
+	    {
+		if (br_string != "")
+		    uri = uri + "?" + br_string + "+" + ty_string;
+		else
+		    uri = uri + "?" + ty_string;
+	    }
+	    else
+	    {
+		if (br_string != "")
+		    uri = uri + "?" + br_string;
+	    }
+	    entry = add (entry, "uri", uri);
+	}
+	else if (Printerlib::getUriType (uri) == "irda")
+	{
+	    string dev_name = Printerlib::getUriDevice (uri);
+	    if (dev_name != "")
+		entry = add (entry, "uri", "parallel:" + dev_name);
+	}
+	else if (Printerlib::getUriType (uri) == "samba")
+        {
+	    entry = add (entry, "uri", "smb" + substring (uri, 5));
+        }
+	else if (Printerlib::getUriType (uri) == "filtering")
+	{
+	    string dev_name = Printerlib::getUriDevice (uri);
+	    if (dev_name != "")
+		entry = add (entry, "uri", "lpd:/" + dev_name);
+	}
+	if (ppdfilename != "")
+	{
+	    SCR::Write (.target.string, ppdfilename, ppdfile);
+	    entry = add (entry, "ppd", ppdfilename);
+	}
+	else
+	    entry = add (entry, "ppd", ownppd);
+	boolean res = SCR::Write (.cups.printers.add, entry);
+	if (! res)
+	    UI::MessagePopup (_("Error occured while saving queue %1"), name);
+	return res;
+    }
+    /**
+     * Call lprsetup
+     * @param command command to call
+     * @return boolean true if successful
+     */
+    define boolean callLprsetup (string command) ``{
+	integer succ = SCR::Execute (.target.bash, command);
+	if (succ != 0 || (-1 == SCR::Read(.target.size, "/etc/printcap")))
+	    {
+		// message box
+		Report::Error (sformat (_("Running lprsetup (%1) was not successful."), command));
+		return false;
+	    }
+	return true;
+    }
+    /**
+      * separates from config map only values of specified type
+      * @param config Map of configuration
+      * @param type String specifying type
+      * @return map of selected values
+      */
+    global define map getArgsOfType (map config, string type) ``{
+	map result = $[];
+
+	foreach (`k, `v, config, ``{
+	    map valmap = lookup (config, k, $[]);
+	    string value = lookup (valmap,type,"");
+	    if (value != "") {
+		result = add (result, k, value);
+	    }
+	});
+	return result;
+    }
+
+    /**
+     * Write the .upp file and the configuration.
+     * @param entry Entry for printer to save.
+     * @return boolean true if successful
+     */
+    define boolean createUppFile (map entry) ``{
+	string upp_file = SCR::Write (add (.printerdb.upp, lookup (entry, "config", "")), lookup (entry, "options", $[]));
+	string name = lookup (entry, "name", "");
+
+	// Save the .upp file
+	SCR::Execute (.target.mkdir, sformat ("/etc/lpdfilter/%1", name));
+	string fname = sformat ("/etc/lpdfilter/%1/upp", name);
+	if (!SCR::Write (.target.string, fname, upp_file))
+	{
+	    // message box
+	    Report::Error (sformat (_("Cannot write %1."), fname));
+	    return false;
+	}
+
+	SCR::Execute (.target.bash, sformat ("/bin/chmod 644 %1", fname));
+	return true;
+    }
+    /**
+     * Add a remote printer to the printcap.
+     * @param entry Entry for printer to save.
+     * @return boolean true if successful
+     */
+    define boolean createRemoteEntry (map entry) ``{
+	string uri = lookup (entry, "uri", "");
+	string hostname = Printerlib::getUriHost (uri);
+	string queue = Printerlib::getUriRemoteQueue (uri);
+	string name = lookup (entry, "name", "");
+	string tail = "";
+	if (!lookup (entry, "ff", false))
+	    tail = " -sf";
+
+	y2milestone ("%1", uri);
+	y2milestone ("%1", entry);
+	if (hostname != "" && queue != "" && name != "")
+	{
+	    if (callLprsetup (sformat ("/usr/lib/lpdfilter/bin/lprsetup -lprng -overwrite %1 -host %2 -rp %3 -raw -color", name, hostname, queue) + tail))
+		return true;
+	}
+	// message box
+	Report::Error (_("I cannot configure a remote
+queue. The internal structure
+is not filled properly."));
+
+	return false;
+    }
+
+    /**
+     * Add a yast2 printer to the printcap
+     * @param entry Entry for printer to save.
+     * @return boolean true if successful
+     */
+    define boolean createEntry (map entry) ``{
+	string uri = lookup (entry, "uri", "");
+	string name = lookup (entry, "name", "");
+	string device = "/dev/null";
+	string baudrate_str = "";
+	string tail = " -driver upp -own -color";
+	if (lookup (entry, "raw", false))
+	    tail = " -raw";
+	else if (lookup (entry, "ascii", false)) //Queue mustn't be ascii AND raw
+	    tail = tail + " -ascii";
+	if (!lookup (entry, "ff", false))
+	    tail = tail + " -sf";
+
+	string con_type = Printerlib::getUriType (uri);
+	if (con_type == "parallel" ||
+	    con_type == "serial" ||
+	    con_type == "usb" ||
+	    con_type == "irda")
+	{
+	    device = Printerlib::getUriDevice (uri);
+	    if (con_type == "serial")
+	    {
+		integer baudrate = Printerlib::getUriBaudrate (uri);
+		if (baudrate != 0)
+		{
+		    baudrate_str = sformat ("-br %1", baudrate);
+		}
+	    }
+	    if (con_type == "serial")
+	    {
+		string ser_opt = Printerlib::getUriValue (uri, "ty");
+		if (filterchars (ser_opt, "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890-") == "")
+		    ser_opt = "ixon -imaxbel -ixany -ixoff -crtscts";
+		tail = tail + sformat (" -ty \"%1\"", ser_opt);;
+	    }
+	    if (callLprsetup (sformat ("/usr/lib/lpdfilter/bin/lprsetup -lprng -overwrite %1 -device %2 %3", name, device, baudrate_str) + tail))
+		return true;
+	}
+	else if (con_type == "prefilter")
+	{
+	    if (callLprsetup (sformat ("/usr/lib/lpdfilter/bin/lprsetup -lprng -overwrite %1 -device /dev/null -redirect %2", name, Printerlib::getUriRemoteQueue (uri)) + tail))
+		return true;
+	}
+	else if (con_type == "samba" || con_type == "novell")
+	{
+	    // create file redirect
+	    string ret = getRemoteEntry (uri);
+	    string fn = "/etc/lpdfilter/" + name + "/redirect";
+	    SCR::Write (.target.string, fn, ret);
+	    SCR::Execute (.target.bash, sformat ("chmod 0750 %1 ; chown lp:lp %1", fn));
+	    if (callLprsetup (sformat ("/usr/lib/lpdfilter/bin/lprsetup -lprng -overwrite %1 -device /dev/null", name) + tail))
+		return true;
+	}
+	else if (con_type == "file")
+	{
+	    if (callLprsetup (sformat ("/usr/lib/lpdfilter/bin/lprsetup -lprng -overwrite %1 -device '| -$ /bin/cat > %2'", name, Printerlib::getUriDevice (uri)) + tail))
+		return true;
+	}
+	else if (con_type == "pipe")
+	{
+	    if (callLprsetup (sformat ("/usr/lib/lpdfilter/bin/lprsetup -lprng -overwrite %1 -redirect '%2' -device /dev/null", name, Printerlib::getUriDevice (uri)) + tail))
+		return true;
+	}
+	else if (con_type == "ipp")
+	{
+	    string queue = Printerlib::getUriRemoteQueue (uri);
+	    if ("printers/" == substring (queue, 0, 9))
+		queue = substring (queue, 9);
+	    if (callLprsetup (sformat ("/usr/lib/lpdfilter/bin/lprsetup -lprng -overwrite %1 -device '| -$ /usr/bin/lp.cups -d %3 -h %2'", name, Printerlib::getUriHost (uri), queue) + tail))
+		return true;
+	}
+	else if (con_type == "filtering")
+	{
+	    if (callLprsetup (sformat ("/usr/lib/lpdfilter/bin/lprsetup -lprng -overwrite %1 -host %2 -rp %3", name, Printerlib::getUriHost (uri), Printerlib::getUriRemoteQueue (uri)) + tail))
+                return true;
+	}
+	else if (con_type == "socket")
+	{
+	    if (callLprsetup (sformat ("/usr/lib/lpdfilter/bin/lprsetup -lprng -overwrite %1 -host %2 -port %3", name, Printerlib::getUriHost (uri), Printerlib::getUriPort (uri)) + tail))
+//Printerlib::getUriRemoteQueue (uri)) + tail))
+		return true;
+	}
+	// message box
+	Report::Error (_("I cannot configure a printer
+queue. The internal structure
+is not filled properly."));
+	return false;
+    }
+    /**
+     * Write conf file onto disk.
+     * @param fn filename
+     * @param conf file contents
+     */
+    define void writeConf (string fn, map conf) ``{
+	string s = "#\n# for documentation see /usr/lib/lpdfilter/global/optional.options\n#\n\n";
+	foreach (`k, `v, conf, ``{
+	    s = s + sformat ("%1=\"%2\"\n", k, v);
+	});
+	SCR::Write (.target.string, fn, s);
+	SCR::Execute (.target.bash, sformat ("/bin/chmod 660 %1 ; /bin/chown lp:lp %1", fn));
+    }
+
+    /**
+     * Create string with the definition of samba print command
+     * @param uri Uri of the printer
+     * @return string string with definition
+     */
+    define string getRemoteEntry (string uri) ``{
+	boolean type = (("novell" == Printerlib::getUriType (uri)) ? true : false);
+	list up = Printerlib::getUriUsernamePass (uri);
+	string user = "";
+	string pass = "";
+	if (select (up, 0, "") != "")
+	    user = sformat ("-U \"%1\"", select (up, 0, ""));
+	if (select (up, 1, "") != "") // -P only for non empty novell printer
+	    pass = ((type ? "-P " : "") + sformat ("\"%1\"", select (up, 1, "")));
+
+	return type ?
+	    sformat ("/usr/lib/lpdfilter/redirect/novell_print -S %1 %2 %3 -q \"%4\" -\n",
+		    Printerlib::getUriHost (uri), user, pass, Printerlib::getUriRemoteQueue (uri))
+	    :
+	    sformat ("/usr/lib/lpdfilter/redirect/samba_print //%1/\"%2\" %3 %4 -N -P\n",
+		    Printerlib::getUriHost (uri), Printerlib::getUriRemoteQueue (uri), pass, user);
+    }
+
+    /**
+     * Wipe printer from disk. It is used exclusively for wiping out
+     * printers created by testPrinter, so only printers created by
+     * apsfilter are wiped by this function.
+     * @param name name of the printer
+     */
+    global define void wipePrinter (string name) ``{
+	// delete files associated with old printer...
+	if (spooler == "cups")
+	    SCR::Write (.cups.printers.remove, [ $[ "name": name ] ]);
+	else
+	    SCR::Execute (.target.bash, sformat ("/bin/rm -r /etc/lpdfilter/%1 /var/spool/lpd/%1 ;\n\\", name));
+    }
+    /**
+     * Create .upp file from the options. Note that there can be depended options.
+     * @param options Options list
+     * @return string upp file content
+     */
+    define string optionsToString (list options) ``{
+	string upp = "";
+	if (nil != options)
+	{
+	    foreach (`opt, options, ``{
+		integer defaultindex = lookup (opt,"defaultindex", nil);
+		string def = lookup (opt, "default", "");
+		list val = lookup (opt,"values", []);
+		list depended_opt = lookup (select (val,0, $[]),"options", nil);
+		if (nil != defaultindex)
+		{
+		    def = lookup (select (val,defaultindex, $[]),"value", nil);
+		    depended_opt = lookup (select (val,defaultindex, $[]),"options", nil);
+		}
+		//else if there is no defaultindex, no changes were made, so let "default"
+		if (def != "")
+		    upp = upp+sformat ("%1\n", def);
+		// if there is no defaultindex, no suboptions can be here
+		if (nil != depended_opt)
+		    upp = upp+optionsToString (depended_opt);
+	    });
+	}
+	return upp;
+    }
+    /**
+     * Creates summary from autodetected printers and printcap.
+     * @param style type of summary - list of symbols - flags:
+     *		`test: add test link<br>
+     *		`nonew: do not include new -- unconfigured printers into summary<br>
+     *		`short: short summary doesn't contain queue description
+     * @return summary string
+     */
+    global define string Summary (list style) ``{
+	// Configured as name_of_queue.
+	string format = contains (style, `short) ? _("Configured as %1.") : _("Configured as:<br>%1");
+	list summary = [];
+	list used = [];
+	// autodetected printer
+	foreach (`i, Printer::autodetected, ``{
+	    string found = "";
+	    string dev = sformat ("%1 %2: %3", lookup (i, "vendor", ""), lookup (i, "device", ""), Printerlib::getUriNiceName (lookup (i, "uri", "")));
+	    foreach (`entry, printcap, ``{
+		if (lookup (i, "unique_key", "") == lookup (entry, "unique_key", " "))
+		{
+		    string cache = lookup (entry, "name", "");
+		    used = add (used, cache);
+		    if (contains (style, `test))
+			cache = sformat ("%1 [<a href=\"%1\">test</a>]", cache);
+		    if (contains (style, `short))
+		    {
+			found = found + ("" != found ? ", " : "") + cache;
+		    }
+		    else
+		    {
+			found = found + ("" != found ? "<br>" : "") + cache + "  -  " +
+			    SCR::Read (.printerdb.configname, [lookup (entry, "vendor",""),
+				lookup (entry,"device", ""), lookup (entry, "config","")]);
+		    }
+		}
+	    });
+	    if ("" == found)
+	    {
+		if (!contains (style, `nonew))
+		    summary = add (summary, Summary::Device (dev, Summary::NotConfigured ()));
+	    }
+	    else
+		summary = add (summary, Summary::Device (dev, contains (style, `short) ? sformat (format, found) : sformat (format + "<br>", found)));
+	});
+	// other than autodetected printers
+	map other_printers = $[];
+	foreach (`i, printcap, ``{
+	    string cache = lookup (i, "name", "");
+	    if (!contains (used, cache))
+	    {
+		string type = lookup (i, "type", "yast2");
+		string cfg = "";
+		if (type == "yast2")
+		{
+		    boolean raw = lookup (i, "raw", false) || "lpd" == Printerlib::getUriType (lookup (i, "uri", ""));
+		    string dev = (raw ?
+			sformat (_("Raw queue: %1"), Printerlib::getUriNiceName (lookup (i, "uri", "")))
+			:
+			sformat ("%1: %2", SCR::Read (.printerdb.printername, [ lookup (i, "vendor", ""), lookup (i, "device", ""),
+				lookup (i, "vendor_ieee", nil), lookup (i, "device_ieee", nil)]), Printerlib::getUriNiceName (lookup (i, "uri", "")))
+		    );
+		    if (contains (style, `test) && (isNetAvailable () || !isPrinterNetwork (i)) && !raw)
+			cache = sformat ("%1 [<a href=\"%1\">test</a>]", cache);
+		    if (!contains (style, `short))
+		    {
+			cfg = SCR::Read (.printerdb.configname, [lookup (i, "vendor", ""), lookup (i, "device", ""), lookup (i, "config", "")]);
+			if (nil != cfg && "" != cfg)
+			    cache = cache + "  -  " + cfg;
+		    }
+		    if (haskey (other_printers, dev))
+			other_printers = add (other_printers, dev, lookup (other_printers, dev, "???") + (contains (style, `short) ? ", " : "<br>") + cache);
+		    else
+			other_printers = add (other_printers, dev, cache);
+		}
+		else
+		{
+		    // This printer was not configured using YaST2. Item in table. SHORT!
+		    if (contains (style, `test))
+			cache = sformat ("%1 [<a href=\"%1\">test</a>]", cache);
+		    if (haskey (other_printers, _("- not YaST2 -")))
+			other_printers = add (other_printers, _("- not YaST2 -"), lookup (other_printers, _("- not YaST2 -"), "???") + ", " + cache);
+		    else
+			other_printers = add (other_printers, _("- not YaST2 -"), cache);
+		}
+	    }
+	});
+	foreach (`k, `v, other_printers, ``{
+	    summary = add (summary, Summary::Device (k, sformat (format, v)));
+	});
+	return Summary::DevicesList (summary);
+    }
+    /**
+     * get list of names of deleted printers.
+     * @return List of names.
+     */
+    global define list DeletedNames () ``{
+	return toset (maplist (`i, deleted, ``(lookup (i, "name", ""))));
+//	return toset (union (deleted, deleted_classes));
+    }
+
+    /**
+     * Get type of currently selected printer. Just a shortcut
+     * to Printerlib::getUriType (...)
+     * @return printer type
+     */
+    global define string getUriType () ``{
+	return Printerlib::getUriType (lookup (printer, "uri", ""));
+    }
+
+
+    /**
+     * Constructor only grabs Args
+     */
+    global define void Printer () ``{
+	integer i = 0;
+	while (i < size (Args ()))
+	{
+	    if (is (Args (i), term) && `db == symbolof (Args (i)))
+	    {
+		string s = select (Args (i), 0, nil);
+		y2milestone ("Changing default database to %1", s);
+		if (nil != s && changeDb (s))
+		{
+		    default_database = s;
+		    current_database = s;
+		    y2milestone ("Default database changed to %1", s);
+		}
+	    }
+	    i = i + 1;
+	}
+	return ;
+    }
+    /**
+     * Change current database
+     * @param s database to use
+     * @return success state
+     */
+    global define boolean changeDb (string s) ``{
+	if (s == current_database)
+	    return true;
+	current_database = s;
+	if (nil == s)
+	    s = "/usr/lib/YaST2/lib/printerdb/suse.prdb";
+	string fn = SCR::Read (.target.tmpdir) + "/re-agent.scr";
+	SCR::Write (.target.string, fn, sformat (".printerdb\n`ag_printerdb(PrinterdbAgent(\"%1\"))\n", s));
+	SCR::UnregisterAgent (.printerdb);
+	SCR::RegisterAgent (.printerdb, fn);
+	list l = SCR::Read (.printerdb.vendors);
+	if (0 == size (l) && nil != current_database)
+	{
+	    changeDb (nil);
+	    return false;
+	}
+	return true;
+    }
+    /**
+     * Change database "back to" default db (passed on the command line)
+     */
+    global define void revertDb () ``{
+	changeDb (default_database);
+    }
+    /**
+     * Prepare detected printer to be configured.
+     * @param det map of detected printer
+     */
+    global define void editDetected (map det) ``{
+	index = -1;
+	printer = $[
+	    "vendor_ieee" : lookup (det, "vendor", ""),
+	    "device_ieee" : lookup (det, "device", ""),
+	    "unique_key" : lookup (det, "unique_key", ""),
+	    "uri" : lookup (det, "bus", "parallel") + ":" + lookup (det, "dev_name", ""),
+	    "info": lookup (det, "vendor", "") + " " + lookup (det, "device", ""),
+            "location": Printerlib::getUriNiceName (lookup (det, "uri", "")),
+	    "vendor_id": lookup (det, "vendor_id",0),
+	    "device_id": lookup (det, "device_id",0),
+            "accepting": true,
+            "state": "idle",
+	];
+    }
+    /**
+     * Has the printer been already configured?
+     * @param uk unique key of the printer
+     * @return true or false
+     */
+    global define boolean alreadyConfigured (string uk) ``{
+	boolean was = false;
+	foreach (`i, printcap, ``{
+	    if (!was && lookup (i, "unique_key", ".a") == uk)
+		was = true;
+	});
+	return was;
+    }
+
+    /**
+     * Autoconfigure all printers that haven't been configured yet.
+     */
+    global define void Propose () ``{
+	// settings are read and hw is detected
+	list forbidden_names = getForbiddenNames ();
+	foreach (`i, autodetected, ``{
+	    if (!alreadyConfigured (lookup (i, "unique_key", "")))
+	    {
+		list detected = SCR::Read (.printerdb.detect, [ lookup (i, "vendor", ""), lookup (i, "device", "") ]);
+		if (2 == size (detected))
+		{
+		    map info = SCR::Read (.printerdb.info, detected);
+		    if (0 == lookup (info, "type", 2))
+		    {
+			editDetected (i);
+			i = union (i, $[
+			    "vendor" : select (detected, 0, ""),
+			    "device" : select (detected, 1, ""),
+			]);
+			list new_queues = SCR::Read (.printerdb.auto, lookup (i, "device", ""));
+			string suffix = getQueueSuffix (new_queues);
+			foreach (`v, new_queues, ``{
+			    map paper = getQuickPaperSize (lookup (v, "config", ""));
+			    if (nil != paper)
+				v = add (v, "options", paper);
+			    string k = adjustQueueName (lookup (v, "name", "lp") + suffix, forbidden_names);
+			    v = add (v, "name", k);
+			    forbidden_names = add (forbidden_names, lookup (v, "name", ""));
+			    printcap = add (printcap, union (v, i));
+			});
+		    }
+		}
+	    }
+	});
+    }
+    /**
+     * Returns option to select regional paper size.
+     * @param config name of the config
+     * @return map $[ option : index ] or nil
+     */
+    global define map getQuickPaperSize (string config) ``{
+	list opts = SCR::Read (add (.printerdb.optionstree, config));
+	integer i = 0;
+	integer len = size (opts);
+	while (i < len)
+	{
+	    string s = lookup (select (opts, i, $[]), "ident", "");
+	    if (substring (s, 0, 10) == "papersize-")
+	    {
+		map m = add ($[], s, Printerlib::getDefaultPaperSize ());
+		return m;
+	    }
+	    i = i + 1;
+	}
+	return nil;
+    }
+    /**
+     * Check if queue name is OK. Otherwise adds number at the end.
+     * @param name printer name
+     * @param forbidden_names forbidden names
+     * @return new queue name.
+     */
+    global define string adjustQueueName (string name, list forbidden_names) ``{
+	if (!contains (forbidden_names, name))
+	    return name;
+	name = name + "%1";
+	integer i = 1;
+	while (contains (forbidden_names, sformat (name, i)))
+	{
+	    i = i + 1;
+	}
+	return sformat (name, i);
+    }
+    /**
+     * Get the suffix for the queue name.
+     * @param queues list of new queues. Keys are the names of the queues.
+     * @return suffix
+     */
+    global define string getQueueSuffix (list queues) ``{
+	integer highest = 0;
+	integer work = 0;
+	foreach (`v, queues, ``{
+	    integer end = size (lookup (v, "name", ""));
+	    foreach (`i, printcap, ``{
+		if (substring (lookup (i, "name", ""), 0, end) == lookup (v, "name", ""))
+		{
+		    work = tointeger (substring (lookup (i, "name", ""), end));
+		    if (work + 1 > highest)
+			highest = work + 1;
+		}
+	    });
+	});
+	if (0 == highest)
+	    return "";
+	return sformat ("%1", highest);
+    }
+    /**
+     * Is a printer network printer?
+     * @param pr printer to check
+     * @return true if yes
+     */
+    define boolean isPrinterNetwork (map pr) ``{
+	string type = Printerlib::getUriType (lookup (pr, "uri", ""));
+	return type == "samba" || type == "novell" || type == "prefilter" || type == "lpd";
+    }
+    /**
+     * Is current printer network printer?
+     * @return true if yes
+     */
+    global define boolean isNetwork () ``{
+	return isPrinterNetwork (printer);
+    }
+    /**
+     * Is network available?
+     * @return true if yes
+     */
+    global define boolean isNetAvailable () ``{
+	return !Mode::cont;
+    }
+    /**
+      * does file exist?
+      * @param filename
+      * @return true if exists
+      */
+    global define boolean isFile (string file) ``{
+	integer filesize = SCR::Read (.target.size, file);
+	if (filesize < 0)
+	    return false;
+	return true;
+    }
+    /**
+      * Is file a ppd file?
+      * @param filename
+      * @return true if yes
+      */
+    global define boolean isPpd (string file) ``{
+	if (! isFile (file))
+	    return false;
+	integer len = size (file);
+	if (!((len >4 && substring (file, len-4) == ".ppd")||(len>7 && substring (file, len-7) == ".ppd.gz")))
+	    return false;
+	return SCR::Read (.cups.isppd, file);
+    }
+    /**
+      * Get PPD file info
+      * @param filename
+      * @return map of informations
+      */
+    global define map ppdInfo (string file) ``{
+	return SCR::Read (.cups.ppdinfo, file);
+    }
+    /**
+      * Add unpresent entries into a map
+      * @param map printer
+      * @return modified map
+      */
+    global define map fixPrinter (map p) ``{
+	if (lookup (p, "accepting", true) == true)
+	    p = add (p, "accepting", true);
+	if (lookup (p, "state", "idle") == "idle")
+	    p = add (p, "state", "idle");
+	if (lookup (p, "bannerstart", "") == "")
+	    p = add (p, "bannerstart", "none");
+	if (lookup (p, "bannerend", "") == "")
+	    p = add (p, "bannerend", "none");
+	return p;
+    }
+}

@@ -1,0 +1,166 @@
+/**
+ * File:
+ *  texts.ycp
+ *
+ * Module:
+ *  Printer library
+ *
+ * Summary:
+ *  Texts.
+ *
+ * Authors:
+ *  Petr Blahos <pblahos@suse.cz>, 2001
+ *
+ * $Id$
+ *
+ * Common texts for printer confguration tools.
+ */
+{
+    textdomain "printer";
+
+    /**
+     * Texts for local tested device.
+     * @return text
+     */
+    global define string textTestDevice ()``{
+	return _("Please connect your printer to the computer,
+switch it on and make sure that it is ONLINE.
+
+If I send the message 'Hello, world' to
+the previously selected device and the operation
+fails, it will be timed out in %1 seconds.");
+    }
+
+    /**
+     * Result from tested device.
+     * @param res return from testdevice
+     * @return text
+     */
+    global define string textTestDeviceResult (integer res) ``{
+	if (0 == res)
+	    return
+		// results of printer test
+		_("It seems that there are no problems with the device
+you chose.
+
+If your printer has reacted somehow (printed message,
+formfeed or at least blinking leds), the hardware 
+connection should be functioning correctly.");
+	if (1 == res)
+	    return
+		// results of printer test
+		_("There was a problem while sending the message
+to the printer--The operation has timed out.
+
+Please, verify that your printer is connected to
+the computer, that the printer power is on and 
+that it is ONLINE. It is also possible that you
+have a cabling problem.");
+	if (2 == res)
+	    return
+		// results of printer test
+		_("There was a problem while printing.
+
+It seems that the device is not properly configured
+or you do not have permissions to write to it.
+Did you run the configuration program as user 'root'?");
+	if (127 == res)
+	    return
+		_("FATAL: Sorry, I was not able to run
+the 'test_device' script.");
+	return "???";
+    }
+
+    /**
+     * Text for remote printer test.
+     * @param ping_only what testing will be done
+     * @return text
+     */
+    global define string textTestRemotePrinter (boolean ping_only) ``{
+	string ret = "";
+	if (ping_only)
+	    {
+		ret =  _("I will run 'ping -c 1 %1'.");
+	    }
+	else
+	    {
+		ret = _("I will try if %1\naccepts printing jobs.");
+	    }
+	ret = ret + _("\n\nIf the operation fails, it will\nbe timed out in a few seconds.");
+	return ret;
+    }
+
+    /**
+     * Remote printer test results.
+     * @param ret return from test remote printer
+     * @return text
+     */
+    global define string textTestRemotePrinterResult (integer ret) ``{
+	if (0 == ret)
+	    // result of testing
+	    return _("The printer server is accessible.");
+	if (1 == ret)
+	    // result of testing
+	    return _("There was a problem.
+
+This is internal error of YaST2.");
+	if (2 == ret)
+	    // result of testing
+	    return _("There was a problem.
+
+Your network access is not properly configured
+or the printer server is unknown or inaccessible.
+Please check the hostname of the print
+server or contact your network administrator.");
+	if (3 == ret)
+	    // result of testing
+	    return _("There was a problem.
+
+Connot connect to the printer server. Please check
+if the printer server is running or contact your
+administrator");
+	if (4 == ret)
+	    // result of testing. Output of some command is appended
+	    return _("There was a problem.
+
+You specified a wrong queue name
+on the printer server, or the printer server
+does not accept print jobs or the queue on
+the print server does not accept print jobs.
+
+Return from remote server:
+");
+	if (127 == ret)
+	    // result of testing
+	    return _("FATAL: Sorry, I was not able to\nrun the test.");
+	return "???";
+    }
+    /**
+     * Help text for editParallelPort.
+     * @return help text
+     */
+    global define string textEditParallelPort () ``{
+	return
+	    _("<p><big><b>Parallel port IO:</b></big><br>If you have an uncommon parallel port 
+card, it may not be possible to automatically detect it. In such cases,
+you must specify its IO addresses. Enter IO addresses separated by commas 
+for all parallel ports here, from the first to the last. Example: <tt>
+0x378,0x2f8</tt><br>If you parallel port works, leave this field untouched.</p>\n")
+	    +
+	    _("<p>Changes will be saved immediately after you press OK.</p>");
+    }
+    /**
+     * Help text for editSerialPort.
+     * @return help text
+     */
+    global define string textEditSerialPort () ``{
+        return
+	    // Help text 1/2
+            _("<p><big><b>Baud rate:</b></big><br>You can specify the speed
+that will be used to communicate with your serial printer.</p>")
+	    + _("<p><big><b>Other settings:</b></big><br>
+You can specify extra settings for your serial port. They may differ depending on your
+spooler. Leave empty for defaults. </p>\n");
+    }
+}
+

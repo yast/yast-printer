@@ -1,0 +1,38 @@
+#! /bin/bash
+#
+# Test ability to connect to remote IPX Novell server.
+#
+# Exits:   0 doesn't seem to have a problem
+#          1 remote host $1 or queue $2 not set
+#          2 the remote host $1 is unreachable
+#          3 no connection possible to port 631 on host $1 (no cups server running ?)
+#          4 queue does not accept a print job (queue does not exist or queueing disabled ?)
+#
+# Johannes Meixner <jsmeix@suse.de>, 2000, 2002
+# Jan Holesovsky <kendy@suse.cz>, 2000
+# Jiri Srain <jsrain@suse.cz>, 2002
+# $Id$
+
+#set -x
+MY_NAME=${0##*/}
+HOST=$1
+QUEUE=$2
+[ -z "$HOST" -o -z "$QUEUE" ] && { echo -en "\nUsage:\n$MY_NAME HOST QUEUE [TIMEOUT]\n" 1>&2 ; exit 1 ; }
+USER=$3
+PASSWORD=$4
+TIMEOUT="$5"
+
+[ -z "$TIMEOUT" ] && TIMEOUT=10
+
+# test the queue and server
+echo -en "" | nprint -S "$HOST" -U "$USER" -P "$PASSWORD" -q "$QUEUE" - 2>&1
+
+RES=$?
+
+if [ $RES -eq 0 ];
+ then
+    exit 0;
+else
+    exit 4;
+fi
+

@@ -1,0 +1,21 @@
+{
+    include "testsuite.ycp";
+    import "Printer";
+
+    map READ = $["printerdb" : $[ "printername" : "- fake name -"]];
+    map WRITE = $[];
+    map EXEC = $[];
+
+    Printer::printcap = [
+	$[ "name" : "lp", "unique_key" : "1", "uri" : "parallel:/dev/lp0", "vendor": "Canon", "device":"BJC-6100", ],
+	$[ "name" : "color", "unique_key" : "1", "uri" : "parallel:/dev/lp0", "vendor": "Canon", "device":"BJC-6100", ],
+	$[ "name" : "mono", "unique_key" : "2", "uri" : "usb:/dev/usb/lp0", "vendor": "hewlett-packard", "device":"hp-laserjet-4", ],
+	$[ "name" : "hand", "uri" : "usb:/dev/usb/lp1", "vendor":"epson", "device": "generic-gdi"],
+	];
+    Printer::autodetected = [
+	$["vendor":"Canon","device":"BJC-6100","unique_key":"1","uri":"parallel:/dev/lp0"],
+	$["vendor":"Epson","device":"Stylus","unique_key":"3","uri":"usb:/dev/usb/lp1"],
+	];
+
+    TEST (``(Printer::Summary ([`short])), [READ, WRITE, EXEC], 0);
+}

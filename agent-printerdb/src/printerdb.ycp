@@ -1,0 +1,180 @@
+
+{
+//    import "Wizard";
+    include "wizard/sequencer.ycp";
+    include "ui/wizard_dialog.ycp";
+
+    string current_vendor = "";
+    string current_printer = "";
+    string current_config = "";
+
+    define getConfigTreeHelper (list l, string pre) ``{
+	list ll = [];
+	foreach (`i, l, ``{
+		ll = add (ll, `item (`id (lookup (i, "ident", "")), haskey (i, "sub") ? "" : "x", pre + lookup (i, "text", ""), lookup (i, "ident", ""), lookup (i, "queue", "")));
+		if (haskey (i, "sub")) {
+		    list x = getConfigTreeHelper (lookup (i, "sub", []), "    " + pre);
+		    foreach (`j, x, ``{
+			ll = add (ll, j);
+		    });
+		}
+	    });
+	return ll;
+    }
+
+    define getConfigTree () ``{
+	list l = SCR::Read (add (.printerdb.configstree, current_printer));
+	return getConfigTreeHelper (l, "");
+    }
+
+    define vendors () ``{
+	list items = SCR::Read (.printerdb.vendors, current_vendor);
+	UI::SetWizardContents ("Vendors", `VBox (
+		    `SelectionBox (`id (`sel), "", items),
+		    `PushButton (`id (`generate), "Generate translation strings and test script")
+		    ), "", true, true);
+	symbol ret = UI::UserInput ();
+	while (`generate == ret)
+	{
+	    string tmp = SCR::Read (.target.tmpdir) + "/printerdb.";
+	    SCR::Write (.printerdb.gettext.db, tmp + "db.msg");
+	    SCR::Write (.printerdb.gettext.prg, tmp + "prg.msg");
+	    SCR::Write (.printerdb.testscript, tmp + "tst");
+	    UI::OpenDialog (`VBox (
+			`Label (sformat ("Files %1msg and %1tst were generated.", tmp)),
+			`HBox (`PushButton ("OK"),`PushButton ("Cancel"))));
+	    ret = UI::UserInput ();
+	    UI::CloseDialog ();
+	    ret = UI::UserInput ();
+	}
+	current_vendor = select (UI::QueryWidget (`id (`sel), `CurrentItem), 0);
+	return ret;
+    }
+
+    define printers () ``{
+	list items = SCR::Read (add (.printerdb.models, current_vendor), current_printer);
+	UI::SetWizardContents ("Printers", `VBox (
+		    `SelectionBox (`id (`sel), "", items)
+		    ), "", true, true);
+	symbol ret = UI::UserInput ();
+	current_printer = select (UI::QueryWidget (`id (`sel), `CurrentItem), 0);
+	return ret;
+    }
+
+    define configsrt () ``{
+	list l = SCR::Read (add (.printerdb.configsrt, current_printer), "");
+	UI::SetWizardContents ("Configs", `VBox (
+		    `RichText (`id (`sel), select (l, 0, "")),
+		    `MenuButton ("Configurations", select (l, 1, []))
+		    ),
+		    "", true, true);
+	any ret = "";
+	while (!is (ret, symbol))
+	{
+	    ret = UI::UserInput ();
+	    if (is (ret, string))
+	    {
+		current_config = ret;
+		ret = `next;
+	    }
+	}
+	return ret;
+    }
+    define configs () ``{
+	UI::SetWizardContents ("Configs", `VBox (
+		    `Table (`id (`sel), `header ("leaf","name", "id", "queue"), getConfigTree ())
+		    ), "", true, true);
+	symbol ret = UI::UserInput ();
+	current_config = UI::QueryWidget (`id (`sel), `CurrentItem);
+	return ret;
+    }
+    define options () ``{
+	UI::SetWizardContents ("Options", `VBox (
+		    `VWeight (1, `ReplacePoint (`id (`upper), `SelectionBox (`id (`opts), "&Options", []))),
+		    `VWeight (1, `ReplacePoint (`id (`lower), `SelectionBox (`id (`vals), "&Values", [])))
+		    ), "", true, false);
+	list opts = SCR::Read (add (.printerdb.options, current_config));
+	UI::ReplaceWidget (`id (`upper), `SelectionBox (`id (`opts), `opt (`notify), "Options", opts));
+	symbol ret = `opts;
+	map selected = $[];
+	while (true) {
+	    if (`next == ret || `back == ret || `abort == ret)
+		break;
+	    if (`opts == ret) {
+		string sel = UI::QueryWidget (`id (`opts), `CurrentItem);
+		any vals = SCR::Read (add (.printerdb.values, sel));
+		y2error ("====> %2 %1", getValuesUI (vals), vals);
+		UI::ReplaceWidget (`id (`lower), getValuesUI (vals));
+	    }
+	    else if (`vals == ret) {
+		string co = UI::QueryWidget (`id (`opts), `CurrentItem);
+		selected = add (selected, co, UI::QueryWidget (`id (`vals), `CurrentItem));
+		opts = SCR::Read (add (add (.printerdb.options, current_config), co), selected);
+		UI::ReplaceWidget (`id (`upper), `SelectionBox (`id (`opts), `opt (`notify), "Options", opts));
+	    }
+	    ret = UI::UserInput ();
+	}
+	return ret;
+    }
+
+    define getValuesUI (any vals) ``{
+	if (is (vals,list))
+	    return `SelectionBox (`id (`vals), `opt (`notify), "&Values", vals);
+	if (!is (vals, term))
+	    return `VStretch ();
+	if (`int == symbolof (vals))
+	{
+	    term out = UI::HasSpecialWidget (`Slider) ? `Slider (`id (`int), "&Values") : `IntField (`id (`int), "&Values");
+	    out = add (out, select (vals, 0, 0));
+	    out = add (out, select (vals, 1, 0));
+	    out = add (out, select (vals, 2, 0));
+	    out = `VBox (
+		    `Label (`opt (`hstretch), sformat ("Minimal value: %1, Maximal value: %2, Step: %3", select (vals, 0), select (vals, 1), select (vals, 2))),
+		    out);
+	    return out;
+	}
+	if (`float == symbolof (vals))
+	{
+	    term out = `TextEntry (`id (`float), "&Values", sformat ("%1",select (vals,2)));
+	    out = `VBox (
+		    `Label (`opt (`hstretch), sformat ("Minimal value: %1, Maximal value: %2, Step: %3", select (vals, 0), select (vals, 1), select (vals, 2))),
+		    out);
+	    return out;
+	}
+	return `VStretch ();
+    }
+
+    UI::CreateWizardDialog ();
+
+    WizardSequencer (
+	    $[
+	    "vendors" : ``(vendors ()),
+	    "printers" : ``(printers ()),
+//	    "configs" : ``(configs ()),
+	    "configs" : ``(configsrt ()),
+	    "options" : ``(options ()),
+	    ],
+	    $[
+	    "ws_start" : "vendors",
+	    "vendors" : $[
+		`next : "printers",
+		`abort: `abort,
+	    ],
+	    "printers" : $[
+		`abort: `abort,
+		`next: "configs",
+	    ],
+	    "configs" : $[
+		`abort: `abort,
+		`next : "options",
+	    ],
+	    "options" : $[
+		`abort : `abort,
+		`next : `next,
+	    ]
+	    ]
+	    );
+
+    UI::CloseDialog ();
+}
+

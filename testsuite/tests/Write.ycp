@@ -1,0 +1,65 @@
+{
+    include "testsuite.ycp";
+    import "Printer";
+    import "Progress";
+
+    Progress::off ();
+
+    map READ = $[];
+    map WRITE = $[];
+    map EXEC = $[];
+
+    WRITE = $[
+	"printerdb" : $[
+	    "upp" : "-supModel=\" \"\n",
+	    "ppd" : "*#PPDFile",
+	    ]
+	];
+    EXEC = $[
+	"target" : $[
+	    "mkdir" : true,
+	],
+    ];
+    READ = $[
+	"var" : $[
+	    "lib" : $[
+		"yast" : $[
+		    "unique": []
+		]
+	    ]
+	],
+	"init" : $[
+	    "scripts" : $[
+		"exists" : true,
+		"runlevel": $[],
+		"comment" : $[],
+	    ]
+	],
+	"target" : $[
+	    "string" : "",
+	],
+	"target" : $[
+	    "tmpdir" : "/tmp",
+	],
+    ];
+
+    Printer::spooler = "lprng";
+
+    TEST (``(Printer::Write ()), [READ, WRITE, EXEC], 0);
+    DUMP ("====================================================");
+    Printer::printcap = [
+	$[  "name" : "lp",
+	    "uri" : "parallel://dev/lp0",
+	    "changed" : true,
+	],
+	$[  "name" : "lpx",
+	    "uri" : "parallel://dev/lp0",
+	    "saved" : $[ "printcap_part" : "yes"],
+	    "changed" : true,
+	]
+	];
+    Printer::index = 1;
+    Printer::deletePrinter ();
+    TEST (``(Printer::Write ()), [READ, WRITE, EXEC], 0);
+    DUMP ("====================================================");
+}
