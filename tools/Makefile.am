@@ -12,6 +12,7 @@ ybin_SCRIPTS =			\
 	listen_remote_ipp	\
 	real_resolution		\
 	process_ppd_files	\
-	assign_printcap_default
+	assign_printcap_default	\
+	prepare_ps_testpage.pl
 
 EXTRA_DIST = $(ybin_SCRIPTS)

@@ -110,95 +110,17 @@
      */
     define string preparePsTestPage (string queue, string opt_file, boolean PS_printer) ``{
 	string out_file = SCR::Read (.target.tmpdir) + "/testpg.ps";
-    // test the distribution
-    string path_to_testpage = "";
-
-    if (SCR::Read(.target.stat, Printerlib::baseDataDir + "/ul_testpg.ps") == $[])
-        path_to_testpage = Printerlib::baseDataDir + "/suse_testpg.ps";
-    else
-        path_to_testpage = Printerlib::baseDataDir + "/ul_testpg.ps";
-
-    y2debug("template test file to print: %1", path_to_testpage);
-
 	SCR::Execute (.target.bash, sformat (
-"/bin/awk -v SKIPPICTURE=\"%5\" '
-      BEGIN { COPY = 1 }
-      /^----X-VENDOR:/		{ $1 = \"\"; ARRAY[\"vendor\"] = $0; 	next;	}
-      /^----X-QUEUE-L:/		{ $1 = \"\"; ARRAY[\"queue\"] = $0; 	next;	}
-      /^----X-PRINTER-L:/ 	{ $1 = \"\"; ARRAY[\"printer\"] = $0; 	next;	}
-      /^----X-CONFIG-L:/ 	{ $1 = \"\"; ARRAY[\"configl\"] = $0;	next;	}
-      /^----X-PPD-L:/	 	{ $1 = \"\"; ARRAY[\"ppdl\"] = $0;	next;	}
-      /^----X-OPTION-L:/ 	{ $1 = \"\"; ARRAY[\"option\"] = $0; 	next;	}
-      /^----X-HEAD:/ 		{ $1 = \"\"; ARRAY[\"head\"] = $0;	next;	}
-      /^----X-ENCODING:/ 	{ $1 = \"\"; ARRAY[\"encoding\"] = $0;	next;	}
-      /^----X-CONFIG:/ 		{ $1 = \"\"; ARRAY[\"config\"] = $0; 	next;	}
-      /^----X-PPD:/ 		{ $1 = \"\"; ARRAY[\"ppd\"] = $0; 	next;	}
- 
-      // { if (FILENAME !~ /suse_testpg.ps$/ && FILENAME !~ /ul_testpg.ps$/)
-      		next;
-      }
-      /\~\~BEGIN\~\~OPTIONAL\~\~PICTURE\~\~/ { COPY=0 }
-      /\~\~END\~\~OPTIONAL\~\~PICTURE\~\~/   { COPY=1 }
-      COPY == 0 && SKIPPICTURE == \"true\"   { next } 
-
-      /\~\~QUEUE\~\~/ { sub (/\~\~QUEUE\~\~/, \"%1\", $0); print $0; next; }
-      /\~\~MODEL\~\~/ {
-      		if (length (ARRAY[\"vendor\"]) > 0)	print ARRAY[\"vendor\"];
-		else					print $0;
-		next;
-      }
-      /\~\~QUEUE\~L\~\~/ {
-      		if (length (ARRAY[\"queue\"]) > 0)	print ARRAY[\"queue\"];
-		else					print $0;
-		next;
-      }
-      /\~\~PRINTER\~L\~\~/ {
-      		if (length (ARRAY[\"printer\"]) > 0)	print ARRAY[\"printer\"];
-		else					print $0;
-		next;
-      }
-      /\~\~CONFIG\~L\~\~/ {
-      		if (length (ARRAY[\"configl\"]) > 0)	print ARRAY[\"configl\"];
-		else					print $0;
-		next;
-      }
-      /\~\~PPD\~L\~\~/ {
-      		if (length (ARRAY[\"ppdl\"]) > 0)	print ARRAY[\"ppdl\"];
-		else					print $0;
-		next;
-      }
-      /\~\~OPTIONS\~L\~\~/ {
-      		if (length (ARRAY[\"option\"]) > 0)	print ARRAY[\"option\"];
-		else					print $0;
-		next;
-      }
-      /\~\~Y2TP\~L\~\~/ {
-      		if (length (ARRAY[\"head\"]) > 0)	print ARRAY[\"head\"];
-		else					print $0;
-		next;
-      }
-      /\~\~CHANGE\~ENCODING\~\~/ {
-      		if (length (ARRAY[\"encoding\"]) > 0)	print ARRAY[\"encoding\"];
-		else					print $0;
-		next;
-      }
-      /\~\~CONFIG\~\~/ {
-      		if (length (ARRAY[\"config\"]) > 0)	print ARRAY[\"config\"];
-		else					print $0;
-		next;
-      }
-      /\~\~PPD\~\~/ {
-      		if (length (ARRAY[\"ppd\"]) > 0)	print ARRAY[\"ppd\"];
-		else					print $0;
-		next;
-      }
-      /\~\~\~PASTE\~OPTIONS\~HERE\~\~\~/ {
-          system (\"/usr/bin/grep -v -e ^----X- %2\");
-          next;
-      }
-      { print $0; }
-' %2 %3 > %4", queue, opt_file, path_to_testpage, out_file, PS_printer));
+	    "/usr/lib/YaST2/bin/prepare_ps_testpage.pl %1 %2",
+	    opt_file,
+	    out_file
+	));
 	return out_file;
+	// test the distribution
+	string path_to_testpage = Printerlib::baseDataDir + "/testpg.ps";
+
+	y2debug("template test file to print: %1", path_to_testpage);
+
     }
 
     /**
@@ -399,48 +321,10 @@ press 'OK'.
 	    }
 
 	    string enc = "ISO-8859-2" == ce ? "h02" : "h01";
-	    os = os + sformat ("----X-ENCODING: %1\n", enc);
 
 	    string config = printer["config"]:"";
-	    string ppd_filename = "";
-	    if (findlastof (config, "(") != nil)
-		ppd_filename = substring (config, findlastof (config, "(") + 1);
-	    if (findfirstof (ppd_filename, ")") != nil)
-		ppd_filename = substring (
-		    ppd_filename, 0, findfirstof (ppd_filename, ")"));
-	    ppd_filename = "/usr/share/cups/model/" + ppd_filename;
 	    if (findfirstof (config, "(") != nil)
 		config = substring (config, 0, findfirstof (config, "("));
-
-	    os = os + sformat ("----X-VENDOR: (%1 %2)\n",
-		printer["vendor_ieee"]:"",
-		printer["device_ieee"]:"");
-	    os = os + sformat ("----X-CONFIG: (%1)\n",
-		config);
-	    os = os + sformat ("----X-PPD: (%1)\n",
-		ppd_filename);
-	    // TRANSLATORS: keep this short! Only translations in languages
-	    // with encodings ISO-8859-[1|2|15] will be used.
-	    os = os + sformat ("----X-QUEUE-L: (%1)\n", _("Print queue:"));
-            // TRANSLATORS: keep this short! Only translations in languages
-            // with encodings ISO-8859-[1|2|15] will be used.
-	    os = os + sformat ("----X-PRINTER-L: (%1)\n", _("Printer:"));
-	    os = os + sformat ("----X-CONFIG-L: (%1)\n",
-		// TRANSLATORS: keep this short! Only
-		// translations in languages
-		// with encodings ISO-8859-[1|2|15] will be used.
-		_("Configuration:"));
-	    os = os + sformat ("----X-PPD-L: (%1)\n",
-		// TRANSLATORS: keep this short! Only
-		// translations in languages
-		// with encodings ISO-8859-[1|2|15] will be used.
-		_("PPD File:"));
-            // TRANSLATORS: keep this short! Only translations in languages
-            // with encodings ISO-8859-[1|2|15] will be used.
-	    os = os + sformat ("----X-OPTION-L: (%1)\n", _("Options:"));
-            // TRANSLATORS: keep this short! Only translations in languages
-            // with encodings ISO-8859-[1|2|15] will be used.
-	    os = os + sformat ("----X-HEAD: (%1)\n", _("YaST2 test page"));
 
 	    // options
 	    string filename = SCR::Read (.ppd.file.open,
@@ -463,12 +347,79 @@ press 'OK'.
 		    if (valuelabel == "")
 			valuelabel = value;
 		    if (label != "" && valuelabel != "")
-			return sformat ("(%1: %2) mm", label, valuelabel);
+			return sformat ("(%1: %2)", label, valuelabel);
 		    else
 			return "";
 	    });
 	    optlist = filter (`o, optlist, ``(o != "" && o != nil));
-	    os = os + mergestring (optlist, "\n");
+
+// encoding
+	    os = os + sformat ("----X-ENCODING: %1\n", enc);
+
+// labels
+            // TRANSLATORS: keep this short! Only translations in languages
+            // with encodings ISO-8859-[1|2|15] will be used.
+	    os = os + sformat ("----X-HEAD: (%1)\n", _("YaST2 test page"));
+	    // TRANSLATORS: keep this short! Only translations in languages
+	    // with encodings ISO-8859-[1|2|15] will be used.
+	    os = os + sformat ("----X-SECT1-L: (%1)\n", _("Print queue:"));
+            // TRANSLATORS: keep this short! Only translations in languages
+            // with encodings ISO-8859-[1|2|15] will be used.
+	    os = os + sformat ("----X-SECT2-L: (%1)\n", _("Printer:"));
+	    // TRANSLATORS: keep this short! Only translations in languages
+	    // with encodings ISO-8859-[1|2|15] will be used.
+	    os = os + sformat ("----X-SECT3-L: (%1)\n", _("PPD File:"));
+            // TRANSLATORS: keep this short! Only translations in languages
+            // with encodings ISO-8859-[1|2|15] will be used.
+	    os = os + sformat ("----X-SECT4-L: (%1)\n", _("Options:"));
+
+// border
+	    os = os + sformat ("----X-BORDER-1: (%1)\n",
+		// footnote of the test page 1/6
+		// TRANSLATORS: keep this short! Only translations in languages
+		// with encodings ISO-8859-[1|2|15] will be used.
+		_("The border lines start and end at the edges of the imageable area."));
+	    os = os + sformat ("----X-BORDER-2: (%1)\n",
+		// footnote of the test page 2/6
+		// TRANSLATORS: keep this short! Only translations in languages
+		// with encodings ISO-8859-[1|2|15] will be used.
+		_("They have 1 inch resp. 2 cm distance to the edges of the imageable area."));
+	    os = os + sformat ("----X-BORDER-3: (%1)\n",
+		// footnote of the test page 3/6
+		// TRANSLATORS: keep this short! Only translations in languages
+		// with encodings ISO-8859-[1|2|15] will be used.
+		_("The actual imageable area depends on the printer model and/or Ghostscript driver."));
+	    os = os + sformat ("----X-BORDER-4-LEFT: (%1)\n",
+		// footnote of the test page 4/6
+		// TRANSLATORS: keep this short! Only translations in languages
+		// with encodings ISO-8859-[1|2|15] will be used.
+		// it will be followed by a position specification
+		// (number/number) and the following part of testpage footnote
+		_("Here it begins on the left/bottom at"));
+	    os = os + sformat ("----X-BORDER-4-RIGHT: (%1)\n",
+		// footnote of the test page 5/6
+		// TRANSLATORS: keep this short! Only translations in languages
+		// with encodings ISO-8859-[1|2|15] will be used.
+		// it will be followed by a position specification
+		// (number/number)
+		_("and on the right/top it ends at"));
+	    os = os + sformat ("----X-BORDER-5: (%1)\n",
+		// footnote of the test page 6/6
+		// TRANSLATORS: keep this short! Only translations in languages
+		// with encodings ISO-8859-[1|2|15] will be used.
+		_("1 unit = 1 PostScript point = 0.0139 inch = 0.0353 cm."));
+
+// values
+	    os = os + sformat ("----X-SECT1: (%1)\n", "queue name");
+	    os = os + sformat ("----X-SECT2: (%1 %2)\n",
+		printer["vendor_ieee"]:"", printer["device_ieee"]:"");
+	    os = os + sformat ("----X-SECT3: (%1)\n", config);
+            // TRANSLATORS: keep this short! Only translations in languages
+            // with encodings ISO-8859-[1|2|15] will be used.
+	    os = os + sformat ("----X-SECT4: %1\n", mergestring (optlist, " "));
+
+
+//	    os = os + mergestring (optlist, "\n");
 
 	    if (ce != "X")
 	    {
