@@ -1568,6 +1568,14 @@ with a prefilled name?")))
 	    new_spooler = "cups-client";
 	}
 
+	// this avoids problem with unread CUPS settings in the proposal
+	// see bug #46822
+	if (CUPS::cups_server_settings == nil
+	    || CUPS::cups_server_permissions == nil)
+	{
+	    CUPS::ReadCupsSettings ();
+	}
+
 	term contents = `VBox (
 	    `VSpacing (1),
 	    `HBox (
