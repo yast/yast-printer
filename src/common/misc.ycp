@@ -143,7 +143,7 @@ This usually takes one or two minutes")));
             hosts = SCR::Read (.net.hostnames.samba);
         else if ("ipp" == type)
             hosts = SCR::Read (.net.hostnames, 631);
-        else if ("lpd" == type)
+        else if ("lpd" == type || "filtering" == type || "prefilter" == type)
             hosts = SCR::Read (.net.hostnames, 515);
         else if ("socket" == type)
             hosts = SCR::Read (.net.hostnames, 9100);
@@ -680,13 +680,13 @@ All changes will be lost!",
 		    // label
 		    `Label (`opt (`hstretch), _("Unsupported printing in CUPS:")),
 		    // radiobutton
-                    `RadioButton (`id (`remote), `opt (`hstretch),      _("LPD &forwarding queue"), type == "lpd"),
+                    `RadioButton (`id (`remote), `opt (`hstretch, `disabled),     _("LPD &forwarding queue"), type == "lpd"),
 		    // radiobutton
-                    `RadioButton (`id (`prefilter),`opt (`hstretch), _("Prefilter queue for a LPD forwarding &queue"), type == "prefilter"),
+                    `RadioButton (`id (`prefilter),`opt (`hstretch, `disabled), _("Prefilter queue for a LPD forwarding &queue"), type == "prefilter"),
 		    // radiobutton
-                    `RadioButton (`id (`novell), `opt (`hstretch),   _("IPX printing (Nove&ll printer)"), type == "novell"),
+                    `RadioButton (`id (`novell), `opt (`hstretch, `disabled),   _("IPX printing (Nove&ll printer)"), type == "novell"),
 		    // radiobutton
-		    `RadioButton (`id (`pipe), `opt (`hstretch),     _("Pip&e printing"), type == "pipe")
+		    `RadioButton (`id (`pipe), `opt (`hstretch, `disabled),     _("Pip&e printing"), type == "pipe")
 		    )
 		: Printer::spooler == "lprng" ?
                 `VBox (
@@ -713,11 +713,11 @@ All changes will be lost!",
 		    // label
 		    `Label (`opt (`hstretch), _("Unsupported printing in LPRng:")),
 		    // radiobutton
-                    `RadioButton (`id (`ipp), `opt (`hstretch),    _("&IPP filtering and forwarding queue"), type == "ipp"),
+                    `RadioButton (`id (`ipp), `opt (`hstretch, `disabled),    _("&IPP filtering and forwarding queue"), type == "ipp"),
 		    // radiobutton
-		    `RadioButton (`id (`other), `opt (`hstretch),   _("&Other Printer (set URI)"), "" == knowConnection (type) && type != "class"),
+		    `RadioButton (`id (`other), `opt (`hstretch, `disabled),   _("&Other Printer (set URI)"), "" == knowConnection (type) && type != "class"),
 		    // radiobutton
-		    `RadioButton (`id (`class), `opt (`hstretch),  _("CUPS &class"), type == "class")
+		    `RadioButton (`id (`class), `opt (`hstretch, `disabled),  _("CUPS &class"), type == "class")
                     )
 		: //unknown spooler
 		`VBox (
