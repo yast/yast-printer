@@ -36,7 +36,7 @@
       * Read settings dialog
       * @return `abort if aborted and `next otherwise
       */
-    global define symbol ReadDialog() ``{
+    define symbol ReadDialog() ``{
 	Wizard::RestoreHelp (getInitProgressHelp ());
 	boolean ret = Printer::Read();
 	return ret ? `next : `abort;
@@ -46,7 +46,7 @@
       * Write settings dialog
       * @return `abort if aborted and `next otherwise
       */
-    global define symbol WriteDialog() ``{
+    define symbol WriteDialog() ``{
 	Wizard::RestoreHelp (getWriteProgressHelp ());
 	boolean ret = Printer::Write();
 	return ret ? `next : `abort;
@@ -58,7 +58,7 @@
       * @param a value
       * @return integer representation of a
       */
-    global define integer AnyToInteger (any a) ``{
+    define integer AnyToInteger (any a) ``{
 	integer c = (integer)a;
 	return c;
     }
@@ -69,7 +69,7 @@
       * @param vdb string database key of printer vendor
       * @param mdb string database key of printer model
       */
-    global define void DisplayPrinterPopup (map info, string vdb, string mdb)``{
+    define void DisplayPrinterPopup (map info, string vdb, string mdb)``{
 	string manuf_info = lookup (info, "vendor",
 	    // richtext
 	    _("<P>No information available.</P>"));
@@ -101,7 +101,7 @@
      * Uses global printer
      * @return symbol `back, `next, `abort
      */
-    global define symbol runManufModelDialog () ``{
+    define symbol runManufModelDialog () ``{
 	y2milestone ("Manuf/model dialog started for %1", Printer::printer);
 	map ppd_info = Printer::printer["ppd_info"]:$[];
 	string manuf_db = ppd_info["manufacturer_db"]:"";
@@ -312,7 +312,7 @@ additional PostScript module).");
      * Run dialog
      * @return symbol `back, `next, `abort
      */
-    global define symbol runDownloadPpdFile () ``{
+    define symbol runDownloadPpdFile () ``{
 	term contents = `HBox (`HStretch (),
 	    `VBox (
 		`VStretch (),
@@ -395,7 +395,7 @@ user name, and password.
      * Run dialog
      * @return symbol `back, `next, `abort
      */
-    global define symbol runInstalledPrinterDialog () ``{
+    define symbol runInstalledPrinterDialog () ``{
 	y2milestone ("running installed printers dialog");
 	list<map> printers = getConfiguredPrinters ();
 	list items = [];
@@ -472,7 +472,7 @@ user name, and password.
      * Dialog for choosing configuration.
      * @return symbol for wizard sequencer
      */
-    global define symbol runPpdSelectDialog () ``{
+    define symbol runPpdSelectDialog () ``{
 	y2milestone ("Running config dialog for %1", Printer::printer);
 	map ppd_info = Printer::printer["ppd_info"]:$[];
 	string manuf_db = ppd_info["manufacturer_db"]:"";
@@ -638,7 +638,7 @@ Select model first"));
      * @param allow_auto boolean true if should be allowed to omit printer name
      * @return symbol for wizard seq.
      */
-    global define symbol runNameDialog (boolean allow_auto) ``{
+    define symbol runNameDialog (boolean allow_auto) ``{
 	y2milestone ("Running name dialog for %1", Printer::printer);
 	list forbidden_names = Printer::getForbiddenNames ();
 	string name = Printer::printer["name"]:"";
@@ -873,7 +873,7 @@ and test the queue after the printer model is selected."));
      * Choose one printer from list of printers
      * @return string selected printer
      */
-    global define string choosePrinterOrClass () ``{
+    define string choosePrinterOrClass () ``{
 	list onlyprinters = filter (map e, Printer::printcap,
 	    ``(lookup (e, "uri", "class") != "class"));
 	list printers =
@@ -931,7 +931,7 @@ and test the queue after the printer model is selected."));
      * Members of class
      * @return symbol `next or `back
      */
-    global define symbol runMembersDialog () ``{
+    define symbol runMembersDialog () ``{
 	list printers = toset (lookup (Printer::printer, "printers", []));
 	term contents =
 	    `VBox (
@@ -1034,7 +1034,7 @@ and test the queue after the printer model is selected."));
      * of options (upper list).
      * @return symbol for ws
      */
-    global define symbol runOptionsDialog () ``{
+    define symbol runOptionsDialog () ``{
 	if (SCR::Read (.target.size, Printer::printer["ppd"]:"") <= 0)
 	{
 	    Report::Message (_("Unknown PPD file. Select printer model."));
@@ -1278,7 +1278,7 @@ and test the queue after the printer model is selected."));
     /**
      * Create contents for edit dialog. Calls Setwizardcontents at the end.
      */
-    global define void createEditDialog () ``{
+    define void createEditDialog () ``{
 	map ppd_info = Printer::printer["ppd_info"]:$[];
 	string manuf_db = ppd_info["manufacturer_db"]:"";
 	string model_db = ppd_info["model_db"]:"";
@@ -1406,7 +1406,7 @@ and test the queue after the printer model is selected."));
      * Complex edit dialog for printer...
      * @return symbol for wizard seq.
      */
-    global define symbol runEditDialog () ``{
+    define symbol runEditDialog () ``{
 	any ret = nil;
 	createEditDialog ();
 	if (lookup (Printer::printer, "type", "yast2") == "yast2")
@@ -1529,7 +1529,7 @@ with a prefilled name?
       * Start dialog with advanced spooler settings
       * @return symbol for wizzard seq
       */
-    global define symbol runAdvancedDialog () ``{
+    define symbol runAdvancedDialog () ``{
 	string new_spooler = Spooler::Get ();
 	if (new_spooler == "cups"
 	    && CUPS::InstallationType () == `client)
@@ -1729,7 +1729,7 @@ y2error ("CIT: %1", CUPS::InstallationType ());
       * Dialog for choosing what kind of devices to use
       * @return wizard sequencer symbol
       */
-    global define symbol runCupsUsbDeviceTypeDialog () ``{
+    define symbol runCupsUsbDeviceTypeDialog () ``{
 	term contents = `HBox (`HStretch (), `VBox (
 	    `VStretch (),
 	    `RadioButtonGroup (`id (`devtype),
@@ -1782,7 +1782,7 @@ y2error ("CIT: %1", CUPS::InstallationType ());
       * Decide how to configure autodetected printer
       * @return symbol for ws
       */
-    global define symbol detectConfigType () ``{
+    define symbol detectConfigType () ``{
 	y2milestone ("Detecting way to configure printer");
 	symbol ret = nil;
 	// new queue to existing printer
@@ -1870,7 +1870,7 @@ y2error ("CIT: %1", CUPS::InstallationType ());
      * Show printer details in one window
      * @return symbol `back `next `abort
      */
-    global define symbol runQueuesProposalDialog () ``{
+    define symbol runQueuesProposalDialog () ``{
 	y2milestone ("Started queues proposal dialog for %1", Printer::printer);
 	map ppd_info = Printer::printer["ppd_info"]:$[];
 	string vendor = ppd_info["manufacturer_db"]:"";
@@ -1982,7 +1982,7 @@ y2error ("CIT: %1", CUPS::InstallationType ());
      * @param current_sel currently selected item
      * @return list list of items, `ids are indexes to autoprobed_printers list
      */
-    global define list getAutoprobedSelectionBox (integer current_sel) ``{
+    define list getAutoprobedSelectionBox (integer current_sel) ``{
 	integer current = -1;
 	boolean selected = false;
 	list items = maplist (map i, Printer::autodetected, ``{
@@ -2024,7 +2024,7 @@ y2error ("CIT: %1", CUPS::InstallationType ());
      * Restart detection of printers.
      * @return symbol always `next
      */
-    global define symbol runProbeDialog () ``{
+    define symbol runProbeDialog () ``{
 	Printer::Detect ();
 	return `next;
     }
@@ -2033,7 +2033,7 @@ y2error ("CIT: %1", CUPS::InstallationType ());
      * Common detected hardware dialog.
      * @return symbol for ws
      */
-    global define symbol runDetectedDialog () ``{
+    define symbol runDetectedDialog () ``{
 	y2milestone ("Starting detected dialog");
 	Printer::confmode = `det;
 	term contents = Wizard_hw::DetectedContent (
@@ -2082,6 +2082,7 @@ y2error ("CIT: %1", CUPS::InstallationType ());
 	    }
 	    else if (`next == ret) // finish
 	    {
+		break;
 	    }
 	    else if (`configure_button == ret)
 	    {
@@ -2133,7 +2134,7 @@ Continue?
      * Complex dialog.
      * @return symbol for ws
      */
-    global define symbol runComplexDialog () ``{
+    define symbol runComplexDialog () ``{
 	Printer::confmode = `adm;
 	string spoolerlabel = "";
 	if (Spooler::Get () == "cups")
@@ -2284,7 +2285,7 @@ All your changes will be lost.
       * Detect installation type
       * @return symbol `server or `client
       */
-    global define symbol getInstType () ``{
+    define symbol getInstType () ``{
 	if (Spooler::Get () != "cups")
 	    return `server;
 	return CUPS::InstallationType ();
@@ -2294,7 +2295,7 @@ All your changes will be lost.
       * Mark the queue as the queue maintained by YaST
       * @return symbol `next
       */
-    global define symbol markQueueYaST () ``{
+    define symbol markQueueYaST () ``{
 	Printer::printer["type"] = "yast2";
 	return `next;
     }
@@ -2302,7 +2303,7 @@ All your changes will be lost.
      * We need this wrapper because of wizard sequencer.
      * @return `next for wizard sequencer
      */
-    global define symbol storePrinter () ``{
+    define symbol storePrinter () ``{
 	Printer::storePrinter ();
 	return `next; // because of wizard sequencer
     }

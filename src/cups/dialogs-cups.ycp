@@ -33,7 +33,7 @@
       * Run dialog informing about IPP queue listening
       * @return symbol for WS
       */
-    global define symbol runListenIPPDialog () ``{
+    define symbol runListenIPPDialog () ``{
 
 	term contents = `HBox (`HStretch (), `VBox (
 	    `VStretch (),
@@ -85,7 +85,7 @@
       *   "Complex" dialog
       * @return symbol for wizard sequencer
       */
-    global define symbol runCupsClientDialog (boolean main) ``{
+    define symbol runCupsClientDialog (boolean main) ``{
 	term advanced = main
 	    ? `VBox (
 		`VSpacing (4),
@@ -258,7 +258,7 @@
      * Choose PPD file
      * @return symbol `next, `abort or `back
      */
-    global define symbol runSelectPpdFile () ``{
+    define symbol runSelectPpdFile () ``{
 	term contents = `HBox (
 	    `HStretch (),
 	    `VBox (
@@ -288,8 +288,6 @@
 	    if (`next == ret)
 	    {
 		string file = (string)UI::QueryWidget (`id (`name), `Value);
-		if (!is (file, string))
-		    file = "";
 		if (!Printer::isFile (file))
 		{
 		    // popup
@@ -334,7 +332,7 @@
      * Choose an user.
      * @return list list of selected users
      */
-    global define list chooseUser () ``{
+    define list chooseUser () ``{
             list<map> users_maps = (list<map>) SCR::Read (.etc.passwd);
             list<string>users_names = maplist (map i, users_maps, ``{
                 return lookup (i, "username", "");
@@ -399,7 +397,7 @@
      * Show dialog with users that can/can not use printer/class.
      * @return symbol `next or `back
      */
-    global define symbol runUsersDialog () ``{
+    define symbol runUsersDialog () ``{
         //
         // parse settings...
         //
@@ -538,7 +536,7 @@
      * State of printer/class.
      * @return symbol `next or `back
      */
-    global define symbol runStateDialog () ``{
+    define symbol runStateDialog () ``{
 	boolean is_class = lookup (Printer::printer, "uri", "class") == "class";
         // get state
         boolean accept = lookup (Printer::printer, "accepting", true);
@@ -674,7 +672,7 @@
       * @param state symbol `allow or `deny checked radiobutton
       * @return term dialog contents
       */
-    global define term ipAddrPopup (boolean ad, string label, string init, symbol state) ``{
+    define term ipAddrPopup (boolean ad, string label, string init, symbol state) ``{
 	return `VBox (
 	    ad ? `RadioButtonGroup (`id (`type),
 		`HBox (
@@ -696,7 +694,7 @@
      * @param type symbol `root, `admin, `printers of `classes specifying access configuration area
      * @return symbol `next or `back
      */
-    global define symbol runCupsAclDialog (symbol type) ``{
+    define symbol runCupsAclDialog (symbol type) ``{
 	string pth = type == `root ? "/" : type == `admin ? "/admin" : type == `printers ? "/printers" : "/classes";
 	boolean show_ignore = type != `root && type != `admin;
 	term contents = `HBox (
@@ -853,7 +851,7 @@
      * CUPS server settings dialog
      * @return symbol `next or `back
      */
-    global define symbol runCupsServerDialog () ``{
+    define symbol runCupsServerDialog () ``{
 	term contents = `HBox (`HSpacing (2), `VBox (
 	    `VSpacing (1),
 	    // frame
