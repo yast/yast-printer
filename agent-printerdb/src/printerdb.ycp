@@ -97,18 +97,27 @@
 	    SCR::Write (.printerdb.gettext.db, tmp + "db.msg");
 	    SCR::Write (.printerdb.gettext.prg, tmp + "prg.msg");
 	    SCR::Write (.printerdb.testscript, tmp + "tst");
-	    string result = "vendor_name | product_name | architecture | distribution | language | support_status | bus_type | manufacturer_comment | model_comment | available_configurations \n";
+//	    string result = "vendor_name | product_name | architecture | distribution | language | support_status | bus_type | manufacturer_comment | model_comment | available_configurations \n";
+	    string result = "vendor_name | product_name | support | manufacturer_comment | model_comment \n";
 	    list vend = SCR::Read (.printerdb.vendors, current_vendor);
 	    foreach (`v, vend, ``{
-		string vlabel = select (v, 1, "");
+		y2milestone ("Vendor: %1", v);
+		string vlabel = select (v, 1, "");// was 1
 		string vid = select (select (select (v, 0, []), 0, []), 0, "");
 		list mod = SCR::Read (add (.printerdb.models, vid), current_printer);
 		string vcomment = "";
 		foreach (`m, mod, ``{
-		    string mlabel = select (m, 1, "");
+		    y2milestone ("Model: %1", m);
+//		    string mlabel = select (m, 1, "");// was 1
+		    any xxx = select (m, 0, []);
+		    xxx = select (xxx, 0, []);
+		    y2milestone ("XXX: %1", xxx);
+		    string mlabel = select (select (m, 0, []), 1, "");
+		    y2milestone ("MLabel: %1", mlabel);
+		    mlabel = select (xxx, 1, "");
+		    y2milestone ("MLAbel: %1", mlabel);
 		    string mid = select (select (select (m, 0, []), 0, []), 0, "");
 		    list cfgs = select (SCR::Read (add (.printerdb.configsrt, mid), ""),1,[]);
-y2error ("cfgs: %1", cfgs);
 		    boolean cups = false;
 		    boolean lprng = false;
 		    boolean problematic = true;
@@ -137,9 +146,7 @@ y2error ("cfgs: %1", cfgs);
 			    clabel = clabel + " - used by YaST2 as default";
 			cfgslst = add (cfgslst, clabel);
 		    });
-y2error ("cfgslst: %1", cfgslst);
 		    string cfgstr = mergestring (cfgslst, ", ");
-y2error ("%1", cfgstr);
 		    string support = "not";
 		    if (cups && lprng)
 			support = "full";
@@ -147,7 +154,6 @@ y2error ("%1", cfgstr);
 			support = "partially";
 		    if (support != "not" && size (SCR::Read (.printerdb.auto, mid)) == 0)
 			support = "problematic";
-y2error ("Auto: %1", SCR::Read (.printerdb.auto, mid));
 
 		    map pinfo = SCR::Read (.printerdb.info, [ vid, mid ]);
 		    if (/*0 != lookup (pinfo, "type", 0) && */"" != lookup (pinfo, "printer", lookup (pinfo, "config", "")))
@@ -155,20 +161,16 @@ y2error ("Auto: %1", SCR::Read (.printerdb.auto, mid));
 			mcomment = lookup (pinfo, "printer", lookup (pinfo, "config", ""));
 			vcomment = lookup (pinfo, "vendor", "");
 		    }
-//		    mcomment = mergestring (splitstring (mcomment, "\n"), " ");
-//		    vcomment = mergestring (splitstring (vcomment, "\n"), " ");
-//		    mcomment = mergestring (splitstring (mcomment, "<BR>"), "\\0");
-//		    vcomment = mergestring (splitstring (vcomment, "<BR>"), "\\0");
 		    mcomment = replaceAll (mcomment, "\n", " ");
 		    vcomment = replaceAll (vcomment, "\n", " ");
-                    mcomment = replaceAll (mcomment, "<BR>", "\\0");
-                    vcomment = replaceAll (vcomment, "<BR>", "\\0");
+//                    mcomment = replaceAll (mcomment, "<BR>", "\\0");
+//                    vcomment = replaceAll (vcomment, "<BR>", "\\0");
 
 
-// FIXMEdone remove 2 lines
-//mcomment = "";
-//vcomment = "";
-		    string line = mergestring ([vlabel, mlabel, "i386", "8.1", "en_UK/de_DE", support, "unknown", vcomment, mcomment, cfgstr], " | ");
+//		    string line = mergestring ([vlabel, mlabel, "i386", "8.1", "en_UK/de_DE", support, "unknown", vcomment, mcomment, cfgstr], " | ");
+
+		    string line = mergestring ([vlabel, mlabel, support, vcomment, mcomment], "|");
+
 //		    string line = sformat ("%1 | %2 | %3 | %4 | %5 | %6 | %7 | %8 | %9 | %10 \n", vlabel, mlabel, "i386", "8.1", "en_UK/de_DE", support, "unknown", vcomment, mcomment, cfgstr);
 		    if (! (issubstring (mlabel, "supported") || issubstring (mlabel, "no GDI") || issubstring (mlabel, "laser printer") || issubstring (mlabel, "PostScript or PDF")
 				|| issubstring (mlabel, "inkjet printer") || issubstring (mlabel, "dot matrix") || issubstring (mlabel, "special")))

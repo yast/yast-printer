@@ -46,6 +46,7 @@ class PPD {
                 string printer;
                 string product;
                 string nick;
+		string shortnick;
                 string lang;
                 string pnp_vendor;
                 string pnp_printer;
@@ -72,6 +73,7 @@ class PPD {
 
     private:
         Vendors db;
+	
         char ppd_dir[MAX];
         char ppd_db[MAX];
         time_t mtime;
@@ -80,6 +82,8 @@ class PPD {
         VendorsMap vendors_map;
 	typedef map<string, vector<pair <string, string> > > ModelsMap;
 	ModelsMap models_map;
+	typedef map<string, map <string, map <string, string> > > ModelsInfoMap;
+	ModelsInfoMap models_info;
 
         bool mtimes(const char *dirname, time_t mtime, int *count);
 	int  countFiles (const char *dirname);

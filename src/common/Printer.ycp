@@ -55,7 +55,7 @@
       * Shall be printers detected
       * If nil, ask user
       */
-    global boolean detect = true;//nil;
+    global boolean detect = true;
     /**
      * Database passed on command line (or nil
      * in case flobal db should be used)
@@ -903,7 +903,8 @@ END { if (!used) print \"ServerName %1\" }
 	Printerlib::stopServices();
 	if (Printer::spooler == "cups")
 	{
-	    Runlevel::ServiceAdjust ("lpd", "disable");
+	    if (SCR::Read (.init.scripts.exists, "lpd"))
+		Runlevel::ServiceAdjust ("lpd", "disable");
 	    if (0 == cupsInstallationType ())
 	    {
 		writeCupsSettings ();
@@ -913,7 +914,8 @@ END { if (!used) print \"ServerName %1\" }
             if (0 != cupsInstallationType ())
 	    {
 		Printerlib::stopServices();
-		Runlevel::ServiceAdjust ("cups", "disable");
+		if (SCR::Read (.init.scripts.exists, "cups"))
+		    Runlevel::ServiceAdjust ("cups", "disable");
 		saveClientHostName ();
 		// popup
 		boolean delete = Pkg::IsProvided ("cups") && UI::YesNoPopup (_("Some packages installed are not needed
@@ -939,7 +941,8 @@ Remove them?
 	}
 	else
 	{
-	    Runlevel::ServiceAdjust ("cups", "disable");
+	    if (SCR::Read (.init.scripts.exists, "cups"))
+		Runlevel::ServiceAdjust ("cups", "disable");
 	}
 	restartSpoolerIfNeeded (true);
 	// caption of progress
@@ -1062,7 +1065,8 @@ the selected spooler does not support it.
 	    else
 	    {
 		Printerlib::stopServices();
-		Runlevel::ServiceAdjust ("cups", "disable");
+		if (SCR::Read (.init.scripts.exists, "cups"))
+		    Runlevel::ServiceAdjust ("cups", "disable");
 	    }
 	}
 	else
@@ -1074,7 +1078,8 @@ the selected spooler does not support it.
 	    else
 	    {
 		Printerlib::stopServices();
-		Runlevel::ServiceAdjust ("lpd", "disable");
+		if (SCR::Read (.init.scripts.exists, "lpd"))
+		    Runlevel::ServiceAdjust ("lpd", "disable");
 	    }
 	}
 	    Progress::NextStage ();
@@ -1524,7 +1529,20 @@ the selected spooler does not support it.
 		{
 		    map info = $[];
 		    if (Printer::db == `foomatic)
-			info = $["supported":true, "type":0];// FIXME type
+		    {
+			string vdb = SCR::Read (.ppd.db.vendorname,
+                            i["vendor"]:"");
+			string mdb = SCR::Read (.ppd.db.modelname,
+                            [vdb, i["device"]:""]);
+			y2error ("Printer: %1 %2", vdb, mdb);
+			boolean supp = size (filter (`k, `v, Printer::foomatic[vdb, mdb]:$[], ``(is (k, string)))) > 0;
+			y2error ("Supp: %1", supp);
+			integer type = Printer::foomatic[vdb, mdb, `support]:1;
+			y2error ("Type: %1", type);
+			if (! supp)
+			    type = 2;
+			info = $["supported":true, "type":type];// FIXME type
+		    }
 		    else
 			info = SCR::Read (.printerdb.info, detected);
 		    if (0 == lookup (info, "type", 2))

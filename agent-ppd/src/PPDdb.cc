@@ -81,7 +81,7 @@ PPD::PPD(const char *ppddir, const char *ppddb) {
         vendors_map[string(v)]=string(array_map[i].val);
 
     char buf[256];
-    FILE* f = fopen ("/usr/share/YaST2/data/printerdb/models.equiv", "r");
+    FILE* f = fopen ("/usr/share/YaST2/data/printer/models.equiv", "r");
     if (f)
     {
 	while (fgets (buf, 255, f))
@@ -345,6 +345,175 @@ void* PPD::createdbThread() {
 
     creation_status = 90;
 
+    // process list of SuSE database printers
+    
+    char buf[16384];
+    FILE* f = fopen ("/usr/share/YaST2/data/printer/printers.susedb", "r");
+    if (f)
+    {
+	y2milestone ("File with SuSE database entries found, processing...");
+        while (fgets (buf, 16384, f))
+        {
+            unsigned int i = 0;
+            string vendor;
+            string model;
+            string support;
+	    string vendor_comment;
+	    string model_comment;
+            for (; i < strlen (buf) ; i++)
+            {
+                if (buf[i] == '|' || buf[i] == '\n')
+                {
+                    i++;
+                    break;
+                }
+                vendor = vendor + buf[i];
+            }
+            for (; i < strlen (buf) ; i++)
+            {
+                if (buf[i] == '|' || buf[i] == '\n')
+                {
+                    i++;
+                    break;
+                }
+                model = model + buf[i];
+            }
+            for (; i < strlen (buf) ; i++)
+            {
+                if (buf[i] == '|' || buf[i] == '\n')
+                {
+                    i++;
+                    break;
+                }
+                support = support + buf[i];
+            }
+            for (; i < strlen (buf) ; i++)
+            {
+                if (buf[i] == '|' || buf[i] == '\n')
+                {
+                    i++;
+                    break;
+                }
+                vendor_comment = vendor_comment + buf[i];
+            }
+            for (; i < strlen (buf) ; i++)
+            {
+                if (buf[i] == '|' || buf[i] == '\n')
+                {
+                    i++;
+                    break;
+                }
+                model_comment = model_comment + buf[i];
+            }
+	    string mlabel = model;
+	    vendor = getVendorId (vendor);
+	    model = getModelId (vendor, model);
+
+	    Models mod;
+            if(db.find(vendor) != db.end())
+                mod = db[vendor];
+	    Drivers dri;
+	    if (mod.find(model) != mod.end ())
+		dri = mod[model];
+	    else
+	    {
+		y2milestone ("Non-existent printer %s found", model.c_str ());
+	    }
+
+            mod[model] = dri;
+            db[vendor] = mod;
+
+	    map <string, map <string, string> > vendinfo;
+	    if (models_info.find (vendor) != models_info.end ())
+		vendinfo = models_info[vendor];
+	    map <string, string> modinfo;
+	    if (vendinfo.find (model) != vendinfo.end ())
+		modinfo = vendinfo[model];
+
+	    string tmp = vendor_comment;
+	    vendor_comment = "";
+	    for (string::const_iterator i = tmp.begin (); i != tmp.end (); i++)
+	    {
+		if (*i == '\\' || *i == '\"')
+		    vendor_comment = vendor_comment + '\\';
+		vendor_comment = vendor_comment + *i;
+	    }
+	    tmp = model_comment;
+	    model_comment = "";
+            for (string::const_iterator i = tmp.begin (); i != tmp.end (); i++)
+            {
+                if (*i == '\\' || *i == '\"')
+                    model_comment = model_comment + '\\';
+                model_comment = model_comment + *i;
+            }
+
+
+	    modinfo["vendor_comment"] = vendor_comment;
+	    modinfo["model_comment"] = model_comment;
+	    modinfo["support_status"] = support;
+	    modinfo["mlabel"] = mlabel;
+
+	    vendinfo[model] = modinfo;
+	    models_info[vendor] = vendinfo;
+
+	}
+	fclose (f);
+    }
+
+    creation_status = 94;
+
+    /* Make equivalent models really equivalent */
+
+    PPD::Vendors::const_iterator i1 = db.begin ();
+    PPD::Vendors new_db;
+    for (; i1 != db.end (); i1++)
+    {
+	PPD::Models::const_iterator it2 = (*i1).second.begin ();
+	string vendor = i1->first;
+	PPD::Models new_mods;
+	for (; it2 != (*i1).second.end(); it2++) {
+	    string modlabel = it2->first;
+	    Drivers moddata = it2->second;
+	    string model = getModelId (vendor, modlabel);
+// store modlabel
+            map <string, map <string, string> > vendinfo;
+            if (models_info.find (vendor) != models_info.end ())
+                vendinfo = models_info[vendor];
+            map <string, string> modinfo;
+            if (vendinfo.find (model) != vendinfo.end ())
+                modinfo = vendinfo[model];
+	    string label;
+	     if (modinfo.find ("mlabel") != modinfo.end ())
+		label = modinfo["mlabel"];
+	    if ((label == "" || label.size () > modlabel.size ())
+		&& modlabel != model)
+	    {
+		modinfo["mlabel"] = modlabel;
+	    }
+	    vendinfo[model] = modinfo;
+	    models_info[vendor] = vendinfo;
+	    y2debug ("Set label for %s to %s", model.c_str(),
+		models_info[vendor][model]["mlabel"].c_str ());
+
+// merge PPD files if needed
+	    if (new_mods.find (model) != new_mods.end ())
+	    {
+		// was already found
+		Drivers old_model = new_mods[model];
+		for (Drivers::const_iterator it3 = old_model.begin ();
+		    it3 != old_model.end (); it3++)
+		{
+		    moddata[it3->first] = it3->second;
+		}
+	    }
+	    new_mods[model] = moddata;
+	}
+	new_db[vendor] = new_mods;
+    }
+    db = new_db;
+
+    creation_status = 98;
+
     fprintf(file,"/*\n");
     fprintf(file," * YCP database of all PPD files\n");
     fprintf(file," * GENERATED FILE, DON'T EDIT!\n");
@@ -355,6 +524,9 @@ void* PPD::createdbThread() {
 
     PPD::Vendors::const_iterator it1 = db.begin ();
     for(f1 = true; it1 != db.end(); it1++) {
+	map <string, map <string, string> > vendinfo;
+	if (models_info.find (it1->first) != models_info.end ())
+	    vendinfo = models_info[it1->first];
         F(f1) fprintf(file,str);
         fprintf(file,"\n  \"%s\" : $[\n", it1->first.c_str());
 	fprintf(file,"    `label : \"%s\",\n", it1->first.c_str());
@@ -364,9 +536,42 @@ void* PPD::createdbThread() {
             fprintf(file,"    \"%s\" : $[\n", getModelId
 		(it1->first, it2->first).c_str ());
 
+	    string support, vcomment, mcomment;
+	    string vendor = it1->first.c_str();
+	    string model = it2->first.c_str ();
+            map <string, string> modinfo;
+            if (vendinfo.find (model) != vendinfo.end ())
+                modinfo = vendinfo[model];
+	    if (modinfo.find ("support_status") != modinfo.end ())
+		support = modinfo["support_status"];
+            if (modinfo.find ("vendor_comment") != modinfo.end ())
+                vcomment = modinfo["vendor_comment"];
+            if (modinfo.find ("model_comment") != modinfo.end ())
+                mcomment = modinfo["model_comment"];
+	    if (mcomment == " ")
+		mcomment = "";
+	    int sup_status = 0;
+	    if (support == "problematic")
+		sup_status = 1;
+	    else if (support != "full")
+		sup_status = 2;
 
-//strupper(it2->first).c_str());
-	    fprintf(file,"      `label : \"%s\",\n", it2->first.c_str());
+            if (modinfo.find ("shortnick") != modinfo.end ())
+                fprintf(file,"      `label : \"%s\",\n",
+                    modinfo["shortnick"].c_str());
+	    else if (modinfo.find ("mlabel") != modinfo.end ())
+		fprintf(file,"      `label : \"%s\",\n",
+		    modinfo["mlabel"].c_str());
+	    else
+		fprintf(file,"      `label : \"%s\",\n", it2->first.c_str());
+
+	    if (support != "")
+		fprintf(file,"      `support : %d,\n", sup_status);
+            if (vcomment != "")
+                fprintf(file,"      `vcomment : \"%s\",\n", vcomment.c_str ());
+            if (mcomment != "")
+                fprintf(file,"      `mcomment : \"%s\",\n", mcomment.c_str ());
+
             PPD::Drivers::const_iterator it3 = (*it2).second.begin();
             for(f3 = true; it3 != (*it2).second.end(); it3++) {
                 F(f3) fprintf(file,str);
@@ -653,6 +858,7 @@ bool PPD::process_file(const char *filename, PPDInfo *newinfo) {
     char vendor[MAX]="";
     char printer[MAX]="";
     char nick[MAX]="";
+    char shortnick[MAX]="";
     char lang[MAX]="";
     char product[MAX]="";
     char pnp_vendor[MAX]="";
@@ -706,6 +912,10 @@ bool PPD::process_file(const char *filename, PPDInfo *newinfo) {
         }
         else if(!strncmp(line, "*NickName:", 10)) {
             sscanf(line, "%*[^\"]\"%255[^\"\n]", nick);
+            ready++;
+        }
+        else if(!strncmp(line, "*ShortNickName:", 15)) {
+            sscanf(line, "%*[^\"]\"%255[^\"\n]", shortnick);
             ready++;
         }
         else if(!strncmp(line, "*pnpManufacturer:", 17)) {
@@ -787,6 +997,7 @@ bool PPD::process_file(const char *filename, PPDInfo *newinfo) {
     info.product = clean(product);
     info.lang = clean(lang);
     info.nick = nick;
+    info.shortnick = shortnick;
     info.pnp_vendor = pnp_vendor;
     info.pnp_printer = pnp_printer;
     preprocess(info, newinfo);
@@ -806,6 +1017,7 @@ void PPD::preprocess(PPD::PPDInfo info, PPDInfo *newinfo) {
     string product = killbraces(info.product);
     string lang = killbraces(info.lang);
     string nick = info.nick;
+    string shortnick = info.shortnick;
     string pnp_vendor = info.pnp_vendor;
     string pnp_printer = info.pnp_printer;
     string tmp;
@@ -880,9 +1092,21 @@ void PPD::preprocess(PPD::PPDInfo info, PPDInfo *newinfo) {
     vendor = killbraces(vendor);
     if(vendor=="") vendor = "Other";
 
-    /* Prepare printer */
+    /* Prepare printer -- use short nick first*/
+    string printer_back = printer;
+    printer = shortnick;
     signed ind;
     signed size = vendor.size();
+    if(strupper(printer.substr(0,size))==vendor) printer.erase(0,size);
+    printer = killbraces(printer);
+
+    ind = (signed) printer.find_last_of("(");
+    if(ind!=-1) printer.erase(ind, printer.size());
+    printer = killbraces(printer);
+
+    /* model not found -- use printer now */
+    if(printer=="") printer = killbraces(printer_back);
+
     if(strupper(printer.substr(0,size))==vendor) printer.erase(0,size);
     printer = killbraces(printer);
 
@@ -899,7 +1123,7 @@ void PPD::preprocess(PPD::PPDInfo info, PPDInfo *newinfo) {
     ind = (signed) printer.find_last_of("(");
     if(ind!=-1) printer.erase(ind, printer.size());
     printer = killbraces(printer);
-    if(printer=="") printer = "Other";
+    if(printer=="") printer = "Filename";
 
     /* remove ", Foomatic..." from printer name */
     int br = printer.find (", ");
@@ -917,6 +1141,8 @@ void PPD::preprocess(PPD::PPDInfo info, PPDInfo *newinfo) {
         vendor="HITACHI";
 
     /* prepare nick */
+    if (nick == "")
+	nick = filename;
     nick = addbrace(nick);
 
     if(lang!="English")// return; // FIXME (not needed any more)
@@ -957,6 +1183,32 @@ void PPD::preprocess(PPD::PPDInfo info, PPDInfo *newinfo) {
         item.pnp_vendor = pnp_vendor;
         item.pnp_printer = pnp_printer;
         db[vendor][printer][nick]=item;
+	/* Set the short nick name for using as label */
+/*	if(strupper(shortnick.substr(0,size))==vendor) shortnick.erase(0,size);
+	shortnick = killbraces(shortnick);
+
+	ind = (signed) shortnick.find_last_of("(");
+	if(ind!=-1) shortnick.erase(ind, shortnick.size());
+	shortnick = killbraces(shortnick);
+
+        map <string, map <string, string> > vendinfo;
+        if (models_info.find (vendor) != models_info.end ())
+            vendinfo = models_info[vendor];
+        map <string, string> modinfo;
+        if (vendinfo.find (getModelId (vendor, printer)) != vendinfo.end ())
+            modinfo = vendinfo[getModelId (vendor, printer)];
+        string label;
+         if (modinfo.find ("shortnick") != modinfo.end ())
+            label = modinfo["shortnick"];
+        if ((label == "" || label.size () > shortnick.size ()))
+        {
+            modinfo["shortnick"] = shortnick;
+        }
+        vendinfo[getModelId (vendor, printer)] = modinfo;
+        models_info[vendor] = vendinfo;
+        y2error ("Set short nick for %s to %s", printer.c_str(),
+            models_info[vendor][printer]["shortnick"].c_str ());
+*/
     }
 
     y2debug("File: %s", filename.c_str());

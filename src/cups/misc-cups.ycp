@@ -64,7 +64,14 @@
 	    ppdfile = Printer::foomatic[entry["vendor_db"]:"",
 		entry["device_db"]:"",
 		entry["config"]:"", 0]:"";
-	    y2milestone ("Using PPD file %1", ppdfile);
+	    y2milestone ("Using PPD file >>%1<<", ppdfile);
+	    if (ppdfile == "")
+	    {
+		UI::MessagePopup (sformat (_("Error occurred while saving queue %1.
+\nIncorrect internal data. Try to choose
+printer model again."), name));
+		return false;
+	    }
 //	    ppdfile = SCR::Read (.target.string, ppdfile);
 	}
 	else
@@ -82,7 +89,7 @@
 	}
         // --
 
-        if (ownppd == "" || isPpd (ownppd))
+        if ((ownppd == "" || isPpd (ownppd)) && ! raw)
         {
             if (ppdfilename != "")
             {
