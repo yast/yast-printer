@@ -445,7 +445,7 @@
       * @param printer_type string "printer" or "class"
       */
     global define void addToDeleted (string name, string printer_type) ``{
-	deleted = add (deleted, $[ "name" : name, "type" : printer_type, "states" : $["cups-state" : "changed", "lprng-state" : "changed"]]);
+	deleted = add (deleted, $[ "name" : name, "type" : printer_type]);
     }
     /**
      * Save currently edited printer.
@@ -541,11 +541,6 @@
      */
     global define void Reset () ``{
 
-	list pr = printcap;
-	foreach (`e, pr, ``{
-	    string uri = lookup (e, "uri", "");
-	    deletePrinters ([$["name": lookup (e, "name", ""), "type":  uri == "class" ? "class" : "printer"]]);
-	});
 	CUPS::server_hostname = "";
 	CUPS::cups_installation = nil;
 	dirty = true;
@@ -1069,47 +1064,39 @@ Detect your printers?"));
      }
     /**
       * deletes printers
-      * @param l list of strings representing names
+      * @param printer map of printer to delete (with keys name and type
+      *  containing "printer" or "class"
       * @return success state
       */
-    global define boolean deletePrinters (list l) ``{
-	if (size (l) > 0)
+    global define boolean wipePrinter (map printer) ``{
+	string command = "";
+	string name = lookup (printer, "name", "");
+	string p_type = lookup (printer, "type", "class");
+	if ("" != name)
 	{
-	    string command = "";
-	    foreach (`printer, l, ``{
-		string name = lookup (printer, "name", "");
-		string p_type = lookup (printer, "type", "class");
-		map states = lookup (printer, "states", $[]);
-		if ("" != name)
+	    if (Spooler::Get () == "cups")
+	    {
+		if (p_type == "class")
 		{
-		    if (Spooler::Get () == "cups")
-		    {
-			if (lookup (states, "cups-state", "changed") != "commited")
-			{
-			    if (p_type == "class")
-			    {
-				SCR::Write (.cups.classes.remove, name);
-			    }
-			    else
-			    {
-				SCR::Write (.cups.printers.remove, name);
-			    }
-			}
-		    }
-		    else if (Spooler::Get () == "lprng")
-		    {
-			if (p_type != "class" && lookup (states, "lprng-state", "changed") != "commited")
-			{
-			    command = command +
-				sformat ("/bin/rm -r /etc/lpdfilter/%1 /var/spool/lpd/%1; \n", name);
-			    callLprsetup (sformat ("/usr/lib/lpdfilter/bin/lprsetup -lprng -delete %1", name));
-			}
-		    }
+		    SCR::Write (.cups.classes.remove, name);
 		}
-	    });
-	    if (command != "")
-		SCR::Execute (.target.bash, command);
+		else
+		{
+		    SCR::Write (.cups.printers.remove, name);
+		}
+	    }
+	    else if (Spooler::Get () == "lprng")
+	    {
+		if (p_type != "class")
+		{
+		    command = command +
+			sformat ("/bin/rm -r /etc/lpdfilter/%1 /var/spool/lpd/%1; \n", name);
+		    callLprsetup (sformat ("/usr/lib/lpdfilter/bin/lprsetup -lprng -delete %1", name));
+		}
+	    }
 	}
+	if (command != "")
+	    SCR::Execute (.target.bash, command);
 	return true;
     }
 
@@ -1235,19 +1222,8 @@ Detect your printers?"));
       */
     global define boolean deleteDeletedPrinters () ``{
 	// FIXME error checking
-	deletePrinters (deleted);
-	deleted = maplist (`e, deleted, ``{
-	    map states = lookup (e, "states", $[]);
-	    if (Spooler::Get () == "cups")
-	    {
-		states = add (states, "cups-state", "commited");
-	    }
-	    else if (Spooler::Get () == "lprng")
-	    {
-		states = add (states, "lprng-state", "commited");
-	    }
-	    e = add (e, "states", states);
-	    return e;
+	foreach (map d, deleted, ``{
+	    wipePrinter (d);
 	});
 	return true;
     }
