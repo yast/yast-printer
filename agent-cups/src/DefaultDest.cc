@@ -13,12 +13,12 @@ YCPValue DefaultDest::Write(const YCPPath &path, const YCPValue& value, const YC
   // value must be string
   //
   string argument = "";
-  if (arg->isString ())
+  if ((! arg.isNull ()) && arg->isString ())
   {
     argument = arg->asString()->value();
   }
 
-  if(value->isString())
+  if((! value.isNull ()) && value->isString())
   {
     if (argument == "local")
       setDefaultDestLocal (value->asString()->value_cstr());
