@@ -93,7 +93,7 @@ main (int argc, char *argv[])
 	    strcpy (&cname[len-4], ".db");
 	    YCPTerm term (string ("PrinterdbAgent"), false);
 	    term->add (YCPString (cname));
-	    interpreter->evaluate (term);
+	    interpreter->evaluateSCR (term);
 	    free (cname);
 	}
     }
