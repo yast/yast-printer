@@ -279,13 +279,16 @@
 		`TextEntry (`id (`url), _("&URL"), "ftp://"),
 		`VSpacing (2),
 		`HBox (
+		    // text entry label
 		    `TextEntry (`id (`user), _("&User"), ""),
 		    `HSpacing (2),
+		    // password text entry label
 		    `Password (`id (`pass), _("&Password"), "")
 		),
 		`VStretch ()
 	    ), `HStretch ()
 	);
+	// dialog caption
 	Wizard::SetContents (_("Download PPD file"), contents,
 	    downloadHelp(), true, true);
 
@@ -319,6 +322,7 @@
 		}
 		SCR::Execute (.target.bash, sformat (
 		    "/usr/bin/rm %1/*", dir));
+		// label of popup informing about processed operation
 		UI::OpenDialog (`VBox (`Label (_("Downloading file"))));
 		y2milestone ("Downloading from %1 to %2", url, file);
 		map response = SCR::Execute (.curl.get, url,
@@ -642,12 +646,13 @@ database of printers. Select model first");
 		_("Do local &filtering"), ! raw);
 
 	term ff_insert = "cups" == Printer::spooler ? `VSpacing (0) :
-	    // check box
 	    `CheckBox (`id (`ff), `opt (`hstretch),
+		// check box
 		_("Print &formfeed between jobs"), ff);
 
 	term aa_insert = allow_auto
 	    ? `CheckBox (`id (`auto), `opt (`notify, `hstretch),
+		// check box
 		_("Automatically propose &multiple queues"), auto_propose)
 	    : `VSpacing (0);
 
@@ -762,6 +767,7 @@ database of printers. Select model first");
 		raw = ! UI::QueryWidget (`id (`raw), `Value);
 		if (! raw)
 		{
+		    // error report
 		    Report::Error (_("Only not filtering queues can
 be tested here."));
 		}
@@ -1420,13 +1426,13 @@ with a prefilled name?
 			Printer::save_all),
 		    `VStretch (),
 		    `HBox (`HWeight (999, `HStretch ()), `VBox (
-			// pushbutton
 			`PushButton (`id (`reinstall), `opt (`hstretch),
+			    // pushbutton
 			    _("Re&install printing packages")),
 			`VStretch (),
-			// pushbutton
 			`PushButton (`id (`scratch), `opt (`hstretch),
-				_("Cl&ear current configuration")),
+			    // pushbutton
+			    _("Cl&ear current configuration")),
 			Printer::spooler == "cups" && `server == Printer::cupsInstallationType () ? `VStretch () :`VSpacing (0),
 			// pushbutton
 			Printer::spooler == "cups" && `server == Printer::cupsInstallationType () ? `PushButton (`id (`cupsd), `opt (`hstretch), _("CUPS server se&ttings")) : `VSpacing (0),
@@ -1464,8 +1470,8 @@ with a prefilled name?
 	    }
 	    if (`scratch == ret)
 	    {
-		// popup
 		if (! Popup::AnyQuestion (Label::WarningMsg(),
+		    // popup
 		    _("Really discard your configuration?"),
 		    Label::YesButton(), Label::NoButton (), `focus_no))
 		{
@@ -1872,6 +1878,8 @@ the current configuration.
 		return nil;
 	    }
 	    else
+		// selection box entry, %1 is printer manufacturer, %2 model
+		// %3 device, eg. EPSON Stylus Photo 810 on /dev/usb/lp0
 		return `item (`id (current), sformat (_("%1 %2 on %3"),
 		    i["vendor"]:"", i["device"]:"",
 		    Printerlib::getDeviceNiceName (i["dev_name"]:"", true)),
