@@ -23,6 +23,7 @@ liby2ag_ppd_la_SOURCES = 	\
 	PPDfile.h		
 
 liby2ag_ppd_la_LDFLAGS = -version-info 2:0
+liby2ag_ppd_la_LIBADD = @AGENT_LIBADD@
 
 libpy2ag_ppd_la_SOURCES =		\
 	$(liby2ag_ppd_la_SOURCES)	\
@@ -32,5 +33,6 @@ libpy2ag_ppd_la_SOURCES =		\
 #	Y2PPDAgentComponent.h		\
 #	Y2PPDAgentComponent.cc
 libpy2ag_ppd_la_LDFLAGS = -version-info 2:0
+libpy2ag_ppd_la_LIBADD = @AGENT_LIBADD@
 
 INCLUDES = -I$(includedir)
