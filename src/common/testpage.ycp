@@ -205,11 +205,24 @@ press 'OK'.
 	    string enc = "ISO-8859-2" == ce ? "h02" : "h01";
 	    os = os + sformat ("----X-ENCODING: %1\n", enc);
 
+	    string config = printer["config"]:"";
+	    string ppd_filename = "";
+	    if (findlastof (config, "(") != nil)
+		ppd_filename = substring (config, findlastof (config, "(") + 1);
+	    if (findfirstof (ppd_filename, ")") != nil)
+		ppd_filename = substring (
+		    ppd_filename, 0, findfirstof (ppd_filename, ")"));
+	    ppd_filename = "/usr/share/cups/model/" + ppd_filename;
+	    if (findfirstof (config, "(") != nil)
+		config = substring (config, 0, findfirstof (config, "("));
+
 	    os = os + sformat ("----X-VENDOR: (%1 %2)\n",
 		printer["vendor_ieee"]:"",
 		printer["device_ieee"]:"");
 	    os = os + sformat ("----X-CONFIG: (%1)\n",
-		printer["config"]:"");
+		config);
+	    os = os + sformat ("----X-PPD: (%1)\n",
+		ppd_filename);
 	    // TRANSLATORS: keep this short! Only translations in languages
 	    // with encodings ISO-8859-[1|2|15] will be used.
 	    os = os + sformat ("----X-QUEUE-L: (%1)\n", _("Print queue:"));
@@ -221,6 +234,11 @@ press 'OK'.
 		// translations in languages
 		// with encodings ISO-8859-[1|2|15] will be used.
 		_("Configuration:"));
+	    os = os + sformat ("----X-PPD-L: (%1)\n",
+		// TRANSLATORS: keep this short! Only
+		// translations in languages
+		// with encodings ISO-8859-[1|2|15] will be used.
+		_("PPD file:"));
             // TRANSLATORS: keep this short! Only translations in languages
             // with encodings ISO-8859-[1|2|15] will be used.
 	    os = os + sformat ("----X-OPTION-L: (%1)\n", _("Options:"));
@@ -434,10 +452,12 @@ you made previously."));
       /^----X-QUEUE-L:/		{ $1 = \"\"; ARRAY[\"queue\"] = $0; 	next;	}
       /^----X-PRINTER-L:/ 	{ $1 = \"\"; ARRAY[\"printer\"] = $0; 	next;	}
       /^----X-CONFIG-L:/ 	{ $1 = \"\"; ARRAY[\"configl\"] = $0;	next;	}
+      /^----X-PPD-L:/	 	{ $1 = \"\"; ARRAY[\"ppdl\"] = $0;	next;	}
       /^----X-OPTION-L:/ 	{ $1 = \"\"; ARRAY[\"option\"] = $0; 	next;	}
       /^----X-HEAD:/ 		{ $1 = \"\"; ARRAY[\"head\"] = $0;	next;	}
       /^----X-ENCODING:/ 	{ $1 = \"\"; ARRAY[\"encoding\"] = $0;	next;	}
       /^----X-CONFIG:/ 		{ $1 = \"\"; ARRAY[\"config\"] = $0; 	next;	}
+      /^----X-PPD:/ 		{ $1 = \"\"; ARRAY[\"ppd\"] = $0; 	next;	}
  
       // { if (FILENAME !~ /suse_testpg.ps$/ && FILENAME !~ /ul_testpg.ps$/)
       		next;
@@ -467,6 +487,11 @@ you made previously."));
 		else					print $0;
 		next;
       }
+      /\~\~PPD\~L\~\~/ {
+      		if (length (ARRAY[\"ppdl\"]) > 0)	print ARRAY[\"ppdl\"];
+		else					print $0;
+		next;
+      }
       /\~\~OPTIONS\~L\~\~/ {
       		if (length (ARRAY[\"option\"]) > 0)	print ARRAY[\"option\"];
 		else					print $0;
@@ -484,6 +509,11 @@ you made previously."));
       }
       /\~\~CONFIG\~\~/ {
       		if (length (ARRAY[\"config\"]) > 0)	print ARRAY[\"config\"];
+		else					print $0;
+		next;
+      }
+      /\~\~PPD\~\~/ {
+      		if (length (ARRAY[\"ppd\"]) > 0)	print ARRAY[\"ppd\"];
 		else					print $0;
 		next;
       }
