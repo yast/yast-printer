@@ -17,6 +17,7 @@
     import "Wizard_hw";
     import "Printerlib";
     import "Printer";
+    import "Arch";
 
     include "printer/misc.ycp";
     include "printer/helps.ycp";
@@ -689,7 +690,7 @@ that your parallel port is not properly configured.
 	if (type != "socket")
 	    UI::ChangeWidget (`id (`queueent), `Value, queue);
 	else
-	    UI::ChangeWidget (`id (`queueent), `ValidChars, "1234567890");
+	    UI::ChangeWidget (`id (`port), `ValidChars, "1234567890");
 	UI::ChangeWidget (`id (`hostnameent), `Value, hostname);
 
 	symbol ret = nil;
@@ -716,7 +717,14 @@ that your parallel port is not properly configured.
 	    {
 		// get remote hosts (we always offer list of hosts)
                 list hosts = [];
+		if (`get_hosts_special == ret && type == "socket")
+		{
+		    type = UI::QueryWidget (`id (`port), `Value);
+		    if (type == "0" || type == "")
+			type = "9100";
+		}
                 hosts = getHostnames (`get_hosts_special == ret ? type : "");
+		type = "socket";
 		UI::ReplaceWidget (
 		    `id (`hostent_replace),
 		    `ComboBox (`id (`hostnameent), `opt (`editable, `hstretch), hent_str, sort (hosts))

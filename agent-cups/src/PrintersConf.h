@@ -253,8 +253,6 @@ private:
    */  
   list<PrinterEntry>::iterator findPrinter(const string name);
 
-  void DeleteUnsavedPrinters();  
-  void UnsavePrinters();
 public:
   /**
    * Default Constructor.

@@ -570,6 +570,7 @@ END { if (!used) print \"ServerName %1\" }
         if (0 == cupsInstallationType ())
         {
             list ret = SCR::Read (.cups.printers);
+y2error ("Cups read: %1", ret);
 	    ret = filter (`e, ret, ``(lookup (e, "uri", "") != ""));
             list classes = SCR::Read (.cups.classes);
 	    if (nil == ret) ret = [];
@@ -627,7 +628,7 @@ END { if (!used) print \"ServerName %1\" }
 	list tmplist = [];
 	list tmpdellist = [];
 	boolean ret = true;
-	boolean update = false;
+//	boolean update = false;
 	list nonyast = [];
 	string old_default = default;
 
@@ -641,7 +642,7 @@ END { if (!used) print \"ServerName %1\" }
         }
 	if (! reread)
 	{
-	    printcap = filter (`e, printcap, ``(lookup (e, "type", "yast2") == "yast2"));// && lookup (e, "uri", "class") != "class"));
+	    printcap = filter (`e, printcap, ``(lookup (e, "type", "yast2") == "yast2"));
 	    foreach (`e, printcap, ``{
 		string name = lookup (e, "name", "");
 		if ("" != name)
@@ -661,11 +662,11 @@ END { if (!used) print \"ServerName %1\" }
 	    if (nil == state)
 	    {
 		state = $[];
-		if (is (nonyast, list) && size (nonyast) > 0)
+/*		if (is (nonyast, list) && size (nonyast) > 0)
 		{
 		    y2milestone ("First run after update from older version");
 		    update = true;
-		}
+		}*/
 	    }
 	    printcap = lookup (state, "printers", []);
 	    deleted = lookup (state, "deleted", []);
@@ -716,15 +717,23 @@ END { if (!used) print \"ServerName %1\" }
 	        }
 	    }
         });
-	if (update)
+/*	if (update)
 	{
 	    list tmp = printcap;
 	    printcap = [];
 	    foreach (`e, tmp, ``{
 		e = add (e, "type", "yast2");
+		if (Printer::spooler == "cups")
+		{
+		    e = add (e, "ownppd", lookup (e, "ppd", ""));
+		}
+		else if (Printer::spooler == "lprng")
+		{
+
+		}
 		printcap = add (printcap, e);
 	    });
-	}
+	}*/
         original_unique_keys = $[];
         foreach (`i, printcap, ``{
             if (haskey (i, "unique_key"))
@@ -1061,20 +1070,6 @@ the selected spooler does not support it.
 	    sformat ("/usr/lib/lpdfilter/redirect/samba_print //%1/\"%2\" %3 %4 -N -P\n",
 		    Printerlib::getUriHost (uri), Printerlib::getUriRemoteQueue (uri), pass, user);
     }
-
-    /**
-     * Wipe printer from disk. It is used exclusively for wiping out
-     * printers created by testPrinter, so only printers created by
-     * apsfilter are wiped by this function.
-     * @param name name of the printer
-     */
-    global define void wipePrinter (string name) ``{
-	// delete files associated with old printer...
-	if (spooler == "cups")
-	    SCR::Write (.cups.printers.remove, [ $[ "name": name ] ]);
-	else
-	    SCR::Execute (.target.bash, sformat ("/bin/rm -r /etc/lpdfilter/%1 /var/spool/lpd/%1 ;\n\\", name));
-    }
     /**
      * Create .upp file from the options. Note that there can be depended options.
      * @param options Options list
@@ -1182,6 +1177,8 @@ the selected spooler does not support it.
 		{
 	            string model = SCR::Read (.printerdb.printername, [ lookup (i, "vendor", ""), lookup (i, "device", ""),
                                 lookup (i, "vendor_ieee", nil), lookup (i, "device_ieee", nil)]);
+		    if (model == "")
+			model = lookup (i, "info", "");
 		    string ppd = lookup (i, "ownppd", "");
 	            if (ppd != "" && ! isPpd (ppd))
 	                ppd = lookup (i, "ppd", "");
@@ -1487,9 +1484,9 @@ the selected spooler does not support it.
     global define boolean isPpd (string file) ``{
 	if (! isFile (file))
 	    return false;
-	integer len = size (file);
+/*	integer len = size (file);
 	if (!((len >4 && substring (file, len-4) == ".ppd")||(len>7 && substring (file, len-7) == ".ppd.gz")))
-	    return false;
+	    return false;*/
 	return SCR::Read (.cups.isppd, file);
     }
     /**

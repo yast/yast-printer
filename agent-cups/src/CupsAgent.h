@@ -18,7 +18,6 @@
 #include <scr/SCRAgent.h>
 #include <scr/SCRInterpreter.h>
 
-#include "PPD.h"
 #include "PrintersConf.h"
 #include "ClassesConf.h"
 #include "DefaultDest.h"
@@ -32,7 +31,6 @@ private:
   /**
    * Agent private variables
    */
-  PPD ppd;
   PrintersConf printers;
   ClassesConf classes;
   DefaultDest defaultdest;

@@ -3,41 +3,35 @@
 # Test ability to connect to remote direct socket (JetDirect) server.
 #
 # Exits:   0 doesn't seem to have a problem
-#          1 remote host $1 or queue $2 not set
+#          1 remote host $1 not set
 #          2 the remote host $1 is unreachable
-#          3 no connection possible to port 9100 on host $1 (no cups server running ?)
-#          4 queue does not accept a print job (queue does not exist or queueing disabled ?)
+#          3 no connection possible to port 9100 or port $2 on host $1
+#          4 port 9100 or port $2 on host $1 does not accept data
 #
-# Johannes Meixner <jsmeix@suse.de>, 2000, 2002
-# Jan Holesovsky <kendy@suse.cz>, 2000
+# Johannes Meixner <jsmeix@suse.de> 2002
 # Jiri Srain <jsrain@suse.cz>, 2002
 # $Id$
 
 #set -x
 MY_NAME=${0##*/}
 HOST="$1"
+[ -z "$HOST" ] && { echo -en "\nUsage:\n$MY_NAME HOST [PORT [TIMEOUT]]\n" 1>&2 ; exit 1 ; }
 PORT="$2"
-[ -z "$HOST" ] && { echo -en "\nUsage:\n$MY_NAME HOST PORT [TIMEOUT]\n" 1>&2 ; exit 1 ; }
+[ -z "$PORT" ] && PORT=9100
 TIMEOUT="$3"
 [ -z "$TIMEOUT" ] && TIMEOUT=10
 
 # test whether the remote host is accessible
 ping -c 1 -w $TIMEOUT $HOST || { echo -en "\nHost $HOST unreachable\n" ; exit 2 ; }
 
-# test whether connection is possible to port 9100 on the remote host
-netcat -w $TIMEOUT -z $HOST $PORT || { echo -en "\nNo connection possible to port 9100\n" ; exit 3 ; }
+# test whether connection is possible to $PORT on the remote host
+netcat -w $TIMEOUT -z $HOST $PORT || { echo -en "\nNo connection possible to port $PORT\n" ; exit 3 ; }
 
-exit 0;
-
-# test the queue and server
-echo -en "\r" | lp -d $QUEUE -h $HOST 2>&1;
-
-RES=$?
-
-if [ $RES -eq 0 ];
- then
-    exit 0;
-else
-    exit 4;
-fi
+# test whether $PORT on the remote host accepts data
+echo -en "\r" | netcat -w $TIMEOUT $HOST $PORT 2>&1
+RESULT=$?
+[ "$RESULT" = "0" ] \
+  && { echo -en "\nPort $PORT on host $HOST accepts data\n" ; exit 0 ; } \
+  || echo -en "\nPort $PORT on host $HOST does not accept data\n"
+exit 4
 

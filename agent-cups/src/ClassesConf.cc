@@ -618,18 +618,3 @@ bool ClassesConf::modifyClass(YCPMap clas)
         return newClass(clas);
     }
 }
-
-void ClassesConf::UnsaveClasses()
-{
-  list<ClassEntry>::iterator it = Classes.begin();
-  for(;it!=Classes.end();it++)
-    it->clearSaved();
-}
-
-void ClassesConf::DeleteUnsavedClasses()
-{
-    list<ClassEntry>::iterator it = Classes.begin();
-    for(;it!=Classes.end();it++)
-        if(!it->isSaved())
-            deleteClass(it->getClass_str());
-}

@@ -22,13 +22,8 @@ liby2ag_cups_la_SOURCES = 	\
 	DefaultDest.cc		\
 	DefaultDest.h		\
 	Y2Logger.h		\
-	PPD.cc			\
-	PPD.h			\
-	PPDVendors.h		\
 	PpdOptions.cc		\
-	PpdOptions.h		\
-	ppdstruct.cc		\
-	ppdstruct.h
+	PpdOptions.h		
 
 liby2ag_cups_la_LDFLAGS = -version-info 2:0
 

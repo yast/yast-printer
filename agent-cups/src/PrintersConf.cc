@@ -642,18 +642,3 @@ bool PrintersConf::modifyPrinter(YCPMap printer)
             return newPrinter(printer);
         }
 }
-
-void PrintersConf::UnsavePrinters()
-{
-    list<PrinterEntry>::iterator it = Printers.begin();
-    for(;it!=Printers.end();it++)
-        it->clearSaved();
-}
-
-void PrintersConf::DeleteUnsavedPrinters()
-{
-    list<PrinterEntry>::iterator it = Printers.begin();
-    for(;it!=Printers.end();it++)
-        if(!it->isSaved())
-            deletePrinter(it->getPrinter_str());
-}
