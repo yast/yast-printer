@@ -24,6 +24,7 @@ vardata_DATA = \
 
 ppd_db.ycp: dbbuild
 	./dbbuild
+	echo "#this database was generated during package building" >> ppd_db.ycp
 
 EXTRA_DIST =
 
