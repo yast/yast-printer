@@ -28,6 +28,7 @@
     import "Printer";
     import "Printerdb";
     import "Printerlib";
+    import "Require";
     import "Spooler";
     import "Wizard";
 
@@ -50,20 +51,20 @@
         if (vendor == "__spec_ppd__")
             ppdfile_orig = model;
         else if (config == nil || config == "")
-            ppdfile_orig = Printerdb::getAutoPpdFile (ppds, vendor, model);
+            ppdfile_orig = Printerdb::getAutoPpdFile (vendor, model, nil);
         else
             ppdfile_orig = Printerdb::foomatic[vendor, model, config, "filename"]:"";
         y2debug ("Choosen PPD file: %1", ppdfile_orig);
         string config = ppds[ppdfile_orig]:"";
-        string ppdfile = SCR::Read (.ppd.file.open,
+        string ppdfile = (string)SCR::Read (.ppd.file.open,
             [ppdfile_orig, SCR::Read (.target.tmpdir)]);
 	Printer::printer["ppd"] = ppdfile;
 	Printer::printer["ppd_info"] = Printer::ppdInfo (ppdfile);
-        map options = SCR::Read (.ppd.file.options, [ppdfile, ""]);
+        map options = (map)SCR::Read (.ppd.file.options, [ppdfile, ""]);
         list opts = options["data"]:[];
             integer ind = -1;
             boolean found = true;
-            find (`i, opts, ``{
+            find (map i, opts, ``{
                 ind = ind + 1;
                 found = i["name"]:"" == "PrintoutMode";
                 return found;
@@ -77,7 +78,7 @@
             if (composite != $[])
             {
                 string optname = composite["name"]:"";
-                foreach (`v, composite["valorder"]:[], ``{
+                foreach (string v, composite["valorder"]:[], ``{
                     map new_options = $[
                         optname : v,
                         "PageSize" : pagesize,
@@ -110,16 +111,13 @@
             }
             string suffix = Printer::getQueueSuffix (new_queues);
 
-            new_queues = maplist (`v, new_queues, ``{
+            new_queues = maplist (map v, new_queues, ``{
                 v = add (v, "name", Printer::adjustQueueName (lookup (v, "name", "lp") + suffix, forbidden_names));
-                if (nil == first_queue)
-                {
-                    first_queue = lookup (v, "name", "");
-                }
                 forbidden_names = add (forbidden_names, lookup (v, "name", ""));
                 return union (Printer::printer, v);
         });
-        y2debug ("Proposing queues %1", maplist (`q, new_queues, ``(q["name"]:"")));
+        y2debug ("Proposing queues %1", maplist (map q, new_queues, ``(
+	    q["name"]:"")));
         y2debug ("Proposed queues: %1", new_queues);
         return new_queues;
     }
@@ -132,12 +130,12 @@
       */
     global define list sortitems (map items) ``{
 	string enc = Console::encoding;
-	items = mapmap (`k, `v, items, ``(
-	    [k, UI::Recode ("UTF-8", enc, v)]));
-	list l = SCR::Read (.ppd.sort_items, items);
-	l = maplist (`i, l, ``{
+	items = mapmap (string k, string v, items, ``(
+	    $[k: (string)UI::Recode ("UTF-8", enc, v)]));
+	list l = (list)SCR::Read (.ppd.sort_items, items);
+	l = maplist (term i, l, ``{
 	    string label = select (i, 1, "");
-	    label = UI::Recode (enc, "UTF-8", label);
+	    label = (string)UI::Recode (enc, "UTF-8", label);
 	    i = remove (i, 2);
 	    i = add (i, label);
 	    return i;
@@ -195,13 +193,13 @@
       * Get printers (physical devices), which are configured
       * @return a list of printers maps (one queue of each printer)
       */
-    global define list(map) getConfiguredPrinters () ``{
-        list(string) ukeys = [];
-        list(string) uris = [];
-	list(string) models = [];
-	list(map) printers = [];
+    global define list<map> getConfiguredPrinters () ``{
+        list<string> ukeys = [];
+        list<string> uris = [];
+	list<string> models = [];
+	list<map> printers = [];
 
-        foreach (`p, Printer::printcap, ``{
+        foreach (map p, Printer::printcap, ``{
             string ukey = p["unique_key"]:"";
             string uri = p["uri"]:"";
 	    map ppd_info = p["ppd_info"]:$[];
@@ -240,11 +238,12 @@
     global define boolean isPrinterConfigured (string manuf, string model,
 	string uri, string unique_key)
     ``{
-	string manuf_db = SCR::Read (.ppd.db.vendorname, manuf);
-	string model_db = SCR::Read (.ppd.db.modelname, [manuf_db, model]);
+	string manuf_db = (string)SCR::Read (.ppd.db.vendorname, manuf);
+	string model_db = (string)SCR::Read (.ppd.db.modelname,
+	    [manuf_db, model]);
 	boolean exists = false;
 
-	foreach (`p, Printer::printcap, ``{
+	foreach (map p, Printer::printcap, ``{
 	    if ((p["unique_key"]:"" == unique_key && unique_key != "")
 		|| (p["uri"]:"" == uri && uri != ""
 		    && ((p["ppd_info", "manufacturer_db"]:".." == manuf_db
@@ -278,12 +277,13 @@
 	list to_delete = ["plp", "lprold", "lprng", "cups", "cups-client", "cups-drivers", "cups-drivers-cs", "cups-drivers-de", "cups-drivers-stp",
 	    "cups-libs", "cups-devel", "lpdfilter", "filters", "ghostscript-fonts-other", "ghostscript-x11", "ghostscript-fonts-std", "ghostscript-library",
 	    "ghostscript-fonts-kanji", "ghostscript-serv", "ghostscript-fonts-rus", "ghostscript-library", "a2ps", "foomatic-filters"];
-	to_delete = filter (`e, to_delete, ``(Pkg::IsProvided (e) == true));
+	to_delete = filter (string e, to_delete,
+	    ``(Pkg::IsProvided (e) == true));
 
 	list to_install = ["ghostscript-library", "ghostscript-x11", "ghostscript-fonts-std", "ghostscript-fonts-other", "a2ps", "cups-libs"];
 
 	y2milestone("deleting: %1", to_delete);
-	foreach (`e, to_delete, ``{Pkg::PkgDelete (e);});
+	foreach (string e, to_delete, ``{Pkg::PkgDelete (e);});
 	Pkg::PkgCommit (0);
 	SCR::Execute (.target.bash, "/bin/rm -rf /etc/cups/");
 	SCR::Execute (.target.bash, "/bin/rm -rf /etc/lpdfilter/");
@@ -295,15 +295,12 @@
 	SCR::Execute (.target.bash, "/bin/rm -rf /var/spool/cups/");
 	SCR::Execute (.target.bash, "/bin/rm -rf /var/lib/YaST2/printers");
 
-	foreach (`e, to_install, ``{Pkg::PkgInstall (e);});
+	foreach (string e, to_install, ``{Pkg::PkgInstall (e);});
 
 	y2milestone("installing: %1", to_install);
 	Pkg::PkgSolve ();
 	Pkg::PkgCommit (0);
-	Wizard::CreateDialog ();
-	WFM::CallModule("inst_suseconfig", []);
-	Wizard::CloseDialog ();
-
+	Require::RunSuSEconfig ();
 	return true;
 
     }
@@ -318,23 +315,23 @@
                          `Label (_("Scanning for hosts on this LAN...")));
         list hosts = [];
         if ("samba" == type)
-            hosts = SCR::Read (.net.hostnames.samba);
+            hosts = (list)SCR::Read (.net.hostnames.samba);
         else if ("ipp" == type)
 	{
-            hosts = SCR::Read (.net.hostnames, 631);
+            hosts = (list)SCR::Read (.net.hostnames, 631);
 	    hosts = filter (`h, hosts, ``{
-		list queues = SCR::Read (.cups.remote, h);
+		list queues = (list)SCR::Read (.cups.remote, h);
 		return size (queues) > 0;
 	    });
 	}
         else if ("lpd" == type)
-            hosts = SCR::Read (.net.hostnames, 515);
+            hosts = (list)SCR::Read (.net.hostnames, 515);
         else if ("socket" == type)
-            hosts = SCR::Read (.net.hostnames, 9100);
+            hosts = (list)SCR::Read (.net.hostnames, 9100);
         else if ("" != type)
-	    hosts = SCR::Read (.net.hostnames, tointeger (type));
+	    hosts = (list)SCR::Read (.net.hostnames, tointeger (type));
 	else
-            hosts = SCR::Read (.net.hostnames);
+            hosts = (list)SCR::Read (.net.hostnames);
         if (nil == hosts)
             hosts = [];
         UI::CloseDialog ();
@@ -512,19 +509,20 @@ All changes will be lost.
 
     /**
      * Get list of available devices in nice-names.
-     * @param dev list of devices to show
+     * @param devices list of devices to show
      * @param device device that should be selected. If "" then first device will be selected.
      * @return list Items for selection box. One of the items is selected.
      */
-    global define list getDevicesItems (list dev, string device) ``{
+    global define list getDevicesItems (list devices, string device) ``{
 	list device_val = [];
 	boolean default_selected = false;
-	foreach (`dev, devices, ``{
-	    boolean this_is_selected = (("" != device && dev == device) ||
-					("" == device && (dev == "/dev/lp0" ||
-							  dev == "/dev/usblp0" ||
-							  dev == "/dev/usb/lp0" ||
-							  dev == "/dev/ttyS0")));
+	foreach (string dev, devices, ``{
+	    boolean this_is_selected = (("" != device && dev == device)
+					 || ("" == device && (
+					    dev == "/dev/lp0"
+					    || dev == "/dev/usblp0"
+					    || dev == "/dev/usb/lp0"
+					    || dev == "/dev/ttyS0")));
 	    if (this_is_selected)
 		default_selected = true;
 	    device_val = add (device_val, `item (`id (dev), Printerlib::getDeviceNiceName (dev, false), this_is_selected));
@@ -540,7 +538,7 @@ All changes will be lost.
     global define list printcapTable () ``{
 	integer count = 0;
 	Printer::sortPrinters ();
-	return maplist (`ent, Printer::printcap, ``{
+	return maplist (map ent, Printer::printcap, ``{
 		string name = lookup (ent, "name", "???");
 		term ret =
 		    `item (
@@ -710,7 +708,7 @@ It cannot contain the characters @ and :.
      */
     global define boolean diffUppFiles (string file1, string file2) ``{
 	// save files
-	string tmpdir = SCR::Read (.target.tmpdir);
+	string tmpdir = (string)SCR::Read (.target.tmpdir);
 	SCR::Write (.target.string, tmpdir + "/options1.upp", file1);
 	SCR::Write (.target.string, tmpdir + "/options2.upp", file2);
 	// diff files
@@ -726,7 +724,7 @@ It cannot contain the characters @ and :.
      */
     global define boolean havePaperSize (map selected) ``{
 	boolean found = false;
-	foreach (`k, `v, selected, ``{
+	foreach (string k, any v, selected, ``{
 	    if (substring (k, 0, 10) == "papersize-")
 		found = true;
 	});
