@@ -2160,6 +2160,38 @@ Continue?
 		    Printer::editDetected (
 			Printer::autodetected[
 			    Printer::runAutoprobedListDialog__current]:$[]);
+		    if (Printer::printer["detected", "ptal_manual"]:false)
+		    {
+			// yes-no popup, %1 is an URL
+    // (http://portal.suse.com/sdb/en/2002/05/ke_hp-officejet.html for English)
+			string message = _("Selected printer is an HP all-in-one device.
+
+To access HP all-in-one devices as both printer and scanner
+the HP PTAL service must be used.
+
+YaST failed to set up PTAL automatically. Therefore you should
+setup PTAL manually. See the following support database article:
+%1
+
+It is possible to set up a HP all-in-one device only for
+printing without using PTAL but then it would no longer print
+after PTAL was set up because a running PTAL service inhibits
+the normal non-PTAL access.
+
+Set up this device for printing only?");
+			message = sformat (message,
+    // URL, localized version may exist. For German, use
+    // 'http://portal.suse.com/sdb/de/1998/07/ke_hp-officejet.html'
+    // if you don't know how to determine if there is a localized version
+    // available or its URL, comment on SUSE Bug #35737 or ask
+    // fhassel@suse.de or fs@suse.de about the URL of localized version and
+    // why it is not possible to determine the URL of the localized version
+    // via the WWW interface
+    _("http://portal.suse.com/sdb/en/2002/05/ke_hp-officejet.html"));
+
+			if (! Popup::YesNo (message))
+			    continue;
+		    }
 		}
 		else
 		{

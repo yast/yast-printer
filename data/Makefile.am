@@ -9,7 +9,8 @@ ydata_DATA = \
 	testpg.ascii		\
 	models.equiv		\
 	ppd_preference_list	\
-	printers_support
+	printers_support	\
+	hp_all_in_one_model_list
 
 
 EXTRA_DIST = $(ydata_DATA)

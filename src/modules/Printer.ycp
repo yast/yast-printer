@@ -34,6 +34,7 @@
     import "Printerlib";
     import "Progress";
     import "Report";
+    import "Require";
     import "Spooler";
     import "Summary";
 
@@ -244,21 +245,141 @@
     /**
      * Autodetect printers.
      */
-    global define void Detect () ``{
+    global define list<map<string,any> > Detect () ``{
+	if (Mode::config)
+	{
+	    Printerlib::DisplayUnavailableAIPopup ();
+	    autodetected = [];
+	    return [];
+	}
         /* Confirmation: label text (detecting hardware: xxx) */
         if (!Confirm::Detection (_("Printers")))
-            return;
+            return [];
+
+	y2milestone ("Detecting printers");
+	boolean restart_cups = false;
+	boolean detected_usb = false;
 
 	dirty = true;
-	autodetected = Printerlib::Detect (false);
-	autodetected = maplist (map<string,any> i, autodetected, ``{
-	    i["info"] = i["vendor"]:"" + " " + i["device"]:"";
-            i["location"] = Printerlib::getUriNiceName (i["uri"]:"");
-	    i["vendor_db"] = SCR::Read (.ppd.db.vendorname, i["vendor"]:"");
-	    i["device_db"] = SCR::Read (.ppd.db.modelname,
-		    [i["vendor_db"]:"", i["device"]:""]);
-	    y2milestone ("Detected printer %1", i);
-	    return i;
+	SCR::Execute (.target.bash,
+	    "test -f /etc/init.d/hotplug && (test -d /proc/bus/usb/001 || /etc/init.d/hotplug start)");
+	list<map> aprobe = (list<map>)SCR::Read (.probe.printer);
+/*
+aprobe = [
+$["bus":"USB", "bus_hwcfg":"usb", "class_id":265, "dev_name":"/dev/usb/lp0", "dev_names":["/dev/usb/lp0"], "dev_num":$["major":180, "minor":0, "range":1, "type":"c"], "device":"HP LASERJET 1220", "device_id":196613, "driver":"usblp", "hotplug":"usb", "model":"HP LASERJET 1220", "old_unique_key":"oQ6X.jfKkG0mJXc1", "resource":$["baud":[$["speed":1500000]]], "rev":"1.00", "sub_class_id":0, "sub_device":"HP LASERJET 1220", "sub_vendor":"HP", "sysfs_bus_id":"1-2:1.0", "unique_key":"cLrx.twN5GQuyNJ3", "vendor":"HP", "vendor_id":197816],
+$["bus":"USB", "bus_hwcfg":"usb", "class_id":265, "dev_name":"/dev/usb/lp0", "dev_names":["/dev/usb/lp0"], "dev_num":$["major":180, "minor":0, "range":1, "type":"c"], "device":"LASERJET 1300", "device_id":196613, "driver":"usblp", "hotplug":"usb", "model":"LASERJET 1300", "old_unique_key":"oQ6X.jfKkG0mJXc1", "resource":$["baud":[$["speed":1500000]]], "rev":"1.00", "sub_class_id":0, "sub_device":"LASERJET 1300", "sub_vendor":"HP", "sysfs_bus_id":"1-2:1.0", "unique_key":"cLrx.twN5GQuyNJ3", "vendor":"HP", "vendor_id":197816]
+];
+*/
+	y2milestone ("Probed printers: %1", aprobe);
+	autodetected = maplist (map i, aprobe, {
+	    map<string,any> p = $[];
+	    string bus = i["bus"]:"Parallel";
+
+	    if ("Parallel" == bus)
+	    {
+		p = $[
+		    "vendor" : i["vendor"]:"",
+		    "device" : i["device"]:"",
+		    "unique_key" : i["unique_key"]:"",
+		    "uri" : "parallel:" + i["dev_name"]:"",
+		];
+	    }
+	    else if  ("USB" == bus)
+	    {
+		detected_usb = true;
+		if (0 !=  SCR::Execute (.target.bash,
+		    "grep '^usblp ' /proc/modules"))
+		{
+		    return $[];
+		}
+		if ("epson" == tolower (i["sub_vendor"]:""))
+		{
+		    string sub_dev
+			= Printerlib::getEpsonUsbModel (i["dev_name"]:"");
+		    if (sub_dev != "")
+			i["sub_device"] = sub_dev;
+		}
+		string class_dev = i["dev_name"]:"";
+		string dev_name = class_dev;
+
+		if (Spooler::Get () == "cups")
+		{
+		    dev_name = select (Printerlib::getCupsUsbDeviceInfo (
+			class_dev), 0, "");
+		    if (dev_name == nil || dev_name == "")
+		    {
+			dev_name = class_dev;
+		    }
+		}
+		p = $[
+		    "vendor" : i["sub_vendor"]:i["vendor"]:"",
+		    "device" : i["sub_device"]:i["device"]:"",
+		    "unique_key": i["unique_key"]:"",
+		    "uri": "usb:" + dev_name,
+		];
+	    }
+	    p = (map<string,any>)union (p, $[
+		"info" : p["vendor"]:"" + " " + p["device"]:"",
+	        "location" : Printerlib::getUriNiceName (p["uri"]:""),
+		"vendor_db" : SCR::Read (.ppd.db.vendorname, p["vendor"]:""),
+		"device_db" : SCR::Read (.ppd.db.modelname,
+		    [p["vendor_db"]:"", p["device"]:""]),
+	    ]);
+	    if (Spooler::Get () == "cups")
+	    {
+		boolean ptal_failed = false;
+		if (contains (i["requires"]:[], "hp-officeJet")
+		    ||(p["vendor_db"]:"" == "HP"
+			&& contains (
+			    Printerlib::GetHPAllInOneModels (),
+			    p["device_db"]:"")))
+		{
+		    y2milestone ("PTAL device found: %1", p);
+		    if (substring (p["uri"]:"", 0, 9) == "parallel:")
+		    {
+			y2warning ("PTAL must be set manually for parallel devices");
+			ptal_failed = true;
+		    }
+		    boolean req_ret = true;
+		    if (! Pkg::IsProvided ("hp-officeJet"))
+		    {
+			req_ret = Require::RequireAndConflict (
+			    ["hp-officeJet"],
+			    [],
+			    // question, %1 is package name
+			    _("An HP all-in-one device has been detected. To
+use it as both printer and scanner,
+package %1 must be installed.
+
+Install it now?
+"));
+		    }
+		    if (! req_ret && ! Require::LastOperationCanceled ())
+		    {
+			// error report
+			Report::Error (_("Failed to install required package."));
+			ptal_failed = true;
+		    }
+		    restart_cups = true;
+		    string ptal_uri
+			= Printerlib::getPtalUri (p["device_db"]:"");
+		    if (ptal_uri != nil && ! ptal_failed)
+		    {
+			p["uri"] = ptal_uri;
+		    }
+		    else
+		    {
+			y2warning ("Cannot detect PTAL URI");
+			ptal_failed = true;
+		    }
+		}
+		if (ptal_failed)
+		{
+		    p["ptal_manual"] = true;
+		}
+	    }
+	    y2milestone ("Detected printer %1", p);
+	    return p;
 	});
 	if (Spooler::Get () == "cups")
 	{
@@ -268,6 +389,50 @@
 		    Printerlib::getUriDevice (a["uri"]:""))
 	    ));
 	}
+	// check if usblp module is loaded
+	if (detected_usb)
+	{
+	    if (0 !=  SCR::Execute (.target.bash, "grep '^usblp ' /proc/modules"))
+	    {
+		y2error ("USB printer found and printer module not loaded, loading it");
+		boolean probe_success = (boolean)SCR::Execute(.target.modprobe, "usblp", "");
+		string hotplug
+		    = (string)SCR::Read (.sysconfig.hotplug.HOTPLUG_USB_STATIC_MODULES);
+		y2debug ("Current hotplug: %1", hotplug);
+		list<string> hplist = splitstring (hotplug, " ");
+		if (! contains (hplist, "usblp"))
+		{
+		    hplist = add (hplist, "usblp");
+		    hotplug = mergestring (hplist, " ");
+		    y2debug ("Final hotplug: %1", hotplug);
+		    SCR::Write (.sysconfig.hotplug.HOTPLUG_USB_STATIC_MODULES,
+			hotplug);
+		    SCR::Write (.sysconfig.hotplug, nil);
+		}
+		sleep (100);
+		if (probe_success)
+		{
+		    probe_success = 0 == SCR::Execute (.target.bash, "grep '^usblp ' /proc/modules");
+		}
+		if (probe_success)
+		{
+		    y2milestone ("Restarting detection");
+		    list<map<string,any> > redetected = Detect ();
+		    y2debug ("Redetection done");
+		    return redetected;
+		}
+		else
+		{
+		    y2error ("Error occured while loading usblp.ko module");
+		}
+	    }
+	}
+	// restart CUPS so that it knows about new URIs
+	if (restart_cups)
+	{
+	    SCR::Execute (.target.bash, "test -x /etc/init.d/cups && /etc/init.d/cups status && /etc/init.d/cups restart");
+	}
+	return autodetected;
     }
 
     /**
@@ -1799,6 +1964,8 @@ the selected spooler does not support it."), name));
 		string support = Printerdb::foomatic[vdb, mdb, `support]:"";
 		boolean configure = (support == "full" || support == "partially"
 		    || support == "");
+		if (i["detected", "ptal_manual"]:false)
+		    configure = false;
 		if (ppd_file != nil && configure)
 		{
 		    boolean ok = true;
