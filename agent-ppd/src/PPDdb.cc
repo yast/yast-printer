@@ -1043,7 +1043,8 @@ bool PPD::process_file(const char *filename, PPDInfo *newinfo) {
     info.filter = filter;
     preprocess(info, newinfo);
 
-    creation_status = (done_files * 80) / (total_files) + 10;
+    if (total_files != 0)
+	creation_status = (done_files * 80) / (total_files) + 10;
     return true;
 }
 
