@@ -133,7 +133,9 @@ This usually takes one or two minutes")));
 	SCR::Execute (.target.bash, "/bin/rm -rf /var/spool/lpd/");
 	SCR::Execute (.target.bash, "/bin/rm -rf /var/spool/cups/");
 	SCR::Execute (.target.bash, "/bin/rm -rf /var/lib/YaST2/printers");
-	foreach (`e, to_install, ``{Pkg::DoProvide (e);});
+    // DoProvide has a list as an argument:
+    Pkg::DoProvide (to_install);
+    //	foreach (`e, to_install, ``{Pkg::DoProvide (e);});
 	Pkg::PkgSolve ();
 	Pkg::PkgCommit (0);
 	WFM::CallModule("inst_suseconfig", []);
