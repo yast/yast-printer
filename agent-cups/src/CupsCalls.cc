@@ -802,7 +802,6 @@ bool getRemoteDestinations(const char*host,YCPList&ret, ipp_op_t what_to_get,
     {
 	pthread_cond_wait (&reply_cv, &operation);
     }
-    pthread_cond_destroy (&reply_cv);
 
     bool retval;
 
@@ -822,7 +821,6 @@ bool getRemoteDestinations(const char*host,YCPList&ret, ipp_op_t what_to_get,
 
 	retval = false;
     }
-
 
     pthread_mutex_unlock (&operation);
     pthread_mutex_destroy (&operation);
