@@ -122,7 +122,7 @@ global define list<string> GetHPAllInOneModels () {
 	    return m;
 	});
 	hp_all_in_one = models;
-	y2milestone ("Known HP all-in-one devices: %1", hp_all_in_one);
+	y2debug ("Known HP all-in-one devices: %1", hp_all_in_one);
     }
     return hp_all_in_one;
 }
@@ -159,6 +159,7 @@ ECHO_PID=$!
       */
     global define list<list<string> > getPtalDevices () ``{
 	SCR::Execute (.target.bash, "test -f /usr/sbin/ptal-init && /usr/sbin/ptal-init setup-usb >/dev/null 2>&1");
+	SCR::Execute (.target.bash, "test -f /etc/init.d/ptal && /etc/init.d/ptal restart");
         if (SCR::Read (.target.size, "/usr/lib/cups/backend/ptal") <= 0)
             return [];
         map out = (map)SCR::Execute (.target.bash_output,
@@ -187,6 +188,7 @@ ECHO_PID=$!
       * @return a list of HPLIP devices
       */
     global define list<list<string> > getHplipDevices () ``{
+	SCR::Execute (.target.bash, "test -f /etc/init.d/hplip && /etc/init.d/hplip restart");
         if (SCR::Read (.target.size, "/usr/lib/cups/backend/hp") <= 0)
             return [];
         map out = (map)SCR::Execute (.target.bash_output,
