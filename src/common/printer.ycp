@@ -120,7 +120,7 @@
 	Printer::sys_forbidden_names = nil;
 	symbol ret = CallFunction ("printer", Args());
 	CloseDialog ();
-        return ret; //CallFunction ("printer", Args());
+        return ret;
     }
     if (Printer::spooler == "exit")
 	return `back;
@@ -160,7 +160,7 @@
 	    titles = add (titles, _("Autodetecting printers..."));
 	}
 	// progress bar caption
-	Progress::New (_("Initializing printer configuration tool..."), " ", skip_autodetection ? 8 : 12, stages, titles, getInitProgressHelp ());
+	Progress::New (_("Initializing printer configuration tool..."), " ", skip_autodetection ? 10 : 14, stages, titles, getInitProgressHelp ());
     }
 
     Progress::NextStageStep (0);	if (testAbort ())			return `back;
@@ -176,8 +176,8 @@
 		integer status = SCR::Execute (.target.bash, "/usr/bin/lpq 2>/dev/null");
                 if (status == 0)
 		{
-		    Progress::NextStep ();              if (testAbort ())                       return `back;
-	            Progress::NextStep ();              if (testAbort ())                       return `back;
+		    Progress::NextStep (); if (testAbort ()) return `back;
+	            Progress::NextStep (); if (testAbort ()) return `back;
 		}
 		else
 		{
@@ -194,7 +194,7 @@
 			close_dialog = true;
 			showCupsInitPopup ();
 		    }*/
-		    Progress::NextStep ();              if (testAbort ())                       {if (close_dialog) UI::CloseDialog (); return `back;}
+		    Progress::NextStep (); if (testAbort ())                       {if (close_dialog) UI::CloseDialog (); return `back;}
 /*		    status = 1;
 		    integer attempts = 0;
 		    while (true)
@@ -310,7 +310,7 @@ the current configuration.
 */
     }
 
-    Progress::NextStageStep (8);        if (testAbort ())                       return `back;
+    Progress::NextStageStep (10);        if (testAbort ())                       return `back;
 
 
     /* Autodetection */
