@@ -1132,7 +1132,7 @@ with the SuSE database of printers only.</B></P>
 			    l = l + "I";
 			    add_blank = false;
 			}
-			modnames[l] = k;
+			modnames[toupper (l)] = k;
 		    });
 
 		}
@@ -1142,7 +1142,33 @@ with the SuSE database of printers only.</B></P>
 					  _("Select &model:"),
 		    Printer::db == `foomatic
 
-			? maplist (`k, `v, modnames, ``(`item (`id (v), k)))
+			? maplist (`k, `v, modnames, ``{
+			    string cur_label
+				= Printer::foomatic[manuf_db, v, `label]:k;
+			    if (substring (cur_label, 0, 7) == "DESKJET")
+			    {
+				cur_label
+				    = "DeskJet" + substring (cur_label, 7);
+			    }
+                            else if (substring (cur_label, 0, 8) == "LASERJET")
+                            {
+                                cur_label
+                                    = "LaserJet" + substring (cur_label, 8);
+                            }
+                            else if (substring (cur_label, 0, 9) == "OFFICEJET")
+                            {
+                                cur_label
+                                    = "OfficeJet" + substring (cur_label, 9);
+                            }
+                            else if (substring (cur_label, 0, 10)
+				== "PHOTOSMART")
+                            {
+                                cur_label
+                                    = "PhotoSmart" + substring (cur_label, 10);
+                            }
+
+			    return `item (`id (v), cur_label);
+			})
 			: SCR::Read (add (.printerdb.models, manuf),
 			    [ model, model_ieee ]));
 		UI::ReplaceWidget (`id (`modelsel_rep), modelsel);
