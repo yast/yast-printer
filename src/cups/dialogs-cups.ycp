@@ -30,6 +30,10 @@
     include "printer/testpage.ycp";
 
 
+    /**
+      * Run dialog informing about IPP queue listening
+      * @return symbol for WS
+      */
     global define symbol runListenIPPDialog () ``{
 
 	term contents = `HBox (`HStretch (), `VBox (
@@ -114,6 +118,25 @@ y2error ("CSS: %1", Printer::cups_server_settings);
 		    _("&Test remote IPP access")),
 		`HStretch ()
 	    ),
+	    `VSpacing (2),
+	    `HBox (`HWeight (999, `HStretch ()), `VBox (
+		`Left (`CheckBox (`id (`server),
+		    `opt (`notify),
+		    // checkbox
+		    _("Use &server's default queue"))),
+		`VSpacing (0.4),
+		`HBox (`ReplacePoint (`id (`def_queue_rep),
+		    `Left (`ComboBox (`id (`def_queue),
+			`opt (`hstretch, `editable),
+			// combo box
+			_("&Default queue")))),
+		    `VBox (
+			`Label (""),
+			// push button
+			`PushButton (`id (`refresh), _("&Lookup"))
+		    )
+		)
+	    ), `HWeight (999, `HStretch ())),
 	    advanced,
 	    `VSpacing (2)
             );
@@ -121,6 +144,11 @@ y2error ("CSS: %1", Printer::cups_server_settings);
         Wizard::SetContentsButtons (_("CUPS server"), contents,
 	    getCupsClientHelp (main), Label::BackButton (),
 	    main ? Label::FinishButton () : Label::OKButton ());
+
+	UI::ChangeWidget (`id (`server), `Value, Printer::server_default);
+	UI::ChangeWidget (`id (`def_queue), `Enabled, !Printer::server_default);
+	UI::ChangeWidget (`id (`refresh), `Enabled, !Printer::server_default);
+	UI::ChangeWidget (`id (`def_queue), `Value, Printer::default);
 
         symbol ret = nil;
         while (true)
@@ -132,6 +160,12 @@ y2error ("CSS: %1", Printer::cups_server_settings);
 	    {
 		string n = UI::QueryWidget (`id(`hostnameent), `Value);
 		Printerlib::testRemote (n, "", "ipp_server", 0);
+	    }
+	    else if (`server == ret)
+	    {
+		boolean sd = UI::QueryWidget (`id (`server), `Value);
+		UI::ChangeWidget (`id (`def_queue), `Enabled, !sd);
+		UI::ChangeWidget (`id (`refresh), `Enabled, !sd);
 	    }
             else if (`next == ret)
             {
@@ -152,12 +186,28 @@ system will be saved.")))
 			continue;
 		    }
 		    Printer::cups_installation = `client;
+		    Printer::server_default
+			= UI::QueryWidget (`id (`server), `Value);
+		    if (! Printer::server_default)
+			Printer::default
+			    = UI::QueryWidget (`id (`def_queue), `Value);
                     break;
 		}
             }
 	    else if (`advanced == ret)
 	    {
 		break;
+	    }
+	    else if (`refresh == ret)
+	    {
+		list queues = SCR::Read (.cups.remote, UI::QueryWidget (`id (`hostnameent), `Value));
+		queues = toset (queues);
+		UI::ReplaceWidget (`id (`def_queue_rep),
+		    `Left (`ComboBox (`id (`def_queue),
+			`opt (`hstretch, `editable),
+			// combo box
+                        _("&Default queue"),
+			queues)));
 	    }
             else if (`abort == ret)
             {

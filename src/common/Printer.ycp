@@ -28,6 +28,8 @@
     import "HTML";
     import "Popup";
     import "Arch";
+    import "Crash";
+    import "Label";
     include "printer/misc.ycp";
     include "printer/misc-lprng.ycp";
     include "printer/misc-cups.ycp";
@@ -212,7 +214,10 @@
       */
     global boolean conf_detected = false;
 
-
+    /**
+      * When configuring client, using server's default queue?
+      */
+    global boolean server_default = true;
 
     /**
      * Get list of names that are forbidden because they are used as
@@ -572,6 +577,7 @@
 	    "spooler" : spooler,
 	    "cups_installation" : cups_installation,
 	    "server_hostname" : server_hostname,
+	    "server_default" : server_default,
 	];
     }
     /**
@@ -588,6 +594,7 @@
 	cups_usb_dev_names = `always;
 	index = -1;
 	deleted = [];
+	server_default = settings["server_default"]:"";
     }
     /**
      * Reset all settings...
@@ -608,6 +615,7 @@
 	deleted = [];
 	autodetected = [];
 	cups_usb_dev_names = `always;
+	server_default = true;
     }
     /**
      * read printers from /etc/printcap
@@ -899,6 +907,17 @@ to print."));
                 return false;
 	    }
 	}
+	else if (Printer::spooler == "cups"
+	    && Printer::cupsInstallationType () == `client)
+	{
+	    map state = SCR::Read (.target.ycp, "/var/lib/YaST2/printers");
+	    if (nil == state)
+	    {
+		state = $[];
+	    }
+	    server_default = state["server_default"]:true;
+	    default = state["default"]:"";
+	}
 
 	// step 8
 	Progress::NextStageStep (8); if (testAbort ()) return false;
@@ -939,6 +958,11 @@ Detect your printers?"));
 	return true;
     }
 
+    /**
+      * Old read function, called from new Read function
+      * TODO: integrate
+      * @return boolean true on success
+      */
     global define boolean oldRead () ``{
 	list tmplist = [];
 	list tmpdellist = [];
@@ -1153,6 +1177,11 @@ Detect your printers?"));
 	}
 	return ret;
     }
+    /**
+      * Old write function, called from new Write function
+      * TODO: integrate
+      * @return boolean true on success
+      */
     global define boolean oldWrite () ``{
 	Printerlib::stopServices();
 	if (spooler == "cups")
@@ -1171,6 +1200,14 @@ Detect your printers?"));
 		if (SCR::Read (.init.scripts.exists, "cups"))
 		    Runlevel::ServiceAdjust ("cups", "disable");
 		saveClientHostName ();
+		SCR::Write (.sysconfig.printer.DEFAULT_PRINTER, nil);
+		SCR::Write (.sysconfig.printer, nil);
+
+		if (server_default)
+		{
+		    default = "";
+		}
+		SCR::Write (.cups.default_dest, default, "local");
 		boolean delete = false;
 		if (! Mode::autoinst)
 		{
@@ -1195,6 +1232,7 @@ Remove them?
 		    Pkg::PkgCommit (0);
 		    WFM::CallModule("inst_suseconfig", []);
 		}
+		saveTheConfiguration ();
 		return true;
 	    }
 	}
@@ -1327,7 +1365,10 @@ the selected spooler does not support it."), name));
 // in. See #27259
 //	    SCR::Write (.sysconfig.printer.DEFAULT_PRINTER, default_printer_found ? default : "none");
 	    SCR::Write (.sysconfig.printer, nil);
-	    SCR::Write (.cups.default_dest, default_printer_found ? default : "");
+	    SCR::Write (.cups.default_dest,
+		default_printer_found
+		    ? default
+		    : "");
 	    SCR::Execute (.target.bash, "/usr/sbin/rccups restart");
 	    if (size (printcap) > 0)
 		Runlevel::ServiceAdjust ("cups", "enable");
@@ -1383,8 +1424,13 @@ the selected spooler does not support it."), name));
 	l = maplist (`e, l, ``(filter (`k, `v, e,
 	    ``(! contains (forbidden_keys, k)))));
 	cleanDeletedPrinters ();
-	map save = $["printers" : l, "deleted" : deleted, "default" : default,
-	    "cups_usb_devices" : cups_usb_dev_names ];
+	map save = $[
+	    "printers" : l,
+	    "deleted" : deleted,
+	    "default" : default,
+	    "cups_usb_devices" : cups_usb_dev_names,
+	    "server_default" : server_default,
+	];
 	save["version"] = version;
 	if (! SCR::Write (.target.ycp, "/var/lib/YaST2/printers", save))
 	{
@@ -1905,7 +1951,7 @@ to access queues of remote CUSP servers.</LI>"));
 
     /**
       * List all available queues (local and remote)
-      * @return list of strings all available queues
+      * @return a list of strings all available queues
       */
     global define list(string) GetAvailableQueues () ``{
 	list(string) ret = [];
@@ -1943,17 +1989,6 @@ to access queues of remote CUSP servers.</LI>"));
 	    if (cupsInstallationType () == `client && server_hostname != "")
 		hostname = server_hostname;
 	    ret = SCR::Read (.cups.remote, hostname);
-	    ret = maplist (string r, ret, ``{
-		r = substring (r, 6);
-		integer slash = findfirstof (r, "/");
-		if (slash != nil)
-		    r = substring (r, slash + 1);
-		if (substring (r, 0, 9) == "printers/")
-		    r = substring (r, 9);
-		else if (substring (r, 0, 8) == "classes/")
-		    r = substring (r, 0, 8);
-		return r;
-	    });
 	    ret = toset (ret);
 	}
 	y2error ("Ret: %1", ret);
