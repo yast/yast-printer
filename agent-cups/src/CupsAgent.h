@@ -13,7 +13,6 @@
 #ifndef _CupsAgent_h
 #define _CupsAgent_h
 
-//#define y2log_component "ag_cups"
 #include <Y2.h>
 #include <scr/SCRAgent.h>
 #include <scr/SCRInterpreter.h>
