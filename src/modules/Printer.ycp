@@ -311,10 +311,9 @@
 	boolean found_defstr = false;
 	string norm_name = "";
 	string first = "";
-	string state_string = Spooler::Get () + "-state";
 	foreach (`e, printcap, ``{
 	    string name = lookup (e, "name", "");
-	    if (lookup (e, state_string, "") != "void")
+	    if (e["valid"]:true)
 	    {
 		if (name == "lp")
 		    found_lp = true;
@@ -386,11 +385,10 @@
       *   (to assign correct state)
       * @return map printer with assigned states
       */
-    global define map assignStates (map p, boolean changed) ``{
+    global define map assignState (map p, boolean changed) ``{
 	if (lookup (p, "type", "yast2") != "yast2")
 	    return p;
 	boolean supported = true;
-	list spoolers = ["cups", "lprng"];
 	string uri = lookup (p, "uri", "");
 	string q_type = Printerlib::getUriType (uri);
 	string q_filter = "";
@@ -406,39 +404,21 @@
 	boolean is_class = q_type == "class";
 	if (is_class || p["raw"]:false)
 	    supported = true;
-	foreach (`s, spoolers, ``{
-	    boolean filt_sup = ((s == "cups" || ! is_class)
-		    && (s == "cups" || q_filter == "foomatic-rip"))
-		|| p["raw"]:false;
-	    boolean spool_sup = Spooler::testSupportedQueueBySpooler (q_type, s);
-	    string key = s + "-state";
-	    boolean sup = supported && filt_sup && spool_sup;
-	    p[key] = sup
-		    ?
-			(changed ?
-			    "changed"
-			:
-			    (lookup (p, key, "changed") == "void"
-			    ?
-				"changed"
-			    :
-				lookup (p, key, "changed")))
-		    :
-			"void";
-	});
+	string s = Spooler::Get ();
+	boolean filt_sup = ((s == "cups" || ! is_class)
+		&& (s == "cups" || q_filter == "foomatic-rip"))
+	    || p["raw"]:false;
+	boolean spool_sup = Spooler::testSupportedQueueBySpooler (q_type, s);
+	boolean sup = supported && filt_sup && spool_sup;
+	p["valid"] = sup
+	    ?
+		true
+	    :
+		false;
+	p["changed"] = changed;
 	return p;
     }
 
-    /**
-      * Gets state of printer for choosen spooler
-      * @param p map printer
-      * @param spooler string spooler (cups or lprng)
-      * @return string state
-      */
-    global define string getPrinterState (map p, string spooler) ``{
-	string s = spooler + "-state";
-	return p[s]:"changed";
-    }
     /**
       * Adds a queue to the deleted list
       * @param name string queue name
@@ -467,7 +447,7 @@
 	    return;
 	}
 
-	printer = assignStates (printer, true);
+	printer = assignState (printer, true);
 
 	y2milestone ("Storing printer %1, index %2", printer, index);
 
@@ -586,7 +566,8 @@
 
 	ret = maplist (map p, ret, ``{
 	    p["saved"] = $[];
-	    p["lprng-state"] = "commited";
+	    p["changed"] = false;
+	    p["valid"] = true;
 	    if (p["type"]:"" != "yast2")
 		return p;
 	    boolean raw = yast_queues_map[p["name"]:"", "raw"]:false;
@@ -652,7 +633,8 @@
 			"^smb(:\/\/.*)$",
 			"samba\\1");
 		}
-		e["cups-state"] = "commited";
+		e["changed"] = false;
+		e["valid"] = true;
 		e["type"] = "yast2";
 
 		// in case of raw queues, there is no PPD file and no options
@@ -831,7 +813,7 @@
 		return false;
 	}
 
-	printcap = maplist (`e, printcap, ``{return assignStates (e, false);});
+	printcap = maplist (`e, printcap, ``{return assignState (e, false);});
 
 	Progress::NextStageStep (12); // step 12-15 - autodetection
 	if (testAbort ()) return false;
@@ -1249,8 +1231,7 @@ Detect your printers?"));
 		Report::Error (sformat (_("Attempting to save unnamed printer. Skipping: %1"), entry));
 		return;
 	    }
-	    string state = Spooler::Get () + "-state";
-	    if (name == default && lookup (entry, state, "changed") != "void")
+	    if (name == default && entry["valid"]:true)
 		default_printer_found = true;
 
 	    string unique_key = lookup (entry,"unique_key", nil);
@@ -1260,38 +1241,39 @@ Detect your printers?"));
 		original_unique_keys = add (original_unique_keys, unique_key, false);
 	    }
 	    entry = fixPrinter(entry);
+
 	    if (Spooler::Get () == "cups")
 	    {
-		if (lookup (entry, "cups-state", "changed") == "void")
+		if (! entry["valid"]:true)
 		{
 		    Popup::Message (sformat(
 			// popup %1 is queue name
 			_("Queue %1 cannot be saved because
 the selected spooler does not support it."), name));
 		}
-		else if ((lookup (entry, "cups-state", "changed") == "changed" || save_all) && (lookup (entry, "type", "yast2") == "yast2"))
+		else if ((entry["changed"]:false || save_all) && (lookup (entry, "type", "yast2") == "yast2"))
 		{
 		    y2debug ("Saving printer %1", entry);
 		    if (writeCupsPrinter (entry))
 		    {
 			y2debug ("Success");
-			entry = add (entry, "cups-state", "commited");
+			entry["changed"] = false;
 		    }
 		}
 	    }
 	    else if (Spooler::Get () == "lprng")
 	    {
-		if (lookup (entry, "lprng-state", "changed") == "void")
+		if (! entry["valid"]:true)
 		{
 		    Popup::Message (sformat(
 			// popup %1 is queue name
 			_("Queue %1 cannot be saved because
 the selected spooler does not support it."), name));
 		}
-		else if ((lookup (entry, "lprng-state", "changed") == "changed" || save_all) && (lookup (entry, "type", "yast2") == "yast2"))
+		else if ((entry["changed"]:false || save_all) && (lookup (entry, "type", "yast2") == "yast2"))
 		{
 		    if (writeLpdPrinter (entry))
-			entry = add (entry, "lprng-state", "commited");
+			entry["changed"] = false;
 		}
 	    }
 	    Progress::NextStep ();
@@ -1442,13 +1424,12 @@ the selected spooler does not support it."), name));
 	    foreach (`entry, printcap, ``{
 		if (lookup (i, "unique_key", "") == lookup (entry, "unique_key", " "))
 		{
-		    entry = assignStates (entry, false);
+		    entry = assignState (entry, false);
 		    string cache = lookup (entry, "name", "");
 		    used = add (used, cache);
 		    if (contains (style, `test))
 		    {
-			if ((Spooler::Get () == "cups" && lookup (entry, "cups-state", "") != "void")
-			    || (Spooler::Get () == "lprng" && lookup (entry, "lprng-state", "") != "void"))
+			if (lookup (entry, "valid", true))
 			{
 			    cache = sformat ("%1 [<a href=\"%1\">test</a>]", cache);
 			}
@@ -1460,31 +1441,26 @@ the selected spooler does not support it."), name));
 		    else
 		    {
 			string state = "";
-			if (Spooler::Get () == "cups")
-			    state = entry["cups-state"]:"changed";
-			else if (Spooler::Get () == "lprng")
-			    state = entry["lprng-state"]:"changed";
-			if (state != "" && state != nil)
+			if (entry["type"]:"yast2" == "yast2")
 			{
-			    if (state == "commited")
-			    {
-				state = " - " + HTML::Colorize (
-				    // summary part, printer state
-				    _("ready"), "green");
-			    }
-			    else if (state == "changed")
-			    {
-				state = " - " + HTML::Colorize (
-				    // summary part, printer state
-				    _("changed, not yet saved"), "orange");
-			    }
-			    else if (state == "void")
+			    if (! entry["valid"]:true)
 			    {
 				// summary part, printer state
                                 state = " - " + HTML::Colorize (
                                     _("invalid for current spooler"), "red");
 			    }
-			    else state = "";
+			    else if (! entry["changed"]:false)
+			    {
+				state = " - " + HTML::Colorize (
+				    // summary part, printer state
+				    _("ready"), "green");
+			    }
+			    else
+			    {
+				state = " - " + HTML::Colorize (
+				    // summary part, printer state
+				    _("changed, not yet saved"), "orange");
+			    }
 			}
 			found = found + ("" != found ? "<br>" : "") + cache + state;
 		    }
@@ -1525,7 +1501,7 @@ the selected spooler does not support it."), name));
 			}
 		    }
 
-		    i = assignStates (i, false);
+		    i = assignState (i, false);
 		    string dev = (raw ?
 			// menu item, %1 is URI
 			sformat (_("Raw queue: %1"), Printerlib::getUriNiceName (lookup (i, "uri", "")))
@@ -1534,8 +1510,7 @@ the selected spooler does not support it."), name));
 		    );
 		    if (contains (style, `test))
 		    {
-			if ((Spooler::Get () == "cups" && lookup (i, "cups-state", "") != "void")
-			    || (Spooler::Get () == "lprng" && lookup (i, "lprng-state", "") != "void"))
+			if (i["valid"]:true)
 			{
 			    cache = sformat ("%1 [<a href=\"%1\">test</a>]", cache);
 			}
@@ -1546,31 +1521,26 @@ the selected spooler does not support it."), name));
 			    cache = cache + "  -  " + cfg;
 
                         string state = "";
-                        if (Spooler::Get () == "cups")
-                            state = i["cups-state"]:"changed";
-                        else if (Spooler::Get () == "lprng")
-                            state = i["lprng-state"]:"changed";
-                        if (state != "" && state != nil)
+			if (i["type"]:"yast2" == "yast2")
                         {
-                            if (state == "commited")
-                            {
-                                state = " - " + HTML::Colorize (
-                                    // summary part, printer state
-				    _("ready"), "green");
-                            }
-                            else if (state == "changed")
-                            {
-                                state = " - " + HTML::Colorize (
-                                    // summary part, printer state
-				    _("changed, not yet saved"), "orange");
-                            }
-                            else if (state == "void")
+                            if (! i["valid"]:true)
                             {
                                 state = " - " + HTML::Colorize (
                                     // summary part, printer state
 				    _("invalid for current spooler"), "red");
 			    }
-                            else state = "";
+                            else if (! i["changed"]:false)
+                            {
+                                state = " - " + HTML::Colorize (
+                                    // summary part, printer state
+				    _("ready"), "green");
+                            }
+                            else
+                            {
+                                state = " - " + HTML::Colorize (
+                                    // summary part, printer state
+				    _("changed, not yet saved"), "orange");
+                            }
                         }
 			cache = cache + state;
 		    }
@@ -1705,7 +1675,7 @@ the selected spooler does not support it."), name));
 		    });
 		    if (ok)
 		    {
-			printer = assignStates (printer, true);
+			printer = assignState (printer, true);
 			y2milestone ("Configuring autodetected printer %1",
 			    printer);
 			storePrinter ();
