@@ -363,7 +363,8 @@ END {
 	string pid = nil;
 	if (SCR::Read (.target.size, "/var/run/listen_remote_ipp.pid") > 0)
 	{
-	    pid = (string)SCR::Read (.target.string, "/var/run/listen_remote_ipp.pid");
+	    pid = (string)SCR::Read (.target.string,
+		"/var/run/listen_remote_ipp.pid");
 	}
 	boolean aborted = false;
 	if (pid != nil)
@@ -440,9 +441,8 @@ END {
 	SCR::Execute(.target.bash_background,
 	    "/usr/lib/YaST2/bin/listen_remote_ipp 30");
 	sleep (1000);
-	boolean abort_server = WaitForCupsListeiningFinish ();
+	WaitForCupsListeiningFinish ();
 
-	parseFoundCupsServers ();
 	if (0 == status)
 	    SCR::Execute (.target.bash_background, "/etc/init.d/cups start");
 	return cups_servers;
