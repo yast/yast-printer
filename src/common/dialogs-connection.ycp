@@ -1243,9 +1243,18 @@ actually selected.
             if (ret == `cancel)
                 ret = `abort;
             if (`next == ret)
-            {   // get the file name
-                string name = (string)UI::QueryWidget (`id (`name), `Value);
-                Printer::printer = add (Printer::printer, "uri", name);
+            {
+		// get the file name
+                string uri = (string)UI::QueryWidget (`id (`name), `Value);
+		string uri_type = Printerlib::getUriType (uri);
+		if (! Spooler::testSupportedQueueBySpooler (uri_type, "cups"))
+		{
+		    if (! Popup::YesNo (
+_("Specified URI is not supported by current spooler.
+Continue?")))
+			continue;
+		}
+                Printer::printer = add (Printer::printer, "uri", uri);
                 break ;
             }
             else if (`back == ret)
