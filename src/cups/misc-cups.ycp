@@ -50,14 +50,16 @@
             ppdfilename = "";
             ownppd = "";
         }
-        else if (ppdfilename == "" && ownppd == "")
+        else if (ppdfilename == "")
         {
             ppdfilename = SCR::Read (.target.tmpdir);
             ppdfilename = ppdfilename + "/ppdfile";
         }
 
 	string ppdfile = "";
-	if (entry["database"]:"" == "foomatic")
+	if (entry["ownppd"]:"" != "")
+	    ppdfile = entry["ownppd"]:"";
+	else if (entry["database"]:"" == "foomatic")
 	{
 	    ppdfile = Printer::foomatic[entry["vendor_db"]:"",
 		entry["device_db"]:"",
@@ -80,7 +82,7 @@
 	}
         // --
 
-        if (ownppd == "")
+        if (ownppd == "" || isPpd (ownppd))
         {
             if (ppdfilename != "")
             {

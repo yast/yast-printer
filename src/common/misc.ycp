@@ -24,16 +24,132 @@
     import "PackageCallbacks";
 
 
-    global define list getFoomaticAutoQueues (string vendor, string model) ``{
-	y2milestone ("Getting auto queues for %1 %2", vendor, model);
+    /**
+      * Get printers (physical devices), which are configured
+      * @return list of printers maps (one queue of each printer)
+      */
+    global define list(map) getConfiguredPrinters () ``{
+        list(string) ukeys = [];
+        list(string) uris = [];
+	list(string) models = [];
+	list(map) printers = [];
+
+        foreach (`p, Printer::printcap, ``{
+            string ukey = p["unique_key"]:"";
+            string uri = p["uri"]:"";
+	    string model = p["vendor"]:"" + p["device"]:"";
+	    if (p["ownppd"]:"" != "")
+		model = p["ownppd"]:"";
+	    if (model == "")
+		model = p["vendor_ieee"]:"" + p["device_ieee"]:"";
+	    if (model == "")
+		model = p["vendor_db"]:"" + p["device_db"]:"";
+            if ((! contains (ukeys, ukey)
+		    && (! contains (uris, uri))
+			|| ! contains (models, model)
+		    )
+		&& (((p["vendor"]:"" != ""
+			    && p["device"]:"" != "")
+			|| p["ownppd"]:"" != ""
+		    )&& p["uri"]:"" != ""))
+            {
+                if (uri != "")
+                    uris = add (uris, uri);
+                if (ukey != "")
+                    ukeys = add (ukeys, ukey);
+		if (model != "")
+		    models = add (models, model);
+                printers = add (printers, p);
+            }
+        });
+
+	return printers;
+    }
+
+    /**
+      * List all queues of specified printer
+      * @param uri of printer
+      * @return list of maps of queues
+      */
+    global define list(map) getQueuesOfPrinter (string uri, string vendor,
+	string device)
+    ``{
+	list(map) queues = filter (`p, Printer::printcap, ``(
+	    p["uri"]:"" == uri && p["vendor"]:"" == vendor
+		&& p["device"]:"" == device));
+	return queues;
+    }
+
+    /**
+      * Has a printer (physical) been already configured (contains at least
+      * one queue?
+      * @param printer map containing at least vendor, device and
+      *   unique_key keys for comparsionprinter vendor
+      * @return boolean true if already configured
+      */
+    global define boolean isPrinterConfigured (map printer) ``{
+	string vendor = printer["vendor"]:"";
+	string device = printer["device"]:"";
+	string ukey = printer["unique_key"]:"";
+	boolean exists = false;
+
+	foreach (`p, Printer::printcap, ``{
+	    if (p["unique_key"]:"..." == ukey
+		|| (p["vendor"]:".." == vendor && p["device"]:".." == device)
+		|| (p["vendor_db"]:".." == vendor
+		    && p["device_db"]:".." == device)
+		|| (p["vendor_ieee"]:".." == vendor
+		    && p["device_ieee"]:".." == device))
+	    {
+		exists = true;
+	    }
+	});
+	return exists;
+    }
+
+    /**
+      * Get proposed default queue when using foomatic db
+      * @param list of queues
+      * @return proposed default queue name
+      */
+    global define string getFoomaticDefaultQueue (list queues) ``{
+	string default_queue = queues[0, "name"]:nil;
+        foreach (`q, queues, ``{
+            if (regexpmatch (q["name"]:"", "normal[0-9]")
+                 || q["name"]:"" == "normal")
+            {
+                default_queue = q["name"]:"";
+            }
+        });
+	return default_queue;
+    }
+
+    /**
+      * Get auto queues for printer when using foomatic database
+      * @param vendor string vendor db key
+      * @param model string model db key
+      * @param config string choosen ppd file, nil = auto
+      * @return list of PPD files
+      */
+    global define list getFoomaticAutoQueues (string vendor, string model,
+	string config)
+    ``{
+	list forbidden_names = Printer::getForbiddenNames ();
+	y2milestone ("Getting auto queues for >>%1<< >>%2<<", vendor, model);
 	loadFoomaticIfNeeded ();
 	list new_queues = [];
-            map ppds = getPpdFiles (vendor, model);
-            string ppdfile_orig = getAutoPpdFile (ppds, vendor, model);
-            string config = ppds[ppdfile_orig]:"";
-            string ppdfile = SCR::Read (.ppd.file.open, [ppdfile_orig, "/tmp"]);
-            map options = SCR::Read (.ppd.file.options, [ppdfile, ""]);
-            list opts = options["data"]:$[];
+        map ppds = getPpdFiles (vendor, model);
+	string ppdfile_orig = "";
+	if (vendor == "__ownppd__")
+	    ppdfile_orig = model;
+	else if (config == nil || config == "")
+            ppdfile_orig = getAutoPpdFile (ppds, vendor, model);
+	else
+	    ppdfile_orig = Printer::foomatic[vendor, model, config, 0]:"";
+        string config = ppds[ppdfile_orig]:"";
+        string ppdfile = SCR::Read (.ppd.file.open, [ppdfile_orig, "/tmp"]);
+        map options = SCR::Read (.ppd.file.options, [ppdfile, ""]);
+        list opts = options["data"]:[];
 // FIXME multiple composite options checking ????
             integer ind = -1;
             boolean found = true;
@@ -48,7 +164,7 @@
             if (composite != $[])
             {
                 foreach (`v, composite["valorder"]:[], ``{
-                string optname = composite["name"]:"";
+                    string optname = composite["name"]:"";
                     map new_options = $[
                         optname : v,
                     ];
@@ -82,7 +198,8 @@
                 }
                 forbidden_names = add (forbidden_names, lookup (v, "name", ""));
                 return union (Printer::printer, v);
-            });
+        });
+	y2milestone ("Proposing queues %1", maplist (`q, new_queues, ``(q["name"]:"")));
 	return new_queues;
     }
 
@@ -131,14 +248,24 @@ of printers"));
       */
     global define string getAutoPpdFile (map ppds, string vend, string mod) ``{
 	vendor = SCR::Read (.ppd.db.vendorname, vendor);
-	map order = $[
-	    "__default__": [".*hpijs.*", ".*gimp.*", ".*escp.*", ".*upp.*", ".*stcolor.*", ".*cdj[0-9].*", ".*pcl3.*", ".*cdj.*"],
-	];
+	SCR::Execute (.target.bash, "/usr/bin/touch /usr/share/YaST2/data/printerdb/pref_queues");
+	map order = SCR::Read (.target.ycp, "/usr/share/YaST2/data/printerdb/pref_queues");
+//	map order = $[
+//	    "__default__": [".*hpijs.*", ".*gimp.*", ".*escp.*", ".*upp.*", ".*stcolor.*", ".*cdj[0-9].*", ".*pcl3.*", ".*cdj.*"],
+//	];
+	if (order == nil)
+	    order = $[];
 
 	list(string) preferred = [];
 	foreach (`k, `v, order, ``{
 	    if (regexpmatch (vend, k))
 	    {
+		foreach (`kk, `vv, v, ``{
+		    if (regexpmatch (mod, kk))
+		    {
+			preferred = order[k, kk]:[];
+		    }
+		});
 		if (preferred == [])
 		{
 		    preferred = order[k, "__default__"]:[];
@@ -216,6 +343,27 @@ of printers"));
 	  }
 	});
 	return ppds;
+    }
+
+    /**
+      * Get auto queues for printer when using SuSE database
+      * @param model string model name
+      * @return list of PPD files
+      */
+    global define list getSuSEdbAutoQueues (string device) ``{
+	list forbidden_names = Printer::getForbiddenNames ();
+        list new_queues = SCR::Read (.printerdb.auto, device);
+        string suffix = Printer::getQueueSuffix (new_queues);
+        new_queues = maplist (`v, new_queues, ``{
+            map paper = Printer::getQuickPaperSize (lookup (v, "config", ""));
+            if (nil != paper)
+            {
+                v = add (v, "options", paper);
+            }
+            v = add (v, "name", Printer::adjustQueueName (lookup (v, "name", "lp") + suffix, forbidden_names));
+            return union (Printer::printer, v);
+        });
+	return new_queues;
     }
 
 
@@ -963,9 +1111,14 @@ All changes will be lost!"),
      * @param type type of connection to pre-select.
      * @return List of items. Item of Id is its name.
      */
-    global define list advancedConnectionsRadioButtons (string type) ``{
+    global define list advancedConnectionsRadioButtons (string type, boolean queue) ``{
+	if (size (getConfiguredPrinters ()) == 0)
+	    queue = false;
+
 	return Printer::spooler == "cups" ?
 		`VBox (
+		    // radiobutton
+		    queue ? `RadioButton (`id (`existing), `opt (`hstretch), _("N&ew queue to configured printer"), type == "queue") : `VSpacing (0),
 		    // label
 		    `Label (`opt (`hstretch), _("LPD and IPP network printing:")),
 		    // radiobutton
@@ -993,10 +1146,12 @@ All changes will be lost!"),
 		    // radiobutton
                     `RadioButton (`id (`novell), `opt (`hstretch, `disabled),   _("IPX printing (Nove&ll printer)"), type == "novell"),
 		    // radiobutton
-		    `RadioButton (`id (`pipe), `opt (`hstretch, `disabled),     _("Pip&e printing"), type == "pipe")
+		    `RadioButton (`id (`pipe), `opt (`hstretch, `disabled),     _("&Pipe printing"), type == "pipe")
 		    )
 		: Printer::spooler == "lprng" ?
                 `VBox (
+		    // radiobuton
+		    queue ? `RadioButton (`id (`existing), `opt (`hstretch), _("N&ew queue to configured printer"), type == "queue") : `VSpacing (0),
 		    // label
                     `Label (`opt (`hstretch), _("LPD and IPP network printers:")),
 		    // radiobutton
@@ -1016,7 +1171,7 @@ All changes will be lost!"),
 		    // label
 		    `Label (`opt (`hstretch), _("Other printing:")),
 		    // radiobutton
-		    `RadioButton (`id (`pipe), `opt (`hstretch),     _("Pip&e printing"), type == "pipe"),
+		    `RadioButton (`id (`pipe), `opt (`hstretch),     _("&Pipe printing"), type == "pipe"),
 		    // label
 		    `Label (`opt (`hstretch), _("Unsupported printing in LPRng:")),
 		    // radiobutton
@@ -1028,6 +1183,8 @@ All changes will be lost!"),
                     )
 		: //unknown spooler
 		`VBox (
+		    // radiobutton
+		    queue ? `RadioButton (`id (`existing), `opt (`hstretch), _("N&ew queue to configured printer"), type == "queue") : `VSpacing (0),
 		    // label
                     `Label (`opt (`hstretch), _("LPD and IPP network printing:")),
 		    // radiobutton
@@ -1051,7 +1208,7 @@ All changes will be lost!"),
 		    // radiobutton
                     `RadioButton (`id (`other), `opt (`hstretch),  _("&Other Printer (set URI)"), "" == knowConnection (type) && type != "class"),
 		    // radiobutton
-                    `RadioButton (`id (`pipe), `opt (`hstretch),     _("Pip&e printing"), type == "pipe"),
+                    `RadioButton (`id (`pipe), `opt (`hstretch),     _("&Pipe printing"), type == "pipe"),
 		    // radiobutton
                     `RadioButton (`id (`class), `opt (`hstretch),  _("CUPS &class"), type == "class")
 		);
@@ -1062,9 +1219,14 @@ All changes will be lost!"),
      * @param all show all possible connections (true) or only local connections (false)?
      * @return List of items. Item of Id is its name.
      */
-    global define list connectionsRadioButtons (string type, boolean all) ``{
+    global define list connectionsRadioButtons (string type, boolean all, boolean queue) ``{
+        if (size (getConfiguredPrinters ()) == 0)
+            queue = false;
+
         return all ?
 	    `VBox (
+		    // radiobutton
+		queue ? `RadioButton (`id (`existing), `opt (`hstretch), _("N&ew queue to configured printer"), type == "queue") : `VSpacing (0),
 		    // label
 		`Label (`opt (`hstretch), _("Local printing:")),
 		    // radiobutton
@@ -1598,6 +1760,7 @@ to install and configure.
 	    if (`lprng == result)
 	    {
 		Printerlib::switchTo ("lprng");
+		Printer::db = `suse;
 		return "switched";
 	    }
 	    else if (`cups_server == result)
@@ -1634,6 +1797,7 @@ to leave installed and configure.
             if (`lprng == result)
             {
                 Printerlib::switchTo ("lprng");
+		Printer::db = `suse;
                 return "switched";
             }
             else if (`foomatic == result)
@@ -1691,6 +1855,7 @@ run properly.<
 	    }
 	    else if (`lprng == result)
 	    {
+		Printer::db = `suse;
 		Printerlib::switchTo ("lprng");
 		return "switched";
 	    }
@@ -1733,6 +1898,7 @@ may not run properly.<
 	    else if (`lprng == result)
 	    {
 		Printerlib::switchTo ("lprng");
+		Printer::db = `suse;
 		return "switched";
 	    }
             else if (`cancel == result)
