@@ -378,7 +378,7 @@ user name, and password.
 		    ret = nil;
 		    continue;
 		}
-		if (! processPpdFiles (dir))
+		if (! Printerdb::processPpdFiles (dir))
 		{
 		    ret = nil;
 		    continue;
@@ -1869,36 +1869,6 @@ the current configuration.
     }
 
     /**
-     * Popup wanting device name.
-     * @param pre_filled TextEntry is pre-set by this value.
-     * @return string new device or ""
-     */
-    global define string getDeviceName (string pre_filled)``{
-	symbol ret = `ok;
-	UI::OpenDialog (
-	    `opt (`decorated),
-	    `VBox (
-		`TextEntry (`id (`text),
-			    // textentry label
-			    _("&Enter device:"),
-			    pre_filled),
-		`HBox (
-		    `PushButton (`id (`ok), `opt (`key_F10), Label::OKButton ()),
-		    `PushButton (`id (`cancel), `opt (`key_F9), Label::CancelButton ())
-		    )
-		)
-	    );
-	ret = UI::UserInput ();
-	pre_filled = UI::QueryWidget (`id (`text), `Value);
-	UI::CloseDialog ();
-	if (`cancel == ret)
-	    {
-		return "";
-	    }
-	return pre_filled;
-    }
-
-    /**
      * Show printer details in one window
      * @return symbol `back `next `abort
      */
@@ -2146,7 +2116,7 @@ Continue?
 		}
 		else
 		{
-		    Printer::printer = $[];
+		    Printer::selectPrinter (-1);
 		    Printer::index = -1;
 		}
 	    }

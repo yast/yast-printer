@@ -42,7 +42,7 @@
 	// TRANSLATORS:
 	// You may add some text to ascii test page if you want.
 	// Fill in your encoding here! (e.g. iso-8859-2 for czech)
-	string encoding = UI (_("!!!  YOUR  ENCODING  !!!"));
+	string encoding = _("!!!  YOUR  ENCODING  !!!");
 	// TRANSLATORS:
 	// This text will be added at the end of your test-page if
 	// user chooses your language. Write anything you want here.
@@ -54,7 +54,7 @@
 	// text must contain encoding and text. e.g.:
 	// ISO-8859-1: Some text in your language.
 	// ONLY ONE LINE PLEASE
-	string special_text = UI (_("!!!  YOUR  TEXT  !!!"));
+	string special_text = _("!!!  YOUR  TEXT  !!!");
 	// TRANSLATORS:
 	// Ascii Test Page now contains only English explanation:
 	// Following lines contain characters in various encodings.  You can check if your
@@ -65,22 +65,22 @@
 	// It is possible, that proper encoding is not chosen when printing the
 	// test page.
 	// ONLY ONE LINE PLEASE. IF YOU WANT MORE LINES, PLEASE USE \\n
-	string common_text = UI (_("!!! COMMON  EXPLANATION !!!"));
+	string common_text = _("!!! COMMON  EXPLANATION !!!");
 
 
-	string out_file = SCR::Read (.target.tmpdir) + "/testpg.ascii";
+	string out_file = (string)SCR::Read (.target.tmpdir) + "/testpg.ascii";
 	string c_text = "";
 	string s_text = "";
 	if ("!!!  YOUR  ENCODING  !!!" != encoding && "" != encoding)
 	    {
 		if ("!!!  YOUR  TEXT  !!!" != special_text && "" != special_text)
 		    {
-			s_text = UI::Recode ("utf-8", encoding, special_text);
+			s_text = (string)UI::Recode ("utf-8", encoding, special_text);
 			s_text = mergestring (splitstring (s_text, "\n"), " ");
 		    }
 		if ("!!! COMMON  EXPLANATION !!!" != common_text && "" != common_text)
 		    {
-			c_text = UI::Recode ("utf-8", encoding, common_text);
+			c_text = (string)UI::Recode ("utf-8", encoding, common_text);
 			c_text = mergestring (splitstring (c_text, "\n"), " ");
 		    }
 	    }
@@ -111,7 +111,7 @@
     define string preparePsTestPage (string queue, string opt_file,
 	string photo)
     ``{
-	string out_file = SCR::Read (.target.tmpdir) + "/testpg.ps";
+	string out_file = (string)SCR::Read (.target.tmpdir) + "/testpg.ps";
 	string command = sformat (
 	    "/usr/lib/YaST2/bin/prepare_ps_testpage.pl %1 %2 %3 %4",
 	    opt_file,
@@ -228,7 +228,7 @@ on and ONLINE then press the 'OK' button.
 "),
 		    Label::OKButton (), Label::CancelButton (), `focus_yes))
 	    {
-		return ;
+		return true;
 	    }
 	}
 	else
@@ -264,11 +264,11 @@ press 'OK'.
 	    symbol ret = nil;
 	    while (nil == ret)
 	    {
-		ret = UI::UserInput ();
+		ret = (symbol)UI::UserInput ();
 		if (ret == `cancel)
 		{
 		    UI::CloseDialog ();
-		    return;
+		    return true;
 		}
 		if (ret == `ok)
 		{
@@ -340,9 +340,11 @@ press 'OK'.
 
 	if (`postscript == testpage_type)
 	{
-	    map consolefonts = SCR::Read (.target.yast2, "consolefonts.ycp");
-	    string ce = select (lookup (consolefonts, UI::GetLanguage (false), []), 4, "X");
-	    string opts = SCR::Read (.target.tmpdir) + "/testpg.options";
+	    map consolefonts = (map)SCR::Read (.target.yast2,
+		"consolefonts.ycp");
+	    string ce = (string)select (lookup (consolefonts, UI::GetLanguage (false), []), 4, "X");
+	    string opts = (string)SCR::Read (.target.tmpdir)
+		+ "/testpg.options";
 	    string os = "";
 	    // encoding first
 	    ce = toupper (ce);
@@ -361,9 +363,9 @@ press 'OK'.
 
 // FIXME recode to UTF-8
 
-	    map options = SCR::Read (.ppd.file.options, [ppd_file, ""]);
+	    map options = (map)SCR::Read (.ppd.file.options, [ppd_file, ""]);
 	    list optlist = options["data"]:[];
-	    optlist = maplist (`i, optlist, ``{
+	    optlist = maplist (map i, optlist, ``{
 		    string name = i["name"]:"";
 		    string label = i["gui"]:"";
 		    string value = printer["options", name]:"";
@@ -379,7 +381,7 @@ press 'OK'.
 		    else
 			return "";
 	    });
-	    optlist = filter (`o, optlist, ``(o != "" && o != nil));
+	    optlist = filter (string o, optlist, ``(o != "" && o != nil));
 
 // encoding
 	    os = os + sformat ("----X-ENCODING: %1\n", enc);
@@ -473,7 +475,7 @@ press 'OK'.
 
 	    if (ce != "X")
 	    {
-		    os = UI::Recode ("UTF-8", ce, os);
+		    os = (string)UI::Recode ("UTF-8", ce, os);
 	    }
 	    SCR::Write (.target.string, opts, os);
 	    test_page = preparePsTestPage (virtual_name, opts, photo_filename);
@@ -483,7 +485,7 @@ press 'OK'.
 	    test_page = prepareAsciiTestPage ();
 	}
 	string lpr_command = sformat ("/usr/bin/lpr -P%1 %2", name, test_page);
-	map out = SCR::Execute (.target.bash_output, lpr_command);
+	map out = (map)SCR::Execute (.target.bash_output, lpr_command);
 
 	// restore CUPS server settings
 	if (Spooler::Get () == "cups")
