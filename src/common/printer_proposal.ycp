@@ -47,9 +47,11 @@
 		Printer::Reset ();
 		Printer::Read ();
 		if (nil == Printer::detect)
-	        // popup
-		// FIXME: there is a typo, shall be ... If a freeze happens, ...
-		    Printer::detect = UI::AnyQuestionPopup (WarningMsg(), _("Printer detection can now start. In some cases, detection can cause a
+		    Printer::detect = UI::AnyQuestionPopup (WarningMsg(),
+			// popup
+			_("Note, that during the following step YaST2 will try to detect local printers only.\n\n") +
+			// popup, continuing
+			_("Printer detection can now start. In some cases, detection can cause a
 system freeze. If a freeze happens, select Skip Detection
 when next running the printer configuration.
 
@@ -112,12 +114,14 @@ Detect your printers?
 	 * with nothing configured, we may just check if the list
 	 * of printers is empty (there is nothing to save).
 	 */
+	restartSpoolerIfNeeded (true);
 	boolean success = true;
 	if (1 == spool_sys || 2 == spool_sys)
 	{
 	    if (0 != size (Printer::printcap))
 	    success = Printer::Write ();
 	}
+	Printerlib::stopServices ();
         ret = $[ "success" : success ];
     }
     return ret;

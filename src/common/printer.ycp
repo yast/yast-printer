@@ -276,9 +276,11 @@ the current configuration.
     if (!skip_autodetection)
     {
 	if (nil == Printer::detect)
-	    // popup
-	    // FIXME: there is a typo, shall be ... If a freeze happens, ...
-	    Printer::detect = UI::AnyQuestionPopup (WarningMsg(), _("Printer detection can now start. In some cases, detection can cause a
+	    Printer::detect = UI::AnyQuestionPopup (WarningMsg(),
+		// popup
+		_("Note, that during the following step YaST2 will try to detect local printers only.\n\n") +
+		// popup, continuing
+		_("Printer detection can now start. In some cases, detection can cause a
 system freeze. If a freeze happens, select Skip Detection
 when next running the printer configuration.
 
@@ -335,7 +337,7 @@ Detect your printers?
 	else if (Printer::spooler == "lprng")
 	    SCR::Execute (.target.bash, "/etc/init.d/lpd stop");
     }
-    else
+    else if (size (Printer::printcap > 0))
     {
 	if (Printer::spooler == "cups")
 	    if (Printer::cupsInstallationType () != 1)
