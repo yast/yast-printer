@@ -251,7 +251,7 @@ YCPList preprocessOptions (char* file, YCPList opts){
 
 string getPatchedPpdFile (const char* filename, string options)
 {
-    string ret;
+    string ret; // none initialization - couldn't this cause the bug 19354?
     char* ppd_file = readFileToString (filename);
     if (0 == ppd_file)
         return string ("");
@@ -290,6 +290,7 @@ string getPatchedPpdFile (const char* filename, string options)
             tmp = strstr (line_copy, " ");
             if (! (tmp)) {
 		if (*line_copy)
+            // shouldn't here be string(line_copy)?
 		    ret = ret + line_copy + string ("\n");
                 free (line_copy);
 		continue;
@@ -335,9 +336,16 @@ string putValuesInString ( string pattern, vector<opt_as>&f){
     
     vector<opt_as>::iterator i;
     for (i = f.begin (); i != f.end (); i++) {
-
-        if ((*i).value.substr(0, 4) == "*~*~") 
-             (*i).value = (*i).value.substr (4);
+        if ((*i).value.substr(0, 4) == "*~*~") {
+            /* not included in 8.1 Branch
+            // WARNING: I'm not sure if this change is OK:
+            // check if this member is on the same level (then exit, 
+            // will be solved in next function call) or deeper (continue)
+            if (((int)pattern.find((*i).as))<0)
+                return pattern;
+            */
+            (*i).value = (*i).value.substr (4);
+        }
 
 	string find_as = "%" + (*i).as + "%";
 		
@@ -386,7 +394,11 @@ void getConfFile (const List*u, YCPMap&selected,int&flags,vector<opt_as>&s, cons
 	oa.as = string (uo->as);
 	oa.remove = false;
 	if (o) {
-	    YCPValue v = selected->value (YCPString (uo->ident));
+        YCPValue v = selected->value (YCPString (uo->ident));
+        /* not included in 8.1 Branch
+//      This should be right to correctly use the "As" feature from db
+	    YCPValue v = selected->value (YCPString (oa.as));
+        */
 	
 	    switch (o->type) {
 	    case 1:
@@ -428,6 +440,7 @@ void getConfFile (const List*u, YCPMap&selected,int&flags,vector<opt_as>&s, cons
 	    case 3:
 		{
 		    if (!v.isNull () && v->isString ()){
+                
 			oa.value = putValueInString (o->valtext->pattern, v->asString ()->value_cstr ());
 			s.push_back (oa);
 		    }
@@ -479,8 +492,9 @@ string getConfFile (List*u, YCPMap&selected,int&flags, const string selection)
     vector<opt_as>f;
     getConfFile (u, selected, flags, f, selection);
     vector<opt_as>::iterator i;
-    string pattern;
+    string pattern; // this is not used
     string s = "";
+
     for (i = f.begin (); i != f.end (); i++) {
 	if ((*i).value.substr(0, 4) == "*~*~") {
 	     (*i).value = (*i).value.substr (4);

@@ -4,6 +4,8 @@
 
 ydata_DATA = \
 	suse_testpg.ps		\
-	suse_testpg.ascii
+	suse_testpg.ascii   \
+    ul_testpg.ps        \
+	ul_testpg.ascii
 
 EXTRA_DIST = $(ydata_DATA)

@@ -169,7 +169,7 @@
     global define list getSystemForbiddenNames () ``{
 	if (nil == sys_forbidden_names)
 	{
-	    if (0 != SCR::Read (.target.bash, "test -d /etc/lpdfilter"))
+	    if (0 != SCR::Execute (.target.bash, "test -d /etc/lpdfilter"))
 		sys_forbidden_names = [];
 	    else
 		sys_forbidden_names = SCR::Read (.etc.printcap.sysnames);
@@ -271,7 +271,7 @@
 	    {
 		if (name == "lp")
 		    found_lp = true;
-		if (name == "default")
+		if (name == default)
 		    found_default = true;
 		if (first == "")
 		    first = name;
@@ -554,7 +554,7 @@ END { if (!used) print \"ServerName %1\" }
         if (-1 != cups_installation)
             return cups_installation;
 
-        if (Pkg::IsProvided ("cups-client") &&
+        if (Pkg::IsProvided ("cups-libs") &&
             !Pkg::IsProvided ("cups"))
         {
             loadClientHostName ();
@@ -924,9 +924,9 @@ Remove them?
 			entry = add (entry, "cups-state", "commited");
 		if (lookup (entry, "cups-state", "changed") == "void")
 		    // popup %1 is queue name
-		    UI::MessagePopup (_("Queue %1 cannot be saved because
+		    UI::MessagePopup (sformat(_("Queue %1 cannot be saved because
 the selected spooler does not support it.
-"), name);
+"), name));
 	    }
 	    else if (spooler == "lprng")
 	    {
@@ -935,9 +935,9 @@ the selected spooler does not support it.
 			entry = add (entry, "lprng-state", "commited");
 		if (lookup (entry, "lprng-state", "changed") == "void")
 		    // popup %1 is queue name
-		    UI::MessagePopup (_("Queue %1 cannot be saved because
+		    UI::MessagePopup (sformat(_("Queue %1 cannot be saved because
 the selected spooler does not support it.
-"), name);
+"), name));
 	    }
 	    Progress::NextStep ();
 	    return entry;

@@ -236,6 +236,7 @@
 		Printer::printer = add (Printer::printer, "vendor_ieee", manuf);
 		Printer::printer = add (Printer::printer, "device_ieee", model);
 		Printer::printer = add (Printer::printer, "ownppd", file);
+		Printer::printer = filter (`k, `v, Printer::printer, ``(k != "config" && k != "options"));
 		testPrinter (Printer::printer, -1);
 	    }
 	    else if (`next == ret)
@@ -258,14 +259,17 @@
 		Printer::printer = add (Printer::printer, "ownppd", file);
 		Printer::printer = add (Printer::printer, "vendor_ieee", manuf);
 		Printer::printer = add (Printer::printer, "device_ieee", model);
+		Printer::printer = filter (`k, `v, Printer::printer, ``(k != "config" && k != "options"));
 		break;
 	    }
 	    else if (`db == ret)
 	    {
+		Printer::printer = add (Printer::printer, "ownppd", "");
 		break;
 	    }
 	    else if (`advanced == ret)
 	    {
+		Printer::printer = add (Printer::printer, "ownppd", file);
 		break;
 	    }
 	    else if (`back == ret)
@@ -357,7 +361,8 @@
                             `PushButton (`id (`ok), OKButtonLabel()),
                             `PushButton (`id (`cancel), CancelButtonLabel ())
                             ),
-                        `VSpacing (0.3)
+                        `VSpacing (0.3),
+			`HSpacing (40)
                         ),
                     `HSpacing (0.7)
                     )

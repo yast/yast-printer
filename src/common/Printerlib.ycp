@@ -262,12 +262,21 @@
 			c_text = mergestring (splitstring (c_text, "\n"), " ");
 		    }
 	    }
+    // test the distribution
+    // could be done by
+    // if (Product::baseproduct == "UnitedLinux")
+    string path_to_testpage = "/usr/share/YaST2/data";
+    if (SCR::Read(.target.stat, path_to_testpage + "/ul_testpg.ascii") == $[])
+        path_to_testpage = path_to_testpage + "/suse_testpg.ascii";
+    else
+        path_to_testpage = path_to_testpage + "/ul_testpg.ascii";
+
 	// now we have texts to replace.
 	SCR::Execute (
 	    .target.bash,
 	    sformat (
-		"/bin/cat /usr/share/YaST2/data/suse_testpg.ascii | /bin/sed -e \"s/~common~explanation~/%1/\" -e \"s/~special~text~/%2/\" > %3",
-		c_text, s_text, out_file));
+		"/bin/cat %1 | /bin/sed -e \"s/~common~explanation~/%2/\" -e \"s/~special~text~/%3/\" > %4",
+        path_to_testpage, c_text, s_text, out_file));
 	return out_file;
     }
     /**
@@ -279,9 +288,18 @@
      */
     global define string preparePsTestPage (string queue, string opt_file, boolean PS_printer) ``{
 	string out_file = SCR::Read (.target.tmpdir) + "/testpg.ps";
+    // test the distribution
+    string path_to_testpage = "/usr/share/YaST2/data";
+
+    if (SCR::Read(.target.stat, path_to_testpage + "/ul_testpg.ps") == $[])
+        path_to_testpage = path_to_testpage + "/suse_testpg.ps";
+    else
+        path_to_testpage = path_to_testpage + "/ul_testpg.ps";
+
+    y2debug("template test file to print: %1", path_to_testpage);
 
 	SCR::Execute (.target.bash, sformat (
-"/bin/awk -v SKIPPICTURE=\"%4\" '
+"/bin/awk -v SKIPPICTURE=\"%5\" '
       BEGIN { COPY = 1 }
       /^----X-VENDOR:/		{ $1 = \"\"; ARRAY[\"vendor\"] = $0; 	next;	}
       /^----X-QUEUE-L:/		{ $1 = \"\"; ARRAY[\"queue\"] = $0; 	next;	}
@@ -292,7 +310,7 @@
       /^----X-ENCODING:/ 	{ $1 = \"\"; ARRAY[\"encoding\"] = $0;	next;	}
       /^----X-CONFIG:/ 		{ $1 = \"\"; ARRAY[\"config\"] = $0; 	next;	}
  
-      // { if (FILENAME !~ /suse_testpg.ps$/)
+      // { if (FILENAME !~ /suse_testpg.ps$/ && FILENAME !~ /ul_testpg.ps$/)
       		next;
       }
       /\~\~BEGIN\~\~OPTIONAL\~\~PICTURE\~\~/ { COPY=0 }
@@ -345,7 +363,7 @@
           next;
       }
       { print $0; }
-' %2 /usr/share/YaST2/data/suse_testpg.ps > %3", queue, opt_file, out_file, PS_printer));
+' %2 %3 > %4", queue, opt_file, path_to_testpage, out_file, PS_printer));
 	return out_file;
     }
 
@@ -465,7 +483,7 @@
 		    return 2;
 		else
 		{
-		    boolean cups_client = Pkg::IsProvided ("cups-libs");
+		    boolean cups_client = Pkg::IsProvided ("cups-libs") && ! Pkg::IsProvided ("cups");
 		    if (cups_client)
 			return 512 + 2;
 		    else
@@ -646,7 +664,7 @@
      * @see getUriType
      */
     global define integer getUriBaudrate (string uri) ``{
-	return tointeger (getUriValue (uri, "baudrate"));
+	return tointeger (getUriValue (uri, "baudrate"));// not defined for ""
     }
     /**
      * Get any parameter from uri. Suppose uri has form:
