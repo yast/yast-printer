@@ -297,3 +297,33 @@ YCPMap PPDfile::ppdInfo (const char *filename)
     return m;
 }
 
+/**
+  * Get UI constraints of a PPD file
+  * @param filename of the PPD file
+  * @return list of all constraints of the PPD file
+  */
+YCPList PPDfile::ppdConstraints (YCPString filename)
+{
+    ppd_file_t *ppd; 
+
+    const char* fn = filename->value_cstr ();
+    if ((ppd = ppdOpenFile(fn)) == NULL)
+    {
+        y2error ("Unable to open PPD file %s !", fn);
+        return YCPList ();
+    }
+   
+    YCPList ret = YCPList ();
+    for (int i = 0; i < ppd->num_consts; i++)
+    {
+	YCPMap m = YCPMap ();
+	ppd_const_t c = (ppd->consts)[i];
+	m->add (YCPString ("option1"), YCPString (c.option1));
+	m->add (YCPString ("value1"), YCPString (c.choice1));
+	m->add (YCPString ("option2"), YCPString (c.option2));
+	m->add (YCPString ("value2"), YCPString (c.choice2));
+	ret->add (m);
+    }
+    ppdClose (ppd);
+    return ret;
+}
