@@ -632,15 +632,16 @@ printer model again."), entry["name"]:""));
 	string log = dir + "/log";
 	string target_dir = "/usr/share/cups/model/downloaded";
 	integer test = (integer)SCR::Execute (.target.bash, sformat (
-	    "/usr/lib/YaST2/bin/process_ppd_files %1 %2 %3", dir,
+	    "/usr/lib/YaST2/bin/process_ppd_files \"%1\" \"%2\" \"%3\"", dir,
 	    target_dir, log));
-	y2milestone ("Test status: %1", test);
+	y2milestone ("Test exit code: %1", test);
 	if (test != 0)
 	{
-	    string log = (string)SCR::Read (.target.string, log);
+	    y2milestone ("Reading log from %1", log);
+	    string log_text = (string)SCR::Read (.target.string, log);
 	    term text = `VBox ();
-	    if (log != "" && log != nil)
-		text = `RichText (`opt (`plainText), SCR::Read (.target.string, log));
+	    if (log_text != "" && log_text != nil)
+		text = `RichText (`opt (`plainText), log_text);
 	    UI::OpenDialog(`opt ( `decorated ),
 		`VBox (`HSpacing(75),
 		// heading
