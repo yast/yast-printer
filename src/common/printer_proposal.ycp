@@ -27,6 +27,10 @@
 
     integer spool_sys = Printerlib::getSpoolSystem ();
 
+    if (spool_sys == 1)
+	Printer::spooler = "lprng";
+    else if (spool_sys == 2)
+	Printer::spooler = "cups";
     if (func == "MakeProposal")
     {
 	boolean force_reset = lookup (param, "force_reset", false);
@@ -86,8 +90,8 @@
 	}
 	else */ if (1 == spool_sys || 2 == spool_sys)
 	{
-	    Printer::spooler = 1 == spool_sys ? "lprng" : "cups";
 	    saved = Printer::Export ();
+y2error ("Export returned %1", saved);
 	    seq = CallFunction (`printer (.nocheck, .noio));
 	    if (`next != seq)
 		Printer::Import (saved);
