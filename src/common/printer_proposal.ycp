@@ -20,6 +20,7 @@
     textdomain "printer";
     import "Printer";
     import "Printerlib";
+    import "Arch";
     include "printer/misc.ycp";
 
     string func  = Args(0);
@@ -46,6 +47,12 @@
 		Printerlib::proposal_valid = true;
 		Printer::Reset ();
 		Printer::Read ();
+		// S390/S390x do not have local printers,
+		// so no warning and no probing is necessary (#19186)
+		if (Arch::s390)
+		{
+		    Printer::detect = false;
+		}
 		if (nil == Printer::detect)
 		    Printer::detect = UI::AnyQuestionPopup (WarningMsg(),
 			// popup

@@ -31,6 +31,7 @@
     import "Wizard";
     import "Progress";
     import "Mode";
+    import "Arch";
     include "printer/misc.ycp";
     include "printer/dialogs.ycp";
     include "printer/helps.ycp";
@@ -122,6 +123,12 @@
 
     if (Printer::spooler == "cups" && Printer::cupsInstallationType () != 0)
 	skip_autodetection = true;
+    // S390/S390x do not have local printers,
+    // so no warning and no probing is necessary (#19186)
+    if (Arch::s390)
+    {
+	skip_autodetection = true;
+    }
 
     // progress label
     {
