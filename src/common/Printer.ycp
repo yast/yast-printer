@@ -56,6 +56,10 @@
      */
     global string server_hostname = "";
     /**
+      * List of detected CUPS servers
+      */
+    global list(string) cups_servers = [];
+    /**
       * Shall be printers detected
       * If nil, ask user
       */
@@ -1279,6 +1283,25 @@ the selected spooler does not support it.
      * @return summary string
      */
     global define string Summary (list style) ``{
+	if (Printer::spooler == "cups" && Printer::cups_installation > 0)
+	{
+	    string ret =
+                // summary text
+                // %1 is info about config status of the server
+		sformat (_("<LI>CUPS client-only configuration:<BR>%1</LI>"),
+			// summary text part
+			// %1 server name
+		    sformat (_("using server %1."), Printer::server_hostname));
+	    list servers = filter (`s, cups_servers, ``(s != server_hostname));
+	    if (size (servers) > 0)
+	    {
+		// sumary text
+		ret = ret + sformat(_("<li>Other detected servers:<br>%1</li>"),
+		    mergestring (servers, ", "));
+	    }
+	    ret = "<UL>" + ret + "</UL>";
+	    return ret;
+	}
 	// Configured as name_of_queue.
 	string format = contains (style, `short) ? _("Configured as %1.")
 	// Configured as name_of_queue.
@@ -1550,7 +1573,7 @@ the selected spooler does not support it.
      */
     global define void Propose () ``{
 	if (Printer::spooler == "cups")
-	    setCupsUsbDevicesInfo ();
+	    Printerlib::setCupsUsbDevicesInfo ();
 	// settings are read and hw is detected
 	list forbidden_names = getForbiddenNames ();
 	foreach (`i, autodetected, ``{
