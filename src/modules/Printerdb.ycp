@@ -20,6 +20,7 @@
 
     textdomain "printer";
 
+    import "CommandLine";
     import "Label";
     import "Mode";
     import "Package";
@@ -265,12 +266,21 @@ global boolean GetDriversAreInstalled () {
                 SCR::Write (.ppd.db.check_method, `size);
             }
             SCR::Write (.ppd.db.create, "");
-            UI::OpenDialog (`VBox (
-                `HSpacing (50),
-                `ProgressBar (`id(`pr),
+	    if (Mode::commandline)
+	    {
+		CommandLine::Print (
+		    _("The list of installed drivers has changed.
+Building database of drivers..."));
+	    }
+	    else
+	    {
+		UI::OpenDialog (`VBox (
+		    `HSpacing (50),
+		    `ProgressBar (`id(`pr),
                         // progress bar label
                         _("The list of installed drivers has changed.
 Building database of drivers..."), 100, 0)));
+	    }
             integer result = 0;
             while (true)
             {
@@ -279,10 +289,12 @@ Building database of drivers..."), 100, 0)));
                         break;
                     if (result == 100)
                         break;
-                    UI::ChangeWidget (`id (`pr), `Value, result);
+		    if (! Mode::commandline)
+			UI::ChangeWidget (`id (`pr), `Value, result);
                     sleep (1000);
             }
-            UI::CloseDialog ();
+	    if (! Mode::commandline)
+		UI::CloseDialog ();
             if (result < 0)
             {
                     // error report

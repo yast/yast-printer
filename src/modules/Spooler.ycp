@@ -21,6 +21,7 @@
 
     textdomain "printer";
 
+    import "CommandLine";
     import "CUPS";
     import "Mode";
     import "Label";
@@ -51,10 +52,17 @@
 
 // local functions
 
-    /**
-      * display CUPS initialization popup
-      */
-    define void showCupsInitPopup () ``{
+/**
+ * display CUPS initialization popup
+ */
+define void showCupsInitPopup () ``{
+    if (Mode::commandline)
+    {
+	CommandLine::Print (_("Initializing CUPS server...
+This usually takes one or two minutes"));
+    }
+    else
+    {
         // popup
         UI::OpenDialog(`opt(`decorated ),`VBox (
                 // label
@@ -62,7 +70,7 @@
 This usually takes one or two minutes")),
             `ProgressBar (`id (`cups_prog), "", 60 * 10)));
     }
-
+}
 
 
 
@@ -388,7 +396,7 @@ global list GetSystemForbiddenNames () {
 		    {
 			break;
 		    }
-                    if (close_dialog)
+                    if (close_dialog && ! Mode::commandline)
                         UI::ChangeWidget (`id (`cups_prog), `Value, attempts);
                     sleep (1000);
                     status = (integer)SCR::Execute (.target.bash, "/etc/init.d/cups status");
@@ -400,7 +408,7 @@ global list GetSystemForbiddenNames () {
 			break;
                     }
                 }
-		if (close_dialog)
+		if (close_dialog && ! Mode::commandline)
 		{
 		    UI::CloseDialog ();
 		}
