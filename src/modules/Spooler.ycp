@@ -253,6 +253,7 @@ global list GetSystemForbiddenNames () {
     global define void switchTo (string to) ``{
 	y2milestone ("Switching spooler to %1", to);
 	PackageSystem::EnsureTargetInit ();
+	PackageSystem::EnsureSourceInit ();
 	list<string> del = ["plp", "lprold", "lprng", "cups", "cups-client",
             "cups-drivers", "cups-drivers-cs", "cups-drivers-de",
             "cups-drivers-stp", "lpdfilter", "filters", "foomatic-filters",
@@ -296,8 +297,6 @@ global list GetSystemForbiddenNames () {
 	    {
 		// using the fact that if I mark package for deletion, it gets
 		// deleted during the PackageSystem::InstallAll () call.
-		PackageSystem::EnsureTargetInit ();
-		PackageSystem::EnsureSourceInit ();
 		foreach (string p, del, {Pkg::PkgDelete (p);});
 		PackageSystem::InstallAll (inst);
 		foreach (string p, del, {Pkg::PkgNeutral (p);});
