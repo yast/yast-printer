@@ -67,6 +67,9 @@
     boolean skip_io = false;	// FIXME: use Printer::?????_mode variable
 				// or other mode handling
 
+    boolean cups_running = 0 == SCR::Execute (.target.bash, "test -f /etc/init.d/cups && /etc/init.d/cups status");
+    boolean lprng_running = 0 == SCR::Execute (.target.bash, "test -f /etc/init.d/lpd && /etc/init.d/lpd status");
+
     // static variables
     integer runAutoprobedListDialog__current = 0;
 
@@ -82,6 +85,14 @@
     }
 
     ret = PrinterSequence ();
+
+    if (ret == `abort || ret == `back)
+    {
+	if (! cups_running)
+	    SCR::Execute (.target.bash, "test -f /etc/init.d/cups && /etc/init.d/cups stop");
+	if (! lprng_running)
+	    SCR::Execute (.target.bash, "test -f /etc/init.d/lpd && /etc/init.d/lpd stop");
+    }
 
 /*
     while (true)
