@@ -151,8 +151,6 @@ YCPMap PPDfile::getOptionsGroups (YCPString filename) {
     ppd_file_t *ppd;
     ppd_group_t *group;
 
-    fprintf (stderr, "Opening file %s", fn);
-
     if ((ppd = ppdOpenFile(fn)) == NULL)
     {
         y2error ("Unable to open PPD file %s !", fn);
