@@ -72,6 +72,87 @@ Detect your printers?
 
 		if (Printer::detect)
 		    Printer::Detect ();
+		if (size (Printer::printcap) == 0
+		    && size (Printer::autodetected) == 0
+		    && Printer::spooler == "cups")
+		{
+		    Printerlib::stopServices ();
+		    // no local printer found
+		    y2milestone ("No local printer found, trying IPP servers");
+		    string pid = nil;
+		    if (SCR::Read (.target.size,
+			"/var/run/listen_remote_ipp.pid") > 0)
+		    {
+		        pid = SCR::Read (.target.string,
+			    "/var/run/listen_remote_ipp.pid");
+		    }
+		    boolean abort_server = false;
+		    if (pid != nil)
+		    {
+			y2milestone ("Scanning for CUPS server in progress");
+			SCR::Execute (.target.bash,
+			    sformat ("kill -1 %1", pid));
+			boolean runs = true;
+			boolean displayed = false;
+			integer counter = 0;
+			while (runs)
+			{
+			    if (counter == 10)
+			    {
+				displayed = true;
+				UI::OpenDialog (`VBox (`Label (_("Detecting CUPS network server...")),
+`PushButton (`id (`abort), `opt (`key_F9), AbortButtonLabel ())));
+
+			    }
+			    sleep (100);
+			    runs = SCR::Read (.target.size,
+				"/var/run/listen_remote_ipp.pid") > 0;
+			    counter = counter + 1;
+                            if (displayed)
+                            {
+                                any ui = UI::PollInput ();
+                                if (ui == `abort)
+                                {
+                                    SCR::Execute (.target.bash,
+					sformat ("kill -15 %1", pid));
+				    runs = false;
+				    abort_server = true;
+                                }
+                            }
+
+			}
+			if (displayed)
+			    UI::CloseDialog ();
+		    }
+		    if (SCR::Read (.target.size,
+			"/var/lib/YaST2/cups_network_server_name") != -1)
+		    {
+			y2milestone ("File with CUPS servers found");
+			if (! abort_server)
+			{
+			    string tmp = SCR::Read (.target.string,
+				"/var/lib/YaST2/cups_network_server_name");
+			    Printer::cups_servers = splitstring (tmp, "\n");
+			    Printer::cups_servers
+				= toset (Printer::cups_servers);
+			    Printer::cups_servers = filter (`s,
+				Printer::cups_servers, ``(
+				s != "" && s != nil));
+			}
+			SCR::Execute (.target.bash,
+			    "/bin/rm /var/lib/YaST2/cups_network_server_name");
+		    }
+		    if (size (Printer::cups_servers) > 0)
+		    {
+			y2milestone ("Found servers: %1",Printer::cups_servers);
+			string server = Printer::cups_servers[0]:"";
+			Printer::cups_installation = 1;
+			Printer::server_hostname = server;
+		    }
+		}
+		// cleanup after testing of remote CUPS server existence
+		SCR::Execute (.target.bash, "test -f /var/lib/YaST2/cups_network_server_name && /bin/rm /var/lib/YaST2/cups_network_server_name");
+		SCR::Execute (.target.bash, "test -f /var/run/listen_remote_ipp.pid && /bin/rm /var/run/listen_remote_ipp.pid");
 		Printer::Propose ();
 	    }
 	    if (size (Printer::printcap) > 0)
