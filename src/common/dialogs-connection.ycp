@@ -535,11 +535,13 @@ only if a CUPS spooler is used
         list<string> devices = [];
         path read_devs = "parallel" == type
 	    ? .proc.parport.devices
-	    : "usb" == type
+	    : ("usb" == type
 		? .proc.usblp.devices
-		: "irda" == type
+		: ("irda" == type
 		    ? .proc.irlpt.devices
-		    : .proc.serial.devices;
+		    : .proc.serial.devices
+		  )
+	      );
         integer baudrate = Printerlib::getUriBaudrate (uri);
         string ser_settings = Printerlib::getUriValue (uri, "ty");
         if (0 == baudrate && -1 == Printer::index)
