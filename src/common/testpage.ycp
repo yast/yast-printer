@@ -51,7 +51,6 @@
 	    return false;
 	}
 
-	restartSpoolerIfNeeded (true);
 	if (Printer::spooler != "lprng" && Printer::spooler != "cups")
 	{
 	    // message box
@@ -61,6 +60,20 @@ before printing test pages.
 "));
 	    return true;
 	}
+
+	// set for printing using localhost
+	string cups_server_on_disk = "";
+	if (Printer::spooler == "cups")
+	{
+	    Printer::loadClientHostName ();
+	    cups_server_on_disk = Printer::server_hostname;
+	    Printer::server_hostname = "";
+	    Printer::saveClientHostName ();
+	    Printer::cups_installation = `server;
+	}
+
+	restartSpoolerIfNeeded (true);
+
 	if (testpage_type == nil)
 	    testpage_type = `ask;
 	if (printer == nil || size (printer) == 0)
@@ -139,10 +152,9 @@ press 'OK'.
 	string printer_type = uri == "class" ? "class" : "printer";
 	printer = add (printer, "name", name);
 	printer = add (printer, "recreate", true);
-	// is it pre-filter queue?
-
 	printer = Printer::fixPrinter (printer);
 	y2debug ("Printer for testpage: %1", printer);
+
 	if (Printer::spooler == "cups")
 	{
 	    Printer::writeCupsPrinter (printer);
@@ -257,6 +269,15 @@ press 'OK'.
 	}
 	string lpr_command = sformat ("/usr/bin/lpr -P%1 %2", name, test_page);
 	map out = SCR::Execute (.target.bash_output, lpr_command);
+
+	// restore CUPS server settings
+	if (Printer::spooler == "cups")
+	{
+	    Printer::server_hostname = cups_server_on_disk;
+	    Printer::saveClientHostName ();
+	    Printer::server_hostname = "";
+	}
+
 	if (lookup (out, "exit", 0) != 0)
 	{
 	    Popup::Message (
