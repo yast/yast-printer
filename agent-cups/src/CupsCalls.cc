@@ -610,9 +610,38 @@ bool getClasses ()
 
     return true;
 }
-bool getRemoteDestinations(const char*host,YCPList&ret,ipp_op_t what_to_get)
+
+pthread_t timebomb, checker;
+pthread_cond_t reply_cv;
+pthread_mutex_t global, operation;
+int detect_status;
+
+void* timebombThread (void*)
 {
-    http_t*http = httpConnect(host, ippPort());
+    sleep (2);
+    pthread_mutex_lock (&operation);
+    if (detect_status == 0)
+    {
+	detect_status = -1;
+	pthread_cond_broadcast (&reply_cv);
+    }
+    pthread_mutex_unlock (&operation);
+    return NULL;
+}
+
+struct rdt_struct {
+    const char*host;
+    YCPList ret;
+    ipp_op_t what_to_get;
+};
+
+
+/*bool*/ void* remoteDestinationsThread(void *rdt_v)
+//const char*host,YCPList&ret,
+//    ipp_op_t what_to_get)
+{
+    struct rdt_struct *rdt = (struct rdt_struct *)rdt_v;
+    http_t*http = httpConnect(rdt->host, ippPort());
     ipp_t *request,	/* IPP Request */
         *response;	/* IPP Response */
     ipp_attribute_t *attr;	/* Current attribute */
@@ -626,8 +655,10 @@ bool getRemoteDestinations(const char*host,YCPList&ret,ipp_op_t what_to_get)
 
     if(http == NULL)
         {
-            Y2_ERROR("Error while contacting CUPS server occured.");
-            return false;
+            Y2_ERROR("Error while contacting CUPS server %s occured.",
+		rdt->host);
+	    goto out_err;
+//            return false;
         }
     /*
      * Build a CUPS_GET_CLASSES request, which requires the following
@@ -635,7 +666,7 @@ bool getRemoteDestinations(const char*host,YCPList&ret,ipp_op_t what_to_get)
      */    
     request = ippNew();
     
-    request->request.op.operation_id = what_to_get;
+    request->request.op.operation_id = rdt->what_to_get;
     request->request.op.request_id = 1;
     
     language = cupsLangDefault();
@@ -656,7 +687,8 @@ bool getRemoteDestinations(const char*host,YCPList&ret,ipp_op_t what_to_get)
                 {
                     Y2_ERROR("cupsDoRequest error: %s",ippErrorString(response->request.status.status_code));
                     ippDelete(response);
-                    return false;
+		    goto out_err;
+//                    return false;
                 }
             
             /*
@@ -700,7 +732,7 @@ bool getRemoteDestinations(const char*host,YCPList&ret,ipp_op_t what_to_get)
                             else
                                 {
                                     Y2_DEBUG("Adding %s to list of remote printers.",name->value_cstr());
-                                    ret->add(name);
+                                    rdt->ret->add(name);
                                 }
                         }
                     if (attr == NULL)
@@ -711,7 +743,70 @@ bool getRemoteDestinations(const char*host,YCPList&ret,ipp_op_t what_to_get)
     else
         Y2_WARNING("cupsDoRequest: NULL response - not CUPS server or permission denied???");
     httpClose(http);
-    return true;
+    pthread_mutex_lock (&operation);
+    if (detect_status == 0)
+    {
+        detect_status = 1;
+        pthread_cond_broadcast (&reply_cv);
+    }
+    pthread_mutex_unlock (&operation);
+    return rdt;//true;
+
+out_err:
+    pthread_mutex_lock (&operation);
+    if (detect_status == 0)
+    {
+        detect_status = 1;
+        pthread_cond_broadcast (&reply_cv);
+    }
+    pthread_mutex_unlock (&operation);
+    return NULL;
+
+
+}
+
+bool getRemoteDestinations(const char*host,YCPList&ret, ipp_op_t what_to_get)
+{
+    pthread_cond_init (&reply_cv, NULL);
+    pthread_mutex_init (&operation, NULL);
+    pthread_mutex_lock (&operation);
+    detect_status = 0;
+    struct rdt_struct rdt;
+    rdt.host = host;
+    rdt.ret = ret;
+    rdt.what_to_get = what_to_get;
+    pthread_create (&checker, NULL, remoteDestinationsThread, (void*)&rdt);
+    pthread_create (&timebomb, NULL, timebombThread, NULL);
+    while (detect_status == 0)
+    {
+	pthread_cond_wait (&reply_cv, &operation);
+    }
+    pthread_cond_destroy (&reply_cv);
+
+    bool retval;
+
+    if (detect_status > 0)
+    {
+	pthread_detach (timebomb);
+	pthread_cancel (timebomb);
+	pthread_join (checker, NULL);
+
+	retval = true;
+    }
+    else
+    {
+	pthread_detach (checker);
+	pthread_cancel (checker);
+	pthread_join (timebomb, NULL);
+
+	retval = false;
+    }
+
+
+    pthread_mutex_unlock (&operation);
+    pthread_mutex_destroy (&operation);
+    pthread_cond_destroy (&reply_cv);
+    return retval;
 }
 
 char* TOLOWER(char* src) {
