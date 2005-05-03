@@ -78,7 +78,7 @@
     /**
      * Default queue name
      */
-    global string default = "";
+    global string default_queue = "";
     /**
       * Has to be saved all?
       */
@@ -501,7 +501,7 @@ Install it now?"));
 	    {
 		if (name == "lp")
 		    found_lp = true;
-		if (name == default)
+		if (name == default_queue)
 		    found_default = true;
 		if (name == "normal" || regexpmatch (name, "normal[0-9]"))
 		{
@@ -520,22 +520,22 @@ Install it now?"));
 	}
 	else if (found_lp)
 	{
-	    default = "lp";
+	    default_queue = "lp";
 	    dirty = true;
 	}
 	else if (found_normal)
 	{
-	    default = norm_name;
+	    default_queue = norm_name;
 	    dirty = true;
 	}
 	else if (found_default)
 	{
-	    default = "default";
+	    default_queue = "default";
 	    dirty = true;
 	}
 	else
 	{
-	    default = first;
+	    default_queue = first;
 	    dirty = true;
 	}
     }
@@ -578,7 +578,7 @@ Install it now?"));
     global define void setDefaultPrinter () ``{
 	if (index < 0 || index >= size (printcap))
 	    return ;
-	default = printer["name"]:"";
+	default_queue = printer["name"]:"";
 	dirty = true;
     }
     /**
@@ -688,19 +688,19 @@ Install it now?"));
 	    });
 	}
 	// fix default printer
-	if ("" == default || nil == default)
+	if ("" == default_queue || nil == default_queue)
 	{
-	    default = printer["name"]:"";
+	    default_queue = printer["name"]:"";
 	}
 	else
 	{
 	    boolean found = false;
 	    foreach (map i, printcap, ``{
-		    if (!found && i["name"]:"" == default)
+		    if (!found && i["name"]:"" == default_queue)
 			found = true;
 	    });
 	    if (!found)
-		default = printer["name"]:"";
+		default_queue = printer["name"]:"";
 	}
 	dirty = true;
 	y2debug ("Final printcap: %1", printcap);
@@ -712,7 +712,7 @@ Install it now?"));
     global define map<string, any> Export () ``{
 	return $[
 	    "printcap" : printcap,
-	    "default"  : default,
+	    "default"  : default_queue,
 	    "spooler" : Spooler::Get (),
 	    "cups_installation" : CUPS::cups_installation,
 	    "server_hostname" : CUPS::server_hostname,
@@ -729,7 +729,7 @@ Install it now?"));
 	Spooler::Set (settings["spooler"]:"cups");
 	CUPS::cups_installation = (symbol) (settings["cups_installation"]:nil);
 	CUPS::server_hostname = settings["server_hostname"]:"";
-	default = settings["default"]:"";
+	default_queue = settings["default"]:"";
 	printcap = settings["printcap"]:[];
 	CUPS::usb_dev_names = `always;
 	index = -1;
@@ -745,7 +745,7 @@ Install it now?"));
 	CUPS::server_hostname = "";
 	CUPS::cups_installation = nil;
 	dirty = true;
-	default = "";
+	default_queue = "";
 	printcap = [];
 	index = -1;
 	deleted = [];
@@ -856,9 +856,9 @@ y2internal ("P: %1", pth);
 	    classes = maplist (map<string,any> e, classes,
 		``(add (e, "uri", "class")));
 	    ret = ret + classes;
-	    default = (string)SCR::Read (.cups.default_dest);
-	    if (default == "" || default == nil)
-		default = (string) (ret[0, "name"]:nil);
+	    default_queue = (string)SCR::Read (.cups.default_dest);
+	    if (default_queue == "" || default_queue == nil)
+		default_queue = (string) (ret[0, "name"]:nil);
 	    CUPS::ReadCupsSettings ();
 	    return ret;
         }
@@ -1173,8 +1173,8 @@ Detect your printers?"));
 
 	if (Spooler::Get () == "cups" && CUPS::InstallationType () == `client)
 	{
-	    default = CUPS::ClientRead ();
-	    if (default == nil)
+	    default_queue = CUPS::ClientRead ();
+	    if (default_queue == nil)
 		return false;
 	}
 	else
@@ -1273,7 +1273,7 @@ Detect your printers?"));
 	foreach (map<string,any> entry, printcap, ``{
 	    string uri = entry["uri"]:"";
 	    string name = entry["name"]:"";
-	    entry["default"] = (name == default);
+	    entry["default"] = (name == default_queue);
 	    // progress title, %1 is queue name
 	    Progress::Title (sformat (_("Saving queue %1..."), name));
 	    if (name == "")
@@ -1282,7 +1282,7 @@ Detect your printers?"));
 		Report::Error (sformat (_("Attempting to save unnamed printer. Skipping: %1"), entry));
 		return ;
 	    }
-	    if (name == default && entry["valid"]:true)
+	    if (name == default_queue && entry["valid"]:true)
 		default_printer_found = true;
 
 	    string unique_key = entry["unique_key"]:(string)nil;
@@ -1319,7 +1319,7 @@ the selected spooler does not support it."), name));
 	    SCR::Write (.probe.status.configured, k, v ? `no : `yes);
 	});
 	if (! default_printer_found)
-	    default = "";
+	    default_queue = "";
 	return true;
     }
 
@@ -1330,11 +1330,11 @@ the selected spooler does not support it."), name));
     global define boolean saveDefaultQueue () ``{
 	if (Spooler::Get () == "cups")
 	{
-	    SCR::Write (.cups.default_dest, default);
+	    SCR::Write (.cups.default_dest, default_queue);
 	}
 	else
 	{
-	    SCR::Execute (.target.bash, sformat ("/usr/lib/YaST2/bin/assign_printcap_default %1", default != "" ? default : "\"\""));
+	    SCR::Execute (.target.bash, sformat ("/usr/lib/YaST2/bin/assign_printcap_default %1", default_queue != "" ? default_queue : "\"\""));
 	}
 	return true;
     }
@@ -1498,7 +1498,7 @@ the selected spooler does not support it."), name));
 	{
 	    Progress::NextStage (); // save system settings
 	    if (testAbort ()) return false;
-	    ret = CUPS::SaveCupsClient (default) && ret;
+	    ret = CUPS::SaveCupsClient (default_queue) && ret;
 	    ret = saveTheConfiguration() && ret;
 
 	    Progress::NextStage (); // save firewall settings
