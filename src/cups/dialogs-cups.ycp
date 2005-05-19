@@ -64,8 +64,7 @@ This option is available only if the firewall is enabled.</p>"),
 		_("The local CUPS daemon will be running and listening
 to IPP broadcast packets sent by other servers
 in the network. All broadcasted queues will be
-accessible under the same names as they are
-on the remote host."))),
+accessible under the same names as on the remote host."))),
 	    `VSpacing (2),
 	    `Left (`HBox (`VBox (
 		`Left (`CheckBox (`id (`listen),
@@ -74,7 +73,7 @@ on the remote host."))),
 		    contains (
 			CUPS::cups_server_settings["Browsing"]:["On"],"On"))),
 		// push button
-		`PushButton (`id (`perm), _("Select A&dresses"))
+		`PushButton (`id (`perm), _("Select A&ddresses"))
 	    ), `HStretch ())),
 	    `VSpacing (2),
 	    firewall_layout,
@@ -129,18 +128,18 @@ on the remote host."))),
 		    `id (`hostent_replace),
 		    `ComboBox (`id (`hostnameent), `opt (`editable, `hstretch),
 			// Combobox label
-			_("&Server name"), [ CUPS::server_hostname ] )
+			_("&Server Name"), [ CUPS::server_hostname ] )
 		),
 		`VBox (
 		    `Label (" "),
 		    // menubutton
-                    `MenuButton (_("&Lookup"), [
+                    `MenuButton (_("&Look Up"), [
 			// menu entry
                         `item (`id (`get_hosts_special), _("Scan for &IPP Servers")),
 			// menu item
 			`item (`id (`get_hosts_listen),_("Listen for IPP &Broadcasts")),
 			// menu entry
-                        `item (`id (`get_hosts), _("Lookup &All Hosts")),
+                        `item (`id (`get_hosts), _("Look Up &All Hosts")),
                     ])
 		)
             ),
@@ -149,7 +148,7 @@ on the remote host."))),
 		`HStretch (),
 		`PushButton (`id (`test), `opt (`key_F6),
 		    // push button
-		    _("&Test remote IPP access")),
+		    _("&Test Remote IPP Access")),
 		`HStretch ()
 	    ),
 	    `VSpacing (2),
@@ -167,7 +166,7 @@ on the remote host."))),
 		    `VBox (
 			`Label (""),
 			// push button
-			`PushButton (`id (`refresh), _("&Lookup"))
+			`PushButton (`id (`refresh), _("&Look Up"))
 		    )
 		)
 	    ), `HWeight (999, `HStretch ())),
@@ -175,7 +174,7 @@ on the remote host."))),
 	    `VSpacing (2)
             );
         // dialog label
-        Wizard::SetContentsButtons (_("CUPS server"), contents,
+        Wizard::SetContentsButtons (_("CUPS Server"), contents,
 	    getCupsClientHelp (main), Label::BackButton (),
 	    main ? Label::FinishButton () : Label::OKButton ());
 
@@ -277,7 +276,7 @@ on the remote host."))),
 			`id (`hostnameent),
 			`opt (`editable, `hstretch),
 			// combobox label
-			_("&Server name"),
+			_("&Server Name"),
 			hosts));
             }
         }
@@ -307,7 +306,7 @@ on the remote host."))),
 	);
 
 	// dialog caption
-	Wizard::SetContentsButtons (_("Select PPD file"), contents, getPpdFileHelp (), Label::BackButton (), Label::NextButton ());
+	Wizard::SetContentsButtons (_("Select a PPD file"), contents, getPpdFileHelp (), Label::BackButton (), Label::NextButton ());
 
 	symbol ret = (symbol)nil;
 	while (ret == nil){
@@ -320,7 +319,7 @@ on the remote host."))),
 		if (-1 == SCR::Read (.target.size, file))
 		{
 		    // popup
-		    Popup::Message (_("Enter a valid file name."));
+		    Popup::Message (_("Enter a valid filename."));
 		    ret = nil;
 		    continue;
 		}
@@ -352,7 +351,7 @@ on the remote host."))),
 		    new_name = "/";
 		new_name = UI::AskForExistingFile( new_name, "*.ppd *.ppd.gz *.PPD *.PPD.GZ *.PPD.gz",
 			// dialog header
-                    _("Select the PPD file to use."));
+                    _("Select the PPD File"));
 		if (new_name != "")
 		    UI::ChangeWidget (`id (`name), `Value, new_name);
 		ret = nil;
@@ -374,6 +373,8 @@ on the remote host."))),
             });
 
             UI::OpenDialog (
+//rwalter: maybe you could replace this with an editable combobox called
+//"&Username"? I think the duplicated selection is confusing.
                 `HBox (
                     `HSpacing (0.7),
                     `VSpacing (16),
@@ -381,9 +382,9 @@ on the remote host."))),
                         `VSpacing (0.5),
                         `HSpacing (16),
                         // selection box label
-                        `SelectionBox ( `id (`users), _("&Select user:"), users),
+                        `SelectionBox ( `id (`users), _("&User"), users),
                         // text entry label
-                        `TextEntry (`id (`user), _("Or type &user name:"), ""),
+                        `TextEntry (`id (`user), _("&Username"), ""),
                         `HBox (
                             `PushButton (`id (`ok), `opt (`key_F10), Label::OKButton()),
                             `PushButton (`id (`cancel), `opt (`key_F9), Label::CancelButton ())
@@ -449,19 +450,19 @@ on the remote host."))),
         list items = ((Printer::printer["uri"]:"class" != "class") ?
             [
                 // items in combobox
-                `item ( `id (`all),    _("All users can use this printer"), `all == style),
+                `item ( `id (`all),    _("All Users Allowed"), `all == style),
 		// items in combobox
-                `item ( `id (`can),    _("The following users can use this printer"), `can == style),
+                `item ( `id (`can),    _("Listed Users Allowed"), `can == style),
 		// items in combobox
-                `item ( `id (`cannot), _("The following users cannot use this printer"), `cannot == style)
+                `item ( `id (`cannot), _("Listed Users Forbidden"), `cannot == style)
             ] :
             [
                 // items in combobox
-                `item ( `id (`all),    _("All users can use this class"), `all == style),
+                `item ( `id (`all),    _("All Users Allowed"), `all == style),
 		// items in combobox
-                `item ( `id (`can),    _("The following users can use this class."), `can == style),
+                `item ( `id (`can),    _("Listed Users Allowed"), `can == style),
 		// items in combobox
-                `item ( `id (`cannot), _("The following users cannot use this class."), `cannot == style)
+                `item ( `id (`cannot), _("Listed Users Forbidden"), `cannot == style)
             ]);
         term contents = `VBox (
 		`ComboBox (`id (`type), `opt (`notify),  "", items),
@@ -575,25 +576,25 @@ on the remote host."))),
         boolean idle = Printer::printer["state"]:"idle" != "stopped";
 
 	// label
-        string caption_state = (!is_class ? _("The printer is idle or &printing.")
+        string caption_state = (!is_class ? _("Idle or &Printing")
 	// label
-	 : _("The class is idle or &printing."));
+	 : _("Idle or &Printing"));
 	// label
-        string caption_avail = (!is_class ? _("The printer is accepting &jobs.")
+        string caption_avail = (!is_class ? _("Accepting &Jobs")
 	// label
-	 : _("The class is accepting &jobs."));
+	 : _("Accepting &Jobs"));
 	// label
-        string caption = (!is_class ? _("State and banners of the printer")
+        string caption = (!is_class ? _("State and Banners")
 	// label
 	 : _("State and banners of the class"));
 	// label
-	string state_caption = (!is_class ? _("State of the printer")
+	string state_caption = (!is_class ? _("State")
 	// label
-	 : _("State of the class"));
+	 : _("State"));
 	// label
-	string banners_caption = (!is_class ? _("Banners of the printer")
+	string banners_caption = (!is_class ? _("Banners")
 	// label
-	 : _("Banners of the class"));
+	 : _("Banners"));
 
         // read list of banners
         list<string> banners = CUPS::getBannerList ();
@@ -630,14 +631,14 @@ on the remote host."))),
                 `VBox (
                     `ComboBox ( `id (`banner_start),
                         // combo box label
-                        _("&Starting banner"),
+                        _("&Starting Banner"),
                         maplist (string i, banners, ``{
                             return `item (`id (i), i, i == banner_start);
                         })
                     ),
                     `ComboBox( `id (`banner_end),
                         // combo box label
-                        _("&Ending banner"),
+                        _("&Ending Banner"),
                         maplist (string i, banners, ``{
                             return `item (`id (i), i, i == banner_end);
                        })
@@ -740,7 +741,7 @@ on the remote host."))),
 	    `VBox (
 		`VSpacing (1),
 		// frame
-		`Frame (_("Application order"),
+		`Frame (_("Application Order"),
                 `RadioButtonGroup (`id (`order), `HBox (
 		    // radio button
                     `RadioButton (`id (`ad), `opt (`hstretch), _("A&llow, Deny")),
@@ -758,7 +759,7 @@ on the remote host."))),
                 ),
 		show_ignore ? `VSpacing (1) : `VSpacing (0),
 		// push button
-		show_ignore ? `PushButton (`id (`ignore), sformat (_("Use inherited permissions"))) : `VSpacing (0),
+		show_ignore ? `PushButton (`id (`ignore), sformat (_("Use Inherited Permissions"))) : `VSpacing (0),
 		`VSpacing (1)
 	    ),
 	    `HSpacing (2)
@@ -802,9 +803,9 @@ on the remote host."))),
 	// selectionbox label
 	UI::ReplaceWidget (`id (`replace_acl), `SelectionBox (`id (`acl), _("&Permissions"),
 	   // listbox entry, %1 is IP address
-	   maplist (term e, cont, ``(`item (`id (e), e[0]:nil == `allow ? sformat (_("Allow From %1"), e[1]:"")
+	   maplist (term e, cont, ``(`item (`id (e), e[0]:nil == `allow ? sformat (_("Allow from %1"), e[1]:"")
 		// listbox entry, %1 is IP address
-		: sformat (_("Deny From %1"), e[1]:""))))));
+		: sformat (_("Deny from %1"), e[1]:""))))));
         symbol ret = nil;
         while (true)
         {
@@ -829,7 +830,7 @@ on the remote host."))),
 	    else if (`add == ret)
             {
 		// popup request
-                UI::OpenDialog (ipAddrPopup (true, _("Enter &IP address"), "", `allow));
+                UI::OpenDialog (ipAddrPopup (true, _("&IP Address"), "", `allow));
                 symbol r = nil;
                 while (nil == r)
                     r = (symbol)UI::UserInput ();
@@ -845,9 +846,9 @@ on the remote host."))),
 		// selectionbox label
 		UI::ReplaceWidget (`id (`replace_acl), `SelectionBox (`id (`acl), _("&Permissions"),
 		    // listbox entry, %1 is IP address
-	            maplist (term e, cont, ``(`item (`id (e), e[0]:nil == `allow ? sformat (_("Allow From %1"), e[1]:"")
+	            maplist (term e, cont, ``(`item (`id (e), e[0]:nil == `allow ? sformat (_("Allow from %1"), e[1]:"")
 			// listbox entry, %1 is IP address
-			: sformat (_("Deny From %1"), e[1]:""))))));
+			: sformat (_("Deny from %1"), e[1]:""))))));
 	    }
 	    else if (`edit == ret)
             {
@@ -856,7 +857,7 @@ on the remote host."))),
 		string ad = (string)item[1]:"";
 
 		// popup request
-                UI::OpenDialog (ipAddrPopup (true, _("Enter &IP address"), ad, acc));
+                UI::OpenDialog (ipAddrPopup (true, _("&IP Address"), ad, acc));
                 symbol r = nil;
                 while (nil == r)
                     r = (symbol)UI::UserInput ();
@@ -873,9 +874,9 @@ on the remote host."))),
 		// selectionbox label
                 UI::ReplaceWidget (`id (`replace_acl), `SelectionBox (`id (`acl), _("&Permissions"),
 		    // listbox entry, %1 is IP address
-                    maplist (term e, cont, ``(`item (`id (e), e[0]:nil == `allow ? sformat (_("Allow From %1"), e[1]:"")
+                    maplist (term e, cont, ``(`item (`id (e), e[0]:nil == `allow ? sformat (_("Allow from %1"), e[1]:"")
 			// listbox entry, %1 is IP address
-                        : sformat (_("Deny From %1"), e[1]:""))))));
+                        : sformat (_("Deny from %1"), e[1]:""))))));
             }
 	    else if (`del == ret)
 	    {
@@ -883,9 +884,9 @@ on the remote host."))),
 		// selectionbox label
                 UI::ReplaceWidget (`id (`replace_acl), `SelectionBox (`id (`acl), _("&Permissions"),
 		    // listbox entry, %1 is IP address
-                    maplist (term e, cont, ``(`item (`id (e), e[0]:nil == `allow ? sformat (_("Allow From %1"), e[1]:"")
+                    maplist (term e, cont, ``(`item (`id (e), e[0]:nil == `allow ? sformat (_("Allow from %1"), e[1]:"")
 			// listbox entry, %1 is IP address
-                        : sformat (_("Deny From %1"), e[1]:""))))));
+                        : sformat (_("Deny from %1"), e[1]:""))))));
 	    }
         }
 	settings[order_key] = UI::QueryWidget (`id (`order), `CurrentButton)
@@ -937,7 +938,7 @@ on the remote host."))),
 	term contents = `HBox (`HSpacing (2), `VBox (
 	    `VSpacing (1),
 	    // frame
-	    `Frame (_("Browsing settings"), `VBox (
+	    `Frame (_("Browsing Settings"), `VBox (
 		`HBox (`HSpacing (3), `RadioButtonGroup (`id (`browsing), `HBox (
 		    // label
 		    `Label (_("Browsing")),
@@ -961,7 +962,7 @@ on the remote host."))),
 		)
 	    )),
 	    // frame
-	    `Frame (_("Access settings"), `VBox (
+	    `Frame (_("Access Settings"), `VBox (
 		`RadioButtonGroup (`id (`loc), `VBox (
 		    `HBox (
 			`RadioButton (`id (`root), `opt (`hstretch), "/ (r&oot)", true),
@@ -973,13 +974,13 @@ on the remote host."))),
 		    )
 		)),
 		// pushbutton
-		`PushButton (`id (`change), _("Change p&ermissions"))
+		`PushButton (`id (`change), _("Change P&ermissions"))
 	    )),
 	    firewall_layout
 	), `HSpacing (2));
 
 	// dialog caption
-	Wizard::SetContentsButtons (_("CUPS server settings"), contents, getCupsServerHelp () + firewall_help, Label::BackButton (), Label::NextButton ());
+	Wizard::SetContentsButtons (_("CUPS Server Settings"), contents, getCupsServerHelp () + firewall_help, Label::BackButton (), Label::NextButton ());
 
 	list<string> addresses = CUPS::cups_server_settings["BrowseAddress"]:[];
 
@@ -1020,7 +1021,7 @@ on the remote host."))),
 	    else if (`add == ret)
 	    {
 		// popup request
-		UI::OpenDialog (ipAddrPopup (false, _("Enter &IP address"), "", nil));
+		UI::OpenDialog (ipAddrPopup (false, _("&IP Address"), "", nil));
 		symbol r = nil;
 		while (nil == r)
 		    r = (symbol)UI::UserInput ();
@@ -1044,7 +1045,7 @@ on the remote host."))),
 		if (UI::QueryWidget (`id (`addr), `CurrentItem) == nil)
 		    continue;
 		// popup request
-		UI::OpenDialog (ipAddrPopup (false, _("Enter &IP address"),
+		UI::OpenDialog (ipAddrPopup (false, _("&IP Address"),
 		    (string)UI::QueryWidget (`id (`addr), `CurrentItem), nil));
                 symbol r = nil;
                 while (nil == r)

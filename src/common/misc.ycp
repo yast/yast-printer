@@ -124,7 +124,7 @@ define string GetPpdFileDescription (string nick, string language,
                 new_queues = [ $[
                     "name" : "lp",
                         // table cell
-                    "info" : _("default configuration"),
+                    "info" : _("Default configuration"),
 		    "ppd_options" : $[
                         "PageSize" : pagesize,
                         "PageRegion" : pagesize,
@@ -390,7 +390,7 @@ define void CleanAndUnmountAgents () {
 	if (brate == 0)
 	    {
 		// message box
-		Popup::Message (_("The baud rate should not be 0!"));
+		Popup::Message (_("The baud rate should not be 0."));
 		return false;
 	    }
 	return true;
@@ -413,9 +413,9 @@ define void CleanAndUnmountAgents () {
 		// message box
 		// the ',' character isn't separator,
 		//  but one of a list of characters
-		Popup::Message (_("Invalid host name. It must be
-shorter than fifty characters and cannot contain
-:, / or @.
+		Popup::Message (_("Invalid hostname. It must be
+shorter than 50 characters and cannot contain the following characters:
+:,/@
 "));
 	    }
 	return false;
@@ -439,8 +439,9 @@ shorter than fifty characters and cannot contain
                 // message box
                 // the ',' character isn't separator,
                 //  but one of a list of characters
-                Popup::Message (_("Invalid user name. It cannot 
-contain the characters : , / @.
+                Popup::Message (_("Invalid username. It cannot 
+contain the following characters:
+:,/@
 "));
             }
         return false;
@@ -465,7 +466,8 @@ contain the characters : , / @.
                 // the ',' character isn't separator,
                 //  but one of a list of characters
                 Popup::Message (_("Invalid password. It cannot 
-contain the characters : , / @.
+contain the following characters:
+:,/@
 "));
             }
         return false;
@@ -496,8 +498,9 @@ contain the characters : , / @.
             }
 	return Popup::AnyQuestion( Popup::NoHeadline(),
 // question popup
-_("Really leave printer configuration without saving?
-All changes will be lost.
+_("If you leave the printer configuration now, 
+all changes will be lost.
+Really leave without saving?
 "),
                                       Label::YesButton(),
                                       Label::NoButton(),
@@ -549,12 +552,12 @@ All changes will be lost.
 		    string description = Printerlib::getUriNiceName (ent["uri"]:"");
 		    if (! ent["valid"]:true)
 			// table item. SHORT!
-			description = _("- invalid for selected spooler -");
+			description = _("Invalid for selected spooler");
 		    ret = add (ret, description);
 		}
 		else
 		    // This printer was not configured using YaST2. Item in table. SHORT!
-		    ret = add (ret, _("- not YaST2 -"));
+		    ret = add (ret, _("Non-YaST2"));
 		if (Spooler::Get () == "cups")
 		{
 		    if ("yast2" == ent["type"]:"yast2")
@@ -562,7 +565,7 @@ All changes will be lost.
 			ret = add (ret, ! ent["changed"]:false ? _("OK") : "");
 		    else
 			// table item. SHORT
-			ret = add (ret, _("unknown"));
+			ret = add (ret, _("Unknown"));
 		}
 		count = count+1;
 		return ret;
@@ -586,7 +589,7 @@ boolean CheckLocalQueueName (string name, list forbidden_names) {
     {
 	Report::Message (
 	    // error message
-	    _("The queue name cannot be longer than thirty-two characters."));
+	    _("The queue name cannot be longer than 32 characters."));
 	return false;
     }
     if (! (size (filterchars (substring (name, 0, 1),
@@ -598,7 +601,7 @@ boolean CheckLocalQueueName (string name, list forbidden_names) {
 	// popup
 	Report::Message (_("Invalid queue name. It must be
 shorter than 32 characters, start with a letter,
-and only contain 0...9, A...Z, a...z, and _."));
+and only contain 0-9, A-Z, a-z, and _."));
 	return false;
 
     }
@@ -680,7 +683,7 @@ define boolean checkIppQueueName (string name) {
 		`HSpacing (3)
 	    );
 	    // frame
-	    ret = `Frame (_("Value:"), ret);
+	    ret = `Frame (_("Value"), ret);
 	    ret = `HBox (
 		`HStretch (),
 		`VBox (

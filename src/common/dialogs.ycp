@@ -74,7 +74,7 @@
         // selection box label
 	term manufsel = `SelectionBox (`id (`manufsel), `opt (`notify),
 	    // selection boc title
-	    _("&Select manufacturer:"),
+	    _("Manufacturer"),
 	    maplist (string k, map v, Printerdb::foomatic, ``(
 		`item (`id (k), v[`label]:k))));
 
@@ -87,7 +87,7 @@
 		// menubutton
 		`MenuButton (`id (`other_ppd), _("Add &PPD File to Database"), [
 		    // menubutton item
-		    `item (`id (`specifyppd), _("Specify &Local PPD File")),
+		    `item (`id (`specifyppd), _("&Local PPD File")),
 		    // menubutton item
 		    `item (`id (`downloadppd), _("&Download PPD File")),
 		]),
@@ -96,7 +96,7 @@
 		`HStretch ()
 	    ));
 	// dialog box label
-	Wizard::SetContentsButtons (_("Printer model"),
+	Wizard::SetContentsButtons (_("Printer Model"),
 	    contents, getManufModelHelp (), Label::BackButton (),
 	    Label::NextButton ());
 	Wizard::RestoreAbortButton ();
@@ -136,7 +136,7 @@
 		modelsel = `SelectionBox (`id (`modelsel), `opt (`notify,
 		    `immediate),
 		    // selection box caption
-		    _("Select &model:"),
+		    _("&Model"),
 		    modelsel_items);
 		UI::ReplaceWidget (`id (`modelsel_rep), modelsel);
 		if (! haskey (Printerdb::foomatic[manuf_db]:$[], model_db))
@@ -181,33 +181,22 @@
 		``(is (k, string)))) <= 0)
 	    {
 		// message popup
-		string old_text = _("No PPD file available for selected model");
+		string old_text = _("No PPD file is available for the selected model.");
 
 		// richtext - information about support status
 		// %1 is URL
 		// %2 is URL
-		string unsup_message = sformat (_("This printer is not supported by &product;.<BR>
+		string unsup_message = _("This printer is not supported by &product;.
 Find information regarding supported and unsupported printers
-in your manual or in the support database articles
-\"Purchase of Printers and Compatibility\" and \"GDI Printers\",
-available online at<BR>
-%1<BR>
-and<BR>
-%2<BR>
+in your product documentation.<br>
 If the printer can be switched to support a standard
-printer language (PostScript, PCL, ESC/P), it can be
-configured as a PostScript, PCL, or ESC/P printer.<BR>
+printer language (PostScript, PCL, or ESC/P), it can be
+configured as that type of printer.
 Ask the vendor of the printer whether this model
-\"understands\" a standard printer language directly (not
+understands a standard printer language directly (not
 through a driver emulation) and how to switch the printer
-into the standard printer language mode (e.g., via an
-additional PostScript module)."),
-		// URL, localized version may exist
-		// for German, use 'http://portal.suse.com/sdb/de/1999/12/jsmeix_print-kompatibel.html'
-		_("http://portal.suse.com/sdb/en/2000/08/jsmeix_print-kompatibel.html"),
-		// URL, localized version may exist
-		// For German, use 'http://portal.suse.com/sdb/de/1998/05/ke_printer-gdi.html'
-		_("http://portal.suse.com/sdb/en/1998/06/ke_printer-gdi.html"));
+into the standard printer language mode, for example, 
+using an additional PostScript module.");
 		term d = `VBox (
 		    `HSpacing (60),
 		    `HBox (
@@ -260,7 +249,7 @@ additional PostScript module)."),
 		`VSpacing (2),
 		`HBox (
 		    // text entry label
-		    `TextEntry (`id (`user), _("&User"), ""),
+		    `TextEntry (`id (`user), _("&Username"), ""),
 		    `HSpacing (2),
 		    // password text entry label
 		    `Password (`id (`pass), Label::Password (), "")
@@ -269,7 +258,7 @@ additional PostScript module)."),
 	    ), `HStretch ()
 	);
 	// dialog caption
-	Wizard::SetContents (_("Download PPD File"), contents,
+	Wizard::SetContents (_("Download a PPD File"), contents,
 	    downloadHelp(), true, true);
 
 	symbol ret = nil;
@@ -308,7 +297,7 @@ additional PostScript module)."),
 		SCR::Execute (.target.bash, sformat (
 		    "/bin/rm %1/*", dir));
 		// label of popup informing about processed operation
-		UI::OpenDialog (`VBox (`Label (_("Downloading File"))));
+		UI::OpenDialog (`VBox (`Label (_("Downloading file..."))));
 		y2milestone ("Downloading from %1 to %2", url, file);
 		map response = (map)SCR::Execute (.curl.get, url,
 		    $["output": file]);
@@ -320,7 +309,7 @@ additional PostScript module)."),
 // error report
 _("An error occurred while downloading the PPD file.
 Verify the URL, 
-user name, and password."));
+username, and password."));
 		    ret = nil;
 		    continue;
 		}
@@ -360,7 +349,7 @@ user name, and password."));
 	term contents = `HBox (`HSpacing (2), `VBox (
 	    `VSpacing (2),
 		// selection box label
-	    `SelectionBox (`id (`printers), `opt (`hstretch), _("&Select Printer:"), sel_items),
+	    `SelectionBox (`id (`printers), `opt (`hstretch), _("Printer"), sel_items),
 	    `VSpacing (2)
 	), `HSpacing (2));
 
@@ -440,7 +429,7 @@ user name, and password."));
 	{
 	    // message popup
 	    Popup::Message (_("Cannot determine the model of the printer.
-Select the model first."));
+Select the model."));
 	    return `back;
 	}
 	Printerdb::loadFoomaticIfNeeded ();
@@ -521,7 +510,7 @@ Select the model first."));
 		    filter_box,
 		    `ReplacePoint (`id (`selection_rp),
 			// selection box label
-			`SelectionBox (`id (`selection), `opt (`hstretch), _("&Select PPD File:"), cfgs)
+			`SelectionBox (`id (`selection), `opt (`hstretch), _("&PPD File"), cfgs)
 		    ),
 		    `VSpacing (1),
 		    `HBox (
@@ -531,7 +520,7 @@ Select the model first."));
 			    ? `PushButton (`id (`select_model), _("Select &Model"))
 			    : `HSpacing (0),
 			// pushbutton
-			`HWeight (1, `PushButton (`id (`test), `opt (`key_F6), _("&Test printing")))
+			`HWeight (1, `PushButton (`id (`test), `opt (`key_F6), _("&Test Printing")))
 		    ),
 		    `VSpacing (1)
 		),
@@ -597,7 +586,7 @@ y2error ("File: %1", file);
 		    return `item (`id (id), label);
 		});
 		UI::ReplaceWidget (`selection_rp,
-		    `SelectionBox (`id (`selection), `opt (`hstretch), _("&Select PPD File:"), cfgs));
+		    `SelectionBox (`id (`selection), `opt (`hstretch), _("&PPD File"), cfgs));
 
 	    }
 	    if (`info == ret)
@@ -606,7 +595,7 @@ y2error ("File: %1", file);
 		    // contents of a rich text field in information popup
 		    = info["comment"]:_("<P>No information available.</P>");
 		// popup header
-		Popup::LongText (_("Configuration information"), `RichText (i), 50, 18);
+		Popup::LongText (_("Configuration Information"), `RichText (i), 50, 18);
 	    }
 	    if (`abort == ret)
 	    {
@@ -715,7 +704,7 @@ y2error ("File: %1", file);
 	term ff_insert = "cups" == Spooler::Get () ? `VSpacing (0) :
 	    `CheckBox (`id (`ff), `opt (`hstretch),
 		// check box
-		_("Print &formfeed between jobs"), ff);
+		_("Print &Form Feed between Jobs"), ff);
 
 	term aa_insert = allow_auto
 	    ? `CheckBox (`id (`auto), `opt (`notify, `hstretch),
@@ -726,18 +715,18 @@ y2error ("File: %1", file);
 	term contents = `VBox (
 	    `TextEntry (`id (`name), `opt (`hstretch),
 		// text entry
-		_("Name for &printing:"), name),
+		_("Name for &Printing"), name),
 	    `VSpacing (0.5),
 	    `TextEntry (`id (`info), `opt (`hstretch), is_class
 		// text entry
-		? _("&Description of class")
+		? _("Class &Description")
 		// text entry
-		: _("&Description of Printer"), info),
+		: _("Printer &Description"), info),
 	    `TextEntry (`id (`loc), `opt (`hstretch), is_class
 		// text entry
-		? _("&Location of class")
+		? _("&Class Location")
 		// text entry
-		: _("&Location of Printer"), loc),
+		: _("Printer &Location"), loc),
 	    `VSpacing (0.5),
 	    raw_insert,
 	    ff_insert,
@@ -748,19 +737,19 @@ y2error ("File: %1", file);
 	contents = `HBox (`HSpacing (4),
 	    `VBox (
 		// frame label
-		`Frame (_("Queue name and spooler settings"), contents),
+		`Frame (_("Queue Name and Spooler Settings"), contents),
 		`VSpacing (is_class ? 0 : 1),
 		is_class
 		    ? `VSpacing (0)
 		    : `PushButton (`id (`test), `opt (`key_F6),
 			// push button
-			_("&Test printing"))
+			_("&Test Printing"))
 	    ), `HSpacing (4));
 
 	// dialog box label
 	Wizard::SetContentsButtons (
 		// dialog caption
-		is_class ? _("Class name") : _("Queue name"),
+		is_class ? _("Class Name") : _("Queue Name"),
 		contents,
 		getSpoolInfoHelp (is_class),
 		Label::BackButton (),
@@ -839,7 +828,7 @@ y2error ("File: %1", file);
 		{
 		    // error report
 		    Report::Error (_("Queues that do local filtering cannot be tested
-here. Proceed to next dialog to select printer model
+here. Proceed to the next dialog to select the printer model
 and test the queue after the printer model is selected."));
 		}
 		else
@@ -931,7 +920,7 @@ and test the queue after the printer model is selected."));
 			`VSpacing (0.5),
 			`HSpacing (16),
 			// selection box label
-			`SelectionBox ( `id (`printers), _("Choose &printer:"), maplist (string i, printers, ``{return `item (`id(i),i);})),
+			`SelectionBox ( `id (`printers), _("&Printer"), maplist (string i, printers, ``{return `item (`id(i),i);})),
 			`HBox (
 			    `PushButton (`id (`ok), `opt (`key_F10), Label::OKButton ()),
 			    `PushButton (`id (`cancel), `opt (`key_F9), Label::CancelButton ())
@@ -974,7 +963,7 @@ and test the queue after the printer model is selected."));
 		    `SelectionBox(
 			`id (`printers),
 			// selection box label
-			_("&Following printers and classes are members of this class"),
+			_("&Members of This Class"),
 			maplist (string i, printers, ``{
 			    return `item (`id (i), i);
 			})
@@ -986,7 +975,7 @@ and test the queue after the printer model is selected."));
 		    )
 		);
 	// dialog label
-	Wizard::SetContentsButtons (_("Members of class"), contents, getMembersHelp (), Label::BackButton (), Label::NextButton ());
+	Wizard::SetContentsButtons (_("Class Members"), contents, getMembersHelp (), Label::BackButton (), Label::NextButton ());
 
 	symbol ret = nil;
 	while (true)
@@ -1006,7 +995,7 @@ and test the queue after the printer model is selected."));
 				`SelectionBox(
 				    `id (`printers),
 				    // selection box label
-				    _("&Following printers and classes are members of this class"),
+				    _("&Members of This Class"),
 				    maplist (string i, printers, ``{
 					return `item (`id (i), i);
 				    })));
@@ -1014,7 +1003,7 @@ and test the queue after the printer model is selected."));
 		    else
 			{
 			    // message box
-			    Popup::Message (_("Select printer to delete."));
+			    Popup::Message (_("Select the printer to delete."));
 			}
 		}
 	    else if (`add == ret)
@@ -1028,7 +1017,7 @@ and test the queue after the printer model is selected."));
 			    `SelectionBox(
 				`id (`printers),
 				// selection box label
-				_("&Following printers and classes are members of this class"),
+				_("&Members of This Class"),
 				maplist (string i, printers, ``{
 				    return `item (`id (i), i);
 				})));
@@ -1044,7 +1033,7 @@ and test the queue after the printer model is selected."));
 		    else
 			{
 			    // message box
-			    Popup::Message (_("Class must contain at least one printer."));
+			    Popup::Message (_("A class must contain at least one printer."));
 			}
 		}
 	    else if (`back == ret)
@@ -1072,7 +1061,7 @@ and test the queue after the printer model is selected."));
 	if (SCR::Read (.target.size, Printer::printer["ppd"]:"") <= 0)
 	{
 	    // message popup
-	    Report::Message (_("Unknown PPD file. Select printer model."));
+	    Report::Message (_("Unknown PPD file. Select the printer model."));
 	    return `back;
 	}
 	string filename = Printer::printer["ppd"]:"";
@@ -1086,7 +1075,7 @@ and test the queue after the printer model is selected."));
 		_("&Test")));
 
 	// dialog caption
-	Wizard::SetContentsButtons (_("Configuration options"), `VBox (
+	Wizard::SetContentsButtons (_("Configuration Options"), `VBox (
 		`VWeight (1, `ReplacePoint (`id (`upper), `VSpacing (1))),
 		`VWeight (1, `ReplacePoint (`id (`lower), `VSpacing (1))),
 		`HBox (`HStretch (), test_button, `HStretch ())
@@ -1117,14 +1106,14 @@ and test the queue after the printer model is selected."));
 		// list item
 		"5" : _("Reverse"),
 		// list item
-		"6" : _("Reverse portrait"),
+		"6" : _("Reverse Portrait"),
 	    ],
 	]);
 	optlist = add (optlist, $[
 	    "location" : `lpoptions,
 	    "current" : "1",
 	    // list item
-	    "gui" : _("Pages per sheet"),
+	    "gui" : _("Pages per Sheet"),
 	    "name" : "number-up",
 	    "type" : "PickOne",
 	    "valorder" : ["1", "2", "4"],
@@ -1355,7 +1344,7 @@ and test the queue after the printer model is selected."));
 		lang)
 	);
 	if (config_text == "")
-	    config_text = _("unknown");
+	    config_text = _("Unknown");
 
 	string name_text = Printer::printer["name"]:"";
 	string connection_text = "";
@@ -1374,7 +1363,7 @@ and test the queue after the printer model is selected."));
 		items = add (items, `item (`id (`ppd), _("PPD file"), config_text));
 	    }
 		// table entry
-	    items = add (items, `item (`id (`connection), _("Connection"), know ? Printerlib::getUriNiceName (uri) : _("unknown")));
+	    items = add (items, `item (`id (`connection), _("Connection"), know ? Printerlib::getUriNiceName (uri) : _("Unknown")));
 	}
 	if ("class" == uri_type)
 	{
@@ -1383,20 +1372,20 @@ and test the queue after the printer model is selected."));
 	// table entry
 	    items = add (items, `item (`id (`class_members), _("Class members"), members_str));
 	// table entry
-	    items = add (items, `item (`id (`perm), _("Restrictions settings"), ""));
+	    items = add (items, `item (`id (`perm), _("Restriction settings"), ""));
 	// table entry
-	    items = add (items, `item (`id (`state), _("State and banners settings"), ""));
+	    items = add (items, `item (`id (`state), _("State and banner settings"), ""));
 	}
 	else
 	{
 	    if (! raw)
 	    {
 		// table entry
-		items = add (items, `item (`id (`settings), _("Printing filter settings"), ""));
+		items = add (items, `item (`id (`settings), _("Filter settings"), ""));
 		// table entry
-		items = add (items, `item (`id (`perm), _("Restrictions settings"), ""));
+		items = add (items, `item (`id (`perm), _("Restriction settings"), ""));
 		// table entry
-		items = add (items, `item (`id (`state), _("State and banners settings"), ""));
+		items = add (items, `item (`id (`state), _("State and banner settings"), ""));
 	    }
 	}
 
@@ -1404,7 +1393,7 @@ and test the queue after the printer model is selected."));
 	    ? `VBox (
 		`Left (`CheckBox (`id (`yast), `opt (`notify),
 		    // check box
-		    _("&Allow editing of this queue"), conf_type)),
+		    _("&Allow Editing"), conf_type)),
 		`VSpacing (1))
 	    : `VSpacing (0);
 
@@ -1415,9 +1404,9 @@ and test the queue after the printer model is selected."));
 		`VBox (
 		    allow_cbox,
 			// table header
-		    `Table (`id (`options), `opt(`keepSorting, `notify), `header ( _("Option area"),
+		    `Table (`id (`options), `opt(`keepSorting, `notify), `header ( _("Option Area"),
 			// table header
-			 _("Current values")), items),
+			 _("Current Values")), items),
 		    `HBox (
 			// push button
 			`PushButton (`id (`edit), `opt (`key_F4), Label::EditButton ()),
@@ -1432,7 +1421,7 @@ and test the queue after the printer model is selected."));
 	);
 
 	// dialog caption
-	Wizard::SetContentsButtons (_("Edit configuration"), contents, getEditHelp (uri_type, raw),
+	Wizard::SetContentsButtons (_("Configuration"), contents, getEditHelp (uri_type, raw),
 	    Label::BackButton (), Label::OKButton ());
 	Wizard::RestoreBackButton ();
 	Wizard::RestoreAbortButton ();
@@ -1505,8 +1494,8 @@ and test the queue after the printer model is selected."));
 		    {
 			// popup
 			if (Popup::YesNo (_("The selected queue was not configured 
-using YaST2. Do you want to add a printer 
-with a prefilled name?")))
+using YaST2. Add a printer 
+with a preassigned name?")))
 			    ret = `add;
 			else
 			{
@@ -1623,20 +1612,20 @@ with a prefilled name?")))
 		    ),
 		    `VStretch (),
 		    // checkbox
-		    `CheckBox (`id (`save), _("&Force saving everything"),
+		    `CheckBox (`id (`save), _("&Force Saving Everything"),
 			Printer::save_all),
 		    `VStretch (),
 		    `HBox (`HWeight (999, `HStretch ()), `VBox (
 			`PushButton (`id (`reinstall), `opt (`hstretch),
 			    // pushbutton
-			    _("Re&install printing packages")),
+			    _("Re&install Printing Packages")),
 			`VStretch (),
 			`PushButton (`id (`scratch), `opt (`hstretch),
 			    // pushbutton
-			    _("Cl&ear current configuration")),
+			    _("Cl&ear Current Configuration")),
 			Spooler::Get () == "cups" && `server == CUPS::InstallationType () ? `VStretch () :`VSpacing (0),
 			// pushbutton
-			Spooler::Get () == "cups" && `server == CUPS::InstallationType () ? `PushButton (`id (`cupsd), `opt (`hstretch), _("CUPS server se&ttings")) : `VSpacing (0),
+			Spooler::Get () == "cups" && `server == CUPS::InstallationType () ? `PushButton (`id (`cupsd), `opt (`hstretch), _("CUPS Server Se&ttings")) : `VSpacing (0),
 			Spooler::Get () == "cups" && `server == CUPS::InstallationType () ? `VStretch () :`VSpacing (0),
 			// pushbutton
 			Spooler::Get () == "cups" && `server == CUPS::InstallationType () ? `PushButton (`id (`cupsusb), `opt (`hstretch), _("CUPS &USB Device Settings")) : `VSpacing (0),
@@ -1649,7 +1638,7 @@ with a prefilled name?")))
 	);
 
 	// dialog caption
-	Wizard::SetContentsButtons (_("Edit configuration"), contents,
+	Wizard::SetContentsButtons (_("Configuration"), contents,
 	    getAdvancedHelp (Spooler::Get () == "cups"
 		&& `server == CUPS::InstallationType ()),
 	    Label::BackButton (), Label::AcceptButton ());
@@ -1695,8 +1684,9 @@ with a prefilled name?")))
 		// popup
 		if (! Popup::AnyQuestion(Label::WarningMsg(),
 		    // popup question
-		    _("Really reinstall your printing system? 
-All your changes will be lost."),
+		    _("All your changes will be lost.
+Really reinstall your printing system? 
+"),
 		    // pushbutton
 		    _("&Reinstall"), Label::CancelButton (), `focus_no))
 		{
@@ -1752,8 +1742,8 @@ All your changes will be lost."),
 		{
 		    if (!Printer::queuesRead ())
 		    {
-			// message box
-			Popup::Message (_("ERROR: Unable to read
+			// error message
+			Popup::Error (_("Unable to read
 the current configuration."));
 		    }
 		}
@@ -1795,7 +1785,7 @@ the current configuration."));
 	    `VStretch (),
 	    `RadioButtonGroup (`id (`devtype),
 			// frame
-		`Frame (_("Use CUPS-Like USB Device Names"),`HBox (
+		`Frame (_("CUPS-Like USB Device Names"),`HBox (
 		    `HSpacing (3),
 		    `VBox (
 			`VSpacing (3),
@@ -1950,12 +1940,12 @@ the current configuration."));
 		`VBox (
 		    `Heading (
 			// heading label
-			_("The following print queues have been configured:")
+			_("Configured Queues")
 		    ),
 		    `VSpacing (0.5),
 		    `Table (
 			// table header
-			`id (`table), `opt (`notify), `header (_("Queue name"),
+			`id (`table), `opt (`notify), `header (_("Queue Name"),
 			    // table header
 			     _("Comment")),
 			    maplist (map v, queues, ``(
@@ -1977,7 +1967,7 @@ the current configuration."));
 	); // VBox
 
 	// label of the dialog
-	Wizard::SetContentsButtons (_("Printer overview"), contents,
+	Wizard::SetContentsButtons (_("Printer Overview"), contents,
 	    getShowPrinterHelp (), Label::BackButton (), Label::OKButton ());
 	Wizard::RestoreBackButton ();
 	Wizard::RestoreAbortButton ();
@@ -2007,7 +1997,7 @@ the current configuration."));
 		if (i == nil || i == "")
 		{
 		    // message popup
-		    Popup::Message (_("Select a queue"));
+		    Popup::Message (_("Select a queue."));
 		}
 		else
 		{
@@ -2079,7 +2069,7 @@ the current configuration."));
 	{
 	    items = add (items, `item (`id (-2),
 		// selection box entry
-		_("New Queue for Already Configured Printer")));
+		_("New Queue for Configured Printer")));
 	}
 
 	// selection box entry
@@ -2105,12 +2095,12 @@ the current configuration."));
 	Printer::confmode = `det;
 	term contents = Wizard_hw::DetectedContent (
 	    // Selectionbox caption
-	    _("Printers to configure"),
+	    _("Printers to Configure"),
 	    getAutoprobedSelectionBox (
 		Printer::runAutoprobedListDialog__current),
 	    true,
 	    // richtext caption
-	    _("<P>Already installed printers and queues:</P>")
+	    _("<P>Installed Printers and Queues</P>")
 	    + Printer::Summary ([`nonew, `test, `state, `ipp_listen_modify])
 	    );
 	// dialog label
@@ -2157,10 +2147,9 @@ the current configuration."));
 		    && CUPS::InstallationType () == `client)
 		{
 		    // popup
-		    boolean b = Popup::YesNo (_("Warning!
-
+		    boolean b = Popup::YesNo (_("
 Your system is configured as a CUPS client only.
-Setting any queue will discard these settings.
+Setting a queue will discard these settings.
 
 Continue?"));
 		    if (! b)
@@ -2187,31 +2176,20 @@ Continue?"));
 		    if (Printer::printer["detected", "ptal_manual"]:false
 			&& Printer::hp_driver == "ptal")
 		    {
-			// yes-no popup, %1 is an URL
-    // (http://portal.suse.com/sdb/en/2002/05/ke_hp-officejet.html for English)
+			// yes-no popup
 			string message = _("The selected printer is an HP all-in-one device.
-To access HP all-in-one devices as both printer and scanner,
+To access an HP all-in-one device as both printer and scanner,
 the HP PTAL service must be used.
 
-YaST failed to set up PTAL automatically. Therefore you should
-setup PTAL manually. See the following support database article:
-%1
+Automatic setup PTAL failed. Refer to your product documentation 
+for information about configuring PTAL manually.
 
 It is possible to set up an HP all-in-one device only for
-printing without using PTAL, but then it would no longer print
-after PTAL was set up because a running PTAL service inhibits
-the normal non-PTAL access.
+printing without using PTAL, but then it would stop printing
+if PTAL were configured later, because a running PTAL service 
+inhibits the normal non-PTAL access.
 
 Set up this device for printing only?");
-			message = sformat (message,
-    // URL, localized version may exist. For German, use
-    // 'http://portal.suse.com/sdb/de/1998/07/ke_hp-officejet.html'
-    // if you don't know how to determine if there is a localized version
-    // available or its URL, comment on SUSE Bug #35737 or ask
-    // fhassel@suse.de or fs@suse.de about the URL of localized version and
-    // why it is not possible to determine the URL of the localized version
-    // via the WWW interface
-    _("http://portal.suse.com/sdb/en/2002/05/ke_hp-officejet.html"));
 
 			if (! Popup::YesNo (message))
 			    continue;
@@ -2223,7 +2201,7 @@ Set up this device for printing only?");
 // message popup
 _("YaST failed to set up the HPLIP service.
 Therefore the HP all-in-one device was set up as an ordinary USB printer.
-Printing should work without problems but the 'hp-toolbox' program
+Printing should work without problems, but the 'hp-toolbox' program
 for printer maintenance (ink status, etc.) cannot work because
 it requires a running HPLIP service."));
 		    }
@@ -2259,11 +2237,11 @@ it requires a running HPLIP service."));
 	{
 	    // is %1 in following translation text
 	    // "Printer administration for %1"
-	    spoolerlabel = _("any spooler");
+	    spoolerlabel = _("Any Spooler");
 	}
 	Wizard::SetContentsButtons (
-	// Header of the dilag with all the printers
-	    sformat (_("Printer administration for %1"), spoolerlabel),
+	// Header of the dialog with all the printers
+	    sformat (_("Printer Administration for %1"), spoolerlabel),
 	    Wizard_hw::ConfiguredContent (
 		(Spooler::Get () == "cups")
 		?
@@ -2287,7 +2265,7 @@ it requires a running HPLIP service."));
 		`HBox (
 		    `HStretch (),
 		// push button
-		`PushButton (`id (`setdefault), _("&Set as default")),
+		`PushButton (`id (`setdefault), _("&Set as Default")),
 		// push button
 		`PushButton (`id (`advanced), `opt (`key_F7), _("Ad&vanced")),
 
@@ -2331,7 +2309,7 @@ it requires a running HPLIP service."));
 			else if (`delete_button == ret)
 			{
 			    // message box, %1 is replaced by printer name
-			    if (Popup::YesNo (sformat (_("Really delete the \"%1\" printer?"), Printer::printer["name"]:"")))
+			    if (Popup::YesNo (sformat (_("Really delete printer %1?"), Printer::printer["name"]:"")))
 				Printer::deletePrinter ();
 			    UI::ChangeWidget (`id (`table), `Items, printcapTable ());
 			    UI::ChangeWidget (`id (`table), `CurrentItem, Printer::index);
