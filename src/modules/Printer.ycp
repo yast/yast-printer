@@ -924,7 +924,7 @@ global define boolean checkSpooler () {
 	if (SCR::Execute (.target.bash, "/usr/bin/which gs") != 0)
 	{
 	    // message box
-	    Report::Warning (_("It seems that you do not have GhostScript
+	    Report::Warning (_("GhostScript is not
 installed on your computer. It is needed
 to print."));
 	    return false;
@@ -970,9 +970,9 @@ to print."));
 	if (Printer::detect != false)
 	    Printer::detect = Crash::AskRun ("printer_detection",
 		// popup
-		_("During the following step, YaST2 will try to detect local printers only.
+		_("During the following step, only local printers are detected.
 
-Printer detection can now start. In some cases, detection can cause a
+In some cases, detection can cause a
 system freeze. If a freeze happens, select Skip Detection
 when next running the printer configuration.
 
@@ -1113,13 +1113,13 @@ Detect your printers?"));
 	if (!skip_autodetection)
 	{
 	    // progress stage, text in dialog (short) (infinitive)
-	    stages = add (stages, _("Autodetect printers"));
+	    stages = add (stages, _("Detect printers"));
 	    // progress stage, text in dialog (short)
-	    titles = add (titles, _("Autodetecting printers..."));
+	    titles = add (titles, _("Detecting printers..."));
 	}
 
 	// progress label
-	Progress::New (_("Initializing printer configuration"),
+	Progress::New (_("Initializing Printer Configuration"),
 	    " ", skip_autodetection ? 16 : 20, stages, titles, "");
 
 	Progress::NextStageStep (0); // step 0 - check root permission
@@ -1275,11 +1275,11 @@ Detect your printers?"));
 	    string name = entry["name"]:"";
 	    entry["default"] = (name == default_queue);
 	    // progress title, %1 is queue name
-	    Progress::Title (sformat (_("Saving queue %1..."), name));
+	    Progress::Title (sformat (_("Queue %1"), name));
 	    if (name == "")
 	    {
 		// error report. %1 is queue name
-		Report::Error (sformat (_("Attempting to save unnamed printer. Skipping: %1"), entry));
+		Report::Error (sformat (_("Attempting to save unnamed printer. Skipping %1."), entry));
 		return ;
 	    }
 	    if (name == default_queue && entry["valid"]:true)
@@ -1385,7 +1385,7 @@ the selected spooler does not support it."), name));
 	if (with_daemon)
 	{
 	    // caption of progress
-	    Progress::New (_("Saving printer configuration"),
+	    Progress::New (_("Saving Printer Configuration"),
 		" ", size (printcap) + 7,
 		[
 		    // progress bar states
@@ -1426,7 +1426,7 @@ the selected spooler does not support it."), name));
 	else
 	{
 	    // caption of progress
-	    Progress::New (_("Saving printer configuration"),
+	    Progress::New (_("Saving Printer Configuration"),
 		" ", 3,
 		[
 		    // progress stage
@@ -1438,7 +1438,7 @@ the selected spooler does not support it."), name));
 		],
 		[
 		    // progress step
-		    _("Adjusting spooler services"),
+		    _("Adjusting spooler services..."),
                     // progress step
 		    _("Saving system settings..."),
 		    // progress step
@@ -1552,7 +1552,7 @@ the selected spooler does not support it."), name));
 	// to be used in summary after queue name - means verb
 	// is clickable link
 	// eg. HP DeskJet configured as lp0 [test]
-	string test_link = _("test");
+	string test_link = _("Test");
 	inform_about_config = false;
 
 	if (Spooler::Get () == "cups" && CUPS::InstallationType () == `client)
@@ -1564,10 +1564,10 @@ the selected spooler does not support it."), name));
 		    CUPS::server_hostname != "" && CUPS::server_hostname != nil
 			// summary text part, alt. 1
 			// %1 server name
-			? sformat (_("using server %1."),
+			? sformat (_("Using server %1"),
 			    CUPS::server_hostname)
 			// summary text part, alt. 1
-			: _("No server set."));
+			: _("No server set"));
 	    list<string> servers = filter (string s, CUPS::cups_servers,
 		``(s != CUPS::server_hostname));
 	    servers = toset (servers);
@@ -1581,7 +1581,7 @@ the selected spooler does not support it."), name));
 	    return ret;
 	}
 	// Configured as name_of_queue.
-	string format = contains (style, `short) ? _("Configured as %1.")
+	string format = contains (style, `short) ? _("Configured as %1")
 	// Configured as name_of_queue.
 	: _("Configured as:<br>%1");
 	list<string> summary = [];
@@ -1629,19 +1629,19 @@ the selected spooler does not support it."), name));
 			    {
 				// summary part, printer state
                                 state = " - " + HTML::Colorize (
-                                    _("invalid for current spooler"), "red");
+                                    _("Invalid for current spooler"), "red");
 			    }
 			    else if (! entry["changed"]:false)
 			    {
 				state = " - " + HTML::Colorize (
 				    // summary part, printer state
-				    _("ready"), "green");
+				    _("Ready"), "green");
 			    }
 			    else
 			    {
 				state = " - " + HTML::Colorize (
 				    // summary part, printer state
-				    _("changed, not yet saved"), "orange");
+				    _("Changed, not yet saved"), "orange");
 			    }
 			}
 			found = found + ("" != found ? "<br>" : "") + cache + state;
@@ -1691,7 +1691,7 @@ the selected spooler does not support it."), name));
 		    i = assignState (i, false);
 		    string dev = (raw ?
 			// menu item, %1 is URI
-			sformat (_("Raw queue: %1"), Printerlib::getUriNiceName (i["uri"]:""))
+			sformat (_("Raw Queue %1"), Printerlib::getUriNiceName (i["uri"]:""))
 			:
 			sformat ("%1: %2", model, Printerlib::getUriNiceName (i["uri"]:""))
 		    );
@@ -1716,19 +1716,19 @@ the selected spooler does not support it."), name));
                             {
                                 state = " - " + HTML::Colorize (
                                     // summary part, printer state
-				    _("invalid for current spooler"), "red");
+				    _("Invalid for current spooler"), "red");
 			    }
                             else if (! i["changed"]:false)
                             {
                                 state = " - " + HTML::Colorize (
                                     // summary part, printer state
-				    _("ready"), "green");
+				    _("Ready"), "green");
                             }
                             else
                             {
                                 state = " - " + HTML::Colorize (
                                     // summary part, printer state
-				    _("changed, not yet saved"), "orange");
+				    _("Changed, not yet saved"), "orange");
                             }
                         }
 			cache = cache + state;
@@ -1744,12 +1744,12 @@ the selected spooler does not support it."), name));
 		    if (contains (style, `test))
 			cache = sformat ("%1"/* [<a href=\"%1\">test</a>]"*/, cache);
 		    // menu item part
-		    if (haskey (other_printers, _("- not YaST2 -")))
+		    if (haskey (other_printers, _("Non-YaST2")))
 			// menu item part
-			other_printers = add (other_printers, _("- not YaST2 -"), other_printers[_("- not YaST2 -")]:"???" + ", " + cache);
+			other_printers = add (other_printers, _("Non-YaST2"), other_printers[_("Non-YaST2")]:"???" + ", " + cache);
 		    else
 			// menu item part
-			other_printers = add (other_printers, _("- not YaST2 -"), cache);
+			other_printers = add (other_printers, _("Non-YaST2"), cache);
 		}
 	    }
 	});
@@ -1764,14 +1764,14 @@ the selected spooler does not support it."), name));
 		ipp_listen_modify = sformat (
 		    " (<a href=\"change_ipp_listen\">%1</a>)",
 		    // link in rich text for summary
-		    _("change"));
+		    _("Change"));
 	    }
 	    if (contains (CUPS::cups_server_settings["Browsing"]:["On"], "On"))
 	    {
 		summary = add (summary, "<li>" + sformat (
 		    // part of summary
 		    // %1 is link to change the listenning to CUPS servers
-		    _("Listening to CUPS servers to provide access to remote queues.%1"),
+		    _("Listening to CUPS servers to provide access to remote queues %1"),
 		    ipp_listen_modify) + "</li>");
 		if (! Mode::config () && SuSEFirewall::IsEnabled ())
 		{
@@ -1801,7 +1801,7 @@ the selected spooler does not support it."), name));
 			summary = add (summary, "<li>" + sformat (
 			    // part of summary
 			    // %1 is link to change the firewall settings
-			    _("Port for listening to remote CUPS servers is closed by firewall.%1"), ipp_listen_modify) + "</li>");
+			    _("Port for listening to remote CUPS servers is closed by firewall %1"), ipp_listen_modify) + "</li>");
 		    }
 		    else
 		    {
@@ -1810,7 +1810,7 @@ the selected spooler does not support it."), name));
 			summary = add (summary, "<li>" + sformat (
 			    // part of summary, %1 is list of interfaces
 			    // %2 is link to change the firewall settings
-			    _("Port for listening to remote CUPS servers is open on %1.%2"), il, ipp_listen_modify) + "</li>");
+			    _("Port for listening to remote CUPS servers is open on %1 %2"), il, ipp_listen_modify) + "</li>");
 		    }
 		}
 	    }

@@ -402,7 +402,7 @@
 	if (1 < found)
 	{
 	    // command line error report
-	    CommandLine::Print (_("More than spooler specified"));
+	    CommandLine::Print (_("More than one spooler specified"));
 	    return false;
 	}
 	if (haskey (options, "cups"))
@@ -459,7 +459,7 @@
     define boolean PrinterManufacturersHandler (map options) ``{
 	Printerdb::loadFoomaticIfNeeded ();
 	// command line output header
-	CommandLine::Print (_("Known Manfacturers:"));
+	CommandLine::Print (_("Known Manufacturers:"));
 	foreach (string k, map v, Printerdb::foomatic, ``{
 	    CommandLine::Print (v[`label]:k);
 	});
@@ -481,7 +481,7 @@
 	string manufacturer = (string)SCR::Read (.ppd.db.vendorname,
 	    options["manufacturer"]:"");
 	// command line output header
-	CommandLine::Print (_("Known Models"));
+	CommandLine::Print (_("Known Models:"));
 	foreach (string k, map v, (map<string,map>)
 	    filter (any k, any v, Printerdb::foomatic[manufacturer]:$[],
 	    ``(
@@ -517,7 +517,7 @@
 	string model = (string)SCR::Read (.ppd.db.modelname,
 	    [manufacturer, options["model"]:""]);
 	// command line output header
-	CommandLine::Print (_("Known Nick Names"));
+	CommandLine::Print (_("Known Nick Names:"));
 	foreach (string k, map v, (map<string,map>)
 	    filter (any k, any v,
 		Printerdb::foomatic[manufacturer, model]:$[],
@@ -544,7 +544,7 @@
     map cmdline = $[
 	"id"		: "printer",
 	// command line help text for Printer module
-	"help"		: _("Printer configuration module."),
+	"help"		: _("Printer configuration module"),
 	"guihandler"	: GuiHandler,
 	"initialize"	: Printer::Read,
 	"finish"	: Printer::Write,
@@ -562,7 +562,7 @@
 	    "add"	: $[
 		"handler"	: PrinterAddHandler,
 		// command line help text for delete action
-		"help"		: _("Add new queue")
+		"help"		: _("Add a new queue")
 	    ],
 	    "edit"	: $[
 		"handler"	: PrinterEditHandler,
@@ -577,12 +577,12 @@
 	    "ppdoptions": $[
 		"handler"	: PrinterPPDOptionsHandler,
 		// command line help text for the ppdoptions action
-		"help"		: _("Set options that will be writted directoy to PPD file. Options that are not mentioned stay untouched."),
+		"help"		: _("Set options that will be writted directly to the PPD file. Options that are not mentioned remain untouched."),
 	    ],
 	    "lpoptions" : $[
 		"handler"	: PrinterLPOptionsHandler,
 		// command line help text for the lpoptions action
-		"help"		: _("Set options that will be written to /etc/cups/lpoptions. Options that are not mentioned stay untouched."),
+		"help"		: _("Set options that will be written to /etc/cups/lpoptions. Options that are not mentioned remain untouched."),
 	    ],
 	    "spooler"	: $[
 		"handler"	: PrinterSpoolerhandler,
@@ -612,18 +612,18 @@
 	    "list_ppdoptions": $[
 		"handler"	: PrinterListPpdOptionsHandler,
 		// command line help text for the test action
-		"help"		: _("List options of PPD file of specified queue"),
+		"help"		: _("List options of the PPD file of the specified queue"),
 	    ],
 	],
 	"options"	: $[
 	    "detected_index"	: $[
 		// command line help text for the index of detected queue option
-		"help"		: _("Configure detected printer with this index"),
+		"help"		: _("Configure a detected printer with this index"),
 		"type"		: "string",
 	    ],
 	    "queue"	: $[
 		// command line help text for the queue name option
-		"help"		: _("Queue Name"),
+		"help"		: _("Queue name"),
 		"type"		: "string",
 	    ],
 	    "new_name"	: $[
@@ -638,7 +638,7 @@
 	    ],
 	    "raw"	: $[
 		// command line help text for the raw option
-		"help"		: _("Queue will not be filtering."),
+		"help"		: _("Queue will not be filtered"),
 	    ],
 	    "manufacturer" : $[
 		// command line help text for the manufacturer option
@@ -652,7 +652,7 @@
 	    ],
 	    "nick"	: $[
 		// command line help text for the PPD file nick name option
-		"help"		: _("Nick name of the PPD file"),
+		"help"		: _("Nickname of the PPD file"),
 		"type"		: "string",
 	    ],
 	    "info"	: $[
@@ -667,13 +667,13 @@
 	    ],
 	    "bannerstart":$[
 		// command line help text for the starting banner option
-		"help"		: _("Banner to be printed before every job"),
+		"help"		: _("Banner to print before every job"),
 		"type"		: "enum",
 		"typespec"	: CUPS::getBannerList (),
 	    ],
 	    "bannerend"	: $[
 		// command line help text for the ending banner option
-		"help"		: _("Banner to be printed after every job"),
+		"help"		: _("Banner to be print after every job"),
 		"type"		: "enum",
 		"typespec"	: CUPS::getBannerList (),
 	    ],
@@ -700,6 +700,7 @@
 		"type"		: "string",
 	    ],
 	    "default"	: $[
+	    //rwalter: need to see example of how this works
 		// command line help text for the default queue option
 		"help"		: _("Set the queue to default"),
 	    ],
@@ -713,7 +714,7 @@
 	    ],
 	    "cups"	: $[
 		// command line help text for the 'switch to CUPS' option
-		"help"		: _("Switch top CUPS server"),
+		"help"		: _("Switch to CUPS server"),
 	    ],
 	    "cups_client":$[
 		// command line help text for the 'switch to CUPS client' option
@@ -726,12 +727,12 @@
 	    ],
 	    "default_queue":$[
 		// command line help text for the 'local or remote default queue' option
-		"help"		: _("Specify the default queue, if not set, default queue of the server will be used"),
+		"help"		: _("Specify the default queue. If not set, the default queue of the server will be used"),
 		"type"		: "string"
 	    ],
 	    "testpage_type":$[
 		// command line help text for the testpage type option
-		"help"		: _("Type of the test page, one of ascii, graphic, photo"),
+		"help"		: _("Type of the test page: ascii, graphic, or photo"),
 		"type"		: "string",
 	    ],
 	],
