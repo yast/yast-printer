@@ -28,6 +28,7 @@
     import "Stage";
     import "Wizard";
     import "Wizard_hw";
+    import "WizardHW";
 
     include "printer/helps.ycp";
     include "printer/misc.ycp";
@@ -1837,13 +1838,13 @@ the current configuration."));
 	y2milestone ("Detecting way to configure printer");
 	symbol ret = nil;
 	// new queue to existing printer
-	if (Printer::runAutoprobedListDialog__current == -2)
+	if (Printer::runAutoprobedListDialog__current == "-2")
 	{
 	    y2milestone ("Configuring queue for isntalled printer");
 	    return `installed_printer;
 	}
 	// not detected printer
-	else if (Printer::runAutoprobedListDialog__current == -1)
+	else if (Printer::runAutoprobedListDialog__current == "-1")
 	{
 	    y2milestone ("Other undetected printer chosen");
 	    ret = `connection;
@@ -2077,6 +2078,34 @@ the current configuration."));
 	    !selected));
     }
 
+// function to set the data to the hardware dialog
+// get inspired by summary and getAutoprobedSelectionBox when writing it
+void SetHWDialogData () {
+        list < map<string,any> > items = maplist (map i, Printer::autodetected, ``{
+                return  $[ "ID":Printerlib::getReplacedString(Printerlib::getUriDevice (i["uri"]:"")), "MODEL":i["device"]:"unknown" ];
+        });
+
+y2internal("%1", getAutoprobedSelectionBox(0));
+y2internal("%1", Printer::Summary ([`nonew, `test, `state, `ipp_listen_modify]));
+y2internal("%1 - %2", Spooler::Get(), CUPS::InstallationType ());
+
+list < map<string,any> > printers = [];
+
+integer pos=1;
+maplist(map<string,any> s, items, {
+		printers = add(printers,  $[ 
+						"id" : "hw" + pos, 
+						"rich_descr" : "Descr 1",
+						"table_descr":[ s["ID"]:"unknown" , s["MODEL"]:"unknown", "-" ] 
+					   ]);
+		pos = pos + 1;
+		});
+
+  WizardHW::SetContents ( printers );
+}
+
+
+
     /**
      * Restart detection of printers.
      * @return symbol always `next
@@ -2092,6 +2121,37 @@ the current configuration."));
      */
     define symbol runDetectedDialog () ``{
 	y2milestone ("Starting detected dialog");
+
+	// several functions dialog
+	WizardHW::CreateHWDialog (_("Printer Configuration"),
+getDetectedHelp (),
+//	    "help",
+	    [_("Device"), _("Model"), _("Queue Name")],
+	    [
+		[ `redetect, _("Restart Detection") ],
+		[ `default_q, _("Set Default") ],
+	    ]);
+	SetHWDialogData ();
+
+	WizardHW::SetSelectedItem (Printer::runAutoprobedListDialog__current);
+	boolean cont = true;
+	while (cont)
+	{
+	    map<string,any> hw_ret = WizardHW::WaitForEvent ();
+	    map event = hw_ret["event"]:$[];
+	    string selected = hw_ret["selected"]:"";
+	    any ret = event["ID"]:nil;
+	    if (ret == `delete)
+	    {
+	        import "Popup";
+	        Popup::Message (sformat ("Deleting %1", selected));
+	    }
+// TODO handle all events here
+	    else
+	        cont = false;
+	}
+	return `next; // FIXME
+/*
 	Printer::confmode = `det;
 	term contents = Wizard_hw::DetectedContent (
 	    // Selectionbox caption
@@ -2220,7 +2280,7 @@ it requires a running HPLIP service."));
 	    break;
 	}
 	y2milestone ("Finishing detected dialog with %1", ret);
-	return (symbol)ret;
+	return (symbol)ret;*/
     }
     /**
      * Complex dialog.
