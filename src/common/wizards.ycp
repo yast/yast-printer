@@ -421,11 +421,28 @@
     define symbol MainSequence() ``{
 	map<string,any> aliases = getAliases ();
 	map sequence = $[
-	    "ws_start" : "config_type",
+	    "ws_start" : "detected",
 	    "config_type" : $[
-		`server : "complex",
+		`server : "detected",
 		`client : "cups_client_main",
 	    ],
+//old dialogs
+           "detected" : $[
+                `next : `next,
+                `abort : `abort,
+                `configure_button : "add_printer_wz",
+                `restart_button : "redetect",
+                `edit_button : "edit_printer_wz",
+                `change_ipp_listen : "listen_ipp_bcast",
+            ],
+	    "redetect" : $[`next : "detected", ],
+            "listen_ipp_bcast" : $[
+                `next : "detected",
+                `abort : `abort,
+                `perm : "cupsaclbcast",
+            ],
+	    "cupsaclbcast" : $[ `abort : `abort, `next : "listen_ipp_bcast"],
+/*
 	    "complex"  : $[
 		`next : `next,
 		`add  : "add_printer_wz",
@@ -434,6 +451,7 @@
 		`client : "cups_client_main",
 		`advanced : "advanced",
 	    ],
+*/
 	    "advanced" : $[
 		`next : "config_type",
 		`this : "advanced",
@@ -473,11 +491,11 @@
                 `abort : `abort,
             ],
 	    "add_printer_wz" : $[
-		`next: "complex",
+		`next: "detected",
 		`abort : `abort,
 	    ],
 	    "edit_printer_wz": $[
-		`next: "complex",
+		`next: "detected",
 		`abort : `abort,
 	    ],
 	    "cups_client_main" : $[
@@ -495,6 +513,7 @@
       * Main workflow of the printer configuration with detected printers dialog
       * @return sequence result
       */
+/*
     define symbol DetectedSequence() ``{
 	map<string,any> aliases = getAliases ();
 	map sequence = $[
@@ -505,7 +524,7 @@
 		`abort : `abort,
 		`configure_button : "add_printer_wz",
 		`restart_button : "redetect",
-		`edit_button : "main_wz",
+		`edit_button : "edit_printer_wz",
 		`change_ipp_listen : "listen_ipp_bcast",
 	    ],
 	    "add_printer_wz" : $[
@@ -523,12 +542,20 @@
 		`abort : `abort,
 		`perm : "cupsaclbcast",
 	    ],
+	    "edit_printer_wz" : $[
+		`abort : `abort,
+		`next  : "redetect"
+	    ],
+	    "add_printer_wz" : $[
+		`abort : `abort,
+		`next  : "redetect"
+	    ],
 	    "cupsaclbcast" : $[ `abort : `abort, `next : "listen_ipp_bcast"],
 	];
 	aliases = (map<string,any>)filter (string k, any v, aliases, ``(haskey (sequence, k)));
 	return Sequencer::Run(aliases, sequence);
     }
-
+*/
     /**
       * Whole configuration of printer but without reading and writing.
       * For use with autoinstallation.
@@ -547,7 +574,7 @@
 		return `back;
 	    }
 	}
-	symbol ret = DetectedSequence();
+	symbol ret = MainSequence();
 	UI::CloseDialog();
 	return ret;
     }
@@ -559,7 +586,7 @@
     define symbol PrinterSequence() ``{
 	map aliases = $[
 	    "read"	: [ ``( ReadDialog() ), true ],
-	    "main"	:   ``( DetectedSequence() ),
+	    "main"	:   ``( MainSequence() ),
 	    "write"	: [ ``( WriteDialog() ), true ],
 //	    "switch"	: [ ``(`next), true ],
 //	    "reinstall"	: [ ``(`next), true ],
