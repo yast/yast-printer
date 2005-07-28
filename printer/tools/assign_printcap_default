@@ -1,0 +1,27 @@
+#! /bin/bash
+# Assign default queue in printcap
+# Parameters: name of queue to be set as default
+# Exits:   0 doesn't seem to have a problem
+#          1 operation failed
+#
+# Jiri Srain <jsrain@suse.cz>, 2003
+# $Id$
+
+cat /etc/printcap | awk '
+BEGIN { first = 1; }
+/^[a-zA-Z0-9_]+$/ {
+    if (first != 1)
+    {
+	print $0;
+    }
+    first = 0;
+    next;
+}
+// { print $0; } ' > /etc/printcap_nodefault;
+
+echo $1 >/etc/printcap;
+
+cat /etc/printcap_nodefault >> /etc/printcap;
+
+
+

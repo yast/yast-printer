@@ -1,0 +1,21 @@
+#! /bin/bash
+# test_device sends a short message ($1) to device ($2).
+# Timeout is set to $3 sec.
+# Exits:   0 doesn't seem to have a problem
+#          1 operation has timed out
+#          2 problems while writing to $2
+#
+# Jan Holesovsky <kendy@suse.cz>, 2000
+# $Id$
+
+EXITCODE=2
+trap "EXITCODE=0" 10
+
+[ "$2" != "/dev/null" ] && fuser -k $2  # kill all processes using the device
+
+( sleep $3 ) &
+SL=$!
+( echo -en "$1" > $2 && kill -10 $$ ; kill $SL ) &
+PR=$!
+wait $SL && kill $PR && exit 1    # It cannot finish, it has timed out
+exit $EXITCODE                    # How the prining finished?

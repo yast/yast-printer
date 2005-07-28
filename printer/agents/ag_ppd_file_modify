@@ -1,0 +1,85 @@
+#!/usr/bin/perl -w
+
+use ycp;
+use File::Temp;
+
+while ( <STDIN> ) 
+{
+    my ($command, $path, $argument) = ycp::ParseCommand ($_);
+
+    if ($command eq "Write")
+    {
+	if ($path eq "." && ref ($argument) eq "ARRAY")
+	{
+	    $delete = 0;
+	    @a = @{$argument};
+	    $src = $a[0];
+	    $dst = $a[1];
+	    %opt = %{$a[2]};
+
+	    if ($src =~ /.*gz$/)
+	    {
+		$delete = 1;
+		($fh, $filename) = mkstemp("/tmp/ppd.XXXXXXXX");
+		$fh = $fh;
+		system ("/usr/bin/gunzip -c $src > $filename");
+		$src = $filename;
+	    }
+
+	    open (IN, "$src");
+	    open (OUT, ">$dst");
+
+	    while ( $line = <IN> )
+	    {
+
+		chomp ($line);
+
+		if ($line =~ /^\*Default.*/)
+		{
+		    ($key) = $line =~ m/^\s*\*Default(\S*):\s*\S*/;
+		    if (exists ($opt{$key}))
+		    {
+		        print OUT "*Default$key: $opt{$key}\n"
+		    }
+		    else
+		    {
+		        print OUT "$line\n";
+		    }
+		    $patched{$key} = 1;
+		}
+		elsif ($line =~ /^\*\S*\s*\S*/)
+		{
+		    ($key) = $line =~ m/^\*(\S*)\s*\S*/;
+		    if (exists ($opt{$key}) && ! exists ($patched{$key}))
+		    {
+		        print OUT "*Default$key: $opt{$key}\n";
+		        $patched{$key} = 1;
+		    }
+		    print OUT "$line\n";
+		}
+		else
+		{
+		    print OUT "$line\n";
+		}
+	    }
+
+	    close (IN);
+	    close (OUT);
+	    if ($delete)
+	    {
+		system ("/bin/rm $src");
+	    }
+
+	}
+	ycp::Return ("true");
+    }
+    elsif ($command eq "result")
+    {
+	exit;
+    }
+    else
+    {
+	y2error ("Wrong path or arguments");
+	ycp::Return ("false");
+    }
+}

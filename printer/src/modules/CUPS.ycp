@@ -1,0 +1,652 @@
+/**
+ * File:
+ *   modules/CUPS.ycp
+ *
+ * Package:
+ *   Printer configuration
+ *
+ * Summary:
+ *   Data and functions related only to CUPS
+ *
+ * Authors:
+ *   Jiri Srain <jsrain@suse.cz>
+ *
+ * $Id$
+ *
+ * Printer library exported functions. What else?!?
+ */
+
+{
+module "CUPS";
+
+textdomain "printer";
+
+import "Label";
+import "Package";
+import "Printerlib";
+import "Report";
+import "Service";
+import "SuSEFirewall";
+
+// local variables
+
+/**
+ * List of supported URI schemess
+ */
+list<string> supported_uri_types = nil;
+
+// global variables
+
+/**
+ * List of detected CUPS servers
+ */
+global list<string> cups_servers = [];
+
+/**
+ * Use CUPS-like USB devices names
+ * `always, `never, `serial
+ */
+global symbol usb_dev_names = `always;
+
+/**
+ * Type of cups installation.
+ * nil: unknown
+ * `server:  server
+ * `client: client
+ */
+global symbol cups_installation = nil;
+
+/**
+ * If this is only cups client station,
+ * server host name is here.
+ */
+global string server_hostname = "";
+
+/**
+ * Settings of CUPS server
+ */
+global map<string,list<string> > cups_server_settings = nil;
+
+/**
+ * Settings of CUPS server
+ */
+global map<string,map<string, list<string> > > cups_server_permissions = nil;
+
+/**
+ * When configuring client, using server's default queue?
+ */
+global boolean server_default = true;
+
+// local functions
+
+// global functions
+
+// functions related to /etc/cups/client.conf and CUPS client-only installation
+
+/**
+ * Read client.conf host name to server_hostname
+ */
+global void LoadServerHostName () {
+    server_hostname = (string)
+	SCR::Read (.etc.cups.client_conf.value.ServerName);
+    if (nil == server_hostname
+	|| "" == server_hostname
+	|| "nil" == server_hostname ||
+	"localhost" == server_hostname
+	|| "127.0.0.1" == server_hostname)
+    {
+	server_hostname = "";
+    }
+    y2milestone ("Read server host name: >>%1<<", server_hostname);
+}
+
+/**
+ * Save client.conf host name host name
+ * @return boolean true on success
+ */
+global boolean SaveServerHostName () {
+   boolean ret = true;
+    if (server_hostname == "")
+	server_hostname = nil;
+    SCR::Write (.etc.cups.client_conf.value.ServerName, server_hostname);
+    ret = SCR::Write (.etc.cups.client_conf, nil);
+    return ret;
+}
+
+/**
+ * Read settings of CUPS client-only
+ * @return string default queue name (empty if server-default is used,
+ *  nil on fail)
+ * TODO error handling
+ */
+global string ClientRead () {
+    map state = (map)SCR::Read (.target.ycp, "/var/lib/YaST2/printers");
+    if (nil == state)
+    {
+	state = $[];
+    }
+    string cups_default = (string)SCR::Read (.cups.default_dest);
+    map out = (map) SCR::Execute (.target.bash_output,
+	"/bin/grep ^Default </etc/cups/lpoptions | cut -f2 -d\\ ");
+    string lpoptions_default = out["stdout"]:"";
+    if (nil != findfirstof (lpoptions_default, "\n"))
+    {
+	lpoptions_default = substring (lpoptions_default, 0,
+	    findfirstof (lpoptions_default, "\n"));
+    }
+    server_default = ! (cups_default == lpoptions_default);
+    return server_default
+	? ""
+	: cups_default;
+}
+
+
+// functions related to the comoplex CUPS information reading/writing
+
+/**
+ * If only client is installed or remote server to use is set,
+ * returns 1, if this is real server installation, returns 0
+ * Also sets server_hostname and cups_installation
+ * @return symbol `client or `server
+ */
+global symbol InstallationType () {
+    if (nil != cups_installation)
+	return cups_installation;
+
+    LoadServerHostName ();
+    if (Package::Installed ("cups-libs") &&
+	! Package::Installed ("cups"))
+    {
+	cups_installation = `client;
+	return `client;
+    }
+    cups_installation = (("" != server_hostname) ? `client : `server);
+    return cups_installation;
+}
+
+/**
+ * Save CUPS client-only configuration
+ * @param default string default queue name
+ * @return boolean true on success
+ */
+global boolean SaveCupsClient (string default_queue) {
+    SaveServerHostName ();
+    SuSEFirewall::SetServices (["ipp-udp", "ipp-tcp"], [], false);
+    if (server_default)
+    {
+	default_queue = "";
+    }
+    SCR::Write (.cups.default_dest, default_queue, "local");
+    return true;
+}
+
+/**
+ * Reads CUPS server settings from /etc/cups/cupsd.conf file
+ * @return boolean true on success
+ */
+global boolean ReadCupsSettings () {
+    list<string> options = (list<string>)
+	SCR::Dir (.etc.cups.cupsd_conf.value);
+    options = toset (options);
+    map<string,list<string> > settings = $[];
+    foreach (string s, options, {
+	settings[s] = (list<string>)
+	    SCR::Read (add (.etc.cups.cupsd_conf.value, s));
+    });
+    list<string> sections = (list<string>)
+	SCR::Dir (.etc.cups.cupsd_conf.section);
+    map<string, map<string, list<string> > > permissions = $[];
+    foreach (string s, sections, {
+	map<string, list<string> > section = $[];
+	options = (list<string>)
+	    SCR::Dir (add (.etc.cups.cupsd_conf.value, s));
+	options = toset (options);
+	foreach (string o, options, {
+	    section[o] = (list<string>)
+		SCR::Read (add (add (.etc.cups.cupsd_conf.value, s), o));
+	    if (tolower (o) == "allow" || tolower (o) == "deny")
+	    {
+		section[o] = maplist (string s, section[o]:[], {
+		     if (tolower (substring (s, 0, 5)) == "from ")
+			s = substring (s, 5);
+		    return s;
+		});
+	    }
+	});
+	permissions[s] = section;
+    });
+    y2milestone ("CUPS settings read: %1", settings);
+    y2milestone ("CUPS permissions read: %1", permissions);
+    cups_server_settings = settings;
+    cups_server_permissions = permissions;
+    return true;
+}
+
+/**
+ * Writes CUPS server settings to /etc/cups/cupsd.conf file
+ * @return boolean true on success
+ */
+global boolean WriteCupsSettings () {
+    if (cups_server_settings == nil || cups_server_permissions == nil)
+	ReadCupsSettings ();
+    boolean ret = true;
+    foreach (string k, list<string> v, cups_server_settings, {
+	ret = SCR::Write (add (.etc.cups.cupsd_conf.value, k), v) && ret;
+    });
+    foreach (string s, map<string, list<string> > sect,
+	cups_server_permissions,
+    {
+	foreach (string k, list<string> v, sect, {
+	    if (tolower (k) == "allow" || tolower (k) == "deny")
+	    {
+		v = maplist (string s, v, {
+		    if (tolower (substring (s, 0, 5)) != "from ")
+			s = "From " + s;
+		    return s;
+		});
+	    }
+	    ret = SCR::Write (
+		add (add (.etc.cups.cupsd_conf.value, s), k), v) && ret;
+	});
+    });
+    ret = SCR::Write (.etc.cups.cupsd_conf, nil) && ret;
+    y2milestone ("CUPS settings writing success: %1", ret);
+    return ret;
+}
+
+/**
+ * Write configuration to CUPS
+ * @param entry map of printer entry
+ * @return boolean true if successfull
+ */
+global boolean WriteQueue (map entry) {
+    string name = entry["name"]:"";
+    if (entry["uri"]:"class" == "class")
+    {
+	return SCR::Write (.cups.classes.add, entry);
+    }
+    string uri = entry["uri"]:"";
+    string uri_type = Printerlib::getUriType (uri);
+    if (uri_type == "ptal")
+    {
+	y2milestone ("Enabling PTAL service");
+	// for being sure, enable also hotplug
+	Service::Enable ("hotplug");
+	Service::Disable ("hplip");
+	Service::Enable ("ptal");
+    }
+    else if (uri_type == "hp")
+    {
+	y2milestone ("Enabling HPLIP service");
+	// for being sure, enable also hotplug
+	Service::Enable ("hotplug");
+	Service::Disable ("ptal");
+	Service::Enable ("hplip");
+    }
+    if (! entry["valid"]:true)
+    {
+	return false;
+    }
+    boolean raw = entry["raw"]:false;
+    if (entry == nil)
+	return false;
+
+    if (Printerlib::getUriType (uri) == "serial")
+    {
+	string dev_name = Printerlib::getUriDevice (uri);
+	integer baudrate = Printerlib::getUriBaudrate (uri);
+	string ty = Printerlib::getUriValue (uri, "ty");
+	string br_string = baudrate == 0 ? "" : sformat ("baud=%1", baudrate);
+	string ty_string = filterchars (ty, "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890-") == "" ? "" : sformat ("%1", ty);
+	string uri = "serial:" + dev_name;
+	if (ty_string != "")
+	{
+	    if (br_string != "")
+		uri = uri + "?" + br_string + "+" + ty_string;
+	    else
+		uri = uri + "?" + ty_string;
+	}
+	else
+	{
+	    if (br_string != "")
+		uri = uri + "?" + br_string;
+	}
+	entry = add (entry, "uri", uri);
+    }
+    else if (Printerlib::getUriType (uri) == "irda")
+    {
+	string dev_name = Printerlib::getUriDevice (uri);
+	if (dev_name != "")
+	    entry = add (entry, "uri", "parallel:" + dev_name);
+    }
+    else if (Printerlib::getUriType (uri) == "samba")
+    {
+	entry = add (entry, "uri", "smb" + substring (uri, 5));
+    }
+
+    string ppd = entry["ppd"]:"";
+    if (ppd != "" && -1 == SCR::Read (.target.size, ppd))
+    {
+	y2error ("Unexsistent PPD file: %1", ppd);
+	// error popup
+	Report::Error (sformat (_("An error occurred while saving queue %1.
+
+The specified PPD file does not exist."), name));
+	return false;
+    }
+    else if (raw)
+    {
+	// remove the file
+	SCR::Execute (.target.bash, sformat ("test -f %1 && rm %1",
+	    sformat ("/etc/cups/ppd/%1.ppd", entry["name"]:"")));
+    }
+
+    boolean res = SCR::Write (.cups.printers.add, entry);
+    if (! res)
+	// popup
+        Report::Error (sformat (_("An error occurred while communicating with the 
+CUPS server while saving queue %1.
+
+%2"), name, SCR::Read (.cups.last_error)));
+    return res;
+}
+
+// functions for gathering generic information about the spooler
+
+/**
+ * List all available queues (local and remote)
+ * @return a list of strings all available queues
+ */
+global list<string> GetAvailableQueues () {
+    list<string> ret = [];
+    string hostname = "localhost";
+    if (InstallationType () == `client && server_hostname != "")
+	hostname = server_hostname;
+    ret = (list<string>)SCR::Read (.cups.remote, hostname);
+    ret = toset (ret);
+    y2milestone ("Available queues for CUPS: %1", ret);
+    return ret;
+}
+
+/**
+ * Get list of possible banners for CUPS server
+ * @return a list banners names
+ */
+global list<string> getBannerList () {
+    map out = (map)SCR::Execute (.target.bash_output, "/bin/ls -1 /usr/share/cups/banners");
+    list<string> ban = splitstring (out["stdout"]:"", "\n");
+    ban = toset (add (ban, "none"));
+    return filter (string i, ban, {
+	return "" != i;
+    });
+}
+
+
+
+// functions related to gathering information using CUPS backends
+
+/**
+ * Detect information about USB devices using the CUPS USB backend
+ * Also store this information to Printerlib module
+ * @return a list of detected devices
+ */
+global list<list<string> > DetectCupsUsbDevicesInfo () {
+    list<list<string> > cups_usb_devices = [];
+    if (SCR::Read (.target.size, "/usr/lib/cups/backend/usb") <= 0)
+    {
+	Printerlib::SetCupsUsbDevicesInfo (cups_usb_devices);
+	return [];
+    }
+    map out = (map)SCR::Execute (.target.bash_output,
+	"/usr/lib/cups/backend/usb");
+    list<string> lines = splitstring (out["stdout"]:"", "\n");
+    lines = filter (string l, lines, {
+	return l != "" && l != nil;
+    });
+    integer counter = -1;
+    cups_usb_devices = maplist (string l, lines, {
+	string model = regexpsub (l, "[^\"]*\"([^\"]*)\".*", "\\1");
+	string c_dev = regexpsub (l, "direct usb:([^ ]*) .*", "\\1");
+	string u_dev = sformat ("/dev/usb/lp%1", counter);
+	if (usb_dev_names == `never
+	    || (usb_dev_names == `serial
+		&& ! issubstring (c_dev, "serial")))
+	{
+	    c_dev = u_dev;
+	}
+	counter = counter + 1;
+	return [c_dev, model, u_dev];
+    });
+    Printerlib::SetCupsUsbDevicesInfo (cups_usb_devices);
+    return cups_usb_devices;
+}
+
+/**
+ * Get all CUPS-like USB device names
+ * @return a list of CUPS USB device names
+ */
+global list<string> GetCupsUsbDevices () {
+    list<list<string> > devices = Printerlib::GetCupsUsbDevicesInfo ();
+    list<string> ret = (list<string>) maplist (list e, devices, {
+	return e[0]:e[2]:"";
+    });
+    return ret;
+}
+
+/**
+ * Get problematic CUPS USB devices names
+ * @return a list of strings with problematic device names
+ */
+global list<string> GetProblematicCupsUsbDevices () {
+    list<list<string> > devices = Printerlib::GetCupsUsbDevicesInfo ();
+    list<string> c_devs = maplist (list<string> e, devices, {
+	return e[0]:"";
+    });
+    c_devs = filter (string d, c_devs, {
+	return d != "";
+    });
+    if (size (c_devs) == size (toset (c_devs)))
+	return [];
+    list tested = [];
+    list problematic = [];
+    foreach (string d, c_devs, {
+	if (contains (tested, d))
+	    problematic = add (problematic, d);
+	tested = add (tested, d);
+    });
+    return (list<string>)toset (problematic);
+}
+
+// detecting and proposing the overall configuration
+
+/**
+ * Wait until listening to CUPS IPP broadcasts finishes
+ */
+global void WaitForCupsListeiningFinish () {
+    string pid = nil;
+    if (SCR::Read (.target.size, "/var/run/listen_remote_ipp.pid") > 0)
+    {
+	pid = (string)SCR::Read (.target.string,
+	    "/var/run/listen_remote_ipp.pid");
+    }
+    boolean aborted = false;
+    if (pid != nil)
+    {
+	y2milestone ("Scanning for CUPS server in progress");
+	SCR::Execute (.target.bash, sformat ("kill -1 %1", pid));
+	boolean runs = true;
+	boolean displayed = false;
+	integer counter = 0;
+	while (runs)
+	{
+	    if (counter == 10)
+	    {
+		displayed = true;
+		UI::OpenDialog (`VBox (`Label (
+		    // label
+		    _("Detecting CUPS network server...")),
+		    `PushButton (`id (`abort), `opt (`key_F9),
+			Label::AbortButton ())));
+	    }
+	    sleep (100);
+	    runs = SCR::Read (.target.size,
+		"/var/run/listen_remote_ipp.pid") > 0;
+	    counter = counter + 1;
+	    if (displayed)
+	    {
+		any ui = UI::PollInput ();
+		if (ui == `abort)
+		{
+		    SCR::Execute (.target.bash,
+			sformat ("kill -15 %1", pid));
+		    runs = false;
+		   aborted = true;
+		}
+	    }
+	}
+	if (displayed)
+	    UI::CloseDialog ();
+    }
+    else // use results of previous detection
+    {
+	return;
+    }
+    cups_servers = [];
+    if (SCR::Read (.target.size,
+	"/var/lib/YaST2/cups_network_server_name") != -1)
+    {
+	if (! aborted)
+	{
+	    y2milestone ("File with CUPS servers found");
+	    string tmp = (string)SCR::Read (.target.string,
+		"/var/lib/YaST2/cups_network_server_name");
+	    cups_servers = splitstring (tmp, "\n");
+	    cups_servers = toset (cups_servers);
+	    cups_servers = filter (string s, cups_servers, {
+		return s != "" && s != nil;
+	    });
+	}
+    }
+    // cleanup after testing of remote CUPS server existence
+    SCR::Execute (.target.bash, "test -f /var/lib/YaST2/cups_network_server_name && /bin/rm /var/lib/YaST2/cups_network_server_name");
+    SCR::Execute (.target.bash, "test -f /var/run/listen_remote_ipp.pid && /bin/rm /var/run/listen_remote_ipp.pid");
+
+}
+
+/**
+ * Get hosts available on local network via listening to IPP broadcasts
+ * @return list Sorted list of hosts
+ */
+global list ListenCupsServers () {
+    integer status = (integer)
+	SCR::Execute (.target.bash, "/etc/init.d/cups status");
+    if (0 == status)
+	SCR::Execute (.target.bash, "/etc/init.d/cups stop");
+
+    SCR::Execute(.target.bash_background,
+	"/usr/lib/YaST2/bin/listen_remote_ipp 30");
+    sleep (1000);
+    WaitForCupsListeiningFinish ();
+
+    if (0 == status)
+	SCR::Execute (.target.bash_background, "/etc/init.d/cups start");
+    return cups_servers;
+}
+
+/**
+ * Immediatelly stop listenning to IPP broadcasts via the script
+ */
+global void StopListenCupsServers () {
+    if (SCR::Read (.target.size, "/var/run/listen_remote_ipp.pid") > 0)
+    {
+	string pid = (string)SCR::Read (.target.string,
+	    "/var/run/listen_remote_ipp.pid");
+	y2milestone ("Stopping listining to CUPS IPP bcasts, PID %1", pid);
+	SCR::Execute (.target.bash, sformat ("kill -15 %1", pid));
+    }
+}
+
+/**
+ * Propose Client only with a CUPS server
+ * listen_remote_ipp must have neen started befor this function is called
+ */
+global void ProposeClientOnly () {
+    WaitForCupsListeiningFinish ();
+    if (size (cups_servers) > 0)
+    {
+	y2milestone ("Found servers: %1", cups_servers);
+	string server = cups_servers[0]:"";
+	cups_installation = `client;
+	server_hostname = server;
+    }
+    else
+    {
+	cups_installation = `server;
+    }
+}
+
+/**
+ * Propose the CUPS server settings
+ */
+global void ProposeServerSettings () {
+    cups_server_settings["BrowseAddress"] = ["@LOCAL"];
+}
+
+// functions for getting information about CUPS properties
+
+/**
+ * Get the list of queue names that are forbidden by the spooler
+ * @return a list of forbidden queue names
+ */
+global list<string>GetSystemForbiddenNames () {
+    return [];
+}
+
+/**
+ * Get URI Types supported by CUPS
+ * @return a list of supported URI types
+ */
+global list<string> GetSupportedUriTypes () {
+    if (supported_uri_types == nil)
+    {
+	supported_uri_types = [
+	    "parallel",
+	    "usb",
+	    "serial",
+	    "lpd",
+	    "ipp",
+	    "samba",
+	    "socket",
+	    "irda",
+	    "novell",
+	    "pipe",
+	    "file",
+	    "class",
+	];
+	list<string> backends
+	    = (list<string>)SCR::Read (.target.dir, "/usr/lib/cups/backend");
+	if (backends != nil)
+	{
+	    supported_uri_types = (list<string>)merge (
+		supported_uri_types,
+		backends);
+	}
+    }
+    return supported_uri_types;
+}
+
+
+// other functions
+
+/**
+ * start CUPS server and don't wait until initialization finishes
+ */
+global void StartDaemon () {
+    integer status = (integer)SCR::Execute (.target.bash, "/etc/init.d/cups status");
+    if (0 != status)
+    {
+	SCR::Execute (.target.bash_background, "/etc/init.d/cups start");
+    }
+}
+
+} // EOF

@@ -1,0 +1,338 @@
+/**
+ * File:
+ *  printer_auto.ycp
+ *
+ * Module:
+ *  Printer configurator
+ *
+ * Summary:
+ *  Autoconfiguration preparation.
+ *
+ * Authors:
+ *  Petr Blahos <pblahos@suse.cz>, 2001
+ *
+ * $Id$
+ *
+ * Client for preparation of autoinstalation data.
+ */
+
+{
+    textdomain "printer";
+
+    import "PackageSystem";
+    import "Popup";
+    import "Printer";
+    import "Printerdb";
+    import "Spooler";
+    import "Wizard";
+    import "Progress";
+
+    include "printer/wizards.ycp";
+
+    /**
+      * Try to convert the model information from the old database to the
+      * new one
+      * @param p map queue description map with old SuSE database info
+      * @return a map queue description map with updated info to
+      *    Foomatic database
+      */
+    define map<string,any> OldQueue2NewQueue (map<string,any> p) ``{
+	integer papersize = 0;
+	foreach (string k, any v, p["options"]:$[], ``{
+	    if (substring (k, 0, 9) == "papersize")
+	    {
+		papersize = (integer)v;
+	    }
+	});
+	list page_sizes = [ "A4", "Letter", "A4", "Letter", "A3", "A2", "A1",
+	    "A0", "ARCHA", "ARCHB", "ARCHC", "ARCHD", "ARCHE", "B4", "B3",
+	    "B2", "B1", "B0", "C4", "C3", "C2", "C1", "C0", "flsa", "flse",
+	    "Legal", "11x17", "A5", "A6", "A7", "A8", "A9", "A10", "B5", "B6",
+	    "C5", "C5", "C6", "HalfLetter" ];
+	y2milestone ("Guessing page size %1", page_sizes[papersize]:"");
+	p["ppd_options"] = [
+	    $[ "key" : "PageSize", "value" : page_sizes[papersize]:nil]
+	];
+	p["ppd_options"] = filter (map m, p["ppd_options"]:[], ``(
+	    p["value"]:nil != nil
+	));
+	p["options"] = [];
+	p["ppd_options"] = [];
+	string manuf = p["vendor_ieee"]:"";
+	string model = p["device_ieee"]:"";
+	string vendor_db = (string)SCR::Read (.ppd.db.vendorname, manuf);
+	if (vendor_db == "" || vendor_db == nil)
+	    return nil;
+	string model_db = (string)
+	    SCR::Read (.ppd.db.modelname, [vendor_db, model]);
+	if (model_db == "" || model_db == nil)
+	    return nil;
+	Printerdb::loadFoomaticIfNeeded ();
+	p["manufacturer"]
+	    = Printerdb::foomatic[vendor_db, `label]:"";
+	p["model"]
+	    = Printerdb::foomatic[vendor_db, model_db, `label]:"";
+	y2debug ("PPD info: %1:%2", p["manufacturer"]:"", p["model"]:"");
+	return p;
+    }
+
+
+    /**
+      * Filter queue description map so that it contains only keys that
+      * are valid for both export map and autoinstallation map
+      * @param p map export or autoinstallation map
+      * @return a map the map with filtered some keys
+      */
+    define map<string,any> FilterQueueMap (map<string,any> p) ``{
+	list just_copy = ["name", "uri", "raw", "ff", "info", "location",
+	    "bannerstart", "bannerend", "accepting", "state", "allowusers",
+	    "denyusers"];
+	return filter (string k, any v, p, ``(contains (just_copy, k)));
+    }
+
+    /**
+      * Translate map to list of 2-entry maps with keys key and value
+      * @param options map of options option_name -> option_value
+      * @return a list of maps with keys "key" and "value"
+      */
+    define list<map> OptMap2OptList (map<string,any> options) ``{
+	return (list<map>)maplist (string k, any v, options, ``(
+	    $["key" : k, "value" : v]
+	));
+    }
+
+    /**
+      * Translate list of 2-entry maps with keys key and value to a map
+      * @param options a list of maps with keys "key" and "value"
+      * @return a map of options option_name -> option_value
+      */
+    define map<string,any> OptList2OptMap (list<map> options) ``{
+	map<string,any> ret = listmap (map m, options, ``{
+	    string key = m["key"]:"";
+	    any value = m["value"]:"";
+	    return $[key: value];
+	});
+	return filter (string k, any v, ret, ``(k != ""));
+    }
+
+    /**
+      * Translate the Export map to the autoinstallation map
+      * @param exp map the export map
+      * @return map the autoinstallation map
+      */
+    define map Export2AI (map exp) ``{
+	map ai = $[
+	    "spooler" : exp["spooler"]:"",
+	    "cups_installation" : exp["cups_installation"]:`server,
+	    "server_hostname" : exp["server_hostname"]:"",
+	    "default" : exp["spooler"]:"" == "cups"
+			&& exp["cups_installation"]:`server == `client
+			&& exp["server_default"]:false == true
+		? ""
+		: exp["default"]:"",
+	];
+	ai["printcap"] = maplist (map<string,any> p, exp["printcap"]:[], ``{
+	    map q = FilterQueueMap (p);
+	    if (! q["raw"]:false)
+	    {
+		map ppd_file_options = (map)
+		    SCR::Read (.ppd.file.options, [p["ppd"]:"", ""]);
+		list<map>optlist = ppd_file_options["data"]:[];
+		map<string,any> ppd_options = listmap (map i, optlist, ``{
+		    string key = i["name"]:"";
+		    return $[key : i["current"]:""];
+		});
+		ppd_options = (map<string,any>)filter (string k, any v, ppd_options, ``(
+		    k != "" && v != ""
+		));
+		ppd_options = (map<string,any>)union (ppd_options, p["ppd_options"]:$[]);
+		q = union (q, $[
+		    "manufacturer" : p["ppd_info", "manufacturer"]:"",
+		    "model" : p["ppd_info", "model"]:"",
+		    "nick" : p["ppd_info", "nick" ]:"",
+		    "options" : OptMap2OptList (p["options"]:$[]),
+		    "ppd_options" : OptMap2OptList (ppd_options),
+		]);
+	    }
+	    return q;
+	});
+//	ai["cups_server_settings"] = exp["cups_server_settings"]:$[];
+	return ai;
+    }
+
+    /**
+      * Translate the autoinstallation map to the Export map
+      * @param ai map the autoinstallation map
+      * @return a map the export map
+      */
+    define map<string, any> AI2Export (map ai) ``{
+	map<string, any> exp = $[
+	    "spooler" : ai["spooler"]:"",
+	    "cups_installation" : ai["cups_installation"]:`server,
+	    "server_hostname" : ai["server_hostname"]:"",
+	    "server_default" : ai["default"]:"" == "",
+	    "default" : ai["default"]:"",
+	];
+	exp["printcap"] = maplist (map<string,any> p, ai["printcap"]:[], ``{
+	    map q = FilterQueueMap (p);
+	    if (p["uri"]:"" != "class" && ! p["raw"]:false)
+	    {
+		if (! haskey (p, "manufacturer"))
+		{
+		    y2milestone ("Trying to import queue configured using the old database");
+		    p = OldQueue2NewQueue (p);
+		    if (p == nil)
+		    {
+			y2error ("Conversion failed, ignoring queue");
+			return nil;
+		    }
+		}
+		string vendor_db = (string)
+		    SCR::Read (.ppd.db.vendorname, p["manufacturer"]:"");
+		string model_db = (string)
+		    SCR::Read (.ppd.db.modelname, [vendor_db, p["model"]:""]);
+		Printerdb::loadFoomaticIfNeeded ();
+		string ppd_file = Printerdb::getFileFromNickName (
+		    vendor_db,
+		    model_db,
+		    p["nick"]:"",
+		    p["language"]:"");
+		if (ppd_file == "" || ppd_file == nil)
+		{
+		    y2warning ("PPD file not found, selecting the default PPD file for the printer model");
+		    y2debug ("VDB: %1, MDB: %2", vendor_db, model_db);
+		    ppd_file
+			= Printerdb::getAutoPpdFile (vendor_db, model_db);
+		    y2debug ("PPD file: %1", ppd_file);
+		    if (ppd_file == nil)
+			ppd_file = "";
+		}
+		if (ppd_file == "" || ppd_file == nil)
+		{
+		    y2error ("Couldn't find PPD file for queue %1, ignoring",
+			p["name"]:"");
+		    return nil;
+		}
+		ppd_file = (string)SCR::Read (.ppd.file.open,
+		    [ppd_file, SCR::Read (.target.tmpdir)]);
+		q["ppd"] = ppd_file;
+		q["ppd_info"] = Printerdb::PpdInfo (ppd_file);
+	    }
+	    q = union (q, $[
+		"type" : "yast2",
+		"options" : OptList2OptMap (p["options"]:[]),
+		"ppd_options" : OptList2OptMap (p["ppd_options"]:[]),
+	    ]);
+	    return q;
+	});
+	exp["printcap"] = filter (map p, exp["printcap"]:[], ``(p != nil));
+//	exp["cups_server_settings"] = ai["cups_server_settings"]:$[];
+	return exp;
+    }
+
+    any ret = nil;
+    string func = "";
+    map param = $[];
+
+    /* Check arguments */
+    if(size(WFM::Args()) > 0 && is(WFM::Args(0), string)) {
+	func = (string)WFM::Args(0);
+	if(size(WFM::Args()) > 1 && is(WFM::Args(1), map))
+	    param = (map)WFM::Args(1);
+    }
+    y2debug("func=%1", func);
+    y2debug("param=%1", param);
+
+    if(func == "Import") {
+	ret = Printer::Import(AI2Export (param));
+    }
+    /**
+      * Create a summary
+      * return string
+      */
+    else if(func == "Summary") {
+	ret = Printer::Summary ([`short]);
+    }
+    /**
+      * did configuration changed
+      * return boolean
+      */
+    else if (func == "GetModified") {
+	ret = Printer::dirty;
+    }
+    /**
+     * set configuration as changed
+     * return boolean
+     */
+    else if (func == "SetModified") {
+        Printer::dirty = true;
+        ret = true;
+    }
+    /**
+      * Reset configuration
+      * return map or list
+      */
+    else if (func == "Reset") {
+	Printer::Import($[]);
+	ret = $[];
+    }
+    /**
+      * Change configuration
+      * return symbol (i.e. `finish || `accept || `next || `cancel || `abort)
+      */
+    else if (func == "Change") {
+	if (Spooler::Get () == "unknown" || Spooler::Get () == "spooler"
+	    || Spooler::Get () == "")
+	{
+	    Spooler::Set ("cups");
+	}
+	// popup question
+	PackageSystem::InstallAll(["cups-drivers", "cups-drivers-stp", "cups"]);
+	Wizard::CreateDialog ();
+	Wizard::SetDesktopIcon("printer");
+	do
+	{
+	    ret = MainSequence ();
+	}
+	while (ret == `switch);
+	UI::CloseDialog ();
+    }
+    /**
+      * Return configuration data
+      * return map or list
+      */
+    else if (func == "Export") {
+	ret = Export2AI (Printer::Export());
+    }
+    else if (func == "Packages") {
+	ret = $[];
+    }
+    /**
+      * Write configuration data
+      * return boolean
+      */
+    else if (func == "Write") {
+        boolean progress_orig = Progress::set (false);
+	Printer::write_only = true;
+	Printer::save_all = true;
+	ret = Printer::Write();
+        Progress::set (progress_orig);
+    }
+    else if (func == "Read") {
+	ret = Printer::Read();
+    }
+
+    /* unknown function */
+    else {
+	y2error("unknown function: %1", func);
+	ret = false;
+    }
+
+	y2debug("ret=%1", ret);
+	y2milestone("printer auto finished");
+	y2milestone("----------------------------------------");
+
+	return ret;
+
+/* EOF */
+}
