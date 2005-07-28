@@ -631,6 +631,20 @@ ECHO_PID=$!
 	// Unknown printer AnYtHiNg
 	return sformat (_("Unknown printer %1"), uri);
     }
+
+   // replace string "%20" to " "
+   global define string getReplacedString(string device)
+   {
+    string visible_string=device;
+    while (issubstring (visible_string, "%20"))
+    {
+     visible_string = substring(visible_string,0, find(visible_string, "%20")) + " " + substring(visible_string, find(visible_string, "%20")+3);
+    }
+y2milestone("replace string %1", visible_string);
+    return visible_string;
+   }
+
+
     /**
      * Get nice name of some device.
      * @param dev device
@@ -647,7 +661,7 @@ ECHO_PID=$!
 	    if (serial != nil && serial != "")
 	    {
 		// printer port description (%1 si printer serial number
-		return sformat (_("USB port (%1)"), serial);
+		return getReplacedString(sformat (_("USB port (%1)"), serial));
 	    }
 	    string ret = "";
 	    foreach (list e, cups_usb_devices_info, ``{
@@ -657,15 +671,15 @@ ECHO_PID=$!
 	    if (detected)
 		ret = "USB";
 	    if (ret != "" && ret != nil)
-		return sformat ("%1 (%2)", ret, dev);
+		return getReplacedString(sformat ("%1 (%2)", ret, dev));
 	}
 	if (regexpmatch (dev, "[0-9a-fA-F:]{17,17}"))
 	{
 	    string nice_name = probed_bt_devices[dev]:"";
 	    if (nice_name != "")
-		return sformat ("%1 (%2)", nice_name, dev);
+		return getReplacedString(sformat ("%1 (%2)", nice_name, dev));
 	    else
-		return dev;
+		return getReplacedString(dev);
 	}
 	map descriptions = $[
 	    // Names of devices. Labels in dialog
@@ -719,7 +733,7 @@ ECHO_PID=$!
             // Names of devices. Labels in dialog
             "/dev/usb/lp15" : _("Sixteenth USB Printer (/dev/usb/lp15)"),
 	];
-	return descriptions[dev]:dev;
+	return getReplacedString(descriptions[dev]:dev);
     }
     /**
      * get paper size from system and returns `a4 for a4 or `letter for letter

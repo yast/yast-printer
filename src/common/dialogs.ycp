@@ -2081,27 +2081,53 @@ the current configuration."));
 // function to set the data to the hardware dialog
 // get inspired by summary and getAutoprobedSelectionBox when writing it
 void SetHWDialogData () {
-        list < map<string,any> > items = maplist (map i, Printer::autodetected, ``{
-                return  $[ "ID":Printerlib::getReplacedString(Printerlib::getUriDevice (i["uri"]:"")), "MODEL":i["device"]:"unknown" ];
+        list < map<string,any> > items = maplist (map i, Printer::printcap, ``{
+	string def = "";
+	if (i["name"]:"unknown" == Printer::default_queue) def="Default";
+y2internal("%1", i);
+                return  $[      "ID":Printerlib::getReplacedString(Printerlib::getUriDevice (i["uri"]:"")), 
+				"MODEL":i["ppd_info", "model"]:"unknown", 
+				"SPOOL":i["name"]:"unknown",  
+				"DESCR":("<b>" + i["info"]:"none" + "</b><br>" + 
+					_(" Connected As ") + i["location"]:"none") + "<br>" + 
+					_(" With Spool ") + i["name"]:"none",
+				"DEFAULT":def						];
         });
 
-y2internal("%1", getAutoprobedSelectionBox(0));
-y2internal("%1", Printer::Summary ([`nonew, `test, `state, `ipp_listen_modify]));
-y2internal("%1 - %2", Spooler::Get(), CUPS::InstallationType ());
+	items=(list < map<string,any> >) merge((list < map<string,any> >) items, (list < map<string,any> >) maplist (map i, Printer::autodetected, ``{
+y2internal("%1", i);
+	    if (isPrinterConfigured (i["vendor"]:"", i["device"]:"", i["uri"]:"", i["unique_key"]:""))
+	    {
+		y2milestone ("Skipping %1, already configured", i);
+		return nil;
+	    }
+	    else 
+		return  
+			$[      "ID":Printerlib::getReplacedString(Printerlib::getUriDevice (i["uri"]:"")),
+                                "MODEL":i["info"]:"unknown",
+                                "SPOOL":i["name"]:"not configured",
+                                "DESCR":i["location"]:_("This printer is not configured")    ];
+		
 
-list < map<string,any> > printers = [];
-
-integer pos=1;
-maplist(map<string,any> s, items, {
+	}));
+	items = (list < map<string,any> >) filter (any i, items, ``(i != nil));
+	list < map<string,any> > printers = [];
+y2internal("%1", items);
+	integer pos=0;
+	maplist(map<string,any> s, items, {
 		printers = add(printers,  $[ 
-						"id" : "hw" + pos, 
-						"rich_descr" : "Descr 1",
-						"table_descr":[ s["ID"]:"unknown" , s["MODEL"]:"unknown", "-" ] 
+						"id" : tostring(pos), 
+						"rich_descr" : s["DESCR"]:"none",
+						"table_descr":[  
+								s["SPOOL"]:"unknown", 
+								s["ID"]:"unknown" ,
+								s["MODEL"]:"unknown", 
+								s["DEFAULT"]:"" ]
 					   ]);
 		pos = pos + 1;
 		});
-
   WizardHW::SetContents ( printers );
+
 }
 
 
@@ -2123,34 +2149,50 @@ maplist(map<string,any> s, items, {
 	y2milestone ("Starting detected dialog");
 
 	// several functions dialog
-	WizardHW::CreateHWDialog (_("Printer Configuration"),
-getDetectedHelp (),
-//	    "help",
-	    [_("Device"), _("Model"), _("Queue Name")],
+	WizardHW::CreateHWDialog (_("Printer Configuration"), getDetectedHelp (),
+	    [_("Queue Name"),_("Device"), _("Model"),  _("Default Queue") ],
 	    [
 		[ `redetect, _("Restart Detection") ],
 		[ `default_q, _("Set Default") ],
+		[ `change_ipp_listen, _("Change IPP Listen")],
 	    ]);
 	SetHWDialogData ();
 
 	WizardHW::SetSelectedItem (Printer::runAutoprobedListDialog__current);
 	boolean cont = true;
+	symbol ret=nil;
 	while (cont)
 	{
 	    map<string,any> hw_ret = WizardHW::WaitForEvent ();
 	    map event = hw_ret["event"]:$[];
 	    string selected = hw_ret["selected"]:"";
-	    any ret = event["ID"]:nil;
-	    if (ret == `delete)
+	    ret = (symbol) event["ID"]:nil;
+		Printer::selectPrinter(tointeger(selected));
+	if (ret == `delete)
 	    {
 	        import "Popup";
-	        Popup::Message (sformat ("Deleting %1", selected));
+			    if (Popup::YesNo (sformat (_("Really delete printer %1?"), Printer::printer["name"]:""))) Printer::deletePrinter ();
+		SetHWDialogData();
+		continue;
 	    }
 // TODO handle all events here
 	    else
+		if (ret == `default_q) 
+			{
+			Printer::setDefaultPrinter ();
+			ret = `restart_button;
+			}
+		if (ret == `add) 
+			{
+			Printer::selectPrinter(-1);
+			ret = `configure_button;
+			}
+			else if (ret == `edit) ret = `edit_button;
+			 else if (ret == `redetect) ret = `restart_button;
 	        cont = false;
+y2internal("return %1", ret);
 	}
-	return `next; // FIXME
+	return ret; // FIXME
 /*
 	Printer::confmode = `det;
 	term contents = Wizard_hw::DetectedContent (
@@ -2200,18 +2242,15 @@ getDetectedHelp (),
 	    else if (`next == ret) // finish
 	    {
 		break;
-	    }
+	    
 	    else if (`configure_button == ret)
 	    {
 		if (Spooler::Get () == "cups"
 		    && CUPS::InstallationType () == `client)
 		{
 		    // popup
-		    boolean b = Popup::YesNo (_("
-Your system is configured as a CUPS client only.
-Setting a queue will discard these settings.
-
-Continue?"));
+		    boolean b = Popup::YesNo (
+			_(" Your system is configured as a CUPS client only.  Setting a queue will discard these settings.  Continue?"));
 		    if (! b)
 			continue;
 		    else
@@ -2220,8 +2259,7 @@ Continue?"));
 		    }
 		}
 		Printer::conf_detected = true;
-		Printer::runAutoprobedListDialog__current = (integer)
-		    UI::QueryWidget (`id (`detected_selbox), `CurrentItem);
+		Printer::runAutoprobedListDialog__current = (integer) UI::QueryWidget (`id (`detected_selbox), `CurrentItem);
 		if (Printer::runAutoprobedListDialog__current == nil)
 		{
 		    Printer::runAutoprobedListDialog__current = -1;
@@ -2251,8 +2289,7 @@ inhibits the normal non-PTAL access.
 
 Set up this device for printing only?");
 
-			if (! Popup::YesNo (message))
-			    continue;
+			if (! Popup::YesNo (message)) continue;
 		    }
 		    else if (Printer::printer["detected", "ptal_manual"]:false
 			&& Printer::hp_driver == "hp")
