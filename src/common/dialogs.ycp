@@ -33,7 +33,7 @@
     include "printer/helps.ycp";
     include "printer/misc.ycp";
 
-
+list < map <string, any> > conf_unconf_printers = [];
     /**
       * Read settings dialog
       * @return `abort if aborted and `next otherwise
@@ -2084,18 +2084,16 @@ void SetHWDialogData () {
         list < map<string,any> > items = maplist (map i, Printer::printcap, ``{
 	string def = "";
 	if (i["name"]:"unknown" == Printer::default_queue) def="Default";
-y2internal("%1", i);
                 return  $[      "ID":Printerlib::getReplacedString(Printerlib::getUriDevice (i["uri"]:"")), 
 				"MODEL":i["ppd_info", "model"]:"unknown", 
 				"SPOOL":i["name"]:"unknown",  
 				"DESCR":("<b>" + i["info"]:"none" + "</b><br>" + 
 					_(" Connected As ") + i["location"]:"none") + "<br>" + 
 					_(" With Spool ") + i["name"]:"none",
-				"DEFAULT":def						];
+				"DEFAULT":def ];
         });
 
 	items=(list < map<string,any> >) merge((list < map<string,any> >) items, (list < map<string,any> >) maplist (map i, Printer::autodetected, ``{
-y2internal("%1", i);
 	    if (isPrinterConfigured (i["vendor"]:"", i["device"]:"", i["uri"]:"", i["unique_key"]:""))
 	    {
 		y2milestone ("Skipping %1, already configured", i);
@@ -2106,14 +2104,15 @@ y2internal("%1", i);
 			$[      "ID":Printerlib::getReplacedString(Printerlib::getUriDevice (i["uri"]:"")),
                                 "MODEL":i["info"]:"unknown",
                                 "SPOOL":i["name"]:"not configured",
-                                "DESCR":i["location"]:_("This printer is not configured")    ];
+                                "DESCR":i["location"]:_("This printer is not configured") ];
 		
 
 	}));
 	items = (list < map<string,any> >) filter (any i, items, ``(i != nil));
 	list < map<string,any> > printers = [];
-y2internal("%1", items);
 	integer pos=0;
+conf_unconf_printers = items;
+y2internal("%1", items);
 	maplist(map<string,any> s, items, {
 		printers = add(printers,  $[ 
 						"id" : tostring(pos), 
@@ -2187,10 +2186,39 @@ y2internal("%1", items);
 			Printer::selectPrinter(-1);
 			ret = `configure_button;
 			}
-			else if (ret == `edit) ret = `edit_button;
+			else if (ret == `edit) 
+				{
+				 if (Printer::printer == $["type":"yast2"]) 
+					{
+					  integer from_detect = -1;
+					  integer count = 0;
+					  string prn_id="";
+					foreach(map<string, any> temp_printer, Printer::Detect(), {
+						string temp_string = splitstring(temp_printer["uri"]:"", ":")[1]:"";
+                                              if (tointeger(selected) >= count)
+						{
+						if (temp_string == conf_unconf_printers[tointeger(selected), "ID"]:"")
+						 {
+						   from_detect = from_detect + 1;
+						   break;
+						 }
+						if (temp_string != prn_id)
+							{
+							from_detect = from_detect+1;
+							prn_id = temp_printer["ID"]:"";
+							}
+						count=count + 1;
+						}
+
+						});
+					 Printer::editDetected(Printer::Detect()[from_detect]:$[]);
+
+					 y2milestone("Configuring detected, non-configured printer");
+					}
+				 ret = `edit_button;
+				}
 			 else if (ret == `redetect) ret = `restart_button;
 	        cont = false;
-y2internal("return %1", ret);
 	}
 	return ret; // FIXME
 /*
