@@ -707,11 +707,11 @@ y2error ("File: %1", file);
 		// check box
 		_("Print &Form Feed between Jobs"), ff);
 
-	term aa_insert = allow_auto
-	    ? `CheckBox (`id (`auto), `opt (`notify, `hstretch),
-		// check box
-		_("Automatically Propose &Multiple Queues"), auto_propose)
-	    : `VSpacing (0);
+//	term aa_insert = allow_auto
+//	    ? `CheckBox (`id (`auto), `opt (`notify, `hstretch),
+//		// check box
+//		_("Automatically Propose &Multiple Queues"), auto_propose)
+//	    : `VSpacing (0);
 
 	term contents = `VBox (
 	    `TextEntry (`id (`name), `opt (`hstretch),
@@ -731,9 +731,9 @@ y2error ("File: %1", file);
 	    `VSpacing (0.5),
 	    raw_insert,
 	    ff_insert,
-	    `VSpacing (allow_auto ? 0.5 : 0),
-	    aa_insert,
-	    `VSpacing (0.5)
+	    `VSpacing (allow_auto ? 0.5 : 0)
+//	    aa_insert,
+//	    `VSpacing (0.5)
 	);
 	contents = `HBox (`HSpacing (4),
 	    `VBox (
@@ -1477,7 +1477,7 @@ and test the queue after the printer model is selected."));
 			if (Popup::YesNo (_("If you forbid editing this queue,\nyou will not be able to change its settings\nusing YaST2. Continue?")))
 			{
 			    Printer::printer["type"] = "non-yast-now";
-			    ret = `update;
+		    ret = `update;
 			}
 			else
 			{
@@ -2111,8 +2111,7 @@ void SetHWDialogData () {
 	items = (list < map<string,any> >) filter (any i, items, ``(i != nil));
 	list < map<string,any> > printers = [];
 	integer pos=0;
-conf_unconf_printers = items;
-y2internal("%1", items);
+	conf_unconf_printers = items;
 	maplist(map<string,any> s, items, {
 		printers = add(printers,  $[ 
 						"id" : tostring(pos), 
@@ -2183,11 +2182,44 @@ y2internal("%1", items);
 			}
 		if (ret == `add) 
 			{
-			Printer::selectPrinter(-1);
-			ret = `configure_button;
+			if (true == Popup::AnyQuestion( Label::WarningMsg(), 
+							// message box : configure new queue or add a new printer
+							"Do want to configure new queue ?", "Yes", "No", `focus_no )) {
+                                          integer from_detect = -1;
+                                          integer count = 0;
+                                          string prn_id="";
+                                        foreach(map<string, any> temp_printer, Printer::Detect(), {
+                                                string temp_string = splitstring(temp_printer["uri"]:"", ":")[1]:"";
+                                              if (tointeger(selected) >= count)
+                                                {
+                                                if (temp_string == conf_unconf_printers[tointeger(selected), "ID"]:"")
+                                                 {
+                                                   from_detect = from_detect + 1;
+                                                   break;
+                                                 }
+                                                if (temp_string != prn_id)
+                                                        {
+                                                        from_detect = from_detect+1;
+                                                        prn_id = temp_printer["ID"]:"";
+                                                        }
+                                                count=count + 1;
+                                                }
+
+                                                });
+					 map <string, any> tmp_map = Printer::Detect()[from_detect]:$[];
+                                         Printer::editDetected(tmp_map);
+                                         y2milestone("Configuring detected, non-configured printer");
+                                 ret = `edit_button;
+							}
+				else
+				 {
+				Printer::selectPrinter(-1);
+				ret = `configure_button;
+				}
 			}
-			else if (ret == `edit) 
+			if (ret == `edit) 
 				{
+y2internal("%1", Printer::printer);
 				 if (Printer::printer == $["type":"yast2"]) 
 					{
 					  integer from_detect = -1;
@@ -2211,8 +2243,8 @@ y2internal("%1", items);
 						}
 
 						});
+					y2internal("%1", Printer::Detect()[from_detect]:$[]);
 					 Printer::editDetected(Printer::Detect()[from_detect]:$[]);
-
 					 y2milestone("Configuring detected, non-configured printer");
 					}
 				 ret = `edit_button;
