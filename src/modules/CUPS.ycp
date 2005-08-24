@@ -27,6 +27,7 @@ import "Printerlib";
 import "Report";
 import "Service";
 import "SuSEFirewall";
+import "Arch";
 
 // local variables
 
@@ -392,13 +393,13 @@ global list<string> getBannerList () {
  */
 global list<list<string> > DetectCupsUsbDevicesInfo () {
     list<list<string> > cups_usb_devices = [];
-    if (SCR::Read (.target.size, "/usr/lib/cups/backend/usb") <= 0)
+    if (SCR::Read (.target.size, Arch::i386() ? "/usr/lib/cups/backend/usb" : "/usr/lib64/cups/backend/usb") <= 0)
     {
 	Printerlib::SetCupsUsbDevicesInfo (cups_usb_devices);
 	return [];
     }
     map out = (map)SCR::Execute (.target.bash_output,
-	"/usr/lib/cups/backend/usb");
+	Arch::i386() ? "/usr/lib/cups/backend/usb" : "/usr/lib64/cups/backend/usb");
     list<string> lines = splitstring (out["stdout"]:"", "\n");
     lines = filter (string l, lines, {
 	return l != "" && l != nil;
@@ -624,7 +625,7 @@ global list<string> GetSupportedUriTypes () {
 	    "class",
 	];
 	list<string> backends
-	    = (list<string>)SCR::Read (.target.dir, "/usr/lib/cups/backend");
+	    = (list<string>)SCR::Read (.target.dir, Arch::i386 ? "/usr/lib/cups/backend" : "/usr/lib64/cups/backend" );
 	if (backends != nil)
 	{
 	    supported_uri_types = (list<string>)merge (
