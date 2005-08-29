@@ -2147,16 +2147,17 @@ void SetHWDialogData () {
 	y2milestone ("Starting detected dialog");
 
 	// several functions dialog
-	WizardHW::CreateHWDialog (_("Printer Configuration"), getDetectedHelp (),
+    	WizardHW::CreateHWDialog (_("Printer Configuration"), getComplexHelp (),
 	    [_("Queue Name"),_("Device"), _("Model"),  _("Default Queue") ],
 	    [
 		[ `redetect, _("Restart Detection") ],
 		[ `default_q, _("Set Default") ],
-		[ `change_ipp_listen, _("Change IPP Listen")],
+		[ `change_ipp_listen, _("Change IPP Listen")], 
 	    ]);
 	SetHWDialogData ();
 
 	WizardHW::SetSelectedItem (Printer::runAutoprobedListDialog__current);
+
 	boolean cont = true;
 	symbol ret=nil;
 	while (cont)
@@ -2168,8 +2169,7 @@ void SetHWDialogData () {
 		Printer::selectPrinter(tointeger(selected));
 	if (ret == `delete)
 	    {
-	        import "Popup";
-			    if (Popup::YesNo (sformat (_("Really delete printer %1?"), Printer::printer["name"]:""))) Printer::deletePrinter ();
+			    if ( (conf_unconf_printers[tointeger(selected), "SPOOL"]:"" != "not configured") && Popup::YesNo (sformat (_("Really delete printer %1?"), Printer::printer["name"]:""))) Printer::deletePrinter ();
 		SetHWDialogData();
 		continue;
 	    }
@@ -2182,7 +2182,7 @@ void SetHWDialogData () {
 			}
 		if (ret == `add) 
 			{
-			if (true == Popup::AnyQuestion( Label::WarningMsg(), 
+			if ( size(Printer::printcap)>0 && true == Popup::AnyQuestion( Label::WarningMsg(), 
 							// message box : configure new queue or add a new printer
 							"Do want to configure new queue ?", "Yes", "No", `focus_no )) {
                                           integer from_detect = -1;
@@ -2219,7 +2219,6 @@ void SetHWDialogData () {
 			}
 			if (ret == `edit) 
 				{
-y2internal("%1", Printer::printer);
 				 if (Printer::printer == $["type":"yast2"]) 
 					{
 					  integer from_detect = -1;
@@ -2243,7 +2242,6 @@ y2internal("%1", Printer::printer);
 						}
 
 						});
-					y2internal("%1", Printer::Detect()[from_detect]:$[]);
 					 Printer::editDetected(Printer::Detect()[from_detect]:$[]);
 					 y2milestone("Configuring detected, non-configured printer");
 					}
