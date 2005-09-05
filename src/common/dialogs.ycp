@@ -2080,6 +2080,15 @@ the current configuration."));
 // function to set the data to the hardware dialog
 // get inspired by summary and getAutoprobedSelectionBox when writing it
 void SetHWDialogData () {
+        string new_spooler = Spooler::Get ();
+        if (new_spooler == "cups" && CUPS::InstallationType () == `client)
+        {
+            new_spooler = "cups-client";
+        }
+y2milestone("%1", new_spooler);
+  list < map<string,any> > printers = [];
+  if (new_spooler == "cups")
+      {
         list < map<string,any> > items = maplist (map i, Printer::printcap, ``{
 	string def = "";
 	if (i["name"]:"unknown" == Printer::default_queue) def="Default";
@@ -2110,7 +2119,6 @@ void SetHWDialogData () {
 
 	}));
 	items = (list < map<string,any> >) filter (any i, items, ``(i != nil));
-	list < map<string,any> > printers = [];
 	integer pos=0;
 	conf_unconf_printers = items;
 	maplist(map<string,any> s, items, {
@@ -2125,6 +2133,18 @@ void SetHWDialogData () {
 					   ]);
 		pos = pos + 1;
 		});
+       } else {
+	printers = [ $[
+                                                "id" : "0",
+                                                "rich_descr" : "<b>" + CUPS::server_hostname + "</b><br>" 
+						+ ((CUPS::server_default == true) ? _("Default Queue") : (_(" With Spool ") + Printer::default_queue)),
+                                                "table_descr":[
+                                                                "CUPS",
+                                                                "",
+                                                                "",
+                                                                "" ]
+                                           ] ];
+	}
   WizardHW::SetContents ( printers );
 
 }
@@ -2162,8 +2182,11 @@ void SetHWDialogData () {
 
 	WizardHW::SetSelectedItem (Printer::runAutoprobedListDialog__current);
 
+
+
 	boolean cont = true;
 	symbol ret=nil;
+        string new_spooler = Spooler::Get ();
 	while (cont)
 	{
 	    map<string,any> hw_ret = WizardHW::WaitForEvent ();
@@ -2171,9 +2194,14 @@ void SetHWDialogData () {
 	    string selected = hw_ret["selected"]:"";
 	    ret = (symbol) event["ID"]:nil;
 		Printer::selectPrinter(tointeger(selected));
+        if (new_spooler == "cups" && CUPS::InstallationType () == `client)
+        {
+            new_spooler = "cups-client";
+        }
 	if (ret == `delete)
 	    {
-			    if ( (conf_unconf_printers[tointeger(selected), "SPOOL"]:"" != "not configured") && Popup::YesNo (sformat (_("Really delete printer %1?"), Printer::printer["name"]:""))) Printer::deletePrinter ();
+		if (new_spooler == "cups-client") {CUPS::cups_installation=`server;new_spooler="cups";}
+			else if ( (conf_unconf_printers[tointeger(selected), "SPOOL"]:"" != "not configured") && Popup::YesNo (sformat (_("Really delete printer %1?"), Printer::printer["name"]:""))) Printer::deletePrinter ();
 		SetHWDialogData();
 		continue;
 	    }
@@ -2186,7 +2214,9 @@ void SetHWDialogData () {
 			}
 		if (ret == `add) 
 			{
-			if ( size(Printer::printcap)>0 && true == Popup::AnyQuestion( Label::WarningMsg(), 
+			if (new_spooler == "cups")
+			 {
+			  if ( size(Printer::printcap)>0 && true == Popup::AnyQuestion( Label::WarningMsg(), 
 							// message box : configure new queue or add a new printer
 							"Do want to configure new queue ?", "Yes", "No", `focus_no )) {
                                           integer from_detect = -1;
@@ -2220,8 +2250,11 @@ void SetHWDialogData () {
 				Printer::selectPrinter(-1);
 				ret = `configure_button;
 				}
+			 } else continue; 
 			}
 			if (ret == `edit) 
+			    {
+			   if (new_spooler == "cups")
 				{
 				 if (Printer::printer == $["type":"yast2"]) 
 					{
@@ -2250,7 +2283,8 @@ void SetHWDialogData () {
 					 y2milestone("Configuring detected, non-configured printer");
 					}
 				 ret = `edit_button;
-				}
+				} else ret=`connection_cups;
+			     }
 			 else if (ret == `redetect) ret = `restart_button;
 	        cont = false;
 	}
