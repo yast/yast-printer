@@ -1,0 +1,801 @@
+/**
+ * File:
+ *   modules/Printerlib.ycp
+ *
+ * Package:
+ *   Printer library.
+ *
+ * Summary:
+ *   Some utility functions for printer conf. tools.
+ *
+ * Authors:
+ *   Petr Blahos <pblahos@suse.cz>
+ *
+ * $Id$
+ *
+ * Printer library exported functions. What else?!?
+ */
+
+{
+module "Printerlib";
+
+textdomain "printer";
+
+import "Directory";
+import "Mode";
+import "Popup";
+import "Report";
+import "String";
+import "Arch";
+include "printer/texts.ycp";
+
+
+// local variables
+
+/**
+ * System paper size, taken from system locales. 0 for a4 and 1 for
+ * letter. -1 for unknown. Use function Printerlib::getDefaultPaperSize
+ * for accessing this function.
+ */
+symbol paper_size = nil;
+
+/**
+ * Info about USB devices got through CUPS backend
+ * Contains lists of [<cups_device>, <model_name>, <unix_device>]
+ */
+list<list<string> > cups_usb_devices_info = [];
+
+// global variables
+
+/**
+ * set to true after function Read had been called.
+ */
+global boolean proposal_valid = false;
+
+/**
+ * Base directory of printconf's data files
+ */
+global string baseDataDir = Directory::datadir + "/printer";
+
+/**
+ * list of HP all-in-one models
+ */
+list<string> hp_all_in_one = nil;
+
+/**
+ * List of probed bluetooth devices (in order to keep their names)
+ */
+map<string,string> probed_bt_devices = $[];
+
+// local functions
+
+
+
+// global functions
+
+/**
+ * Set the USB devices info got through the CUPS backend
+ * @param di a list of found CUPS devices
+ */
+global define void SetCupsUsbDevicesInfo (list<list<string> > di) {
+    cups_usb_devices_info = di;
+}
+
+/**
+ * Return the currently stored CUPS USB devices info
+ */
+global define list<list<string> > GetCupsUsbDevicesInfo () {
+    return cups_usb_devices_info;
+}
+
+/**
+ * Get info about device connected to USB port from CUPS backed
+ * @param device string USB device to examine
+ * @return a list containing CUPS device name, Printer model and
+ *   UNIX-like device
+ */
+global list<string> GetCupsUsbDeviceInfo (string device) {
+    integer pos = find (device, "lp");
+    string dev_num = substring (device, pos + 2);
+    list<string> ret = [];
+    if (dev_num != "")
+    {
+	integer num = tointeger (dev_num);
+	ret = cups_usb_devices_info[num]:[];
+    }
+    y2milestone ("USB backend for device %1 detected %2", device, ret);
+    return ret;
+}
+
+/**
+ * Get the list of all HP all-in-one models
+ */
+global define list<string> GetHPAllInOneModels () {
+    if (hp_all_in_one == nil)
+    {
+	string file = (string)SCR::Read (.target.string,
+	    baseDataDir + "/hp_all_in_one_model_list");
+	list<string> models = splitstring (file, "\n");
+	models = filter (string m, models, {return m != "";});
+	models = maplist (string m, models, {
+	    m =(string) SCR::Read (.ppd.db.modelname, ["HP", m]);
+	    return m;
+	});
+	hp_all_in_one = models;
+	y2debug ("Known HP all-in-one devices: %1", hp_all_in_one);
+    }
+    return hp_all_in_one;
+}
+
+/**
+ * Inform user that function isn't available during preparatino of AI
+ * via a popup
+ */
+global define void DisplayUnavailableAIPopup () {
+    // popup message
+    Popup::Message (_("This function is not available during
+preparation for autoinstallation."));
+}
+
+    /**
+     * Sends sequence to wake up Epson stylus usb printers.
+     * @see <a href="http://sdb.suse.de/en/sdb/html/jsmeix_print-stcXXXusb.html">Installing an Epson Stylus Color Printer on USB</a>
+     * @param device Device to send sequence to. Should be /dev/usblp? (or /dev/usb/lp?)
+     */
+    define void wakeUpEpson (string device) ``{
+	string sequence =
+	    "\"\\000\\000\\000\\033\\001\\100\\105\\112\\114\\040\\061\\062\\070\\064\\056\\064\\012\\100\\105\\112\\114\\040\\040\\040\\040\\040\\012\"";
+	if (haskey ((map)SCR::Read (.proc.modules), "usblp"))
+	    SCR::Execute (.target.bash, sformat ("
+MAIN_PID=$$
+{/bin/echo -en %1 > %2 ; kill MAIN_PID} &
+ECHO_PID=$!
+{sleep 2s ; kill $ECHO_PID &>/dev/null ; } &", sequence, device));
+    }
+
+    /**
+      * Get list of all PTAL devices
+      * @return a list of PTAL devices
+      */
+    global define list<list<string> > getPtalDevices () ``{
+	SCR::Execute (.target.bash, "test -f /usr/sbin/ptal-init && /usr/sbin/ptal-init setup-usb >/dev/null 2>&1");
+	SCR::Execute (.target.bash, "test -f /etc/init.d/ptal && /etc/init.d/ptal restart");
+        if (SCR::Read (.target.size, Arch::i386() ? "/usr/lib/cups/backend/ptal" : "/usr/lib64/cups/backend/ptal") <= 0)
+            return [];
+        map out = (map)SCR::Execute (.target.bash_output,
+            Arch::i386() ? "/usr/lib/cups/backend/ptal" : "/usr/lib64/cups/backend/ptal" );
+        list<string> lines = splitstring (out["stdout"]:"", "\n");
+        lines = filter (string l, lines, ``(l != "" && l != nil));
+	list<list<string> > ptal_devs = (list<list<string> >) maplist (string l, lines, ``{
+            string ptal_model = regexpsub (l, "[^\"]*\"([^\"]*)\".*", "\\1");
+            string ptal_dev = regexpsub (l, "direct ptal:([^ ]*) .*", "\\1");
+	    if (ptal_dev != nil && ptal_model != nil)
+		return [ptal_dev, ptal_model];
+	    else
+		return nil;
+	});
+	ptal_devs = filter (list<string> pd, ptal_devs, ``(pd != nil));
+	ptal_devs = maplist (list<string> pd, ptal_devs, {
+	    pd[1] = (string)SCR::Read (.ppd.db.modelname, ["HP", pd[1]:""]);
+	    return pd;
+	});
+	y2milestone ("ptal devices: %1", ptal_devs);
+	return ptal_devs;
+    }
+
+    /**
+      * Get list of all HPLIP devices
+      * @return a list of HPLIP devices
+      */
+    global define list<list<string> > getHplipDevices () ``{
+	SCR::Execute (.target.bash, "test -f /etc/init.d/hplip && /etc/init.d/hplip restart");
+        if (SCR::Read (.target.size, Arch::i386() ? "/usr/lib/cups/backend/hp" : "/usr/lib64/cups/backend/hp" ) <= 0)
+            return [];
+        map out = (map)SCR::Execute (.target.bash_output,
+            Arch::i386() ? "/usr/lib/cups/backend/hp" : "/usr/lib64/cups/backend/hp" );
+        list<string> lines = splitstring (out["stdout"]:"", "\n");
+        lines = filter (string l, lines, ``(l != "" && l != nil));
+	list<list<string> > hp_devs = (list<list<string> >) maplist (string l, lines, ``{
+            string hp_model = regexpsub (l, "[^\"]*\"([^\"]*)\".*", "\\1");
+            string hp_dev = regexpsub (l, "direct hp:([^ ]*) .*", "\\1");
+	    if (hp_dev != nil && hp_model != nil)
+		return [hp_dev, hp_model];
+	    else
+		return nil;
+	});
+	hp_devs = filter (list<string> pd, hp_devs, ``(pd != nil));
+	hp_devs = maplist (list<string> pd, hp_devs, {
+	    pd[1] = (string)SCR::Read (.ppd.db.modelname, ["HP", pd[1]:""]);
+	    return pd;
+	});
+	y2milestone ("hp devices: %1", hp_devs);
+	return hp_devs;
+    }
+
+    /**
+      * Get URI of ptal device
+      * @param model string device model identification
+      * @return ptal uri or nil if no ptal device found
+      */
+    global define string getPtalUri (string model) ``{
+	list<list<string> > devices = getPtalDevices ();
+	string ret = nil;
+	foreach (list d, devices, ``{
+	    if (d[1]:"" == model)
+		ret = sformat ("ptal:%1", d[0]:"");
+        });
+	return ret;
+    }
+
+    /**
+      * Get URI of HPLIP device
+      * @param model string device model identification
+      * @return ptal uri or nil if no ptal device found
+      */
+    global define string getHplipUri (string model) ``{
+	list<list<string> > devices = getHplipDevices ();
+	string ret = nil;
+	foreach (list d, devices, ``{
+	    if (d[1]:"" == model)
+		ret = sformat ("hp:%1", d[0]:"");
+        });
+	return ret;
+    }
+
+    /**
+     * Calls escputil to find out exact model of Epson stylus printer.
+     * @param device USB Device to examine.
+     * @return string Printer model. If unsuccessful, returns "Stylus".
+     */
+    global define string getEpsonUsbModel (string device) ``{
+	// we must wake Epson first
+	wakeUpEpson (device);
+	// now we can run escputil
+
+	string model = GetCupsUsbDeviceInfo (device)[1]:"";
+	if (substring (model, 0, 6) == "EPSON ")
+	    model = substring (model, 6);
+	return model;
+    }
+
+    /**
+     * Test device by sending hello world to it. See test_device for details.
+     * @param dev device to test (/dev/lp0)
+     */
+    global define void testDevice (string dev) ``{
+        if (Mode::config ())
+        {
+            DisplayUnavailableAIPopup ();
+            return;
+        }
+	Popup::Message (sformat (textTestDevice (), 10));
+	integer tst = (integer)SCR::Execute (.target.bash,
+				   sformat ("/usr/lib/YaST2/bin/test_device \"\\rHello, world\\r\\f\" %1 %2", dev, 10));
+
+	Popup::Message (textTestDeviceResult (tst));
+    };
+    /**
+      * Test remote queue accessibility if username and password needed
+      * @param wg string workgroup for samba test
+      * @param hname string hostname of remote host
+      * @param rname string name of remote queue
+      * @param user string username to access remote queue
+      * @param pass string password to access remote queue
+      * @param type string "samba" or "novell"
+      */
+    global define void testRemoteUP (string wg, string hname, string rname, string user, string pass, string type) ``{
+	if (Mode::config ())
+	{
+	    DisplayUnavailableAIPopup ();
+	    return;
+	}
+	UI::OpenDialog (`opt (`decorated), `Label (sformat (textTestRemotePrinter (false), hname)));
+	map test_return = $[];
+	if ("samba" == type)
+	    test_return = (map)SCR::Execute (.target.bash_output, sformat ("/usr/lib/YaST2/bin/test_remote_smb \"%1\" \"%2\" \"%3\" \"%4\" \"%5\" 5", wg, hname, rname, user, pass));
+	else if ("novell" == type)
+	    test_return = (map)SCR::Execute (.target.bash_output, sformat ("/usr/lib/YaST2/bin/test_remote_novell \"%1\" \"%2\" \"%3\" \"%4\" 5", hname, rname, user, pass));
+	integer tst = test_return["exit"]:0;
+	string message = textTestRemotePrinterResult (tst);
+	if (4 == tst)
+	{
+	    message = message + test_return["stdout"]:"";
+	}
+	UI::CloseDialog ();
+	Popup::Message (message);
+    };
+
+    /**
+     * Test of the connection. See test_remote_lpd for details.
+     * @param hname host name
+     * @param rname name of remote queue
+     * @param type queue type
+     * @param port TCP port
+     */
+    global define void testRemote (string hname, string rname, string type, integer port) ``{
+        if (Mode::config ())
+        {
+	    DisplayUnavailableAIPopup ();
+            return;
+        }
+	boolean ping_only = "lpd" != type && "ipp" != type && "socket" != type && "ipp_server" != type;
+	UI::OpenDialog (`opt (`decorated), `Label (sformat (textTestRemotePrinter (ping_only), hname)));
+
+	string test_command = sformat ("/bin/ping -c 1 \"%1\"", hname);
+	if (!ping_only)
+	{
+	    if (type == "ipp_server")
+		test_command = sformat ("/usr/lib/YaST2/bin/test_remote_ipp \"%1\" \"%2\" 5", hname, "unexistent");
+	    else if (type == "ipp")
+		test_command = sformat ("/usr/lib/YaST2/bin/test_remote_ipp \"%1\" \"%2\" 5", hname, rname);
+	    else if (type == "socket")
+		test_command = sformat ("/usr/lib/YaST2/bin/test_remote_socket \"%1\" %2 5", hname, port);
+	    else
+		test_command = sformat ("/usr/lib/YaST2/bin/test_remote_lpd \"%1\" \"%2\" 5", hname, rname);
+	}
+
+	map test_return = (map)SCR::Execute (.target.bash_output, test_command);
+	integer tst = test_return["exit"]:0;
+	if (4 == tst && type == "ipp_server")
+	    tst = 0;
+	string message = textTestRemotePrinterResult (tst);
+	if (4 == tst)
+	    {
+		message = message + test_return["stdout"]:"";
+	    }
+	UI::CloseDialog ();
+	Popup::Message (message);
+    }
+
+
+    /**
+     * Printer uri = type://device
+     * where type is one of parallel, serial, usb, file, lpd, novell,
+     *   samba, ipp, socket, http
+     * and device is depending on the type. For parallel, serial, usb, file
+     * it is file name. For lpd it is server/queue.
+     * For socket it is server, for ipp, http it is server/path_to_queue, for
+     * samba, novell it is user:pass@server/queuename (user, pass is
+     * optional).
+     *
+     * Get type of printer from uri. (First part of uri before colon)
+     * @param uri printer uri (file://tmp/pr.tmp, lpd://d11.suse.de)
+     * @return string type of printer or ""
+     */
+    global define string getUriType (string uri) ``{
+	if ("" == uri || nil == uri)
+	    return "";
+	string ss = String::FirstChunk (uri, ":");
+	if ("http" == ss)
+	    ss = "ipp";
+	return ss;
+    }
+    /**
+     * Get printer device from its uri.
+     * @param uri printer uri
+     * @return string device
+     * @see getUriType
+     */
+    global define string getUriDevice (string uri) ``{
+	if ("" == uri || nil == uri || nil == findfirstof (uri, ":"))
+	    return "";
+	string uri_type = getUriType (uri);
+	integer i = findfirstof (uri, ":");
+	if (nil == i)
+	    return "";
+	uri = substring (uri, i + 1);
+	if (uri_type == "bluetooth")
+	{
+	    uri = filterchars (uri, "0123456789aAbBcCdDeEfF");
+	    uri = regexpsub (uri, "(..)(..)(..)(..)(..)(..)",
+		"\\1:\\2:\\3:\\4:\\5:\\6");
+	    return uri;
+	}
+	if (uri_type != "usb")
+	    while ("//" == substring (uri, 0, 2))
+		uri = substring (uri, 1);
+	i = findfirstof (uri, "?");
+	if (nil != i && uri_type != "usb")
+	    uri = substring (uri, 0, i);
+	return uri;
+    }
+    /**
+     * Get printer remote queue. Input to this function must be valid
+     * because it just takes the part of uri after the last slash.
+     * Should be used for: lpd, novell, samba, http/ipp.
+     * @param uri printer uri
+     * @return remote queue
+     * @see getUriType
+     */
+    global define string getUriRemoteQueue (string uri) ``{
+	if (nil == uri || "" == uri)
+	    return "";
+	integer i = findfirstof (uri, "@");
+	if (i != nil)
+	    uri = substring (uri, i + 1);
+	i = findfirstof (uri, "/");
+	if (nil == i)
+		return "";
+	string s = substring (uri, i + 1);
+        if (substring (s, 0, 1) == "/")
+            s = substring (s, 1);
+        i = findfirstof (s, "/");
+        if (nil == i)
+            return s;
+	s = substring (s, i + 1);
+	i = findfirstof (s, "/");
+	if (getUriType (uri) == "samba" && i != nil)
+	{
+	    s = substring (s, i + 1);
+	}
+        return s;
+    }
+    /**
+      * Get port number from URI.
+      * @param uri printer uri
+      * @return integer port
+      */
+    global define integer getUriPort (string uri) ``{
+	integer port = 0;
+        string dev = getUriDevice (uri);
+        if ("" == dev)
+            return 0;
+        dev = substring (dev, 1);
+        // is there a user@pass?
+        integer i = findfirstof (dev, "@");
+        if (nil != i)
+            dev = substring (dev, i + 1);
+        i = findfirstof (dev, "/");
+        if (nil != i)
+            dev = substring (dev, 0, i);
+        i = findfirstof (dev, ":");
+        if (nil != i)
+	{
+            dev = substring (dev, i + 1);
+	    while ("0" == substring (dev, 0, 1))
+		dev = substring (dev, 1);
+	    if (dev == "")
+		dev = "0";
+	    port = tointeger (dev);
+	}
+        return port;
+
+
+    }
+    /**
+     * Get any parameter from uri. Suppose uri has form:
+     * method://user:pass@address/path?key=value+key=value+key=value
+     * @param uri printer uri
+     * @param key key to extract
+     * @return value
+     */
+    global define string getUriValue (string uri, string key) ``{
+	key = key + "=";
+	integer i = find (uri, "+" + key);
+	if (-1 == i)
+	    i = find (uri, "?" + key);
+	if (-1 == i)
+	    return "";
+	string val = substring (uri, i + size (key) + 1);
+	i = findfirstof (val, "+");
+	if (nil != i)
+	    val = substring (val, 0, i);
+	return val;
+    }
+    /**
+     * Get printer baud rate from uri. Applies to serial printers only.
+     * Does not check if passed uri belongs to serial printer.
+     * @param uri printer uri
+     * @return baud rate
+     * @see getUriType
+     */
+    global define integer getUriBaudrate (string uri) ``{
+	string br = getUriValue (uri, "baudrate");
+	if (br == "" || br != filterchars (br, "0123456789"))
+	    return 0;
+	return tointeger (br);
+    }
+    /**
+     * Get host name from uri. Applies to lpd, novell, samba, ipp/http,
+     *   socket
+     * @param uri printer uri
+     * @return hostname
+     * @see getUriType
+     */
+    global define string getUriHost (string uri) ``{
+	string dev = getUriDevice (uri);
+	if ("" == dev)
+	    return "";
+	dev = substring (dev, 1);
+	// is there a user@pass?
+	integer i = findfirstof (dev, "@");
+	if (nil != i)
+	    dev = substring (dev, i + 1);
+	else if (getUriType (uri) == "samba")
+	{
+	    list<string> uri_list = splitstring (dev, "/");
+	    uri_list = filter (string c, uri_list, {return c != "";});
+	    if (size (uri_list) >= 3)
+		return uri_list[1]:"";
+	}
+	i = findfirstof (dev, "/");
+	if (nil != i)
+	    dev = substring (dev, 0, i);
+	i = findfirstof (dev, ":");
+        if (nil != i)
+            dev = substring (dev, 0, i);
+
+	return dev;
+    }
+
+    /**
+     * Get uri user name and password. Applies to samba, novell.
+     * @param uri printer uri
+     * @return [ username, password, workgroup ]
+     * @see getUriType
+     */
+    global define list getUriUsernamePassWorkgroup (string uri) ``{
+	string type = getUriType (uri);
+	if (size (uri) < 8)
+	    return [ "", "" ];
+	uri = substring (uri, 8);
+	while ("/" == substring (uri, 0, 1))
+	    uri = substring (uri, 1);
+	integer len = findfirstof (uri, "@");
+	if (nil == len)
+	{
+	    if (type == "samba")
+	    {
+		list<string> parts = splitstring (uri, "/");
+		parts = filter (string s, parts, {return s != "";});
+		if (size (parts) >= 3)
+		    return [ "", "", parts[0]:""];
+	    }
+	    return [ "", "" ];
+	}
+	string user = substring (uri, 0, len);
+	string pass = "";
+	len = findfirstof (user, ":");
+	if (nil != len)
+	{
+	    pass = substring (user, len + 1);
+	    user = substring (user, 0, len);
+	}
+	string workgroup = "";
+	len = findfirstof (user, "/");
+	if (len != nil)
+	{
+	    workgroup = substring (user, 0, len);
+	    user = substring (user, len + 1);
+	}
+	return [ user, pass, workgroup];
+    }
+    /**
+     * Get nice name for printer uri
+     * @param uri printer uri
+     * @return nice name of printer uri (device, network printer...)
+     */
+    global define string getUriNiceName (string uri) ``{
+	string type = getUriType (uri);
+	if ("parallel" == type)
+	    // Parallel printer on /dev/lp0
+	    return sformat (_("Parallel printer on %1"), getUriDevice (uri));
+	if ("serial" == type)
+	{
+	    string dev = getUriDevice (uri);
+	    integer i = findfirstof (dev, "?");
+	    if (nil != i)
+		dev = substring (dev, 0, i);
+	    // Serial printer on /dev/lp0
+	    return sformat (_("Serial printer on %1"), dev);
+	}
+	if ("usb" == type)
+	{
+	    string dev = getUriDevice (uri);
+	    integer i = findfirstof (dev, "?");
+	    if (nil != i)
+		dev = substring (dev, 0, i);
+	    // USB printer on /dev/lp0
+	    return sformat (_("USB printer on %1"), getUriDevice (uri));
+	}
+	if ("ptal" == type || "hp" == type)
+	    // HP all-in-one device mlc:usb:HP_LaserJet_1220
+	    return sformat (_("HP all-in-one device %1"), getUriDevice (uri));
+	if ("pipe" == type)
+	    // Prograam to get job on stdin
+	    return sformat (_("Program %1"), getUriDevice (uri));
+	if ("irda" == type)
+            // IrDA printer on /dev/irlpt0
+            return sformat (_("IrDA printer on %1"), getUriDevice (uri));
+	if ("bluetooth" == type)
+	    // Bluetooth printer 11:22:33:44:55:66
+	    return sformat (_("Bluetooth printer %1"), getUriDevice (uri));
+        if ("lpd" == type)
+            // Forwarding queue to QUEUENAME on LPD server SERVERNAME
+            return sformat (_("Forwarding queue to %1 on LPD server %2"), getUriRemoteQueue (uri), getUriHost (uri));
+	if ("novell" == type)
+	    // Queue QUEUENAME on novell server SERVERNAME
+	    return sformat (_("Queue %1 on Novell server %2"), getUriRemoteQueue (uri), getUriHost (uri));
+	if ("samba" == type)
+	    // Queue QUEUENAME on SMB server SERVERNAME
+	    return sformat (_("Queue %1 on SMB server %2"), getUriRemoteQueue (uri), getUriHost (uri));
+	if ("ipp" == type || "http" == type)
+	    // Queue QUEUENAME on IPP server SERVERNAME
+	    return sformat (_("Queue %1 on IPP server %2"), getUriRemoteQueue (uri), getUriHost (uri));
+	if ("socket" == type)
+	    // Network printer HOSTNAME
+	    return sformat (_("Direct TCP port printer %1"), getUriHost (uri));
+	if ("class" == type)
+	    // CUPS class
+	    return _("CUPS class");
+	// Unknown printer AnYtHiNg
+	return sformat (_("Unknown printer %1"), uri);
+    }
+
+   // replace string "%20" to " "
+   global define string getReplacedString(string device)
+   {
+    string visible_string=device;
+    while (issubstring (visible_string, "%20"))
+    {
+     visible_string = substring(visible_string,0, find(visible_string, "%20")) + " " + substring(visible_string, find(visible_string, "%20")+3);
+    }
+y2milestone("replace string %1", visible_string);
+    return visible_string;
+   }
+
+
+    /**
+     * Get nice name of some device.
+     * @param dev device
+     * @param detected boolean set to true if displaying detected dialog
+     * @return device nice name
+     */
+    global define string getDeviceNiceName (string dev, boolean detected) ``{
+	if (regexpmatch (dev, "//.*?serial=.*")
+	    && SCR::Read (.target.size, Arch::i386() ? "/usr/lib/cups/backend/usb" : "/usr/lib64/cups/backend/usb") > 0)
+	{
+	    y2milestone ("USB printer %1", dev);
+	    string serial = regexpsub (dev, ".*?(serial=.*)", "\\1");
+	    y2milestone ("Serial: %1", serial);
+	    if (serial != nil && serial != "")
+	    {
+		// printer port description (%1 si printer serial number
+		return getReplacedString(sformat (_("USB port (%1)"), serial));
+	    }
+	    string ret = "";
+	    foreach (list e, cups_usb_devices_info, ``{
+		if (e[0]:"" == dev)
+		    ret = e[1]:"";
+	    });
+	    if (detected)
+		ret = "USB";
+	    if (ret != "" && ret != nil)
+		return getReplacedString(sformat ("%1 (%2)", ret, dev));
+	}
+	if (regexpmatch (dev, "[0-9a-fA-F:]{17,17}"))
+	{
+	    string nice_name = probed_bt_devices[dev]:"";
+	    if (nice_name != "")
+		return getReplacedString(sformat ("%1 (%2)", nice_name, dev));
+	    else
+		return getReplacedString(dev);
+	}
+	map descriptions = $[
+	    // Names of devices. Labels in dialog
+	    "/dev/lp0" : _("First Parallel Port (/dev/lp0)"),
+	    // Names of devices. Labels in dialog
+	    "/dev/lp1" : _("Second Parallel Port (/dev/lp1)"),
+	    // Names of devices. Labels in dialog
+	    "/dev/lp2" : _("Third Parallel Port (/dev/lp2)"),
+	    // Names of devices. Labels in dialog
+	    "/dev/lp3" : _("Fourth Parallel Port (/dev/lp3)"),
+
+	    // Names of devices. Labels in dialog
+	    "/dev/ttyS0" : _("First Serial Port (/dev/ttyS0)"),
+	    // Names of devices. Labels in dialog
+	    "/dev/ttyS1" : _("Second Serial Port (/dev/ttyS1)"),
+	    // Names of devices. Labels in dialog
+	    "/dev/ttyS2" : _("Third Serial Port (/dev/ttyS2)"),
+	    // Names of devices. Labels in dialog
+	    "/dev/ttyS3" : _("Fourth Serial Port (/dev/ttyS3)"),
+
+	    // Names of devices. Labels in dialog
+	    "/dev/usb/lp0" : _("First USB Printer (/dev/usb/lp0)"),
+	    // Names of devices. Labels in dialog
+	    "/dev/usb/lp1" : _("Second USB Printer (/dev/usb/lp1)"),
+	    // Names of devices. Labels in dialog
+	    "/dev/usb/lp2" : _("Third USB Printer (/dev/usb/lp2)"),
+	    // Names of devices. Labels in dialog
+	    "/dev/usb/lp3" : _("Fourth USB Printer (/dev/usb/lp3)"),
+	    // Names of devices. Labels in dialog
+	    "/dev/usb/lp4" : _("Fifth USB Printer (/dev/usb/lp4)"),
+	    // Names of devices. Labels in dialog
+	    "/dev/usb/lp5" : _("Sixth USB Printer (/dev/usb/lp5)"),
+	    // Names of devices. Labels in dialog
+	    "/dev/usb/lp6" : _("Seventh USB Printer (/dev/usb/lp6)"),
+	    // Names of devices. Labels in dialog
+	    "/dev/usb/lp7" : _("Eighth USB Printer (/dev/usb/lp7)"),
+            // Names of devices. Labels in dialog
+            "/dev/usb/lp8" : _("Ninth USB Printer (/dev/usb/lp8)"),
+            // Names of devices. Labels in dialog
+            "/dev/usb/lp9" : _("Tenth USB Printer (/dev/usb/lp9)"),
+            // Names of devices. Labels in dialog
+            "/dev/usb/lp10" : _("Eleventh USB Printer (/dev/usb/lp10)"),
+            // Names of devices. Labels in dialog
+            "/dev/usb/lp11" : _("Twelfth USB Printer (/dev/usb/lp11)"),
+            // Names of devices. Labels in dialog
+            "/dev/usb/lp12" : _("Thirteenth USB Printer (/dev/usb/lp12)"),
+            // Names of devices. Labels in dialog
+            "/dev/usb/lp13" : _("Forteenth USB Printer (/dev/usb/lp13)"),
+            // Names of devices. Labels in dialog
+            "/dev/usb/lp14" : _("Fifteenth USB Printer (/dev/usb/lp14)"),
+            // Names of devices. Labels in dialog
+            "/dev/usb/lp15" : _("Sixteenth USB Printer (/dev/usb/lp15)"),
+	];
+	return getReplacedString(descriptions[dev]:dev);
+    }
+    /**
+     * get paper size from system and returns `a4 for a4 or `letter for letter
+     * @return symbol `a4 for a4, `letter for letter
+     */
+    global define symbol getDefaultPaperSize () ``{
+	if (nil != paper_size)
+	    return paper_size;
+	integer int_paper_size = (integer)SCR::Execute (.target.bash,
+	    "/usr/bin/locale -k LC_PAPER | /usr/bin/grep width=210");
+	if (int_paper_size != 0 && int_paper_size != 1)
+	    int_paper_size = 0;
+	if (int_paper_size == 0)
+	    paper_size = `a4;
+	else
+	    paper_size = `letter;
+	return paper_size;
+    }
+
+global map<string,string> ListBluetoothDevices () {
+    return probed_bt_devices;
+}
+
+global map<string,string> GetBluetoothDevices () {
+    // popup message
+    UI::OpenDialog (`Label (_("Detecting Bluetooth devices...")));
+    map out = (map)SCR::Execute (.target.bash_output,
+	"/usr/bin/hcitool scan --flush");
+    UI::CloseDialog ();
+    if (out["exit"]:0 != 0)
+    {
+	// error report
+	Report::Error (_("Detecting Bluetooth devices failed."));
+	return $[];
+    }
+    string output = out["stdout"]:"";
+    list<string> lines = splitstring (output, "\n");
+
+//list<string> lines = ["   00:04:61:82:92:AB       Printer Adapter 8292AB"];
+
+    probed_bt_devices = listmap (string l, lines, {
+	if (regexpmatch (l, "[0-9a-fA-Z:]{17,17}[ \t]+[^ \t].*$"))
+	{
+	    string device = regexpsub (
+		l,
+		"([0-9a-fA-Z:]{17,17})[ \t]+[^ \t].*$",
+		"\\1");
+	    string descr = regexpsub (
+		l,
+		"[0-9a-fA-Z:]{17,17}[ \t]+([^ \t].*)$",
+		"\\1");
+	    return $[device : descr];
+	}
+
+	return $["" : ""];
+    });
+    probed_bt_devices = filter (string k, string v, probed_bt_devices, {
+	return k != "";
+    });
+    y2milestone ("Detected Bluetooth devices: %1", probed_bt_devices);
+    return probed_bt_devices;
+}
+
+
+}

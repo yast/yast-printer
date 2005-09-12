@@ -1,0 +1,295 @@
+<?xml version="1.0" encoding='ISO-8859-1'?>
+<chapter id = "structures">
+  <title>Internal Structures</title>
+  <section id="queue_struct">
+    <title>Queue Structure</title>
+    <para>
+The information about a queue is stored as a map with the following keys:
+    </para>
+    <itemizedlist>
+      <listitem><para><computeroutput>
+"name" : string
+      </computeroutput>
+contains name of the printer queue
+      </para></listitem>
+      <listitem><para><computeroutput>
+"uri" : string
+      </computeroutput>
+contains the URI of the printer. The URI can be then passed to the
+spooler. The URI for CUPS classes is "class".
+      </para></listitem>
+      <listitem><para><computeroutput>
+"info" : string
+      </computeroutput>
+contains a human-readable information about the printer queue
+      </para></listitem>
+      <listitem><para><computeroutput>
+"location" : string
+      </computeroutput>
+contains a description of the location of the printer queue
+      </para></listitem>
+      <listitem><para><computeroutput>
+"accepting" : boolean
+      </computeroutput>
+is true if the queue is accepting jobs, false otherwise
+      </para></listitem>
+      <listitem><para><computeroutput>
+"bannerstart" : string
+      </computeroutput>
+is the name of the banner page to be printed at the beginning of each job. The available
+banners are files under /usr/share/cups/banners
+      </para></listitem>
+      <listitem><para><computeroutput>
+"bannerend" : string
+      </computeroutput>
+is the name of the banner page to be printed after each job. The available
+banners are the same as for <computeroutput>bannerstart</computeroutput>
+      </para></listitem>
+      <listitem><para><computeroutput>
+"allowusers" : list&lt;string&gt;
+      </computeroutput>
+is a list of users allowed to printing.
+Only one of <computeroutput>"allowusers"</computeroutput>
+and <computeroutput>"denyusers"</computeroutput> can be set.
+If none of them is set, all users are allowed to print.
+      </para></listitem>
+      <listitem><para><computeroutput>
+"denyusers" : list&lt;string&gt;
+      </computeroutput>
+is a list of users not allowed to printing.
+Only one of <computeroutput>"allowusers"</computeroutput>
+and <computeroutput>"denyusers"</computeroutput> can be set.
+If none of them is set, all users are allowed to print.
+      </para></listitem>
+      <listitem><para><computeroutput>
+"raw" : boolean
+      </computeroutput>
+says if the queue is raw (non-filtering - true) or filtering (false).
+Filtering queue must have PPD file defined.
+      </para></listitem>
+      <listitem><para><computeroutput>
+"changed" : boolean
+      </computeroutput>
+says if the queue was modified and needs to be saved. Queues that weren't
+modified aren't saved by default.
+      </para></listitem>
+      <listitem><para><computeroutput>
+"valid" : boolean
+      </computeroutput>
+says if the queue is valid (supported) for the spooler that is being used.
+Invalid (unsupported) queues aren't saved. This value is automatically
+computed.
+      </para></listitem>
+      <listitem><para><computeroutput>
+"ppd" : string
+      </computeroutput>
+is the name of the PPD file used for filtering. It must be uncompressed.
+When queue is read from spooler, the PPD file is taken from the information
+got by the spooler. If queue is new created, it is taken from the database.
+      </para></listitem>
+      <listitem><para><computeroutput>
+"ppd_info" : map
+      </computeroutput>
+holds information got from the PPD file:
+	<itemizedlist>
+	  <listitem><para><computeroutput>
+"filter" : string
+	  </computeroutput>
+contains filter to be used when printing. Is used only internally (when
+detecting if the PPD file can be used for the used spooler
+	  </para></listitem>
+	  <listitem><para><computeroutput>
+"manufacturer" : string
+	  </computeroutput>
+contains the name of the manufacturer in user-readable form (the way it will be
+displayed to user)
+	  </para></listitem>
+	  <listitem><para><computeroutput>
+"model" : string
+	  </computeroutput>
+contains the printer model in user-readable form (the way it will be
+displayed to user)
+	  </para></listitem>
+	  <listitem><para><computeroutput>
+"manufacturer_db" : string
+	  </computeroutput>
+contains the manufacturer transformated to the key of the database
+	  </para></listitem>
+	  <listitem><para><computeroutput>
+"model_db" : string
+	  </computeroutput>
+contains the model name transformated to the key of the database
+	  </para></listitem>
+	  <listitem><para><computeroutput>
+"nick" : string
+	  </computeroutput>
+contains the nick name of the PPD file
+	  </para></listitem>
+	  <listitem><para><computeroutput>
+"lang_version" : string
+	  </computeroutput>
+contains the language the PPD file is in
+	  </para></listitem>
+	  <listitem><para><computeroutput>
+"lang_encoding" : string
+	  </computeroutput>
+contains the character encoding the PPD file is in
+	  </para></listitem>
+	  <listitem><para><computeroutput>
+"language_level" : string
+	  </computeroutput>
+contains the supported level of the PostScript language that can be passed to
+the filter or printer as its input
+	  </para></listitem>
+	</itemizedlist>
+      </para></listitem>
+      <listitem><para><computeroutput>
+"ppd_options" : map
+      </computeroutput>
+contains options to be changed in the PPD file before saving. The keys and their
+values depend on the particular PPD file
+      </para></listitem>
+      <listitem><para><computeroutput>
+"options" : map
+      </computeroutput>
+contains options to be stored for the queue in /etc/cups/lpoptions.
+      </para></listitem>
+      <listitem><para><computeroutput>
+"state" : string,
+      </computeroutput>
+contains the state of the printer (usual values are "idle" or "stopped")
+      </para></listitem>
+      <listitem><para><computeroutput>
+"statemessage" : string
+      </computeroutput>
+contains message describing the state of the queue got by the spooler
+      </para></listitem>
+      <listitem><para><computeroutput>
+"default" : boolean
+      </computeroutput>
+is true if the queue is the default queue
+      </para></listitem>
+      <listitem><para><computeroutput>
+"type" : string
+      </computeroutput>
+contains the type of the queue. Queues YaST is able to modify have this value
+set to "yast2".
+      </para></listitem>
+    </itemizedlist>
+    <example id="queue_struct_ex">
+      <title>Queue Structure</title>
+      <para>
+	<screen>
+$[
+  "accepting":true,
+  "allowusers":[],
+  "bannerend":"none",
+  "bannerstart":"none",
+  "changed":false,
+  "default":false,
+  "denyusers":[],
+  "info":"EPSON Stylus Photo 810",
+  "location":"USB tisk\303\241rna na //EPSON/Stylus%20Photo%20810",
+  "name":"stylusphoto810",
+  "options":$[
+    "job-sheets":"none,none"
+  ],
+  "ppd":"/tmp/YaST2-14612-RwCaQh/ppd_fOJ9JTa",
+  "ppd_info":$[
+    "filter":"foomatic-rip",
+    "lang_encoding":"ISOLatin1",
+    "lang_version":"English",
+    "language_level":3,
+    "manufacturer":"Epson",
+    "manufacturer_db":"EPSON",
+    "model":" Stylus Photo 810",
+    "model_db":"STYLUSPHOTO810",
+    "nick":"Epson Stylus Photo 810 Foomatic/gimp-print (recommended)"
+  ],
+  "ppd_options":$[],
+  "raw":false,
+  "state":"idle",
+  "statemessage":"Media tray empty!",
+  "type":"yast2",
+  "uri":"usb://EPSON/Stylus%20Photo%20810",
+  "valid":true
+]
+	</screen>
+      </para>
+    </example>
+  </section>
+  <section id="detected_printer_struct">
+    <title>Detected Printer Structure</title>
+    <para>
+To detect connected printers, the
+<computeroutput>Printer::Detect</computeroutput>
+function is used. It creates a list of detected printers.
+    </para>
+    <para>
+Detected printer is described as a map with following keys:
+    </para>
+    <itemizedlist>
+      <listitem><para><computeroutput>
+"vendor" : string
+      </computeroutput>
+is the detected vendor (manufacturer) of the printer as was detected
+      </para></listitem>
+      <listitem><para><computeroutput>
+"vendor_db" : string
+      </computeroutput>
+is the detected vendor (manufacturer) of the printer transformated
+to the key for the database of drivers (see <xref linkend="database"/>).
+      </para></listitem>
+      <listitem><para><computeroutput>
+"device" : string
+      </computeroutput>
+is the detected device (model) of the printer as was detected
+      </para></listitem>
+      <listitem><para><computeroutput>
+"device_db" : string
+      </computeroutput>
+is the detected device (model) of the printer transformated
+to the key for the database of drivers (see <xref linkend="database"/>).
+      </para></listitem>
+      <listitem><para><computeroutput>
+"uri" : string
+      </computeroutput>
+contains the URI of the printer. The URI can be then passed to the
+spooler.
+      </para></listitem>
+      <listitem><para><computeroutput>
+"unique_key" : string
+      </computeroutput>
+is the hardware unique key. It is used to determine if a detected
+printer was configured before.
+      </para></listitem>
+      <listitem><para><computeroutput>
+"location" : string
+      </computeroutput>
+The description of location of the printer, derived from the URI
+      </para></listitem>
+      <listitem><para><computeroutput>
+"info" : string
+      </computeroutput>
+Information of any kind about the printer, derived from the vendor and model
+      </para></listitem>
+    </itemizedlist>
+    <example id="detected_printer_struct_ex">
+      <title>Detected Printer Structure</title>
+      <para>
+	<screen>
+$[
+  "device":"Stylus Photo 810",
+  "device_db":"STYLUSPHOTO810",
+  "info":"EPSON Stylus Photo 810",
+  "location":"USB printer on //EPSON/Stylus%20Photo%20810",
+  "unique_key":"cLrx.twN5GQuyNJ3",
+  "uri":"usb://EPSON/Stylus%20Photo%20810",
+  "vendor":"EPSON",
+  "vendor_db":"EPSON"
+]
+	</screen>
+      </para>
+    </example>
+  </section>
+</chapter>

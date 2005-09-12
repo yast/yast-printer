@@ -1,0 +1,838 @@
+/**
+ * File:
+ *   modules/Printerdb.ycp
+ *
+ * Package:
+ *   printer configuration tool
+ *
+ * Summary:
+ *   Defines for handling PPD files and database of PPD files
+ *
+ * Authors:
+ *  Jiri Srain <jsrain@suse.cz>   2002
+ *
+ * $Id$
+ *
+ */
+
+{
+    module "Printerdb";
+
+    textdomain "printer";
+
+    import "CommandLine";
+    import "Label";
+    import "Mode";
+    import "Package";
+    import "Printerlib";
+    import "Report";
+    import "Stage";
+
+// local variables
+
+/**
+ * List of printing filters known by the current spooler
+ * nil if all filters are supported
+ */
+list<string> known_filters = nil;
+
+/**
+ * True if printer drivers have already been installed
+ */
+boolean drivers_installed = nil;
+
+/**
+ * Map of packages that haev checked to be availabel (package name -> boolean)
+ */
+map<string,boolean> available_packages = $[];
+
+/**
+ * Packages containing driver for current spooler
+ */
+list<string> driver_packages = [];
+
+/**
+ * map of foomatic printers database
+ */
+global map<string,map> foomatic = nil;
+
+// local functions
+
+/**
+ * Get the default encoding of the PPD file according to the language
+ * @param language string language in the form it is present in PPD file
+ * @return encoding in the form it is present in PPD file
+ */
+string Language2Encoding (string language) ``{
+    map mapping = $[
+	"English" : "ISOLatin1",
+	"Danish" : "ISOLatin1",
+	"Dutch" : "ISOLatin1",
+	"Finnish" : "ISOLatin1",
+	"French" : "ISOLatin1",
+	"German" : "ISOLatin1",
+	"Italian" : "ISOLatin1",
+	"Japanese" : "JIS83-RKSJ,",
+	"Norwegian" : "ISOLatin1",
+	"Portuguese" : "ISOLatin1",
+	"Spanish" : "ISOLatin1",
+	"Swedish" : "ISOLatin1",
+	"Czech" : "ISOLatin2",
+    ];
+    return mapping[language]:"None";
+}
+
+/**
+ * Translate the country code (eg. cs_CZ) to language name "czech"
+ * @param string the country code
+ * @return string language name
+ */
+string Code2Language (string code) {
+    string orig_code = code;
+    if (regexpmatch (code, ".*_.*"))
+	code = regexpsub (code, "(.*)_.*", "\\1");
+    map<string,string> mapping = $[
+	"EN" : "English",
+	"US" : "English",
+	"DK" : "Danish",
+	"NL" : "Dutch",
+	"FI" : "Finnish",
+	"FR" : "French",
+	"DE" : "German",
+	"IT" : "Italian",
+	"JA" : "Japanese",
+	"NO" : "Norwegian",
+	"PT" : "Portuguese",
+	"ES" : "Spanish",
+	"SW" : "Swedish",
+	"CS" : "Czech",
+	"SK" : "Slowak",
+    ];
+    string lang = tolower (mapping[toupper (code)]:code);
+    y2milestone ("Code %1 -> Language %2", orig_code, lang);
+    return lang;
+}
+
+/**
+ * Get the characters encoding from the form in it is present in PPD file
+ * to the form that can be passed to iconv
+ * @param ppd_enc string encoding in the form for PPD file
+ * @return string encoding in the form for iconv
+ */
+string PPDenc2UIenc (string ppd_enc) ``{
+    map mapping = $[
+	"ISOLatin1" : "ISO-8859-1",
+	"ISOLatin2" : "ISO-8859-2",
+	"ISOLatin5" : "ISO-8859-5",
+	"JIS83-RKSJ" : "SHIFT-JIS",
+	"MacStandard" : "MAC",
+	"WindowsANSI" : "MS_ANSI",
+    ];
+    return mapping[ppd_enc]:"";
+}
+
+// global functions
+
+/**
+ * Set list of packages containing drivers for the current spooler
+ * @param packages a list of package names
+ */
+global void SetDriverPackages (list<string> packages) {
+    driver_packages = packages;
+}
+
+/**
+ * Get list of packages containing drivers for the current spooler
+ * @return a list of package names
+ */
+global list<string> GetDriverPackages () {
+    return driver_packages;
+}
+
+/**
+ * Set the list of supported filters
+ * @param filters a list of known filters or nil if all filters are known
+ */
+global void SetSupportedFilters (list<string> filters) {
+    known_filters = filters;
+}
+
+/**
+ * Get the list of supported filters
+ * @return a list of known filters or nil if all filters are known
+ */
+global list<string> GetSupportedFilters () {
+    return known_filters;
+}
+
+/**
+ * Set the info if packages with drivers were installed
+ * @param installed boolean saying if the driver packages have been installed
+ */
+global void SetDriversAreInstalled (boolean installed) {
+    drivers_installed = installed;
+}
+
+/**
+ * Get the info if packages with drivers were installed
+ * @return boolean saying if the driver packages have been installed
+ */
+global boolean GetDriversAreInstalled () {
+    return drivers_installed;
+}
+
+    /**
+     * Get file names of all PPD files for specified model with the specified
+     * nick name
+     * @param vendor_db string database key of the vendor
+     * @param device_db string database key of the model
+     * @param nick string nick name
+     * @param lang string preferred language version
+     * @return a list of all files with the specified nick name
+     */
+    global define list<string> getFilesFromNickName (
+	string vendor_db,
+	string device_db,
+	string nick,
+	string lang)
+    {
+	lang = tolower (lang);
+	map<string,any> ppds_tmp = foomatic[vendor_db, device_db]:$[];
+	ppds_tmp = filter (string fn, any v, ppds_tmp, {
+	    return is (v, map) && ((map)v)["nickname"]:"" == nick;
+	});
+	map<string,map> ppds = (map<string,map>) ppds_tmp;
+	map<string,map> backup = ppds;
+	if (lang != "")
+	{
+	    ppds = filter (string fn, map v, ppds, {
+		return tolower (v["language"]:"") ==lang;
+	    });
+	}
+	// try english one if none found
+	if (size (ppds) == 0)
+	{
+	    ppds = backup;
+	    lang = "english";
+	    ppds = filter (string fn, map v, ppds, {
+		return tolower (v["language"]:"") ==lang;
+	    });
+	}
+	// well, take them all
+	if (size (ppds) == 0)
+	{
+	    ppds = backup;
+	}
+
+	list<string> ret = maplist (string fn, any v, ppds, {return fn;});
+	y2milestone ("File names of %1: %2", nick, ret);
+	return ret;
+    }
+
+    /**
+     * Get file name of the PPD files for specified model with the specified
+     * nick name
+     * @param vendor_db string database key of the vendor
+     * @param device_db string database key of the model
+     * @param nick string nick name
+     * @param lang string preferred language of the PPD file
+     * @return string file with the specified nick name
+     */
+    global define string getFileFromNickName (
+	string vendor_db,
+	string device_db,
+	string nick,
+	string lang)
+    {
+	list<string> all = getFilesFromNickName (vendor_db, device_db, nick,
+	    lang);
+	return all[0]:"";
+    }
+
+    /**
+     * Get the options of the PPD file
+     * @param filename string file name of the PPD file
+     * @return a list of all options of the PPD file (in UTF-8)
+     */
+    global define list<map> getPpdFileOptions (string filename) ``{
+	map options = (map)SCR::Read (.ppd.file.options, [filename, ""]);
+	list<map> optlist = options["data"]:[];
+	y2debug ("First option: %1", optlist[0]:$[]);
+	optlist = filter (map o, optlist, ``(
+	    o["name"]:"" != "PageRegion"
+	    && o["name"]:"" != "ImageableArea"
+	    && o["mame"]:"" != "PaperDimension"));
+
+	// change the encoding of printable strings
+	map ppdinfo = (map)SCR::Read (.ppd.file.ppdinfo, filename);
+	string encoding = ppdinfo["lang_encoding"]:"";
+	if (encoding == "")
+	    encoding = Language2Encoding (ppdinfo["lang_version"]:"");
+	encoding = PPDenc2UIenc (encoding);
+	if (encoding != "")
+	{
+	    optlist = maplist (map o, optlist, ``{
+//		if (o["name"]:"" != "PageSize" && o["name"]:"" != "InputSlot")
+//		{
+		if (size(o["values", "Custom"]:"")>0)o["values", "Custom"] = UI::Recode(encoding, "UTF-8", o["values", "Custom"]:"");
+//		    o["gui"] = UI::Recode (encoding, "UTF-8", o["gui"]:"");
+//		}
+		o["values"] = mapmap (string k, string v, o["values"]:$[], ``{
+		    if (k != "Custom" && o["name"]:"" != "PageSize")
+		    {
+			v = (string)UI::Recode (encoding, "UTF-8", v);
+		    }
+		    return $[k: v];
+		});
+		return o;
+	    });
+	}
+	return optlist;
+    }
+
+    /**
+      * Get proposed default queue when using foomatic db
+      * @param queues list of queues
+      * @return proposed default queue name
+      */
+    global define string getFoomaticDefaultQueue (list<map> queues) ``{
+        string default_queue = (string) (queues[0, "name"]:nil);
+        foreach (map q, queues, ``{
+            if (regexpmatch (q["name"]:"", "normal[0-9]")
+                 || q["name"]:"" == "normal")
+            {
+                default_queue = q["name"]:"";
+            }
+        });
+        return default_queue;
+    }
+
+    /**
+      * Check whether foomatic database has been loaded, and if not, then
+      * load it
+      */
+    global define void loadFoomaticIfNeeded () ``{
+        if (foomatic != nil)
+            return;
+	boolean contains_flag = 0 == SCR::Execute (.target.bash, "/bin/grep '#this database was generated during package building' /var/lib/YaST2/ppd_db.ycp");
+        y2milestone ("Checking foomatic database");
+        if (((boolean)SCR::Read (.ppd.db.changed) || contains_flag) && ! Mode::test ())
+        {
+            y2milestone ("Database changed");
+            boolean fast_update = false;
+            if (Stage::cont ())
+            {
+                fast_update = true;
+                SCR::Write (.ppd.db.check_method, `size);
+            }
+            SCR::Write (.ppd.db.create, "");
+	    if (Mode::commandline ())
+	    {
+		CommandLine::Print (
+		    _("The list of installed drivers has changed.
+Building database of drivers..."));
+	    }
+	    else
+	    {
+		UI::OpenDialog (`VBox (
+		    `HSpacing (50),
+		    `ProgressBar (`id(`pr),
+                        // progress bar label
+                        _("The list of installed drivers has changed.
+Building database of drivers..."), 100, 0)));
+	    }
+            integer result = 0;
+            while (true)
+            {
+                    result = (integer)SCR::Read (.ppd.db.creation_status);
+                    if (result < 0)
+                        break;
+                    if (result == 100)
+                        break;
+		    if (! Mode::commandline ())
+			UI::ChangeWidget (`id (`pr), `Value, result);
+                    sleep (1000);
+            }
+	    if (! Mode::commandline ())
+		UI::CloseDialog ();
+            if (result < 0)
+            {
+                    // error report
+                    Report::Error (_("An error occurred while creating the printer database."));
+            }
+            if (fast_update)
+            {
+                SCR::Write (.ppd.db.check_method, `checksum);
+            }
+        }
+	foomatic= (map<string,map>)
+	    SCR::Read (.target.ycp, "/var/lib/YaST2/ppd_db.ycp");
+    }
+
+    /**
+      * List all PPD files
+      * @return a list of sorted PPD files (maps containing vendor_db, model_db,
+      *  nick name and file name
+      */
+    global define list<map<string,string> > ListAllPpds () {
+	list<map<string,string> > ret = [];
+	foreach (string vendor, map v, foomatic, {
+	    foreach (any model, any m, v, {
+		if (is (model, string) && is (m, map))
+		{
+		    foreach (any file, any f, (map)m, {
+			if (is (file, string) && is (f, map))
+			{
+			    ret = add (ret, $[
+				"vendor_db" : vendor,
+				"device_db" : (string)model,
+				"filename" : (string)file,
+				"nickname" : ((map)f)["nickname"]:"",
+			    ]);
+			}
+		    });
+		}
+	    });
+	});
+	return ret;
+    }
+    /**
+      * Sort PPD files for specified model according to preference list
+      * @param vendor_db string vendor database key
+      * @param device_db string model database key
+      * @return a list of sorted PPD nicknames
+      */
+    global define list<string> sortPpds (string vendor_db, string device_db) {
+	vendor_db = (string)SCR::Read (.ppd.db.vendorname, vendor_db);
+	device_db = (string)SCR::Read (.ppd.db.modelname, [vendor_db, device_db]);
+        SCR::Execute (.target.bash, sformat (
+	    "/usr/bin/touch %1/ppd_preference_list",
+	    Printerlib::baseDataDir));
+        map<string,any> order = (map<string,any>)SCR::Read (.target.ycp,
+	    sformat ("%1/ppd_preference_list", Printerlib::baseDataDir));
+        if (order == nil)
+            order = $[];
+
+        list<string> preferred = [];
+	map<string,map> order_vend = (map<string,map>)
+	    filter (string k, any v, order, ``(is (v, map)));
+        foreach (string k, map v, order_vend, ``{
+            if (regexpmatch (vendor_db, k))
+            {
+                foreach (string kk, list vv, (map<string,list>)v, ``{
+                    if (regexpmatch (device_db, kk))
+                    {
+                        y2debug ("Matched %1, %2", k, kk);
+                        preferred = order[k, kk]:[];
+                    }
+                });
+                if (preferred == [])
+                {
+                    preferred = order[k, "__default__"]:[];
+                }
+
+            }
+        });
+        if (preferred == [])
+            preferred = order["__default__"]:[];
+        y2debug ("Order preferred list: %1", preferred);
+
+        map<string,list<string> > recom = $[];
+        map<string,list<string> > other = $[];
+	map<string,list<string> > vendrec = $[];
+	map<string,list<string> > vendoth = $[];
+	map<string,list<string> > downrec = $[];
+	map<string,list<string> > downoth = $[];
+	loadFoomaticIfNeeded ();
+
+	map<string,map> ppds = (map<string,map>)
+	    filter (any k, any v, foomatic[vendor_db, device_db]:$[],
+		``(is (k, string) && is (v, map)));
+
+        foreach (string fn, map v, ppds, ``{
+            boolean found = false;
+            foreach (string i, preferred, ``{
+                if (! found && regexpmatch (v["nickname"]:"", i))
+                {
+		  if (issubstring (fn, "/usr/share/cups/model/downloaded/"))
+		  {
+                    if (issubstring (v["nickname"]:"", "(recommended)"))
+                    {
+                        downrec[i] = (list<string>)add (downrec[i]:[], fn);
+                    }
+                    else
+                    {
+                        downoth[i] = (list<string>)add (downoth[i]:[], fn);
+                    }
+		  }
+		  else if (issubstring (fn,
+		    "/usr/share/cups/model/manufacturer-PPDs"))
+		  {
+                    if (issubstring (v["nickname"]:"", "(recommended)"))
+                    {
+                        vendrec[i] = (list<string>)add (vendrec[i]:[], fn);
+                    }
+                    else
+                    {
+                        vendoth[i] = (list<string>)add (vendoth[i]:[], fn);
+                    }
+		  }
+		  else
+		  {
+                    if (issubstring (v["nickname"]:"", "(recommended)"))
+                    {
+                        recom[i] = (list<string>)add (recom[i]:[], fn);
+                    }
+                    else
+                    {
+                        other[i] = (list<string>)add (other[i]:[], fn);
+                    }
+		  }
+                  found = true;
+                }
+
+            });
+            if (! found)
+            {
+	      if (issubstring (fn, "/usr/share/cups/model/downloaded/"))
+	      {
+                if (issubstring (v["nickname"]:"", "(recommended)"))
+                {
+                    downrec["other"] = (list<string>)add (downrec["other"]:[], fn);
+                }
+                else
+                {
+                    downoth["other"] = (list<string>)add (downoth["other"]:[], fn);
+                }
+	      }
+	      else if (issubstring (fn,
+		"/usr/share/cups/model/manufacturer-PPDs"))
+	      {
+                if (issubstring (v["nickname"]:"", "(recommended)"))
+                {
+                    vendrec["other"] = (list<string>)add (vendrec["other"]:[], fn);
+                }
+                else
+                {
+                    vendoth["other"] = (list<string>)add (vendoth["other"]:[], fn);
+                }
+	      }
+	      else
+	      {
+                if (issubstring (v["nickname"]:"", "(recommended)"))
+                {
+                    recom["other"] = (list<string>)add (recom["other"]:[], fn);
+                }
+                else
+                {
+                    other["other"] = (list<string>)add (other["other"]:[], fn);
+                }
+	      }
+            }
+        });
+
+        y2debug ("Recom: %1, other: %2", recom, other);
+	y2debug ("Downloaded: Recom: %1, other: %2", downrec, downoth);
+	y2debug ("Provided by vendor: Recom: %1, other: %2", vendrec, vendoth);
+
+	list<string> drec = [];
+	list<string> doth = [];
+	list<string> vrec = [];
+	list<string> voth = [];
+	list<string> rec = [];
+	list<string> oth = [];
+
+        foreach (string i, preferred, {
+            drec = (list<string>)merge (drec, downrec[i]:[]);
+        });
+        drec = (list<string>)merge (drec, downrec["other"]:[]);
+
+        foreach (string i, preferred, {
+            doth = (list<string>)merge (doth, downoth[i]:[]);
+        });
+        doth = (list<string>)merge (doth, downoth["other"]:[]);
+
+        foreach (string i, preferred, {
+            vrec = (list<string>)merge (vrec, vendrec[i]:[]);
+        });
+        vrec = (list<string>)merge (vrec, vendrec["other"]:[]);
+
+        foreach (string i, preferred, {
+            voth = (list<string>)merge (voth, vendoth[i]:[]);
+        });
+        voth = (list<string>)merge (voth, vendoth["other"]:[]);
+
+        foreach (string i, preferred, {
+            rec = (list<string>)merge (rec, recom[i]:[]);
+        });
+        rec = (list<string>)merge (rec, recom["other"]:[]);
+
+        foreach (string i, preferred, {
+            oth = (list<string>)merge (oth, other[i]:[]);
+        });
+        oth = (list<string>)merge (oth, other["other"]:[]);
+
+        list<string> result = [];
+
+	list<string> rec_ps = (list<string>)merge (rec, drec);
+	rec_ps = filter (string r, rec_ps, ``(issubstring (r, "Postscript")));
+
+	if (0 == size (rec_ps))
+	{
+	    if (size (voth) > 0)
+		y2milestone ("Prefering Foomatic to manufacurer's");
+	    result = (list<string>)flatten ([drec, doth, vrec, rec, voth, oth]);
+	}
+	else
+	{
+	    if (size (voth) > 0)
+		y2milestone ("Prefering manufacturer's to Foomatic");
+	    result = (list<string>)flatten ([drec, doth, vrec, voth, rec, oth]);
+	}
+
+        y2milestone ("Sorted PPD files for %1:%2: %3",
+	    vendor_db, device_db, result);
+        return result;
+    }
+
+
+/**
+ * Get the PPD file for automatic installation
+ * @param vendor_db string vendor database key
+ * @param device_db string model database key
+ * @param ppd_nicks list of PPD file nicknames, if nil, then PPD nicknames
+ *   are taken from foomatic database
+ * @return name of the PPD file (filename),
+ *   nil if no is usable
+ */
+global define string getAutoPpdFile (string vendor_db, string device_db) {
+    list<string> ppds = sortPpds (vendor_db, device_db);
+    if (size (ppds) == 0)
+	return nil;
+    // if not all filters are supported, choose the first PPD file that is
+    if (known_filters != nil)
+    {
+	ppds = filter (string p, ppds, {
+	    return contains (
+		known_filters,
+		foomatic[vendor_db, device_db, p, "filter"]:"");
+	});
+    }
+    string first_nick
+	= foomatic[vendor_db, device_db, ppds[0]:"", "nickname"]:"";
+    ppds = filter (string p, ppds, {
+	return foomatic[vendor_db, device_db, p, "nickname"]:"" == first_nick;
+    });
+    string lang = (string)SCR::Read (.sysconfig.language.RC_LANG);
+    lang = Code2Language (lang);
+    string ret = find (string p, ppds, {
+	return tolower (foomatic[vendor_db, device_db, p, "language"]:"")
+	    == lang;
+    });
+    // try English as fallback
+    if (ret == nil)
+    {
+	lang = "english";
+	string ret = find (string p, ppds, {
+	    return tolower (foomatic[vendor_db, device_db, p, "language"]:"")
+		== lang;
+	});
+    }
+    // well, take the first of none found
+    if (ret == nil)
+    {
+	ret = ppds[0]:"";
+    }
+    y2milestone ("Selected file: %1", ret);
+    return ret;
+}
+
+    /**
+      * Get PPD file updated according to printer options and add it's name to
+      * printer description map
+      * @param entry map of printer
+      * @return map updated printer map
+      */
+    global define map<string,any> getUpdatedPpdFile (map<string,any> entry) {
+        if (entry["uri"]:"class" == "class")
+	    return entry;
+        string src_ppd = entry["ppd"]:"";
+	string dst_ppd = (string)SCR::Read (.target.tmpdir) + "/patched_ppd_"
+	    + entry["name"]:"";
+	if (! Mode::test ())
+	{
+	    while (SCR::Read (.target.size, dst_ppd) > 0)
+		dst_ppd = dst_ppd + "x"; // FIXME this isn't the best
+			// solution, but should work fine, EXCEPT TESTSUITES
+	}
+        boolean raw = entry["raw"]:false;
+        if (raw)
+        {
+            entry["ppd"] = "";
+	    return entry;
+        }
+
+	if (src_ppd == "")
+	{
+	    // message popup
+	    Report::Error (sformat (_("An error occurred while saving queue %1.
+Try selecting the printer model again."), entry["name"]:""));
+	    return nil;
+	}
+
+	SCR::Write (.ppd.file.modify,
+	    [src_ppd, dst_ppd, entry["ppd_options"]:$[]]);
+	entry["ppd"] = dst_ppd;
+//	SCR::Execute (.target.remove, src_ppd);
+        return entry;
+    }
+
+
+    /**
+      * get configurations, which may be usable for detected printer
+      * @param vendor_db string name of printer vendor
+      * @param device_db string printer model name
+      * @return map of ppd files (filename -> description)
+      */
+    global define map getPpdFiles (string vendor_db, string device_db) ``{
+	loadFoomaticIfNeeded ();
+	map ppd_db = foomatic[vendor_db, device_db]:$[];
+	map<string,map> ppd_db_f = (map<string,map>)
+	    filter (any k, any v, ppd_db,
+		``(is (k, string) && is (v, map)));
+	map<string,string> ret = mapmap (string k, map v, ppd_db_f, ``{
+	    string nickname = v["nickname"]:"";
+	    return $[k : nickname];
+	});
+	ret = filter (string k, string v, ret, ``(k != "" && v != ""));
+	return ret;
+    }
+
+    /**
+      * Process downloaded PPD files
+      * @param dir string directory with downloaded PPD files
+      * @return boolean true on success
+      */
+    global define boolean processPpdFiles (string dir) ``{
+	string log = dir + "/log";
+	string target_dir = "/usr/share/cups/model/downloaded";
+	integer test = (integer)SCR::Execute (.target.bash, sformat (
+	    "/usr/lib/YaST2/bin/process_ppd_files \"%1\" \"%2\" \"%3\"", dir,
+	    target_dir, log));
+	y2milestone ("Test exit code: %1", test);
+	if (test != 0)
+	{
+	    y2milestone ("Reading log from %1", log);
+	    string log_text = (string)SCR::Read (.target.string, log);
+	    term text = `VBox ();
+	    if (log_text != "" && log_text != nil)
+		text = `RichText (`opt (`plainText), log_text);
+	    UI::OpenDialog(`opt ( `decorated ),
+		`VBox (`HSpacing(75),
+		// heading
+		`Heading(_("Error: No Suitable PPD File Downloaded")),
+		text,
+		`PushButton( `id(`ok), `opt(`default),
+		     Label::OKButton ())
+		)
+	    );
+
+	    UI::SetFocus(`id(`ok) );
+	    any r = UI::UserInput();
+	    UI::CloseDialog();
+	    return false;
+	}
+	integer count = tointeger (SCR::Read (.target.string, dir + "/count"));
+	if (count != nil)
+	{
+	    // reported message
+	    Report::Message (sformat (_("%1 file was added to the database",
+		"%1 files were added to the database", count),
+		count));
+	}
+	foomatic = nil;
+	loadFoomaticIfNeeded ();
+	return true;
+    }
+
+    /**
+     * Check if drivers for current spooler are installed
+     * @return boolean true if all available drivers are installed
+     */
+    global define boolean AreDriversInstalled () ``{
+	if (drivers_installed != nil)
+	    return drivers_installed;
+	list<string> packages = filter (string p, driver_packages, ``(
+	    available_packages[p]:true
+	));
+	y2milestone ("Packages to check for installing: %1", packages);
+	if (Package::InstalledAll (packages))
+	{
+	    drivers_installed = true;
+	}
+	else
+	{
+	    packages = filter (string p, packages, ``{
+		boolean available = Package::Available (p);
+		available_packages[p] = available;
+		return available;
+	    });
+	    if (Package::InstalledAll (packages))
+		drivers_installed = true;
+	    else
+		drivers_installed = false;
+	}
+	return drivers_installed;
+    }
+
+    /**
+     * Install drivers for current spooler, reread database
+     * @return boolean true on success
+     */
+    global define boolean InstallDrivers () ``{
+	if (drivers_installed)
+	    return true;
+
+	boolean i_result = true;
+	list<string> packages = filter (string p, driver_packages, ``(
+	    available_packages[p]:true
+	));
+	y2milestone ("Packages to check for installing: %1", packages);
+	if (! Package::InstalledAll (packages))
+	{
+	    packages = filter (string p, packages, ``{
+		boolean available = Package::Available (p);
+		available_packages[p] = available;
+		return available;
+	    });
+	    y2milestone ("Available packages: %1", packages);
+	    i_result = Package::InstallAllMsg (packages,
+		// question popup, %1 is list of package names
+		_("Printer drivers are not installed. Install
+packages %1?"));
+	    if (! (i_result || Package::LastOperationCanceled ()))
+	    {
+		// error report
+		Report::Error (_("Installing packages failed."));
+	    }
+	}
+	if (i_result)
+	{
+	    foomatic = nil;
+	    loadFoomaticIfNeeded ();
+	    drivers_installed = true;
+	}
+	return i_result;
+    }
+
+/**
+ * Get PPD file info
+ * @param file string filename to get info from
+ * @return map of informations
+ */
+global define map PpdInfo (string file) ``{
+    return (map)SCR::Read (.ppd.file.ppdinfo, file);
+}
+
+
+} // EOF

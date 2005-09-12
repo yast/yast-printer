@@ -1,0 +1,346 @@
+Agent for reading/writting cups configuration
+=============================================
+Petr Blahos <pblahos@suse.cz>
+
+- this documents covers overall cups daemon settings, configuration of cups
+  printers, classes, mime types and mime conversion, printer/class options and
+  users.
+- Michal Svec (msvec@suse.cz) works on ppd (postscript printer description)
+  agent (FIXME: find out location of documents for ppd)
+
+1. Overview
+-----------
+- cupsd.conf contains common settings of CUPS daemon. It contains server
+  options, filter options, network options, security options...
+- printers.conf contains description of all printers present in system. It does
+  not contain printers that were taken from browsing.
+- classes.conf contains description of classes
+- mime.types and mime.convs contain all file types and all programs know to
+  system.
+- lpoptions contains printer options.
+- passwd.md5 contains users.
+
+2. Purpose of agent
+-------------------
+Read/Write settings for cups.
+
+3. Format of config files
+-------------------------
+- /etc/cups/cupsd.conf (http://www.cups.org/idd.html#3_6_2)
+  It contains lines in format
+  Key Value
+  and one or more <Location> sections:
+  <Location path>
+  Key Value
+  Key Value
+  ..
+  </Location>
+  Some of the keys can be written multiple times, then they are cummulative.
+
+- /etc/cups/printers.conf (http://www.cups.org/idd.html#3_6_3)
+  There can be any number of printer entries. Each entry begins
+  with <Printer printername> or <DefaultPrinter printername>.
+  Entry ends with </Printer>. Settings between them are in format:
+  Key Value
+  FIXME: I suppose, this file contains also printers detected by printer
+  browser. Is it true? If yes, what does it mean for agent?
+- /etc/cups/classes.conf (http://www.cups.org/idd.html#3_6_1)
+  The same principe as printers.conf. Class entry starts with <Class classname> of
+  <DefaultClass classname> and ends with </Class>. There is one one difference
+  between classes and printers. There can be multiple Printer entries in
+  classes.conf: 
+  <Class pizza>
+  Printer margarita
+  Printer salami
+  Printer scupi
+  </Class>
+
+- /etc/cups/mime.types (http://www.cups.org/idd.html#3_3_1)
+  mime.types consists of 1 or more lines. Each line contains mime type
+  description in format:
+  super/type rules
+  The "\" (backslash) can be used at the end of line to continue that line to
+  the next.
+
+- /etc/cups/mime.convs (http://www.cups.org/idd.html#3_3_2)
+  super/type super/type cost program
+
+- format of /etc/cups/lpoptions is not interesting because we will use cups
+  library calls: cupsGetDests, cupsSetDests
+
+- format of /etc/cups/passwd.md5: each line contains user:group:md5_password
+  
+4. Interface of agent
+---------------------
+
+4.1 Daemon settings:
+--------------------
+Path: .cups.daemon
+$[
+        "ServerName"    : <string>,
+        "ServerAdmin"   : <string>,
+        "ServerBin"     : <string>,
+        "ServerRoot"    : <string>,
+
+        "AccessLog"     : <string>,
+        "PageLog"       : <string>,
+        "ErrorLog"      : <string>,
+        "LogLevel"      : "debug"|"error"|"info"|"none"|"warn",
+        "MaxLogSize"    : <string>,
+        
+        "DataDir"       : <string>,
+        "DocumentRoot"  : <string>,
+        "RequestRoot"   : <string>,
+        "Printcap"      : <string>,
+        "RemoteRoot"    : <string>,
+        
+        "DefaultCharSet": <string>,
+        "DefaultLanguage":<string>,
+        "PreserveJobHistory": <boolean>,
+        "PreserveJobFiles": <boolean>,
+        
+        "User"          : <string>,
+        "Group"         : <string>,
+        "RIPCache"      : <string>,
+        "TempDir"       : <string>,
+        "FilterLimit"   : <int>,
+
+
+        "Port"          : [ <integer> ,  <integer> , ... ],
+        "Listen"        : [ <string>, <string>, ... ]
+        "HostnameLookups": <boolean>,
+        
+        "KeepAlive"     : <boolean>,
+        "KeepAliveTimeout": <int>,
+        "MaxClients"    : <int>,
+        "MaxRequestSize": <string>,
+        "Timeout"       : <int>,
+        
+        "Browsing"      : <boolean>,
+        "BrowseShortNames": <boolean>,
+        "BrowseAddress" : [ <string>, <string>, ... ],
+        
+        "BrowseOrder"   : "allow,deny" | "deny,allow",
+        "BrowseAllow"   : [ <string>, <string>, ... ],
+        "BrowseDeny"    : [ <string>, <string>, ... ],
+        
+        "BrowsePoll"    : [ <string>, <string>, ... ],
+        "BrowseRelay"   : [ $["from": <string> , "to": <string>] ,... ],
+        "BrowseInterval": <int>,
+        "BrowsePort"    : <int>,
+        "BrowseTimeout" : int,
+        "ImplicitClasses": <boolean>,
+        
+        "SystemGroup"   : <string>,
+        "locations"     :
+          [
+            $[
+                "Location"     : <string>,
+                "AuthClass" : "Anonymous" | "User" | "System" | "Group",
+                "AuthGroupName": <string>,
+                "AuthType"     : "None" | "Basic" | "Digest",
+                "Order"        : "Allow,Deny" : "Deny,Allow",
+                "Allow"        : [ <string>, <string>, ...],
+                "Deny"         : [ <string>, <string>, ...],                
+            ],
+            ...
+          ],
+];
+
+Reading:
+ Read(.cups.daemon)                      --> list
+
+After consultation with Kendy: we will not implement these, because they are needless.
+ Read(.cups.daemon, <key>)               --> value
+ Dir(.cups.daemon.locations)             --> list of "Location"s
+ Read(.cups.daemon.<location_name>)      --> map
+ Read(.cups.daemon.<location_name>,<key>)--> value
+
+Writing:
+ Write(.cups.daemon,<value>)             -- the only necessary (<value> is map)
+
+Forget these:
+ Write(.cups.daemon,<value>,<key>)
+ Write(.cups.daemon.<location_name>,<value>)
+ Write(.cups.daemon.<location_name>,<value>,<key>)
+
+Deleting of location:
+ Write(.cups.daemon.<location_name>,nil)
+
+4.2 List of all printers:
+-------------------------
+.cups.printers
+[
+  $[ "Name"             : <string>,
+     "Info"             : <string>,
+     "Location"         : <string>,
+     "Uri"              : <string>,
+     "State"            : <string>,
+     "StateMessage"     : <string>,
+     "Accepting"        : <boolean>,
+     "BannerStart"      : <string>,
+     "BannerEnd"        : <string>,
+     "AllowUsers"       : [ <string> , <string> , ... ],
+     "DenyUsers"        : [ <string> , <string> , ... ],
+     "ppd"              " <string>, //path to ppd of the printer
+     "options"          : $[ <string> : <string> , ... ] // option:value
+   ],
+  ...
+];
+
+Reading:
+ Read(.cups.printers)                    --> list
+ 
+Writing:
+ Write(.cups.printers,<value>)  -- write changes ( <value> is list )
+ 
+4.3 List of all classes:
+------------------------
+.cups.classes
+[
+  $[ "Name"             : <string>,  // class name
+     "Info"             : <string>,
+     "Location"         : <string>,
+     "State"            : <string>,
+     "StateMessage"     : <string>,
+     "Accepting"        : <boolean>,
+     "BannerStart"      : <string>,
+     "BannerEnd"        : <string>,
+     "Printers"         : [ <string> , <string> , ... ],
+     "AllowUsers"       : [ <string> , <string> , ... ],
+     "DenyUsers"        : [ <string> , <string> , ... ],
+     "ppd"              " <string>, //path to ppd of the class (can be nil)
+     "options"          : $[ <string> : <string> , ... ] // option:value
+  ],
+  ...
+];
+
+Reading:
+ Read(.cups.classes)                      --> list
+
+Writing:
+ Write(.cups.classes,<value>)   -- only one neccessary write (<value> is list)
+
+4.4 Default destination
+-----------------------
+.cups.default_dest
+<string>
+-- name of printer or class that is default destination
+
+Reading:
+ Read(.cups.default)    --> <string>
+
+Writing:
+ Write(.cups.default,<string>)
+
+FIXME: do we need to delete default destination? I think it is impossible in
+cups. There must be at least one default destination.
+ 
+4.5 Mime types:
+---------------
+.cups.mime.types
+[
+  $[ "Type"       : <string>,
+     "Rule"       : <string>
+ ],
+ ...
+];
+
+Reading:
+ Read(.cups.mime.types)                   --> list
+
+Forget these: 
+ Dir(.cups.mime.types)                    --> list of class-names
+ Read(.cups.mime.types.<type_name>)       --> map (this is not necessary, but
+                                                   for consistence)
+ Read(.cups.mime.types.<type_name>,"Rule")--> value
+
+Writing:
+ Write(.cups.mime.types,<value>)  --> <value> is list
+
+Forget these: 
+ Write(.cups.mime.types.<type_name>,<value>)
+
+Deleting:
+ Write(.cups.mime.types.<type_name>,nil)
+
+4.6 Mime conversion rules:
+--------------------------
+.cups.mime.convs
+[
+$[ "From"       : <string>,
+   "To"         : <string>,
+   "Cost"       : <int>,
+   "Program"    : <string>
+ ],
+ ...
+];
+
+Reading:
+ Read(.cups.mime.convs)           --> list
+
+Writing:
+ Write(.cups.mime.convs,<value>)  --> <value> is list
+
+4.7 Cups users
+--------------
+.cups.users
+[
+$[ "user" : <string> ,
+   "group": <string> ,
+   "pass" : <string> ,  // md5 sum...
+ ],
+...
+];
+
+Reading:
+ Read(.cups.users)        --> list
+
+Writing:
+ Write(.cups.users.<username>,<value>,"group") // write group
+ Write(.cups.users.<username>,<value>,"pass")  // password is encrypted in write...
+
+Deleting:
+ Write(.cups.users.<username>,nil)  // delete user
+
+5. Final saving
+---------------
+Settings are saved when Write function is called.
+
+6. Implementation comments
+--------------------------
+
+.cups.printers, .cups.classes:
+Files classes.conf and printers.conf are generated by cupsd, so they can not be
+changed, so agent uses them only for reading. We get PPD name via
+cupsGetPPD. Printer options are read via cupsGetDests. Agents writes the data
+via cups library calls (ipp*). lpadmin is not enough capable for it, because it
+does not allow setting class info, location. Printer options are saved via
+cupsSetDests.
+Printer/Class name is up to 127 characters long, starts with letter and can
+contain letters, numbers and underscore. Case is not significant.
+
+.cups.daemon
+I think it should be done the same way as in y2a_mods: it should preserve
+comments, it should reload /etc/cups/cupsd.conf when it changed on disk, but
+changes should not be killed by reload. Changes are written into directly
+/etc/cups/cupsd.conf.
+Really preserve comments? Look at current cupsd.conf: it is almost one big
+comment. Perhaps better would be tell to the package maintainer to install
+cups.conf.original or st. like that. FIXME: clearify it.
+
+.cups.mime.types & .cups.mime.convs
+Easy Software suggest not to change files mime.types and mime.convs. So newly
+added items will be added to yast2.types or yast2.convs. There is no reason to
+change mime.types and mime.convs, but if user wants to, he can do so by editing
+mime.types/convs. So we will allow user to remove/edit "default" items  in
+yast2, because we have no way how to prevent it.
+Most probably we will not implement .cups.mime*, because it is too advanced. If 
+someone knows about mime, he will edit files.
+
+.cups.default_dest
+Read and written via dests and cupsSetDests.
+
+7. Milestones
+-------------
+see index.html

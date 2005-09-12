@@ -1,0 +1,57 @@
+/*
+ * Authors:
+ *  Petr Blahos <blahos@suse.cz>, 2001
+ *
+ * $Id$
+ *
+ */
+
+/**
+ * Mainly for testing that when using both allowusers and denyusers, allowusers wins.
+ */
+{
+    list pr = [];
+
+    SCR::Write (.cups.printers, []);
+    SCR::Write (.cups.classes, []);
+
+    pr = [
+	$[
+	    "AllowUsers":[],
+	    "DenyUsers": [],
+	    "Name":"lp0",
+	    "Uri":"parallel:/dev/lp0",
+	    "ppd":"/usr/share/cups/model/epson9.ppd",
+	    "options" : $[],
+	    ],
+	$[
+	    "AllowUsers":["hello", "yes",],
+	    "DenyUsers": [],
+	    "Name":"lp1",
+	    "Uri":"parallel:/dev/lp0",
+	    "ppd":"/usr/share/cups/model/epson9.ppd",
+	    "options" : $[],
+	    ],
+	$[
+	    "AllowUsers":[],
+	    "DenyUsers": ["bloodymarry", "jacktheripper"],
+	    "Name":"lp2",
+	    "Uri":"parallel:/dev/lp0",
+	    "ppd":"/usr/share/cups/model/epson9.ppd",
+	    "options" : $[],
+	    ],
+	$[
+	    "AllowUsers":["hello", "yes",],
+	    "DenyUsers": ["bloodymarry", "jacktheripper"],
+	    "Name":"lp3",
+	    "Uri":"parallel:/dev/lp0",
+	    "ppd":"/usr/share/cups/model/epson9.ppd",
+	    "options" : $[],
+	    ],
+	];
+    SCR::Write (.cups.printers, pr);
+    SCR::Read (.cups.printers, pr);
+    foreach (`i, pr, ``{
+	y2error ("%1 %2", lookup (i, "AllowUsers",""), lookup (i, "DenyUsers",""));
+    });
+}
