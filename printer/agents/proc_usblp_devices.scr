@@ -1,0 +1,34 @@
+/**
+ * File:
+ *   proc_usblp_devices.scr
+ * Summary:
+ *   SCR Agent for reading information on usb printers using /dev/usblp*
+ * Access:
+ *   read-only
+ * Authors:
+ *   Unknown <yast2-hacker@suse.de>
+ * See:
+ *   anyagent
+ *   libscr
+ *   man usb
+ * Example:
+ *   Read(.proc.usblp.devices)
+ * 
+ * $Id$
+ *
+ * Returns a <b>list</b> of arguments given to the kernal at boottime.
+ * (might have been set by lilo, ...)
+ */
+.proc.usblp.devices
+
+`ag_anyagent(
+  `Description (
+      (`Run("for I in `ls /dev/usb/lp* 2> /dev/null`; do echo \"$I\"; done")),
+      "",			// Comment
+      true,			// read-only
+      (`List(
+        `String("^\n"),
+        "\n"
+      ))
+  )
+)

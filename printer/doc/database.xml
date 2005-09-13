@@ -1,0 +1,117 @@
+<?xml version="1.0" encoding='ISO-8859-1'?>
+<chapter id = "database">
+  <title>Database of Drivers</title>
+  <para>
+The database of printer drivers is based on PPD files. Both PPD files for
+PostScript printers (that are provided by manufacturers) and for non-postscript
+printers (eg. using foomatic-rip) are supported. The usability of a particular
+particular PPD file for a particular spooler depends on the availability of
+appropriate filter for the spooler. Additional packages containing filters
+for GDI printers may be required to allow to print using a PPD file.
+  </para>
+  <para>
+The PPD file defines how to filter PostScript to printer-specific data
+format. It also defines driver-specific options and their possible value.
+Additionally, it hints the configuration user interface what widget should
+be used for setting a particular option.
+  </para>
+  <para>
+Converting data of other type than PostScript to PostScript is done by filters
+provided by the spooler and its filter system. This filtering is not dependent
+on the printer model.
+  </para>
+  <section id="db_reading">
+    <title>Reading the Database</title>
+    <para>
+The database is stored as a file with the YCP syntax. The file with the database
+is read via the target agent.
+    </para>
+  </section>
+  <section id="db_building">
+    <title>Building the Database</title>
+    <para>
+When building the database, all PPD files that are present in
+<computeroutput>/usr/share/cups/model</computeroutput> are parsed and
+information about the PPD file is stored. The information that is important
+for the configuration of the printers is described in
+<xref linkend="queue_struct"/>, the <computeroutput>"ppd_info"</computeroutput>
+part of the PPD file. If a PPD file contains information about multiple
+printer models, multiple entries are created in the database.
+    </para>
+    <para>
+The database has a tree structure. The top-level key is the printer manufacturer
+in the form used for printer detection (with other chars than A-Za-z0-9 left
+out, in uppercase). The value is a map where key can be a symbol or a string.
+    </para>
+    <para>
+The only possible symbol key is <computeroutput>`label</computeroutput>
+containing the printable name of the printer vendor. All string keys are
+printer models of the manufacturer (in the same form as the manufacturer key)
+and value is a map where key is a symbol or a string.
+    </para>
+    <para>
+Two symbol values are possible. The <computeroutput>`label</computeroutput>
+key holds the printable label of the the printer model.
+<computeroutput>`support</computeroutput> holds the support status of the
+printer with possible values <computeroutput>"full"</computeroutput>,
+<computeroutput>"not"</computeroutput> and
+<computeroutput>"problematic</computeroutput>.
+If the key is a string, it is a file name of a PPD file and value contains a
+map containing information about the PPD file.
+    </para>
+    <para>
+The information about the PPD file contains the nick name (in order to be
+displayed to the user), the size and MD5 checksum of the PPD file (for detecting
+if the file was changed), the used filer (for checking if it is supported
+by the spooler) and possibly other information got from the PPD file.
+    </para>
+    <para>
+      <example id="db_struct_ex">
+	<title>Structure of the database</title>
+	<para>
+	  <screen>
+$[
+  "EPSON" : $[
+    `label : "EPSON",
+    "STYLUSPHOTO810" : $[
+      `label : "Stylus Photo 810",
+      `support : "full",
+      "/usr/share/cups/model/Epson/Stylus_Photo_810-gimp-print.ppd.gz" : $[
+        "nickname" : "Epson Stylus Photo 810 Foomatic/gimp-print (recommended)",
+        "pnp_vendor" : "",
+        "pnp_printer" : "",
+        "checksum" : "5208b2414fd9eb9ab6c161196cf79352",
+        "size" : 10631,
+        "filter" : "foomatic-rip",
+      ],
+      .... // other PPD files for this model
+    ],
+    .... // other models of this manufacturer
+  ],
+  .... // other manufacturers
+	  </screen>
+	</para>
+      </example>
+    </para>
+  </section>
+  <section id="db_update">
+    <title>Updating the database</title>
+    <para>
+Updating the database of printers consists of 2 steps. First, PPD files
+that were removed and files that were changed from the database, and then
+add files that aren't present in the database into it.
+    </para>
+    <para>
+To detect if a PPD file was changed, first, the date of the last change is compared to the date the database file was written the last time. If the file itself (or a directory above it) was changed, the second check is performed. Otherwise,
+the file is treated as unchanged.
+    </para>
+    <para>
+The way second check is done depends on the situation. If the check is
+performed during installation of the system, just size of the file is compared
+with the information in the database. Otherwise, the MD5 checksum is compared.
+If they are equal, the PPD file is treated as unchanged, otherwise it is
+removed from the database and added again.
+    </para>
+  </section>
+</chapter>
+

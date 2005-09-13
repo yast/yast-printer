@@ -1,0 +1,34 @@
+#!/bin/bash
+#
+# Part of YaST2 printer library (yast2-lib-printer)
+#
+# Petr Blahos <pblahos@suse.cz> 2001
+#
+# Get printers present on samba server $1.
+#
+# $Id$
+#
+export LC_ALL=C
+#exec 2>/dev/null
+
+while true ; do
+    IFS=
+    read COMMAND || exit
+    unset IFS
+    
+    case "$COMMAND" in
+	"result ("*)
+	    exit
+	    ;;
+	'Read (., '*)
+	    HOST=$(echo "$COMMAND" | sed 's/^Read (., *"\(.*\)")/\1/')
+	    echo [
+	    nmblookup -A $HOST |
+		awk 'BEGIN { N=0} /> -/ { if (0==N){ N=1; system ("smbclient -N -L " $1); } }' | 
+		awk '/Printer/ {printf "\"%s\" ,", $1;}'
+  	    echo ]
+	    ;;
+	*)
+	    echo nil
+    esac
+done

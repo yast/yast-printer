@@ -1,0 +1,806 @@
+/**
+ * File:
+ *  printer.ycp
+ *
+ * Module:
+ *  Printer configurator
+ *
+ * Summary:
+ *  Main file of printer.
+ *
+ * Authors:
+ *  Jan Holesovsky <kendy@suse.cz>, 2000
+ *  Petr Blahos <pblahos@suse.cz>, 2001
+ *  Jiri Srain <jsrain@suse.cz>, 2002, 2003
+ *
+ * $Id$
+ *
+ * Main file of printer package. Calls all other modules.
+ */
+
+{
+    /***
+     * <H3>YaST2 Printers configuration</H3>
+     * Configurator of printers that works with package <tt>cups</tt>
+     * as printing daemons and <tt>apsfilter</tt> or Foomatoc as magic filter.<BR>
+     * For printer documentation index, click <a href="../index.html">here</a>.
+     */
+
+    textdomain "printer";
+
+    import "CommandLine";
+    import "Crash";
+    import "CUPS";
+    import "Label";
+    import "Mode";
+    import "RichText";
+    import "Printer";
+    import "Printerdb";
+    import "Printerlib";
+    import "PrinterTest";
+    import "Spooler";
+
+
+    include "printer/wizards.ycp";
+
+// --------------------------------------------------------------------------
+// --------------------------------- cmd-line handlers
+
+    /**
+      * CommandLine handler for running GUI
+      * @return boolean true if settings were saved
+      */
+    define boolean GuiHandler () ``{
+	symbol ret = nil;
+	if (Mode::test ())
+	    testDialogs ();
+	else
+	    ret = PrinterSequence ();
+
+	if (ret == `abort || ret == `back || ret == `nil)
+	    return false;
+	return true;
+    }
+
+    /**
+     * Print summary of basic options
+     * @param options a list of parameters passed as args
+     * @return boolean false
+     */
+    define boolean PrinterSummaryHandler (map options ) ``{
+	CommandLine::Print (RichText::Rich2Plain(
+	    "<br>"+Printer::Summary ([`nonew])));
+	return false; // do not call Write...
+    }
+
+    /**
+     * Delete a specified queue
+     * @param options a list of parameters passed as args
+     * @return boolean true on success
+     */
+    define boolean PrinterDeleteHandler (map options) ``{
+	Printer::selectPrinterByName (options["queue"]:"");
+	if (Printer::printer == $[])
+	{
+	    // command line error report, %1 is queue name
+	    CommandLine::Print (sformat (_("Queue %1 does not exist."),
+		options["queue"]:""));
+	    return false;
+	}
+	Printer::deletePrinter ();
+	return true;
+    }
+
+    /**
+     * Modify a selected queue
+     * @param options a list of parameters passed as args
+     * @return boolean true on success
+     */
+    define boolean ModifyPrinter (map options) ``{
+	boolean recreate_ppd = false;
+	string manufacturer = "";
+	string model = "";
+	string nick = "";
+	string lang = "";
+
+// URI handling
+	if (options["uri"]:"" != "" && options["detected_index"]:nil != nil)
+	{
+	    // command line error report
+	    CommandLine::Print (_("Cannot specify URI and detected printer in one command."));
+	    return false;
+	}
+	if (Printer::printer["uri"]:"" == "" && options["uri"]:"" == ""
+	    && options["detected_index"]:nil == nil)
+	{
+	    // command line error report, %1 is queue name
+	    CommandLine::Print (sformat (_("URI for queue %1 not specified."),
+		options["new_name"]:Printer::printer["name"]:""));
+	    return false;
+	}
+	if (options["uri"]:"" != "")
+	    Printer::printer["uri"] = options["uri"]:"";
+// detected queue handing
+	if (options["detected_index"]:nil != nil)
+	{
+	    string s_index = options["detected_index"]:"0";
+	    integer index = tointeger (s_index);
+	    if (0 >= index || size (Printer::autodetected) < index)
+	    {
+	    // command line error report, %1 is index of detected printer
+		CommandLine::Print (sformat (_("Printer %1 was not detected."),
+		    index));
+		return false;
+	    }
+	    index = index - 1;
+	    Printer::editDetected (Printer::autodetected[index]:$[]);
+	}
+// queue name handling
+	if (Printer::printer["name"]:"" == "" && options["new_name"]:"" == "")
+	{
+	    // command line error report
+	    CommandLine::Print (_("Queue name not specified."));
+	    return false;
+	}
+	if (options["new_name"]:"" != Printer::printer["name"]:""
+	    && contains (Printer::getForbiddenNames(), options["new_name"]:""))
+	{
+	    CommandLine::Print (sformat (
+		// command line error report, %1 is queue name
+		_("Specified queue name %1 is already used."),
+		options["new_name"]:""));
+	    return false;
+	}
+	if (options["new_name"]:"" != ""
+	    && Printer::printer["name"]:"" != options["new_name"]:"")
+	{
+	    if (Printer::printer["name"]:"" != "")
+	    {
+		Printer::addToDeleted (
+                    Printer::printer["name"]:"",
+		    Printer::printer["uri"]:"" == "class"
+			? "class"
+			: "printer"
+		);
+	    }
+	    Printer::printer["name"] = options["new_name"]:"";
+	}
+// raw queue handling
+	if (haskey (options, "raw"))
+	{
+	    Printer::printer["raw"] = true;
+	}
+	else if (haskey (options, "manufacturer") || haskey (options, "model")
+	    || haskey (options, "nick"))
+	{
+	    Printer::printer["raw"] = false;
+	}
+// manufacturer handling
+	if (haskey (options, "manufacturer") && ! haskey (options, "model"))
+	{
+	    // command line error report, %1 is queue name
+	    CommandLine::Print (sformat (_("Model not specified for queue %1."),
+		Printer::printer["name"]:""));
+	    return false;
+	}
+	if (haskey (options, "manufacturer"))
+	{
+	    Printerdb::loadFoomaticIfNeeded ();
+	    manufacturer = (string)SCR::Read (.ppd.db.vendorname,
+		options["manufacturer"]:"");
+	    if (! haskey (Printerdb::foomatic, manufacturer))
+	    {
+	        // command line error report, %1 is manufacturer name
+		CommandLine::Print (sformat (_("Unknown Manufacturer: %1"),
+		    options["manufacturer"]:""));
+		return false;
+	    }
+	    recreate_ppd = true;
+	}
+	else
+	{
+	    manufacturer = Printer::printer["ppd_info", "manufacturer"]:"";
+	}
+// model handling
+	if (haskey (options, "model"))
+	{
+	    Printerdb::loadFoomaticIfNeeded ();
+	    model = (string)SCR::Read (.ppd.db.modelname,
+		[manufacturer, options["model"]:""]);
+	    if (! haskey (Printerdb::foomatic[manufacturer]:$[], model))
+	    {
+	        // command line error report, %1 is model name
+		CommandLine::Print (sformat (_("Unknown Model: %1"),
+		    options["model"]:""));
+		return false;
+	    }
+	    recreate_ppd = true;
+	}
+	else
+	{
+	    model = Printer::printer["ppd_info", "model"]:"";
+	}
+// nickname handling
+	if (haskey (options, "nick"))
+	{
+	    Printerdb::loadFoomaticIfNeeded ();
+	    nick = options["nick"]:"";
+	    lang = options["language"]:"English";
+	    if (! haskey (Printerdb::foomatic[manufacturer, model]:$[], nick))
+	    {
+	        // command line error report, %1 is PPD file nick name
+		CommandLine::Print (sformat (_("Unknown PPD File Nickname: %1"),
+		    options["nick"]:""));
+		return false;
+	    }
+	    recreate_ppd = true;
+	}
+	else
+	{
+	    string ppd_filename
+		= Printerdb::getAutoPpdFile (manufacturer, model);
+	    nick = Printerdb::foomatic[manufacturer, model,
+		ppd_filename, "nickname"]:"";
+	    lang = Printerdb::foomatic[manufacturer, model, 
+		ppd_filename, "language"]:"";
+	}
+// create new PPD file if relevant information changed
+	if (recreate_ppd)
+	{
+	    string filename = Printerdb::getFileFromNickName (
+		manufacturer,
+		model,
+		nick,
+		lang);
+	    string ppd_file = (string)SCR::Read (.ppd.file.open,
+		[filename, SCR::Read (.target.tmpdir)]);
+
+            Printer::printer = (map<string,any>)union (Printer::printer, $[
+                "ppd" : ppd_file,
+                "ppd_info" : Printerdb::PpdInfo (ppd_file),
+            ]);
+	}
+// info handling
+// location handling
+// banners handling
+	list<string> just_copy = ["info", "location", "bannerstart", "bannerend"];
+	foreach (string key, just_copy, ``{
+	    if (haskey (options, key))
+		Printer::printer[key] = options[key]:"";
+	});
+// allow and deny users
+	if (haskey (options, "allowusers") && haskey (options, "denyusers"))
+	{
+	    // command line error report
+	    CommandLine::Print (_("Only one of 'allowusers' and 'denyusers' can be specified."));
+	    return false;
+	}
+	list<string> string2list = ["allowusers", "denyusers"];
+	Printer::printer["allowusers"] = [];
+	Printer::printer["denyusers"] = [];
+	foreach (string key, string2list, ``{
+	    if (haskey (options, key))
+	    {
+		list<string> split = splitstring (options[key]:"", ", ");
+		split = filter (string s, split, ``(s != ""));
+		Printer::printer[key] = split;
+	    }
+	});
+
+// default queue handling
+	if (haskey (options, "default"))
+	    Printer::default_queue = Printer::printer["name"]:"";
+
+	Printer::storePrinter ();
+	return true;
+    }
+
+    /**
+     * Add a mew queue
+     * @param options a list of parameters passed as args
+     * @return boolean true on success
+     */
+    define boolean PrinterAddHandler (map options) ``{
+	Printer::selectPrinter (-1);
+	options["new_name"] = options["queue"]:"";
+	return ModifyPrinter (options);
+    }
+
+    /**
+     * Edit a specified queue
+     * @param options a list of parameters passed as args
+     * @return boolean true on success
+     */
+    define boolean PrinterEditHandler (map options) ``{
+	Printer::selectPrinterByName (options["queue"]:"");
+	if (Printer::printer == $[])
+	    return false;
+	return ModifyPrinter (options);
+    }
+
+    /**
+     * List configured or detected queues
+     * @param options a list of parameters passed as args
+     * @return boolean always false
+     */
+    define boolean PrinterListHandler (map options) ``{
+	if (! haskey (options, "configured"))
+	{  // list detected
+	    CommandLine::Print (_("Detected Printers:"));
+	    integer index = 0;
+	    foreach (map p, Printer::autodetected, ``{
+		index = index + 1;
+		CommandLine::Print (sformat ("%1: %2 %3: %4",
+		    index,
+		    p["vendor"]:"",
+		    p["device"]:"",
+		    Printerlib::getUriNiceName (p["uri"]:"")));
+	    });
+	    CommandLine::Print ("");
+	}
+	if (! haskey (options, "detected"))
+	{  // list configured
+	    CommandLine::Print (_("Configured Queues:"));
+	    foreach (map p, Printer::printcap, ``{
+		CommandLine::Print (sformat ("%1: %2",
+		    p["name"]:"",
+		    Printerlib::getUriNiceName (p["uri"]:"")));
+	    });
+	    CommandLine::Print ("");
+	}
+	return false;
+    }
+
+    /**
+     * Edit specified options of a queue
+     * @param options a list of parameters passed as args
+     * @param type string type of options to change
+     * @return always true
+     */
+    define boolean PrinterOptionsHandler (map options, string type) ``{
+	Printer::printer[type] = union (
+	    Printer::printer[type]:$[], options
+	);
+	return true;
+    }
+
+    /**
+     * Edit options located in /etc/cups/lpoptions of a queue
+     * @param options a list of parameters passed as args
+     * @return always true
+     */
+    define boolean PrinterLPOptionsHandler (map options) ``{
+	return PrinterOptionsHandler (options, "options");
+    }
+
+    /**
+     * Edit options located in PPF file of a queue
+     * @param options a list of parameters passed as args
+     * @return always true
+     */
+    define boolean PrinterPPDOptionsHandler (map options) ``{
+	return PrinterOptionsHandler (options, "ppd_options");
+    }
+
+    /**
+     * Change the currently used spooler (or basic attributes)
+     * @param options a list of parameters passed as args
+     * @return boolean true if saving is to be performed
+     */
+    define boolean PrinterSpoolerhandler (map options) ``{
+	integer found = 0;
+	foreach (string s, ["cups", "cups_client"], ``{
+	    if (haskey (options, s))
+		found = found + 1;
+	});
+	if (0 == found)
+	{
+	    // command line error report
+	    CommandLine::Print (_("No spooler specified."));
+	    return false;
+	}
+	if (1 < found)
+	{
+	    // command line error report
+	    CommandLine::Print (_("More than one spooler specified"));
+	    return false;
+	}
+	if (haskey (options, "cups"))
+	{
+	    Spooler::switchTo ("cups");
+	    Printer::Read ();
+	}
+	else if (haskey (options, "cups_client"))
+	{
+	    if (options["server"]:"" == "")
+	    {
+	        // command line error report
+		CommandLine::Print (_("CUPS server not specified."));
+		return false;
+	    }
+	    Spooler::switchTo ("cups_client");
+	    CUPS::server_hostname = options["server"]:"";
+	    Printer::default_queue = options["default_queue"]:"";
+	    CUPS::server_default = Printer::default_queue == "";
+	}
+	else
+	    return false;
+	return true;
+    }
+
+    /**
+     * Test a queue
+     * @param options a list of parameters passed as args
+     * @return boolean true if saving is to be performed
+     */
+    define boolean PrinterTestHandler (map options) ``{
+	string queue_name = options["queue"]:"";
+	Printer::selectPrinterByName (queue_name);
+	if (Printer::printer == $[])
+	{
+	    CommandLine::Print (sformat (_("Queue %1 does not exist."),
+		queue_name));
+	    return false;
+	}
+	map tp_types = $[
+	    "ascii" : `ascii,
+	    "photo" : `photo,
+	];
+	symbol tp_type = tp_types[options["testpage_type"]:""]:`postscript;
+	PrinterTest::testPrinter(Printer::printer, tp_type);
+	return false;
+    }
+
+    /**
+     * Print manufacturers in the database
+     * @param options a list of parameters passed as args
+     * @return boolean true if saving is to be performed
+     */
+    define boolean PrinterManufacturersHandler (map options) ``{
+	Printerdb::loadFoomaticIfNeeded ();
+	// command line output header
+	CommandLine::Print (_("Known Manufacturers:"));
+	foreach (string k, map v, Printerdb::foomatic, ``{
+	    CommandLine::Print (v[`label]:k);
+	});
+	return false;
+    }
+
+    /**
+     * Print models in the database of the specified manufacturer
+     * @param options a list of parameters passed as args
+     * @return boolean true if saving is to be performed
+     */
+    define boolean PrinterModelsHandler (map options) ``{
+	Printerdb::loadFoomaticIfNeeded ();
+	if (! haskey (options, "manufacturer"))
+	{
+	    CommandLine::Print (_("Manufacturer not specified."));
+	    return false;
+	}
+	string manufacturer = (string)SCR::Read (.ppd.db.vendorname,
+	    options["manufacturer"]:"");
+	// command line output header
+	CommandLine::Print (_("Known Models:"));
+	foreach (string k, map v, (map<string,map>)
+	    filter (any k, any v, Printerdb::foomatic[manufacturer]:$[],
+	    ``(
+		is (k, string) && is (v, map)
+	    )),
+	``{
+	    CommandLine::Print (v[`label]:k);
+	});
+	return false;
+    }
+
+    /**
+     * Print nicknames in the database of specified manuf/model
+     * @param options a list of parameters passed as args
+     * @return boolean true if saving is to be performed
+     */
+    define boolean PrinterNicknamesHandler (map options) ``{
+	Printerdb::loadFoomaticIfNeeded ();
+	if (! haskey (options, "manufacturer"))
+	{
+	    // command line error report
+	    CommandLine::Print (_("Manufacturer not specified."));
+	    return false;
+	}
+	string manufacturer = (string)SCR::Read (.ppd.db.vendorname,
+	    options["manufacturer"]:"");
+	if (!haskey (options, "model"))
+	{
+	    // command line error report
+	    CommandLine::Print (_("Model not specified."));
+	    return false;
+	}
+	string model = (string)SCR::Read (.ppd.db.modelname,
+	    [manufacturer, options["model"]:""]);
+	// command line output header
+	CommandLine::Print (_("Known Nick Names:"));
+	foreach (string k, map v, (map<string,map>)
+	    filter (any k, any v,
+		Printerdb::foomatic[manufacturer, model]:$[],
+	    ``(
+		is (k, string) && is (v, map)
+	    )),
+	``{
+	    CommandLine::Print (v[`label]:k);
+	});
+	return false;
+    }
+
+    /**
+     * Print PPD options of the specified queue
+     * @param options a list of parameters passed as args
+     * @return boolean true if saving is to be performed
+     */
+    define boolean PrinterListPpdOptionsHandler (map options) ``{
+	// TODO implement
+	return false;
+    }
+
+    /* the command line description map */
+    map cmdline = $[
+	"id"		: "printer",
+	// command line help text for Printer module
+	"help"		: _("Printer configuration module"),
+	"guihandler"	: GuiHandler,
+	"initialize"	: Printer::Read,
+	"finish"	: Printer::Write,
+	"actions"	: $[
+	    "summary"	: $[
+		"handler"	: PrinterSummaryHandler,
+		// command line help text for summary action
+		"help"		: _("Configuration summary of printers")
+	    ],
+	    "delete"	: $[
+		"handler"	: PrinterDeleteHandler,
+		// command line help text for delete action
+		"help"		: _("Delete a configured queue")
+	    ],
+	    "add"	: $[
+		"handler"	: PrinterAddHandler,
+		// command line help text for delete action
+		"help"		: _("Add a new queue")
+	    ],
+	    "edit"	: $[
+		"handler"	: PrinterEditHandler,
+		// command line help text for delete action
+		"help"		: _("Edit a configured queue")
+	    ],
+	    "list"	: $[
+		"handler"	: PrinterListHandler,
+		// command line help text for the list action
+		"help"		: _("List detected or configured printers"),
+	    ],
+	    "ppdoptions": $[
+		"handler"	: PrinterPPDOptionsHandler,
+		// command line help text for the ppdoptions action
+		"help"		: _("Set options that will be writted directly to the PPD file. Options that are not mentioned remain untouched."),
+	    ],
+	    "lpoptions" : $[
+		"handler"	: PrinterLPOptionsHandler,
+		// command line help text for the lpoptions action
+		"help"		: _("Set options that will be written to /etc/cups/lpoptions. Options that are not mentioned remain untouched."),
+	    ],
+	    "spooler"	: $[
+		"handler"	: PrinterSpoolerhandler,
+		// command line help text for the spooler action
+		"help"		: _("Switch the currently used spooler")
+	    ],
+	    "test"	: $[
+		"handler"	: PrinterTestHandler,
+		// command line help text for the test action
+		"help"		: _("Print test page"),
+	    ],
+	    "list_manufacturers": $[
+		"handler"	: PrinterManufacturersHandler,
+		// command line help text for the test action
+		"help"		: _("List known manufacturers"),
+	    ],
+	    "list_models"	: $[
+		"handler"	: PrinterModelsHandler,
+		// command line help text for the test action
+		"help"		: _("List known models of specified manufacturer"),
+	    ],
+	    "list_nicknames": $[
+		"handler"	: PrinterNicknamesHandler,
+		// command line help text for the test action
+		"help"		: _("List known nicknames for specified model of specified manufacturers"),
+	    ],
+	    "list_ppdoptions": $[
+		"handler"	: PrinterListPpdOptionsHandler,
+		// command line help text for the test action
+		"help"		: _("List options of the PPD file of the specified queue"),
+	    ],
+	],
+	"options"	: $[
+	    "detected_index"	: $[
+		// command line help text for the index of detected queue option
+		"help"		: _("Configure a detected printer with this index"),
+		"type"		: "string",
+	    ],
+	    "queue"	: $[
+		// command line help text for the queue name option
+		"help"		: _("Queue name"),
+		"type"		: "string",
+	    ],
+	    "new_name"	: $[
+		// command line help text for the queue name option
+		"help"		: _("New queue name (for changing it)"),
+		"type"		: "string",
+	    ],
+	    "uri"	: $[
+		// command line help text for the printer URI option
+		"help"		: _("Printer URI"),
+		"type"		: "string",
+	    ],
+	    "raw"	: $[
+		// command line help text for the raw option
+		"help"		: _("Queue will not be filtered"),
+	    ],
+	    "manufacturer" : $[
+		// command line help text for the manufacturer option
+		"help"		: _("Printer manufacturer"),
+		"type"		: "string",
+	    ],
+	    "model"	: $[
+		// command line help text for the model option
+		"help"		: _("Printer model"),
+		"type"		: "string",
+	    ],
+	    "nick"	: $[
+		// command line help text for the PPD file nick name option
+		"help"		: _("Nickname of the PPD file"),
+		"type"		: "string",
+	    ],
+	    "info"	: $[
+		// command line help text for the optional information
+		"help"		: _("Information about the queue"),
+		"type"		: "string",
+	    ],
+	    "location"	: $[
+		// command line help text for the optional location description
+		"help"		: _("Location of the printer"),
+		"type"		: "string",
+	    ],
+	    "bannerstart":$[
+		// command line help text for the starting banner option
+		"help"		: _("Banner to print before every job"),
+		"type"		: "enum",
+		"typespec"	: CUPS::getBannerList (),
+	    ],
+	    "bannerend"	: $[
+		// command line help text for the ending banner option
+		"help"		: _("Banner to be print after every job"),
+		"type"		: "enum",
+		"typespec"	: CUPS::getBannerList (),
+	    ],
+	    "accepting" : $[
+		// command line help text for the 'accepting jobs' option
+		"help"		: _("Set if the queue accepts jobs"),
+		"type"		: "enum",
+		"typespec"	: ["Yes", "No"],
+	    ],
+	    "state"	: $[
+		// command line help text for the printer state option
+		"help"		: _("Set the state of the queue"),
+		"type"		: "enum",
+		"typespec"	: ["Stopped", "Idle"],
+	    ],
+	    "allowusers": $[
+		// command line help text for the users allowed for printing
+		"help"		: _("Set users that are allowed to print using this queue"),
+		"type"		: "string",
+	    ],
+	    "denyusers"	: $[
+		// command line help text for the users denied to print
+		"help"		: _("Set users that are not allowed to print using this queue"),
+		"type"		: "string",
+	    ],
+	    "default"	: $[
+	    //rwalter: need to see example of how this works
+		// command line help text for the default queue option
+		"help"		: _("Set the queue to default"),
+	    ],
+	    "detected"	: $[
+		// command line help text for the 'list detected only' option
+		"help"		: _("List only detected printers"),
+	    ],
+	    "configured"	: $[
+		// command line help text for the 'list configured only' option
+		"help"		: _("List only configured queues"),
+	    ],
+	    "cups"	: $[
+		// command line help text for the 'switch to CUPS' option
+		"help"		: _("Switch to CUPS server"),
+	    ],
+	    "cups_client":$[
+		// command line help text for the 'switch to CUPS client' option
+		"help"		: _("Switch to CUPS client"),
+	    ],
+	    "server":$[
+		// command line help text for the 'remote CUPS server' option
+		"help"		: _("Specify the remote CUPS server"),
+		"type"		: "string",
+	    ],
+	    "default_queue":$[
+		// command line help text for the 'local or remote default queue' option
+		"help"		: _("Specify the default queue. If not set, the default queue of the server will be used"),
+		"type"		: "string"
+	    ],
+	    "testpage_type":$[
+		// command line help text for the testpage type option
+		"help"		: _("Type of the test page: ascii, graphic, or photo"),
+		"type"		: "string",
+	    ],
+	],
+	"mappings"	: $[
+	    "summary"		: [],
+	    "list"		: [ "detected", "configured" ],
+	    "delete"		: [ "queue" ],
+	    "add"		: [
+					"queue", "detected_index",
+					"uri", "raw", "manufacturer",
+					"model", "nick", "info", "location",
+					"bannerstart", "bannerend",
+					"accepting", "state", "allowusers",
+					"denyusers", "default"
+				  ],
+	    "edit"		: [
+					"queue", "new_name",
+					"uri", "raw", "manufacturer",
+					"model", "nick", "info", "location",
+					"bannerstart", "bannerend",
+					"accepting", "state", "allowusers",
+					"denyusers", "default"
+				  ],
+	    "ppdoptions"	: [ "queue"],
+	    "lpoptions"		: [ "queue"],
+	    "spooler"		: [
+					"cups", "cups_client",
+					"server", "default_queue"
+				  ],
+	    "test"		: [ "queue", "testpage_type" ],
+	    "list_manufacturers": [],
+	    "list_models"	: [ "manufacturer" ],
+	    "list_nicknames"	: [ "manufacturer", "model" ],
+	    "list_ppdoptions"   : [ "queue" ],
+	]
+    ];
+
+
+
+// --------------------------------------------------------------------------
+
+    Crash::Run ("printer.ycp");
+
+    boolean ret = nil;
+
+    boolean cups_running = 0 == SCR::Execute (.target.bash,
+	"test -f /etc/init.d/cups && /etc/init.d/cups status");
+    boolean lprng_running = 0 == SCR::Execute (.target.bash,
+	"test -f /etc/init.d/lpd && /etc/init.d/lpd status");
+
+    ret = (boolean)CommandLine::Run (cmdline);
+
+    if (! ret)
+    {
+	if (! cups_running)
+	{
+	    SCR::Execute (.target.bash,
+		"test -f /etc/init.d/cups && /etc/init.d/cups stop");
+	}
+	if (! lprng_running)
+	{
+	    SCR::Execute (.target.bash,
+		"test -f /etc/init.d/lpd && /etc/init.d/lpd stop");
+	}
+    }
+
+    Crash::Finish ("printer.ycp");
+    return ret;
+}
+
+

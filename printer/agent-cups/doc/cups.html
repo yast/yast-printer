@@ -1,0 +1,288 @@
+<HTML>
+<HEAD>
+<TITLE>Cups agent description</TITLE>
+<!-- $Id$ -->
+</HEAD>
+<BODY>
+<H1>Cups agent description</H1>
+<HR>
+
+<p>
+<H2>Purpose</H2> 
+The Cups agent is part of YaST2 SCR, the system configuration repository,
+used to access configuration data on the target system. The general
+SCR API allows <TT>Read()</TT> and <TT>Write()</TT> access to get and
+change data. <br>
+It is used to read and write printers and classes, to create database of
+printers and to read ppd files.
+
+<P>
+<H2>Implementation</H2>
+<h3>Printers</h3>
+List of printers is obtained from file <tt>/etc/cups/printers.conf</tt> but
+informations here are not suffitient. PPD file name is obtained via
+<tt>cupsGetPPD</tt> and options via <tt>cupsGetDests</tt>. Printers are written
+via ipp calls. Their options are written via <tt>cupsSetDest</tt>.<br> <small>
+TODO: do not read printers from file but using ipp calls</small>. 
+<h3>Classes</h3>
+Classes are read and written via ipp calls. For manipulating their options we
+use <tt>cupsGet/SetDests</tt><br>
+<h3>Default destination</h3>
+Read and written via dests and <tt>cupsSetDests</tt>.<br>
+<h3>Database of printers</h3>
+Number of ppd files present on system can be big. Processing ppd files each time
+cups configuration tool is invoked would take too much time (minutes) hence we
+create index of all ppd files. This file is used for creation of list of vendors
+and printers and for printer autodetection.
+<h3>Options</h3>
+We must deliver an encoding of ppd file to YaST2 because YaST2 works in utf-8
+and we need to recode. Encoding is saved in ppd file so this is no problem.<br>
+Agent understands and processes suboptions that can be stated in ppd file using
+UIConstraints. Example:
+<pre>
+*UIConstraints: *Option1 *Option0 value6
+*UIConstraints: *Option1 *Option0 value7
+
+*OpenUI *Option0/drivers (using macro 'bjc6100'): PickOne
+*DefaultOption0: value0
+*Option0 value0/monochrome or color driver 'bjc600' at '360x360' dpi: ""
+*Option0 value6/color driver 'uniprint' at '360x360' dpi (using 'bjc6000a1.upp'): ""
+*Option0 value7/color driver 'uniprint' at '720x720' dpi (using 'bjc6000b1.upp'): ""
+*CloseUI: *Option0
+
+*OpenUI *Option1/'bits per pixel' settings for the driver 'bjc600': PickOne
+*DefaultOption1: value1
+*Option1 value1/monochrome printing (using '-dBitsPerPixel=1'): ""
+*Option1 value2/color printing (using '-dBitsPerPixel=8'): ""
+*CloseUI: *Option1
+</pre>
+Constraints say that that <tt>Option1</tt> can not be used when <tt>Option0
+value6</tt> or <tt>Option0 value7</tt> is used. Hence <tt>Option1</tt> can be
+used only if <tt>Option0 value0</tt> is selected. <tt>Option1</tt> is suboption
+of <tt>Option0 value0</tt>.
+<h3>Common Options</h3>
+Common options are hardcoded in cups. They are described in
+<a href="http://www.cups.org/sum.html#STANDARD_OPTIONS">
+http://www.cups.org/sum.html#STANDARD_OPTIONS</a>
+We need ppd file name for them because they contain e.g. paper sizes or whether
+printer is color.
+<P>
+<I><B>Note:</B> The complete development documentation is available in the
+<A HREF="autodocs/index.html"><TT>autodocs/</TT></A> directory.</I>
+
+<P>
+<H2>Interface for modules-agent</H2>
+<h3>Printers and Classes</h3>
+<table border>
+<tr><td><b>Read (<tt>.cups.printers</tt>)</b> --&gt; list of printers <br>
+<b>Write (<tt>.cups.printers, list</tt>)</b><br>
+</b></td><td>
+<b>Read (<tt>.cups.classes</tt>)</b> --&gt; list of classes<br>
+<b>Write (<tt>.cups.classes, list</tt>)</b><br>
+</b></td></tr>
+<tr><td><b>List of printers</b></td><td><b>List of classes</b></td></tr>
+<tr><td><pre>
+[
+  $[ "Name"             : &lt;string&gt;, // printer name
+     "Info"             : &lt;string&gt;,
+     "Location"         : &lt;string&gt;,
+     "Uri"              : &lt;string&gt;,
+     "State"            : &lt;string&gt;,
+     "StateMessage"     : &lt;string&gt;,
+     "Accepting"        : &lt;boolean&gt;,
+     "BannerStart"      : &lt;string&gt;,
+     "BannerEnd"        : &lt;string&gt;,
+     "AllowUsers"       : [ &lt;string&gt; , &lt;string&gt; , ... ],
+     "DenyUsers"        : [ &lt;string&gt; , &lt;string&gt; , ... ],
+     "ppd"              : &lt;string&gt;, 
+     "options"          : $[ &lt;string&gt; : &lt;string&gt; , ... ]
+   ],
+  ...
+];</pre></td>
+<td><pre>
+.cups.classes
+[
+  $[ "Name"             : &lt;string&gt;,  // class name
+     "Info"             : &lt;string&gt;,
+     "Location"         : &lt;string&gt;,
+     "State"            : &lt;string&gt;,
+     "StateMessage"     : &lt;string&gt;,
+     "Accepting"        : &lt;boolean&gt;,
+     "BannerStart"      : &lt;string&gt;,
+     "BannerEnd"        : &lt;string&gt;,
+     "Printers"         : [ &lt;string&gt; , &lt;string&gt; , ... ],
+     "AllowUsers"       : [ &lt;string&gt; , &lt;string&gt; , ... ],
+     "DenyUsers"        : [ &lt;string&gt; , &lt;string&gt; , ... ],
+     "ppd"              : &lt;string&gt;, 
+     "options"          : $[ &lt;string&gt; : &lt;string&gt; , ... ] 
+  ],
+  ...
+];</pre></td>
+</tr></table>
+<tt>ppd</tt> is file name of ppd file assotiated with the printer/class. (note
+that ppd file for class has no sense, but cups supports it).<br>
+<tt>options</tt> is list of pairs <tt>option:value</tt><br>
+<tt>AllowUsers</tt> and <tt>DenyUsers</tt> are mutually exclusive. There can not
+be both <tt>AllowUsers</tt> and <tt>DenyUsers</tt> specified.<br><br>
+
+Default destination can be printer or class.<ul>
+<b>Read (<tt>.cups.default_dest</tt>)</b><br>
+<b>Write (<tt>.cups.default_dest, string</tt>)</b></ul>
+
+<h3>PPD files</h3>
+<b>Status of current database</b><ul>
+<b>Read (<tt>.cups.ppd.changed</tt>)</b> --&gt; boolean</ul>
+<b>Database creation</b><ul>
+<b>Write (<tt>.cups.ppd.createdb, true</tt>)</b></ul>
+</ul>
+<b>This sequence ensures reading of fresh database:</b><pre>
+        if (SCR (`Read (.cups.ppd.changed)))
+            SCR (`Write (.cups.ppd.createdb, true));
+        map printers_db = SCR (`Read (.target.ycp, "/var/lib/YaST2/ppd_db.ycp"));
+</pre>
+Example of database:<pre>
+$[
+  "VENDOR" : 
+  $[
+    "MODEL" :
+    $[  // drivers for that model
+      "model nick" :
+        [
+          "ppd file name",
+          "1284 vendor id",
+          "1284 model id"
+        ]
+    ]
+  ],
+  "CANON" : $[
+    "BJC-6100" : $[
+      "Canon BJC-6100, Foomatic + stp-4.0" : [
+        "/usr/share/cups/model/Canon/BJC-6100-stp.ppd",
+        "",
+        ""
+      ],
+      "Canon BJC-6100, SuSE" : [
+        "/usr/share/cups/model/suse/Canon/BJC-6100.ppd",
+        "Canon",
+        "BJC-6100"
+      ]
+    ]
+  ],
+]</pre>
+<b>Options</b><ul>
+<b>Read (<tt>.cups.ppd.options, [ filename, changed_options ]</tt>)</b> --&gt; map
+<br><tt>filename</tt> is path+name to ppd file.
+<br><tt>changed_options</tt> is map in form of $[ "value" : "option" ,
+... ].<br>
+Returned map:<pre>
+$[
+"charset" : string, // isolatin2, ...
+"ppd" :  // list of options
+  [
+    $[
+      "name"      : "Readable name of option",
+      "option"    : "optionname",
+      "default"   : "optionname of default option",
+      "marked"    : "optionname of currently marked option",
+      "type"      : "boolean" | "pickone" | "pickmany",
+      $[
+        "valuename" : _("Readable name of value"),
+        "valuename" : _("..."),
+        // there may be suboptions
+        "valuename:sub" : [ //list of options (suboptions)
+                          ],
+        ...
+      ],
+    ],
+    ...
+  ]
+];
+</pre>
+We do not need <b>Write</b> because we do diff of currently marked options to
+defaults and we get map $[ value: option, ...] which we will save to
+printer/class: "options".
+</ul>
+<b>Common options</b><ul>
+<b>Read (<tt>.cups.ppd.common_options, [ filename, changed_options ]</tt>)</b> --&gt; list
+<br><tt>filename</tt> is path+name to ppd file.
+<br><tt>changed_options</tt> is map in form of $[ "value" : "option" ,
+... ].<br>
+Returned list:<pre>
+[  // list of options
+  $[ 
+    "name"      : _("Readable name of option"),
+    "option"    : "optionname",
+    "default"   : "optionname of default option",
+    "marked"    : "optionname of currently marked option",
+    "type"      : "boolean" | "pickone" | "pickmany", 
+    $[
+      "valuename" : _("Readable name of value"),
+      "valuename" : "...",
+      // in theory there may be suboptions too but there are none
+      "valuename:sub" : [ //list of options (suboptions)
+                        ],
+      ...
+    ],
+  ],
+  $[
+    "name"      : "Readable name of option",
+    "option"    : "optionname",
+    "default"   : "optionname of default option",
+    "marked"    : "optionname of currently marked option",
+    "type"      : "slider" | "int",
+    "lowermargin" : integer,
+    "uppermargin" : integer,
+  ],
+  $[
+    "name"      : "Readable name of option",
+    "option"    : "optionname",
+    "default"   : "optionname of default option",
+    "marked"    : "optionname of currently marked option",
+    "type"      : "yseno",
+  ],
+  ...
+];
+</pre>
+We do not need <b>Write</b> because we do diff of currently marked options to
+defaults and we get map $[ value: option, ...] which we will save to
+printer/class: "options".
+</ul>
+
+<P>
+<H2>Complete Read paths table</H2>
+<TABLE width="100%">
+	<TR><TH WIDTH="30%" ALIGN="left">Path</TH><TH WIDTH="20%" ALIGN="left">Type</TH><TH ALIGN="left">Result</TH></TR>
+	<TR><TD><TT>.cups.printers</TD><TD ALIGN="left">YCPList</TD>
+	<TD>all printers</TD></TR>
+	<TR><TD><TT>.cups.classes</TD><TD ALIGN="left">YCPList</TD>
+	<TD>all classes</TD></TR>
+	<TR><TD><TT>.cups.default_dest</TD><TD ALIGN="left">YCPString</TD>
+	<TD>default destination</TD></TR>
+	<TR><TD><TT>.cups.ppd.changed</TD><TD ALIGN="left">YCPBoolean</TD>
+	<TD>has ppd db changed since last creation?</TD></TR>
+	<TR><TD><TT>.cups.ppd.options</TD><TD ALIGN="left">YCPMap</TD>
+	<TD>options</TD></TR>
+	<TR><TD><TT>.cups.ppd.common_options</TD><TD ALIGN="left">YCPMap</TD>
+	<TD>common options</TD></TR>
+</TABLE>
+
+<P>
+<H2>Complete Write paths table</H2>
+<TABLE width="100%">
+	<TR><TH WIDTH="50%" ALIGN="left">Path</TH><TH ALIGN="left">Result</TH></TR>
+	<TR><TD><TT>.cups.printers</TD><TD>all printers</TD></TR>
+	<TR><TD><TT>.cups.classes</TD><TD>all classes</TD></TR>
+	<TR><TD><TT>.cups.default_dest</TD><TD>default destination</TD></TR>
+        <TR><TD><TT>.cups.ppd.createdb</TD><TD>triggers db breation</TD></TR>        
+</TABLE>
+
+<P>
+<h2>Former documentation</h2>
+<a href="cups.txt">cups.txt</a><br>
+<a href="ppd.txt">ppd.txt</a><br>
+<hr>
+<ADDRESS>
+Petr Blahos &lt;pblahos@suse.cz&gt;<BR>
+</ADDRESS>
+</BODY>
+</HTML>

@@ -1,0 +1,67 @@
+/*
+ * Authors:
+ *  Petr Blahos <blahos@suse.cz>, 2001
+ *
+ * $Id$
+ *
+ */
+
+
+{
+    list pr = [];
+    list cl = [];
+
+    SCR::Write (.cups.printers, []);
+    SCR::Write (.cups.classes, []);
+
+    pr = [
+	$[
+	    "Name":"lp0",
+	    "Uri":"parallel:/dev/lp0",
+	    "ppd":"/usr/share/cups/model/epson9.ppd",
+	    "options" : $[],
+	    ],
+	$[
+	    "Name":"lp1",
+	    "Uri":"parallel:/dev/lp0",
+	    "ppd":"/usr/share/cups/model/epson9.ppd",
+	    "options" : $[],
+	    ],
+	$[
+	    "Name":"lp2",
+	    "Uri":"parallel:/dev/lp0",
+	    "ppd":"/usr/share/cups/model/epson9.ppd",
+	    "options" : $[],
+	    ],
+	];
+
+    cl =     [
+	$[
+	    "Accepting":true,
+	    "AllowUsers":[],
+	    "Default":false,
+	    "DenyUsers": [],
+	    "Info":"",
+	    "Location":"",
+	    "Name":"class1",
+	    "Printers":["lp0", "lp3"],
+	    "State":"idle",
+	    "StateMessage":"",
+	    "options":$[],
+	    ]
+	];
+    SCR::Write (.cups.printers, pr);
+    SCR::Write (.cups.classes, cl);
+
+    pr = SCR::Read (.cups.printers);
+    pr = maplist (`i, pr, ``{
+	return add (add (i, "ppd", ""), "options", $[]);
+    });
+    cl = SCR::Read (.cups.classes);
+    cl = maplist (`i, cl, ``{
+	return add (i, "options", $[]);
+    });
+
+    y2error ("%1", pr);
+    y2error ("%1", cl);
+}

@@ -1,0 +1,723 @@
+/**
+ * File:
+ *  misc.ycp
+ *
+ * Module:
+ *  Printer configurator
+ *
+ * Summary:
+ *  Miscelaneous defines.
+ *
+ * Authors:
+ *  Petr Blahos <pblahos@suse.cz>
+ *  Jiri Srain <jsrain@suse.cz>   2002
+ *
+ * $Id$
+ *
+ * Miscelaneous defines.
+ */
+
+{
+    textdomain "printer";
+
+    import "Encoding";
+    import "CUPS";
+    import "Label";
+    import "Mode";
+    import "Popup";
+    import "PackageSystem";
+    import "Printer";
+    import "Printerdb";
+    import "Printerlib";
+    import "Report";
+    import "Spooler";
+    import "Wizard";
+
+/**
+ * Get description of the PPD file
+ * @param nick string the nick name of the PPD file
+ * @param language string langauge of the PPD file
+ * @param filename string file name of the PPD file
+ * @return string description of the PPD file
+ */
+define string GetPpdFileDescription (string nick, string language,
+    string filename)
+{
+    string label = nick;
+    if (language != "" && language != "English")
+    {
+	label = sformat ("%1 (%2)", label, language);
+    }
+    if (filename != "")
+    {
+	if (substring (filename, 0, 22) == "/usr/share/cups/model/")
+	    filename = substring (filename, 22);
+	label = label + sformat (" (%1)", filename);
+    }
+    return label;
+}
+
+    /**
+      * Get auto queues for printer when using foomatic database
+      * @param vendor string vendor db key
+      * @param model string model db key
+      * @param ppdfile_orig string choosen ppd file, nil = auto
+      * @return a list of PPD files
+      */
+     define list<map<string,any> > getFoomaticAutoQueues (string vendor,
+	string model, string ppdfile_orig)
+    ``{
+        list forbidden_names = Printer::getForbiddenNames ();
+        y2debug ("Getting auto queues for >>%1<< >>%2<<", vendor, model);
+        Printerdb::loadFoomaticIfNeeded ();
+        list<map<string,any> > new_queues = [];
+        map ppds = Printerdb::getPpdFiles (vendor, model);
+        string ppdfile_orig = "";
+        if (vendor == "__spec_ppd__")
+            ppdfile_orig = model;
+        else if (ppdfile_orig == nil || ppdfile_orig == "")
+            ppdfile_orig = Printerdb::getAutoPpdFile (vendor, model);
+
+        y2debug ("Choosen PPD file: %1", ppdfile_orig);
+        string config = ppds[ppdfile_orig]:"";
+        string ppdfile = (string)SCR::Read (.ppd.file.open,
+            [ppdfile_orig, SCR::Read (.target.tmpdir)]);
+	Printer::printer["ppd"] = ppdfile;
+	Printer::printer["ppd_info"] = Printerdb::PpdInfo (ppdfile);
+        map options = (map)SCR::Read (.ppd.file.options, [ppdfile, ""]);
+        list<map> opts = options["data"]:[];
+            integer ind = -1;
+            boolean found = true;
+            find (map i, opts, ``{
+                ind = ind + 1;
+                found = i["name"]:"" == "PrintoutMode";
+                return found;
+            });
+            map composite = $[];
+            if (found)
+                composite = opts[ind]:$[];
+		string pagesize = Printerlib::getDefaultPaperSize () == `a4
+		    ? "A4"
+		    : "Letter";
+            if (composite != $[])
+            {
+                string optname = composite["name"]:"";
+                foreach (string v, composite["valorder"]:[], ``{
+                    map new_options = $[
+                        optname : v,
+                        "PageSize" : pagesize,
+                        "PageRegion" : pagesize,
+                        "ImageableArea" : pagesize,
+                        "PaperDimension" : pagesize,
+                    ];
+                    new_queues = add (new_queues, $[
+                        "name" : mergestring (splitstring
+                            (tolower (v), "."), "_"),
+                        "info" : composite["values", v]:v,
+                        "ppd_options" : new_options,
+                    ]);
+
+                });
+            }
+            else
+            {
+                new_queues = [ $[
+                    "name" : "lp",
+                        // table cell
+                    "info" : _("Default configuration"),
+		    "ppd_options" : $[
+                        "PageSize" : pagesize,
+                        "PageRegion" : pagesize,
+                        "ImageableArea" : pagesize,
+                        "PaperDimension" : pagesize,
+		    ],
+                ]];
+            }
+            string suffix = Printer::getQueueSuffix (new_queues);
+
+            new_queues = maplist (map<string,any> v, new_queues, ``{
+                v = add (v, "name", Printer::adjustQueueName (v["name"]:"lp" + suffix, forbidden_names));
+                forbidden_names = add (forbidden_names, v["name"]:"");
+                return (map<string,any>)union (Printer::printer, v);
+        });
+        y2debug ("Proposing queues %1", maplist (map q, new_queues, ``(
+	    q["name"]:"")));
+        y2debug ("Proposed queues: %1", new_queues);
+        return new_queues;
+    }
+
+
+    /**
+      * Sort items according to locale
+      * @param items map items (item key -> item label)
+      * @return a list of items to be used for selectionbox
+      */
+    define list<term> sortitems (map<string,string> items) ``{
+	string enc = Encoding::console;
+	items = mapmap (string k, string v, items, ``(
+	    $[k: (string)UI::Recode ("UTF-8", enc, v)]));
+	list<term> l = (list<term>)SCR::Read (.ppd.sort_items, items);
+	l = maplist (term i, l, ``{
+	    string label = i[1]:"";
+	    label = (string)UI::Recode (enc, "UTF-8", label);
+	    i = remove (i, 2);
+	    i = add (i, label);
+	    return i;
+	});
+	return l;
+    }
+
+    /**
+      * Check if paper size is set and if not, then set the defaul
+      * Don't change if already set
+      * @param p map of printer to adjust paper size
+      * @return a map of printer with adjusted paper size
+      */
+    define map<string,any> adjustPaperSize (map<string,any> p) ``{
+	map options = p["ppd_options"]:$[];
+	if (haskey (options, "PageSize"))
+	    return p;
+	string pagesize = Printerlib::getDefaultPaperSize () == `a4 ? "A4" : "Letter";
+	options["PageSize"] = pagesize;
+	options["PageRegion"] = pagesize;
+	options["ImageableArea"] = pagesize;
+	options["PaperDimension"] = pagesize;
+	p["ppd_options"] = options;
+	return p;
+    }
+
+    /**
+      * Get printers (physical devices), which are configured
+      * @return a list of printers maps (one queue of each printer)
+      */
+    define list<map> getConfiguredPrinters () ``{
+        list<string> ukeys = [];
+        list<string> uris = [];
+	list<string> models = [];
+	list<map> printers = [];
+
+        foreach (map p, Printer::printcap, ``{
+            string ukey = p["unique_key"]:"";
+            string uri = p["uri"]:"";
+	    map ppd_info = p["ppd_info"]:$[];
+	    string model = ppd_info["manufacturer"]:"" + ppd_info["model"]:"";
+	    if (model == "")
+	    {
+		model = ppd_info["manufacturer_db"]:""
+		    + ppd_info["model_db"]:"";
+	    }
+            if ((! contains (ukeys, ukey)
+		    && (! contains (uris, uri))
+			|| ! contains (models, model)
+		    )
+		&& (model != "" && uri != ""))
+            {
+                uris = add (uris, uri);
+                if (ukey != "")
+                    ukeys = add (ukeys, ukey);
+		models = add (models, model);
+                printers = add (printers, p);
+            }
+        });
+
+	return printers;
+    }
+
+    /**
+      * Has a printer (physical) been already configured (contains at least
+      * one queue?
+      * @param manuf string manufacturer of the printer
+      * @param model string model of the printer
+      * @param uri string URI of the printer
+      * @param unique_key string unique_key of the printer
+      * @return boolean true if already configured
+      */
+    define boolean isPrinterConfigured (string manuf, string model,
+	string uri, string unique_key)
+    ``{
+	string manuf_db = (string)SCR::Read (.ppd.db.vendorname, manuf);
+	string model_db = (string)SCR::Read (.ppd.db.modelname,
+	    [manuf_db, model]);
+	boolean exists = false;
+
+	foreach (map p, Printer::printcap, ``{
+	    if ((p["unique_key"]:"" == unique_key && unique_key != "")
+		|| (p["uri"]:"" == uri && uri != ""
+		    && ((p["ppd_info", "manufacturer_db"]:".." == manuf_db
+			    && p["ppd_info", "model_db"]:".." == model_db)
+			|| (p["ppd_info", "manufacturer"]:".." == manuf
+			    && p["ppd_info", "model"]:".." == model))
+		   ))
+	    {
+		exists = true;
+	    }
+	});
+	return exists;
+    }
+
+define void CleanAndUnmountAgents () {
+    // mark data in INI agents as unchanged
+    SCR::Write (.sysconfig.printer, "clean");
+    SCR::Write (.etc.cups.client_conf, "clean");
+    SCR::Write (.etc.cups.cupsd_conf, "clean");
+    SCR::Write (.etc.cups.printers_conf, "clean");
+
+    // unmount agents in order to clear possibly existing caches
+    SCR::UnmountAgent (.cups);
+    SCR::UnmountAgent (.ppd);
+    SCR::UnmountAgent (.sysconfig.printer);
+    SCR::UnmountAgent (.etc.cups.client_conf);
+    SCR::UnmountAgent (.etc.cups.cupsd_conf);
+    SCR::UnmountAgent (.etc.cups.printers_conf);
+    SCR::UnmountAgent (.ppd.file.modify);
+}
+
+    /**
+     * Reinstall all printing related packages using package-manager
+     * @return boolean true if success
+     */
+    define boolean reinstallAll () ``{
+	if (Mode::config ())
+	{
+	    Printerlib::DisplayUnavailableAIPopup ();
+	    return true;
+	}
+	PackageSystem::EnsureTargetInit ();
+	PackageSystem::EnsureSourceInit ();
+
+	Printer::printcap = [];
+	Printer::default_queue = "";
+
+	Spooler::StopServices();
+
+	CleanAndUnmountAgents ();
+
+	list<string> to_delete = ["plp", "lprold", "lprng", "cups", "cups-client", "cups-drivers", "cups-drivers-cs", "cups-drivers-de", "cups-drivers-stp",
+	    "cups-libs", "cups-devel", "lpdfilter", "filters", "ghostscript-fonts-other", "ghostscript-x11", "ghostscript-fonts-std", "ghostscript-library",
+	    "ghostscript-fonts-kanji", "ghostscript-fonts-rus", "ghostscript-library", "a2ps", "foomatic-filters", "cupsddk"];
+	to_delete = (list<string>)
+	    merge (to_delete, Printerdb::GetDriverPackages ());
+	to_delete = filter (string e, to_delete,
+	    ``(Pkg::IsProvided (e) == true));
+
+	list<string> to_install = ["ghostscript-library", "ghostscript-x11", "ghostscript-fonts-std", "ghostscript-fonts-other", "a2ps", "cups-libs"];
+
+// install also CUPS spooler
+	Spooler::Set ("cups");
+	to_install = (list<string>)merge (to_install, ["cups",
+	    "cups-drivers-stp",
+	    "cupsddk", "cups", "cups-libs",
+	    "cups-client", "cups-devel",
+	    "cups-SUSE-ppds-dat", "cups-drivers",
+	    "foomatic-filters", "filters"]);
+
+	to_install = (list<string>)toset (
+	    merge (to_install, Printerdb::GetDriverPackages ()));
+
+	y2milestone("deleting: %1", to_delete);
+	foreach (string e, to_delete, ``{Pkg::PkgDelete (e);});
+	Pkg::PkgCommit (0);
+	SCR::Execute (.target.bash, "/bin/rm -rf /etc/cups/");
+	SCR::Execute (.target.bash, "/bin/rm -rf /etc/lpdfilter/");
+	SCR::Execute (.target.bash, "/bin/rm -rf /etc/printcap");
+	SCR::Execute (.target.bash, "/bin/rm -rf /etc/printcap.rpm*");
+	SCR::Execute (.target.bash, "/bin/rm -rf /etc/printcap-2*");
+	SCR::Execute (.target.bash, "/bin/rm -rf /etc/printcap.y2*");
+	SCR::Execute (.target.bash, "/bin/rm -rf /var/spool/lpd/");
+	SCR::Execute (.target.bash, "/bin/rm -rf /var/spool/cups/");
+	SCR::Execute (.target.bash, "/bin/rm -rf /var/lib/YaST2/printers");
+
+	foreach (string e, to_install, ``{Pkg::PkgInstall (e);});
+
+	y2milestone("installing: %1", to_install);
+	Pkg::PkgSolve (false);
+	Pkg::PkgCommit (0);
+	PackageSystem::RunSUSEconfig ();
+	return true;
+
+    }
+    /**
+     * Get hosts available on local network. Reads from .net.hostnames. Shows popup window: Wait please.
+     * @param type "ipp", "samba", "lpd" or ""
+     * @return a list Sorted list of hosts.
+     */
+    define list<string> getHostnames (string type) ``{
+        UI::OpenDialog (`opt (`decorated),
+                         // text in dialog box
+                         `Label (_("Scanning for hosts on this LAN...")));
+        list<string> hosts = [];
+        if ("samba" == type)
+            hosts = (list<string>)SCR::Read (.net.hostnames.samba);
+        else if ("ipp" == type)
+	{
+            hosts = (list<string>)SCR::Read (.net.hostnames, 631);
+	    hosts = (list<string>)filter (string h, hosts, ``{
+		list queues = (list<string>)SCR::Read (.cups.remote, h);
+		return size (queues) > 0;
+	    });
+	}
+        else if ("lpd" == type)
+            hosts = (list<string>)SCR::Read (.net.hostnames, 515);
+        else if ("socket" == type)
+            hosts = (list<string>)SCR::Read (.net.hostnames, 9100);
+        else if ("" != type)
+	    hosts = (list<string>)SCR::Read (.net.hostnames, tointeger (type));
+	else
+            hosts = (list<string>)SCR::Read (.net.hostnames);
+        if (nil == hosts)
+            hosts = [];
+        UI::CloseDialog ();
+        return (list<string>)sort (hosts);
+    }
+
+    /**
+     * Return list without item.
+     * @param source source list
+     * @param item item to delete
+     * @return list List without item. If item was not present in list, list is unchanged.
+     */
+    define list DeleteItem (list source, any item) ``{
+        return filter (any i, source, ``{
+            return i != item;
+        });
+    }
+    /**
+     * Displays message when baud rate is 0.
+     * @param brate Baud rate.
+     * @return boolean Is baud rate ok?
+     */
+    define boolean testBaudRate (integer brate) ``{
+	if (brate == 0)
+	    {
+		// message box
+		Popup::Message (_("The baud rate should not be 0."));
+		return false;
+	    }
+	return true;
+    }
+    /**
+     * Is the hostname correct? Check it for allowed characters. Display message if bad hostname.
+     * @param name Hostname to check
+     * @return boolean true if hostname is correct.
+     */
+    define boolean checkHostName (string name) ``{
+	if (size (name) > 0 &&
+	    /*size (name) < 50 &&*/
+	    "" == filterchars (name,
+				":/@"))
+	    {
+		return true;
+	    }
+	else
+	    {
+		// message box
+		// the ',' character isn't separator,
+		//  but one of a list of characters
+		Popup::Message (_("Invalid hostname. It must be
+shorter than 50 characters and cannot contain the following characters:
+:,/@
+"));
+	    }
+	return false;
+    };
+
+   /**
+     * Is the username correct? Check it for allowed characters. Display message if bad username.
+     * @param name Username to check
+     * @return boolean true if username is correct.
+     */
+    define boolean checkUserName (string name) ``{
+        if (/*size (name) > 0 &&
+            size (name) < 50 &&*/
+            "" == filterchars (name,
+                                ":/@"))
+            {
+                return true;
+            }
+        else
+            {
+                // message box
+                // the ',' character isn't separator,
+                //  but one of a list of characters
+                Popup::Message (_("Invalid username. It cannot 
+contain the following characters:
+:,/@
+"));
+            }
+        return false;
+    };
+
+   /**
+     * Is the password correct? Check it for allowed characters. Display message if bad password.
+     * @param name password to check
+     * @return boolean true if hostname is correct.
+     */
+    define boolean checkPassword (string name) ``{
+        if (/*size (name) > 0 &&
+            size (name) < 50 &&*/
+            "" == filterchars (name,
+                                ":/@"))
+            {
+                return true;
+            }
+        else
+            {
+                // message box
+                // the ',' character isn't separator,
+                //  but one of a list of characters
+                Popup::Message (_("Invalid password. It cannot 
+contain the following characters:
+:,/@
+"));
+            }
+        return false;
+    };
+
+    /**
+     * Ask if really abort. Uses boolean Printer::dirty. Sets boolean do_abort_now.
+     * @return boolean true if user really wants to abort
+     */
+    define boolean reallyAbort ()``{
+	boolean abort_now = false;
+	if (abort_now || !Printer::dirty)
+	    {
+		return true;
+	    }
+	abort_now = Popup::ReallyAbort (true);
+	return abort_now;
+    }
+
+    /**
+     * Ask if really exit. Uses boolean Printer::dirty. Sets boolean do_abort_now.
+     * @return boolean true if user really wants to abort
+     */
+    define boolean reallyExit ()``{
+        if (!Printer::dirty)
+            {
+                return true;
+            }
+	return Popup::AnyQuestion( Popup::NoHeadline(),
+// question popup
+_("If you leave the printer configuration now, 
+all changes will be lost.
+Really leave without saving?
+"),
+                                      Label::YesButton(),
+                                      Label::NoButton(),
+                                      `focus_no );
+
+    }
+
+    /**
+     * Get list of available devices in nice-names.
+     * @param devices list of devices to show
+     * @param device device that should be selected. If "" then first device will be selected.
+     * @return list Items for selection box. One of the items is selected.
+     */
+    define list getDevicesItems (list<string> devices, string device) ``{
+	list device_val = [];
+	boolean default_selected = false;
+	foreach (string dev, devices, ``{
+	    boolean this_is_selected = (("" != device && dev == device)
+					 || ("" == device));/* && (
+					    dev == "/dev/lp0"
+					    || dev == "/dev/usblp0"
+					    || dev == "/dev/usb/lp0"
+					    || dev == "/dev/ttyS0")));*/
+	    if (this_is_selected)
+		default_selected = true;
+	    device_val = add (device_val, `item (`id (dev), Printerlib::getDeviceNiceName (dev, false), this_is_selected));
+	});
+	if (!default_selected && device != "")
+	    device_val = add (device_val, `item (`id (device), device, true));
+	return device_val;
+    }
+    /**
+     * Create the content of table of all entries in the printcap.
+     * @return List of items. Item id is index of printer in printcap.
+     */
+    define list printcapTable () ``{
+	integer count = 0;
+	Printer::sortPrinters ();
+	return maplist (map ent, Printer::printcap, ``{
+		string name = ent["name"]:"???";
+		term ret =
+		    `item (
+			`id (count),
+			name == Printer::default_queue ? UI::Glyph (`BulletArrowRight) : " ",
+			ent["name"]:"");
+
+		if ("yast2" == ent["type"]:"yast2")
+		{
+		    string description = Printerlib::getUriNiceName (ent["uri"]:"");
+		    if (! ent["valid"]:true)
+			// table item. SHORT!
+			description = _("Invalid for selected spooler");
+		    ret = add (ret, description);
+		}
+		else
+		    // This printer was not configured using YaST2. Item in table. SHORT!
+		    ret = add (ret, _("Non-YaST2"));
+		if (Spooler::Get () == "cups")
+		{
+		    if ("yast2" == ent["type"]:"yast2")
+			// table item. SHORT
+			ret = add (ret, ! ent["changed"]:false ? _("OK") : "");
+		    else
+			// table item. SHORT
+			ret = add (ret, _("Unknown"));
+		}
+		count = count+1;
+		return ret;
+	});
+    }
+
+/**
+ * Is the name of local queue correct? If not, display message.
+ * @param name string queue name
+ * @param forbidden_names list of forbidden names
+ * @return boolean true if correct
+ */
+boolean CheckLocalQueueName (string name, list forbidden_names) {
+    if (size (name) <= 0)
+    {
+	// error message
+	Report::Message (_("The queue name is empty."));
+	return false;
+    }
+    if (size (name) >= 32)
+    {
+	Report::Message (
+	    // error message
+	    _("The queue name cannot be longer than 32 characters."));
+	return false;
+    }
+    if (! (size (filterchars (substring (name, 0, 1),
+	    "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")) > 0
+	&& name == filterchars (name,
+	    "_0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
+	&& ! contains (forbidden_names, name)))
+    {
+	// popup
+	Report::Message (_("Invalid queue name. It must be
+shorter than 32 characters, start with a letter,
+and only contain 0-9, A-Z, a-z, and _."));
+	return false;
+
+    }
+    if (contains (Spooler::GetSystemForbiddenNames (), name))
+    {
+	// message box
+	Popup::Message (_("Invalid queue name. The entered name is reserved
+by the spooler."));
+	return false;
+    }
+    return true;
+}
+
+    /**
+     * Is the name of the remote printer correct? If not, display message.
+     * @param name Hostname to check
+     * @return boolean true if hostname is correct.
+     */
+    define boolean checkRemoteQueueName (string name) ``{
+	if (size (name) > 0 && "" == filterchars (name, "@:"))
+	{
+		return true;
+	}
+	else
+	{
+	    // message box
+	    Popup::Message (_("Invalid remote queue name. 
+It cannot contain the characters @ and :.
+"));
+	}
+	return false;
+    }
+
+/**
+ * Check IPP queue name
+ * Uses CheckQueueName, just remove leading printers/ or classes/ from the
+ * queue name before
+ */
+define boolean checkIppQueueName (string name) {
+    if ("printers/" == substring (name, 0, 9))
+       name = substring (name, 9);
+    else if ("classes/" == substring (name, 0, 8))
+       name = substring (name, 8);
+    return checkRemoteQueueName (name);
+}
+
+    /**
+      * Creates UI widgets from values.
+      * @param option_type string type of the option
+      *  (pick_one, pick_many, boolean)
+      * @param values list values
+      * @return UI representation of vals
+      */
+    define term getWidgetForOption (string option_type, list values) ``{
+	if (option_type == "Boolean")
+	{
+	    list<list> vals = (list<list>) values;
+	    if (size (vals) != 2)
+	    {
+		y2error (
+		    "Incorrect size of possible values for boolean option: %1",
+		    vals);
+	    }
+	    integer index = -1;
+	    list<term> r_buttons = maplist (list entry, vals, {
+		index = index + 1;
+		return `Left (`RadioButton (`id (index),
+		    `opt (`notify, `immediate),
+		    entry[1]:""));
+	    });
+	    term ret = `VBox (`VSpacing (1));
+	    foreach (term button, r_buttons, ``{
+		ret = add (ret, button);
+	    });
+	    ret = add (ret, `VSpacing (1));
+	    ret = `HBox (
+		`HSpacing (3),
+		`RadioButtonGroup (`id (`vals), ret),
+		`HSpacing (3)
+	    );
+	    // frame
+	    ret = `Frame (_("Value"), ret);
+	    ret = `HBox (
+		`HStretch (),
+		`VBox (
+		    `VStretch (),
+		    ret,
+		    `VStretch ()
+		),
+		`HStretch ()
+	    );
+	    return ret;
+	}
+	if (option_type == "PickMany")
+	{
+	    list<list> vals = (list<list>) values;
+	    return `MultiSelectionBox(`id (`vals), `opt (`notify, `immediate),
+		// multiselectionbox label
+		_("Val&ues"),
+		maplist (list entry, vals, ``(
+		    `item (`id (entry[0]:""), entry[1]:"")
+		))
+	    );
+	}
+	list<list> vals = (list<list>) values;
+	y2debug ("value: %1", values);
+	return `SelectionBox (`id (`vals), `opt (`notify, `immediate),
+	    // selectionbox label
+	    _("Val&ues"),
+	    maplist (list entry, vals, ``(
+		`item (`id (entry[0]:""), entry[1]:"")
+	    ))
+	);
+    }
+
+
+
+
+}
