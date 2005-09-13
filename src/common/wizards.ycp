@@ -30,7 +30,7 @@
 
     define symbol MainSequence();
     define symbol AddPrinterSubSequence ();
-    define symbol EditPrinterSequence ();
+    define symbol EditPrinterSequence (boolean configured);
     define symbol AddPrinterSequence ();
 
     /**
@@ -46,7 +46,8 @@
 	    // sequences
 	    "main_wz" :		``(MainSequence ()),
 	    "add_printer_wz" :	``(AddPrinterSequence ()),
-	    "edit_printer_wz" :	``(EditPrinterSequence ()),
+	    "edit_printer_wz" :	``(EditPrinterSequence (true)),
+	    "edit_printer_unconf" : ``(EditPrinterSequence (false)),
 	    "add_printer_sub_wz":``(AddPrinterSubSequence ()),
 
 	    // real dialogs
@@ -55,6 +56,7 @@
             "detected" :        ``(runDetectedDialog ()),
             "complex" :         ``(runComplexDialog ()),
 	    "model" :           ``(runManufModelDialog ()),
+	    "model_unknown" :   ``(runManufModelDialog ()),
 	    "inst_printer" :    ``(runInstalledPrinterDialog ()),
 	    "queues_proposal" : ``(runQueuesProposalDialog ()),
 
@@ -146,7 +148,7 @@
       * Workflow for editing a single queue
       * @return sequence result
       */
-    define symbol EditPrinterSequence () ``{
+    define symbol EditPrinterSequence (boolean configured) ``{
 	map<string,any> aliases = getAliases ();
 	map sequence = $[
 	    "ws_start"   : "edit",
@@ -242,6 +244,7 @@
 	    "members" : $[ `abort : `abort, `next : "edit", ],
 	    "storeprinter" : $[`next : `next, ],
 	];
+        if (configured == false) sequence["ws_start"] = "model";
 	aliases = (map<string,any>)filter (string k, any v, aliases, ``(haskey (sequence, k)));
 	return Sequencer::Run (aliases, sequence);
     }
@@ -437,6 +440,7 @@
                 `configure_button : "add_printer_wz",
                 `restart_button : "redetect",
                 `edit_button : "edit_printer_wz",
+                `edit_unconf : "edit_printer_unconf",
                 `change_ipp_listen : "listen_ipp_bcast",
 		`cupsd : "cupsd",
 		`cupsusb : "cups_usb",
@@ -454,16 +458,6 @@
                 `perm : "cupsaclbcast",
             ],
 	    "cupsaclbcast" : $[ `abort : `abort, `next : "listen_ipp_bcast"],
-/*
-	    "complex"  : $[
-		`next : `next,
-		`add  : "add_printer_wz",
-		`edit : "edit_printer_wz",
-		`abort : `abort,
-		`client : "cups_client_main",
-		`advanced : "advanced",
-	    ],
-*/
 	    "advanced" : $[
 		`next : "config_type",
 		`this : "advanced",
@@ -505,6 +499,10 @@
 		`abort : `abort,
 	    ],
 	    "edit_printer_wz": $[
+		`next: "detected",
+		`abort : `abort,
+	    ],
+	    "edit_printer_unconf": $[
 		`next: "detected",
 		`abort : `abort,
 	    ],
