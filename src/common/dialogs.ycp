@@ -2108,15 +2108,23 @@ y2milestone("%1", new_spooler);
 		y2milestone ("Skipping %1, already configured", i);
 		return nil;
 	    }
-	    else 
-		return  
+	    else{
+		  boolean finded=false;
+		   foreach(map<string, any> row, items, {
+			if (row["ID"]:nil == Printerlib::getReplacedString(Printerlib::getUriDevice (i["uri"]:"")))
+				{
+				 finded=true;
+				 y2milestone("Printer %1 without ppd file already configured", row["ID"]:nil);
+				}
+			});
+	            if (finded==false) return 
 			$[      "ID":Printerlib::getReplacedString(Printerlib::getUriDevice (i["uri"]:"")),
                                 "MODEL":i["info"]:"unknown",
                                 "SPOOL":i["name"]:"not configured",
                                 "DESCR": "<b>" + i["info"]:"none" + "</b><br>"
 					+ i["location"]:"" + "<br>"
 					+ _("This printer is not configured") ];
-		
+		}
 
 	}));
 	items = (list < map<string,any> >) filter (any i, items, ``(i != nil));
