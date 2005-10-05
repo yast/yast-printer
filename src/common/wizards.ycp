@@ -392,16 +392,6 @@
     define symbol AddPrinterSequence () ``{
 	map<string,any> aliases = getAliases ();
 	map sequence = $[
-/*	    "ws_start"   : "add_printer_sub_wz",
-	    "add_printer_sub_wz" : $[
-                `abort : `abort,
-		`next : `next,
-		`edit : "edit_printer_wz"
-//                `quick : "edit_printer_wz",
-//                `name : "name_auto",
-//		`installed_printer : "inst_printer",
-//		`connection : "connection_type",
-	    ],*/
 	    "edit_printer_wz" : $[ `abort : `abort, `next : `next ],
 	];
 	map<string,any> add_seq = getAddPrinterSubSequence ();
@@ -518,53 +508,6 @@
     }
 
     /**
-      * Main workflow of the printer configuration with detected printers dialog
-      * @return sequence result
-      */
-/*
-    define symbol DetectedSequence() ``{
-	map<string,any> aliases = getAliases ();
-	map sequence = $[
-	    "ws_start" : "detected",
-	    "redetect" : $[`next : "detected", ],
-	    "detected" : $[
-		`next : `next,
-		`abort : `abort,
-		`configure_button : "add_printer_wz",
-		`restart_button : "redetect",
-		`edit_button : "edit_printer_wz",
-		`change_ipp_listen : "listen_ipp_bcast",
-	    ],
-	    "add_printer_wz" : $[
-		`abort : `abort,
-		`next : "detected",
-	    ],
-	    "main_wz" : $[
-		`next : `next,
-		`abort : `abort,
-		`switch : `switch,
-		`reinstall : `reinstall,
-	    ],
-	    "listen_ipp_bcast" : $[
-		`next : "detected",
-		`abort : `abort,
-		`perm : "cupsaclbcast",
-	    ],
-	    "edit_printer_wz" : $[
-		`abort : `abort,
-		`next  : "redetect"
-	    ],
-	    "add_printer_wz" : $[
-		`abort : `abort,
-		`next  : "redetect"
-	    ],
-	    "cupsaclbcast" : $[ `abort : `abort, `next : "listen_ipp_bcast"],
-	];
-	aliases = (map<string,any>)filter (string k, any v, aliases, ``(haskey (sequence, k)));
-	return Sequencer::Run(aliases, sequence);
-    }
-*/
-    /**
       * Whole configuration of printer but without reading and writing.
       * For use with autoinstallation.
       * @return sequence result
@@ -612,12 +555,6 @@
 		`switch		: "read",
 		`reinstall	: "read",
 	    ],
-/*	    "switch" : $[
-		`next : "read",
-	    ],
-	    "reinstall" : $[
-		`next : "read",
-	    ],*/
 	    "write" : $[
 		`abort  : `abort,
 		`next   : `next

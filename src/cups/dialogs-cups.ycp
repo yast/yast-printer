@@ -745,9 +745,9 @@ accessible under the same names as on the remote host."))),
 		`Frame (_("Application Order"),
                 `RadioButtonGroup (`id (`order), `HBox (
 		    // radio button
-                    `RadioButton (`id (`ad), `opt (`hstretch), _("A&llow, Deny")),
+                    `RadioButton (`id (`ad), `opt (`hstretch, `notify), _("A&llow, Deny")),
 		    // radio button
-                    `RadioButton (`id (`da), `opt (`hstretch), _("&Deny, Allow"))
+                    `RadioButton (`id (`da), `opt (`hstretch, `notify), _("&Deny, Allow"))
                 ))),
 		`VSpacing (1),
 		// selection box label
@@ -795,12 +795,21 @@ accessible under the same names as on the remote host."))),
 	    settings = CUPS::cups_server_permissions[pth]:$[];
 	}
 
+	list<term> cont = (list<term>)union (maplist (any e, settings[allow_key]:[], ``{return `i (`allow, e);}),
+			maplist (any e, settings[deny_key]:[], ``{return `i (`deny, e);}));
 	if (settings[order_key]:["Deny,Allow"] == ["Allow,Deny"])
 	    UI::ChangeWidget (`id (`ad), `Value, true);
 	else
+	 {
 	    UI::ChangeWidget (`id (`da), `Value, true);
-	list<term> cont = (list<term>)union (maplist (any e, settings[allow_key]:[], ``{return `i (`allow, e);}),
-			maplist (any e, settings[deny_key]:[], ``{return `i (`deny, e);}));
+               list<term> allow=[];
+                list<term> deny =[];
+                 foreach(term row, cont,{
+                        if (row[0]:nil == `allow) allow=add(allow, row);
+                        	else if (row[0]:nil == `deny)  deny =add(deny, row);
+                        });
+                  cont = deny + allow;
+	 }
 	// selectionbox label
 	UI::ReplaceWidget (`id (`replace_acl), `SelectionBox (`id (`acl), _("&Permissions"),
 	   // listbox entry, %1 is IP address
@@ -811,6 +820,31 @@ accessible under the same names as on the remote host."))),
         while (true)
         {
             ret = (symbol)UI::UserInput ();
+
+	    if (ret == `da || ret == `ad) 
+		{
+		list<term> allow=[];
+		list<term> deny =[];
+		 foreach(term row, cont,{
+			if (row[0]:nil == `allow) allow=add(allow, row);
+				else if (row[0]:nil == `deny)  deny =add(deny, row);
+			});
+		if (ret == `da)
+		 {
+		  cont = deny + allow;
+		  y2milestone("Setting order to : deny, allow %1", cont);
+		 } else
+		    {
+                     cont = allow + deny;
+                     y2milestone("Setting order to : allow, deny %1", cont);
+		    }
+		        UI::ReplaceWidget (`id (`replace_acl), `SelectionBox (`id (`acl), _("&Permissions"),
+           // listbox entry, %1 is IP address
+           maplist (term e, cont, ``(`item (`id (e), e[0]:nil == `allow ? sformat (_("Allow from %1"), e[1]:"")
+                // listbox entry, %1 is IP address
+                : sformat (_("Deny from %1"), e[1]:""))))));
+		}
+
             if (ret == `cancel)
                 ret = `abort;
             if (`abort == ret)
