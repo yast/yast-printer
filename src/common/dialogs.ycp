@@ -111,7 +111,6 @@ list < map <string, any> > conf_unconf_printers = [];
 	    });
 	}
 	UI::ChangeWidget (`id (`manufsel), `CurrentItem, manuf_db);
-
 	symbol ret = `manufsel;
 	while (`abort != ret && `back != ret && ret != `next
 	    && ret != `specifyppd && ret != `downloadppd)
@@ -2185,7 +2184,7 @@ y2milestone("%1", new_spooler);
 		[ `change_ipp_listen, _("Change IPP Listen")], 
 		[ `cupsd, _("CUPS Server Se&ttings") ],
 		[ `cupsusb, _("CUPS &USB Device Settings")],
-		
+		[ `firewall, _("Set &Firewall")]
 	    ]);
 	SetHWDialogData ();
 
@@ -2299,131 +2298,6 @@ y2milestone("%1", new_spooler);
 	        cont = false;
 	}
 	return ret; // FIXME
-/*
-	Printer::confmode = `det;
-	term contents = Wizard_hw::DetectedContent (
-	    // Selectionbox caption
-	    _("Printers to Configure"),
-	    getAutoprobedSelectionBox (
-		Printer::runAutoprobedListDialog__current),
-	    true,
-	    // richtext caption
-	    _("<P>Installed Printers and Queues</P>")
-	    + Printer::Summary ([`nonew, `test, `state, `ipp_listen_modify])
-	    );
-	// dialog label
-	Wizard::SetContentsButtons (_("Printer Configuration"), contents, getDetectedHelp (), Label::BackButton (), Label::FinishButton ());
-	Wizard::SetAbortButton(`abort, Label::CancelButton() );
-	Wizard::HideBackButton();
-	any ret = nil;
-	while (true)
-	{
-	    ret = UI::UserInput ();
-	    if (ret == `cancel)
-		ret = `abort;
-	    if (is (ret, string))
-	    {
-		if (ret == "change_ipp_listen")
-		{
-		    ret = `change_ipp_listen;
-		    break;
-		}
-		else
-		{
-		    // request for testing printer...
-		    Printer::selectPrinterByName ((string)ret);
-		    PrinterTest::testPrinter (Printer::printer, `ask);
-		    continue ;
-		}
-	    }
-	    if (`back == ret || `cancel == ret || `abort == ret)
-	    {
-		ret = `back;
-		if (reallyExit ())
-		{
-		    break;
-		}
-		continue;
-	    }
-	    else if (`next == ret) // finish
-	    {
-		break;
-	    
-	    else if (`configure_button == ret)
-	    {
-		if (Spooler::Get () == "cups"
-		    && CUPS::InstallationType () == `client)
-		{
-		    // popup
-		    boolean b = Popup::YesNo (
-			_(" Your system is configured as a CUPS client only.  Setting a queue will discard these settings.  Continue?"));
-		    if (! b)
-			continue;
-		    else
-		    {
-			Printer::queuesRead ();
-		    }
-		}
-		Printer::conf_detected = true;
-		Printer::runAutoprobedListDialog__current = (integer) UI::QueryWidget (`id (`detected_selbox), `CurrentItem);
-		if (Printer::runAutoprobedListDialog__current == nil)
-		{
-		    Printer::runAutoprobedListDialog__current = -1;
-		}
-		if (Printer::runAutoprobedListDialog__current >= 0)
-		{
-		    // comments added to go with other printer through
-		    // the same sequence
-		    Printer::editDetected (
-			Printer::autodetected[
-			    Printer::runAutoprobedListDialog__current]:$[]);
-		    if (Printer::printer["detected", "ptal_manual"]:false
-			&& Printer::hp_driver == "ptal")
-		    {
-			// yes-no popup
-			string message = _("The selected printer is an HP all-in-one device.
-To access an HP all-in-one device as both printer and scanner,
-the HP PTAL service must be used.
-
-Automatic setup PTAL failed. Refer to your product documentation 
-for information about configuring PTAL manually.
-
-It is possible to set up an HP all-in-one device only for
-printing without using PTAL, but then it would stop printing
-if PTAL were configured later, because a running PTAL service 
-inhibits the normal non-PTAL access.
-
-Set up this device for printing only?");
-
-			if (! Popup::YesNo (message)) continue;
-		    }
-		    else if (Printer::printer["detected", "ptal_manual"]:false
-			&& Printer::hp_driver == "hp")
-		    {
-			Popup::Message (
-// message popup
-_("YaST failed to set up the HPLIP service.
-Therefore the HP all-in-one device was set up as an ordinary USB printer.
-Printing should work without problems, but the 'hp-toolbox' program
-for printer maintenance (ink status, etc.) cannot work because
-it requires a running HPLIP service."));
-		    }
-
-		}
-		else
-		{
-		    Printer::selectPrinter (-1);
-		    Printer::index = -1;
-		}
-	    }
-	    else if (`detected_selbox == ret)
-	    {
-		continue;
-	    }
-	    break;
-	}
-	y2milestone ("Finishing detected dialog with %1", ret);
-	return (symbol)ret;*/
     }
     /**
      * Complex dialog.

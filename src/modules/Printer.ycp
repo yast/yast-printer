@@ -58,7 +58,7 @@
     /**
       * Don't run SuSEconfig, don't restart services if true and possible
       */
-    global boolean write_only = false;
+    global boolean write_only = true;
     /**
       * Shall be printers detected
       * If nil, ask user
@@ -1456,11 +1456,16 @@ the selected spooler does not support it."), name));
 	    CUPS::server_hostname = "";
 	    CUPS::SaveServerHostName ();
 	    CUPS::WriteCupsSettings ();
+    if (((map<string, any>)SCR::Execute(.target.bash_output,
+        "diff /etc/cups/cupsd.conf /etc/cups/cupsd.conf.old|grep -c ''"))["stdout"]:"" != "0\n")
+                write_only=false;
+	if (SCR::Execute(.target.bash, "rm /etc/cups/cupsd.conf.old")!=0) 
+			y2error("Cannot remove backup of /etc/cups/cupsd.conf");
 	}
 
 	Progress::NextStage (); // adjst services
 	if (testAbort ()) return false;
-	ret = Spooler::AdjustServices (size (printcap) > 0) && ret;
+//	ret = Spooler::AdjustServices (size (printcap) > 0) && ret;
 	if (with_daemon)
 	{
 	    Progress::NextStage (); // delete old printers
