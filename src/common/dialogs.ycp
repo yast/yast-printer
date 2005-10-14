@@ -33,7 +33,6 @@
     include "printer/helps.ycp";
     include "printer/misc.ycp";
 
-list < map <string, any> > conf_unconf_printers = [];
     /**
       * Read settings dialog
       * @return `abort if aborted and `next otherwise
@@ -2128,7 +2127,7 @@ y2milestone("%1", new_spooler);
 	}));
 	items = (list < map<string,any> >) filter (any i, items, ``(i != nil));
 	integer pos=0;
-	conf_unconf_printers = items;
+	Printer::conf_unconf_printers = items;
 	maplist(map<string,any> s, items, {
 		printers = add(printers,  $[ 
 						"id" : tostring(pos), 
@@ -2167,6 +2166,46 @@ y2milestone("%1", new_spooler);
 	Printer::Detect ();
 	return `next;
     }
+   define symbol runCupsExpertDialog() ``{
+
+
+ term contents = `HBox (`HStretch (), `VBox (
+            `VStretch (),
+            `RadioButtonGroup (`id (`rb),
+                        // frame
+                `Frame (_("CUPS Configure"),`HBox (
+                    `HSpacing (3),
+                    `VBox (
+                        `VSpacing (3),
+                                // radiobutton
+          `Left(`RadioButton( `id(0), _("Change IPP Listen"))),
+          `Left(`RadioButton( `id(1), _("CUPS Server Se&ttings"))),
+          `Left(`RadioButton( `id(2), _("CUPS &USB Device Settings"))),
+                        // radiobutton
+                        `VSpacing (3)
+                    ),
+                    `HSpacing (3)
+                )
+            )),
+            `VStretch ()
+        ), `HStretch ());
+
+  Wizard::SetContentsButtons (_("Expert CUPS Settings"), contents,  getHelpCupsExperts() ,
+		Label::BackButton (), Label::NextButton () );
+
+        UI::ChangeWidget (`id (`rb), `CurrentButton,0);
+
+  any ret = UI::UserInput();
+  if (ret == `next){
+     integer option = tointeger(UI::QueryWidget(`id(`rb), `CurrentButton));
+     switch (option){
+      case 0 : return `change_ipp_listen;
+      case 1 : return `cupsd;
+      case 2 : return `cupsusb;
+     };
+  }
+  return (symbol) ret;
+ }
 
     /**
      * Common detected hardware dialog.
@@ -2181,10 +2220,10 @@ y2milestone("%1", new_spooler);
 	    [
 		[ `redetect, _("Restart Detection") ],
 		[ `default_q, _("Set Default") ],
-		[ `change_ipp_listen, _("Change IPP Listen")], 
-		[ `cupsd, _("CUPS Server Se&ttings") ],
-		[ `cupsusb, _("CUPS &USB Device Settings")],
-		[ `firewall, _("Set &Firewall")]
+		[ `cups_expert , _("CUPS Expert Settings") ]
+//		[ `change_ipp_listen, _("Change IPP Listen")], 
+//		[ `cupsd, _("CUPS Server Se&ttings") ],
+//		[ `cupsusb, _("CUPS &USB Device Settings")]
 	    ]);
 	SetHWDialogData ();
 
@@ -2209,7 +2248,7 @@ y2milestone("%1", new_spooler);
 	if (ret == `delete)
 	    {
 		if (new_spooler == "cups-client") {CUPS::cups_installation=`server;new_spooler="cups";}
-			else if ( (conf_unconf_printers[tointeger(selected), "SPOOL"]:"" != "not configured") && Popup::YesNo (sformat (_("Really delete printer %1?"), Printer::printer["name"]:""))) Printer::deletePrinter ();
+			else if ( (Printer::conf_unconf_printers[tointeger(selected), "SPOOL"]:"" != "not configured") && Popup::YesNo (sformat (_("Really delete printer %1?"), Printer::printer["name"]:""))) Printer::deletePrinter ();
 		SetHWDialogData();
 		continue;
 	    }
@@ -2222,9 +2261,12 @@ y2milestone("%1", new_spooler);
 			}
 		if (ret == `add) 
 			{
+			 Printer::selectPrinter(-1);
+			 ret = `configure_button; 
+/*
 			if (new_spooler == "cups")
 			 {
-			  if ( size(Printer::printcap)>0 && true == Popup::AnyQuestion( Label::WarningMsg(), 
+			  if ( size(Printer::printcap)>0 && true == Popup::AnyQuestion( Label::WarningMsg(),
 							// message box : configure new queue or add a new printer
 							"Do want to configure new queue ?", "Yes", "No", `focus_no )) {
                                           integer from_detect = -1;
@@ -2234,7 +2276,7 @@ y2milestone("%1", new_spooler);
                                                 string temp_string = splitstring(temp_printer["uri"]:"", ":")[1]:"";
                                               if (tointeger(selected) >= count)
                                                 {
-                                                if (temp_string == conf_unconf_printers[tointeger(selected), "ID"]:"")
+                                                if (temp_string == Printer::conf_unconf_printers[tointeger(selected), "ID"]:"")
                                                  {
                                                    from_detect = from_detect + 1;
                                                    break;
@@ -2258,9 +2300,13 @@ y2milestone("%1", new_spooler);
 				Printer::selectPrinter(-1);
 				ret = `configure_button;
 				}
-			 } else continue; 
+			 } else {
+				y2internal("no action");
+				continue;
+				}
+*/
 			}
-			if (ret == `edit) 
+			if (ret == `edit)
 			    {
 			   if (new_spooler == "cups")
 				{
@@ -2273,7 +2319,7 @@ y2milestone("%1", new_spooler);
 						string temp_string = splitstring(temp_printer["uri"]:"", ":")[1]:"";
                                               if (tointeger(selected) >= count)
 						{
-						if (temp_string == conf_unconf_printers[tointeger(selected), "ID"]:"")
+						if (temp_string == Printer::conf_unconf_printers[tointeger(selected), "ID"]:"")
 						 {
 						   from_detect = from_detect + 1;
 						   break;

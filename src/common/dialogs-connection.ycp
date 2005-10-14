@@ -203,7 +203,7 @@ only if a CUPS spooler is used.
       *   to handle dialog-specific situations
       * @return symbol wizard sequencer symbol
       */
-    define symbol runGenericConnectionTypeDialog (term items,
+    define any runGenericConnectionTypeDialog (term items,
 	string caption, string frame, string help, symbol what)
      ``{
 
@@ -226,15 +226,14 @@ only if a CUPS spooler is used.
 	    help, Label::BackButton (), Label::NextButton ());
 	Wizard::RestoreBackButton ();
 	Wizard::RestoreAbortButton ();
-	symbol ret = nil;
+	any ret = nil;
 
 	while (ret == nil)
 	{
-	    ret = (symbol)UI::UserInput ();
+	    ret = UI::UserInput ();
 	    if (ret == `next)
 	    {
-		ret = (symbol)UI::QueryWidget (`id (`connection_type),
-		    `CurrentButton);
+		ret = UI::QueryWidget (`id (`connection_type), `CurrentButton);
 		if (ret == nil)
 		{
 		    // popup message
@@ -242,14 +241,17 @@ only if a CUPS spooler is used.
 		}
 		else
 		{
+		  if ( is(ret, symbol) )	
+		   {
 		    if (what == `connection_type)
 		    {
-			ret = checkConnectionType (ret);
+			ret = checkConnectionType ((symbol)ret);
 		    }
 		    else
 		    {
-			ret = checkConnectionSubType (what, ret);
+			ret = checkConnectionSubType (what, (symbol)ret);
 		    }
+		   }
 		}
 	    }
 	}
@@ -265,11 +267,31 @@ only if a CUPS spooler is used.
 	boolean add_queue = false;
 	if (size (getConfiguredPrinters ()) != 0 && Printer::confmode == `adm)
 	    add_queue = true;
-	term items = `VBox (
-//	    `Left (`RadioButton (`id (`new_queue),
-//		 // new queue
-//		_("&New Queue"),
-//		 selected == `new_queue)),
+term items = `VBox();
+term printers = `VBox();
+if (Spooler::Get () == "cups")
+{
+	integer row = 0;
+         maplist (map i, Printer::printcap, ``{
+		  printers = add(printers,
+			`Left( `RadioButton(`id(row), i["ppd_info", "model"]:"unknown", false) ));
+		  row = row + 1;
+        });
+}
+if (size(printers)>0)
+ {
+	items = add(items,`VBox(
+	 `Frame(_("New Queue For Existing Printer"),
+	   `VBox(
+		printers
+	    )
+	  )
+	));
+ }
+	items = add(items,
+	`VBox (
+	  `Frame( _("Directly Connected printers"),
+	   `VBox(
 	    `Left (`RadioButton (`id (`parallel),
 		// radio button
 		_("&Parallel Printer"),
@@ -290,55 +312,66 @@ only if a CUPS spooler is used.
 		// radio button
 		_("Blue&tooth Printer"),
 		selected == `bluetooth))
-	);
+		))
+	));
 
 	if (Arch::s390 ())
 	    items = `VBox ();
 
+	items = add (items,
+	 `Frame(_("Network Printers"),	
+	  `VBox(
+						// radio button
+		`Left (`RadioButton (`id (`cups),_("Print via &CUPS Network Server"),selected == `cups)),
+						// radio button
+		`Left (`RadioButton (`id (`lpd),_("Print via &LPD-Style Network Server"),selected == `lpd)),
+						// radio button
+		`Left (`RadioButton (`id (`smb),_("Print via &SMB Network Server"),selected == `smb)),
+						// radio button
+		`Left (`RadioButton (`id (`ipx),_("Print via &IPX Network Server"),selected == `ipx)),
+						// radio button
+		`Left (`RadioButton (`id (`direct),_("Print &Directly to a Network Printer"),selected == `direct)),
+						// radio button
+		`Left (`RadioButton (`id (`other),_("&Other Setup"),selected == `other))
+		)
+	));
 
-	items = add (items,
-	    `Left (`RadioButton (`id (`cups),
-		// radio button
-		_("Print via &CUPS Network Server"),
-		selected == `cups)));
-	items = add (items,
-	    `Left (`RadioButton (`id (`lpd),
-		// radio button
-		_("Print via &LPD-Style Network Server"),
-		selected == `lpd)));
-	items = add (items,
-	    `Left (`RadioButton (`id (`smb),
-		// radio button
-		_("Print via &SMB Network Server"),
-		selected == `smb)));
-	items = add (items,
-	    `Left (`RadioButton (`id (`ipx),
-		// radio button
-		_("Print via &IPX Network Server"),
-		selected == `ipx)));
-	items = add (items,
-	    `Left (`RadioButton (`id (`direct),
-		// radio button
-		_("Print &Directly to a Network Printer"),
-		selected == `direct)));
-
-	if (add_queue)
-	    items = add (items, `Left (`RadioButton (`id (`queue),
-		// radio button
-		_("Create a New &Queue for an Existing Printer"),
-		selected == `queue)));
-	items = add (items, `Left (`RadioButton (`id (`other),
-		// radio button
-		_("&Other Setup"),
-		selected == `other)));
 	// dialog caption
-	symbol ret = runGenericConnectionTypeDialog (items, _("Printer Type"),
+	any ret = runGenericConnectionTypeDialog (items, _("Printer Type"),
 	    // frame label
 	    _("Printer Type"),
 	    getConnectionTypeHelp (add_queue), `connection_type);
 	if (ret == `lpd)
 	    Printer::printer["proposed_raw"] = true;
-	return ret;
+	if (is(ret, integer)) 
+		{
+                                         integer from_detect = -1;
+                                          integer count = 0;
+                                          string prn_id="";
+                                        foreach(map<string, any> temp_printer, Printer::Detect(), {
+                                                string temp_string = splitstring(temp_printer["uri"]:"", ":")[1]:"";
+                                              if (tointeger(ret) >= count)
+                                                {
+                                                if (temp_string == Printer::conf_unconf_printers[tointeger(ret), "ID"]:"")
+                                                 {
+                                                   from_detect = from_detect + 1;
+                                                   break;
+                                                 }
+                                                if (temp_string != prn_id)
+                                                        {
+                                                        from_detect = from_detect+1;
+                                                        prn_id = temp_printer["ID"]:"";
+                                                        }
+                                                count=count + 1;
+                                                }
+
+                                                });
+                                         map <string, any> tmp_map = Printer::Detect()[from_detect]:$[];
+                                         Printer::editDetected(tmp_map);
+                                         y2milestone("Configuring detected, non-configured printer");
+		 return `edit_button;
+		}
+	return (symbol)ret;
     }
 
     /**
@@ -385,7 +418,7 @@ only if a CUPS spooler is used.
 		selected == `bluetooth))
 	);
 	// dialog caption
-	return runGenericConnectionTypeDialog (items, _("Printer Type"),
+	return (symbol) runGenericConnectionTypeDialog (items, _("Printer Type"),
 	    // frame label
 	    _("Printer Type"),
 	    getLocalConnectionsHelp (), `connection_local);
@@ -429,7 +462,7 @@ only if a CUPS spooler is used.
 	);
 	Printer::printer["proposed_raw"] = true;
 	// dialog caption
-	return runGenericConnectionTypeDialog (items, _("Connection Type"),
+	return (symbol)runGenericConnectionTypeDialog (items, _("Connection Type"),
 	    // frame label
 	    _("Type of Connection to the CUPS Server"),
 	    getCupsConnectionsHelp (), `connection_cups);
@@ -469,7 +502,7 @@ only if a CUPS spooler is used.
 	);
 	Printer::printer["proposed_raw"] = false;
 	// dialog caption
-	return runGenericConnectionTypeDialog (items, _("Printer Type"),
+	return (symbol)runGenericConnectionTypeDialog (items, _("Printer Type"),
 	    // frame label
 	    _("Printer Type"),
 	    getDirectConnectionsHelp (), `connection_direct);
@@ -510,7 +543,7 @@ only if a CUPS spooler is used.
 	);
 	Printer::printer["proposed_raw"] = false;
 	// dialog caption
-	return runGenericConnectionTypeDialog (items, _("Printer Type"),
+	return (symbol)runGenericConnectionTypeDialog (items, _("Printer Type"),
 	    // frame label
 	    _("Printer Type"),
 	    getOtherConnectionsHelp (), `connection_other);
