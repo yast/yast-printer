@@ -207,7 +207,7 @@ only if a CUPS spooler is used.
 	string caption, string frame, string help, symbol what)
      ``{
 
-	term contents = `VBox (
+	  term contents = `VBox (
 	    `VSpacing (2),
 	    `HBox (
 		`HSpacing (5),
@@ -220,7 +220,23 @@ only if a CUPS spooler is used.
 		),
 		`HSpacing (5)
 	    ), `VSpacing (2)
-	);
+	  );
+
+	if (caption==nil || frame==nil)
+	 {
+	  contents = `VBox (
+	    `VSpacing (2),
+	    `HBox (
+		`HSpacing (5),
+		    `VBox (
+			`RadioButtonGroup (`id (`connection_type), items),
+			`VSpacing (1)
+		    ),
+		`HSpacing (5)
+	    ), `VSpacing (2)
+	  );
+	}
+
 	// dialog caption
 	Wizard::SetContentsButtons (caption, contents,
 	    help, Label::BackButton (), Label::NextButton ());
@@ -337,9 +353,9 @@ if (size(printers)>0)
 	));
 
 	// dialog caption
-	any ret = runGenericConnectionTypeDialog (items, _("Printer Type"),
+	any ret = runGenericConnectionTypeDialog (items, nil, //_("Printer Type"),
 	    // frame label
-	    _("Printer Type"),
+	    nil, //_("Printer Type"),
 	    getConnectionTypeHelp (add_queue), `connection_type);
 	if (ret == `lpd)
 	    Printer::printer["proposed_raw"] = true;

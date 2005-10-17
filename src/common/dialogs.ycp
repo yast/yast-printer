@@ -2090,15 +2090,19 @@ y2milestone("%1", new_spooler);
       {
         list < map<string,any> > items = maplist (map i, Printer::printcap, ``{
 	string def = "";
+y2internal("i %1", i);
 	if (i["name"]:"unknown" == Printer::default_queue) def="Default";
                 return  $[      "ID":Printerlib::getReplacedString(Printerlib::getUriDevice (i["uri"]:"")), 
 				"MODEL":i["ppd_info", "model"]:"unknown", 
 				"SPOOL":i["name"]:"unknown",  
-				"DESCR":("<b>" + i["info"]:"none" + "</b><br>" + 
-					_(" Connected As ") + i["location"]:"none") + "<br>" + 
+				"DESCR":("<b>" + i["ppd_info", "manufacturer"]:"none" +
+					" " + i["ppd_info", "model"]:"" + 
+					" / " + i["name"]:"" + "</b><br>" + 
+					_(" Connected As ") + i["uri"]:"none") + "<br>" + 
 					_(" With Spool ") + i["name"]:"none",
 				"DEFAULT":def ];
         });
+y2internal("%1", items);
 
 	items=(list < map<string,any> >) merge((list < map<string,any> >) items, (list < map<string,any> >) maplist (map i, Printer::autodetected, ``{
 	    if (isPrinterConfigured (i["vendor"]:"", i["device"]:"", i["uri"]:"", i["unique_key"]:""))
