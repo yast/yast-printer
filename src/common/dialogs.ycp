@@ -1312,7 +1312,7 @@ and test the queue after the printer model is selected."));
      * Create contents for edit dialog. Calls Setwizardcontents at the end.
      */
     define void createEditDialog () ``{
-	map ppd_info = Printer::printer["ppd_info"]:$[];
+	map ppd_info = Printer::printer["detected", "ppd_info"]:$[];		//["ppd_info"]:$[];
 	string manuf_db = ppd_info["manufacturer_db"]:"";
 	string model_db = ppd_info["model_db"]:"";
 	string nick = ppd_info["nick"]:"";
@@ -1325,7 +1325,7 @@ and test the queue after the printer model is selected."));
 	boolean conf_type = Printer::printer["type"]:"yast2" == "yast2";
 	boolean know = conf_type || Printer::printer["type"]:"yast2" == "non-yast-now";
 	boolean raw = Printer::printer["raw"]:false;
-	string model = Printer::printer["device"]:"";
+	string model = Printer::printer["detected", "ppd_info", "model"]:"";		//["device"]:"";
 
 	//
 	// texts
@@ -1386,7 +1386,14 @@ and test the queue after the printer model is selected."));
 		items = add (items, `item (`id (`state), _("State and banner settings"), ""));
 	    }
 	}
+if (Printer::printer["ppd_info"]:nil == nil) 
+		{
+		 Printer::printer["ppd_info"] = Printer::printer["detected", "ppd_info"]:$[];
+		 Printer::printer["valid"] = Printer::printer["detected", "valid"]:false;
+		 Printer::printer["ppd"] = Printer::printer["detected", "ppd"]:"";
+		}
 
+y2internal("%1", Printer::printer);
 	term allow_cbox = Printer::index >= 0 && Spooler::Get () != "cups"
 	    ? `VBox (
 		`Left (`CheckBox (`id (`yast), `opt (`notify),
@@ -2090,7 +2097,6 @@ y2milestone("%1", new_spooler);
       {
         list < map<string,any> > items = maplist (map i, Printer::printcap, ``{
 	string def = "";
-y2internal("i %1", i);
 	if (i["name"]:"unknown" == Printer::default_queue) def="Default";
                 return  $[      "ID":Printerlib::getReplacedString(Printerlib::getUriDevice (i["uri"]:"")), 
 				"MODEL":i["ppd_info", "model"]:"unknown", 
@@ -2102,7 +2108,6 @@ y2internal("i %1", i);
 					_(" With Spool ") + i["name"]:"none",
 				"DEFAULT":def ];
         });
-y2internal("%1", items);
 
 	items=(list < map<string,any> >) merge((list < map<string,any> >) items, (list < map<string,any> >) maplist (map i, Printer::autodetected, ``{
 	    if (isPrinterConfigured (i["vendor"]:"", i["device"]:"", i["uri"]:"", i["unique_key"]:""))
@@ -2225,9 +2230,6 @@ y2internal("%1", items);
 		[ `redetect, _("Restart Detection") ],
 		[ `default_q, _("Set Default") ],
 		[ `cups_expert , _("CUPS Expert Settings") ]
-//		[ `change_ipp_listen, _("Change IPP Listen")], 
-//		[ `cupsd, _("CUPS Server Se&ttings") ],
-//		[ `cupsusb, _("CUPS &USB Device Settings")]
 	    ]);
 	SetHWDialogData ();
 
@@ -2305,10 +2307,10 @@ y2internal("%1", items);
 				ret = `configure_button;
 				}
 			 } else {
-				y2internal("no action");
 				continue;
 				}
 */
+
 			}
 			if (ret == `edit)
 			    {

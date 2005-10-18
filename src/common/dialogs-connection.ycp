@@ -361,30 +361,36 @@ if (size(printers)>0)
 	    Printer::printer["proposed_raw"] = true;
 	if (is(ret, integer)) 
 		{
-                                         integer from_detect = -1;
-                                          integer count = 0;
-                                          string prn_id="";
-                                        foreach(map<string, any> temp_printer, Printer::Detect(), {
-                                                string temp_string = splitstring(temp_printer["uri"]:"", ":")[1]:"";
-                                              if (tointeger(ret) >= count)
-                                                {
-                                                if (temp_string == Printer::conf_unconf_printers[tointeger(ret), "ID"]:"")
-                                                 {
-                                                   from_detect = from_detect + 1;
-                                                   break;
-                                                 }
-                                                if (temp_string != prn_id)
-                                                        {
-                                                        from_detect = from_detect+1;
-                                                        prn_id = temp_printer["ID"]:"";
-                                                        }
-                                                count=count + 1;
-                                                }
+                  integer from_detect = -1;
+                  integer count = 0;
+                  string prn_id="";
+                  foreach(map<string, any> temp_printer, Printer::printcap, {
+                  string temp_string = splitstring(temp_printer["uri"]:"", ":")[1]:"";
+                  if (tointeger(ret) >= count)
+                   {
+                    if (temp_string == Printer::conf_unconf_printers[tointeger(ret), "ID"]:"")
+                     {
+		      y2internal("conf_unconf");
+                      from_detect = from_detect + 1;
+                      break;
+                     }
+                    if (temp_string != prn_id)
+                     {
+                      from_detect = from_detect+1;
+                      prn_id = temp_printer["ID"]:"";
+                     }
+                    count=count + 1;
+                  }
 
-                                                });
-                                         map <string, any> tmp_map = Printer::Detect()[from_detect]:$[];
-                                         Printer::editDetected(tmp_map);
-                                         y2milestone("Configuring detected, non-configured printer");
+               });
+       map <string, any> tmp_map = Printer::printcap[from_detect]:$[];
+//y2internal("%1", tmp_map);
+tmp_map["name"] = Printer::generateQueueName(nil, tmp_map["uri"]:"", 
+	tmp_map["vendor_db"]:"", tmp_map["device_db"]:"", Printer::getForbiddenNames());
+       Printer::editDetected(tmp_map);
+//Printer::runAutoprobedListDialog__current = tostring(ret);
+//Printer::selectPrinter(tointeger(ret));
+       y2milestone("Configuring detected, non-configured printer");
 		 return `edit_button;
 		}
 	return (symbol)ret;
