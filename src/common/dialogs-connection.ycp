@@ -288,9 +288,14 @@ term printers = `VBox();
 if (Spooler::Get () == "cups")
 {
 	integer row = 0;
+	list<string> used = [];
          maplist (map i, Printer::printcap, ``{
+if (contains(used, i["ppd_info", "model"]:"") == false)
+	{
 		  printers = add(printers,
 			`Left( `RadioButton(`id(row), i["ppd_info", "model"]:"unknown", false) ));
+	 used=add(used, i["ppd_info", "model"]:"");
+	}
 		  row = row + 1;
         });
 }
@@ -384,7 +389,6 @@ if (size(printers)>0)
 
                });
        map <string, any> tmp_map = Printer::printcap[from_detect]:$[];
-//y2internal("%1", tmp_map);
 tmp_map["name"] = Printer::generateQueueName(nil, tmp_map["uri"]:"", 
 	tmp_map["vendor_db"]:"", tmp_map["device_db"]:"", Printer::getForbiddenNames());
        Printer::editDetected(tmp_map);
