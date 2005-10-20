@@ -257,7 +257,7 @@ only if a CUPS spooler is used.
 		}
 		else
 		{
-		  if ( is(ret, symbol) )	
+		  if ( is(ret, symbol) )
 		   {
 		    if (what == `connection_type)
 		    {
@@ -274,17 +274,27 @@ only if a CUPS spooler is used.
 	return ret;
     }
 
-    /**
-      * Main connection type dialog
-      * @return symbol wizard sequencer symbol
-      */
-    define symbol runConnectionTypeDialog () ``{
-	symbol selected = Printer::connection_type_selected;
-	boolean add_queue = false;
-	if (size (getConfiguredPrinters ()) != 0 && Printer::confmode == `adm)
-	    add_queue = true;
-term items = `VBox();
-term printers = `VBox();
+    define symbol runPrinterTypeDialog () ``{
+	term items = `VBox(
+				 `VBox(
+				       `Left(`RadioButton(`id(`new_q), 
+							_("New Queue For Existing Printer" ), true)),
+				       `Left(`RadioButton(`id(`add_local), 
+							_("Directly Connected printers"))),
+				       `Left(`RadioButton(`id(`add_remote),  _("Network Printers")))
+				 )
+		);
+	symbol ret = (symbol) runGenericConnectionTypeDialog (items, _("Printer Type"),
+	    // frame label
+	    _("Printer Type"),
+	    getConnectionTypeHelp (false), `connection_type);
+	return ret;
+	}
+
+define symbol runNewQueueDialog() ``{
+
+  list<term> printers = [];
+  term contents = `VBox();
 if (Spooler::Get () == "cups")
 {
 	integer row = 0;
@@ -292,8 +302,7 @@ if (Spooler::Get () == "cups")
          maplist (map i, Printer::printcap, ``{
 if (contains(used, i["ppd_info", "model"]:"") == false)
 	{
-		  printers = add(printers,
-			`Left( `RadioButton(`id(row), i["ppd_info", "model"]:"unknown", false) ));
+	  printers = add(printers, `item(`id(row), i["ppd_info", "model"]:"unknown"));
 	 used=add(used, i["ppd_info", "model"]:"");
 	}
 		  row = row + 1;
@@ -301,69 +310,36 @@ if (contains(used, i["ppd_info", "model"]:"") == false)
 }
 if (size(printers)>0)
  {
-	items = add(items,`VBox(
+	contents = `VBox(
 	 `Frame(_("New Queue For Existing Printer"),
 	   `VBox(
-		printers
-	    )
+		`SelectionBox(`id(`connection_type), _("Select Printer"),
+		 printers 
+		)
 	  )
 	));
  }
-	items = add(items,
-	`VBox (
-	  `Frame( _("Directly Connected printers"),
-	   `VBox(
-	    `Left (`RadioButton (`id (`parallel),
-		// radio button
-		_("&Parallel Printer"),
-		 selected == `parallel)),
-	    `Left (`RadioButton (`id (`usb),
-		// radio button
-		_("&USB Printer"),
-		selected == `usb)),
-	    `Left (`RadioButton (`id (`serial),
-		// radio button
-		_("&Serial Printer"),
-		selected == `serial)),
-	    `Left (`RadioButton (`id (`irda),
-		// radio button
-		_("IrD&A Printer"),
-		selected == `irda)),
-	    `Left (`RadioButton (`id (`bluetooth),
-		// radio button
-		_("Blue&tooth Printer"),
-		selected == `bluetooth))
-		))
-	));
+        Wizard::SetContentsButtons (_("New Queue For Existing Printer"), contents, _("TODO help"), 
+				Label::BackButton (), Label::NextButton ());
+        Wizard::RestoreBackButton ();
+        Wizard::RestoreAbortButton ();
+        any ret = nil;
 
-	if (Arch::s390 ())
-	    items = `VBox ();
+        while (ret == nil)
+        {
+            ret = UI::UserInput ();
+            if (ret == `next)
+            {
+                ret = UI::QueryWidget (`id (`connection_type), `CurrentItem);
+                if (ret == nil)
+                {
+                    // popup message
+                    Popup::Message (_("Select the printer type."));
+                }
+            }
+        }
 
-	items = add (items,
-	 `Frame(_("Network Printers"),	
-	  `VBox(
-						// radio button
-		`Left (`RadioButton (`id (`cups),_("Print via &CUPS Network Server"),selected == `cups)),
-						// radio button
-		`Left (`RadioButton (`id (`lpd),_("Print via &LPD-Style Network Server"),selected == `lpd)),
-						// radio button
-		`Left (`RadioButton (`id (`smb),_("Print via &SMB Network Server"),selected == `smb)),
-						// radio button
-		`Left (`RadioButton (`id (`ipx),_("Print via &IPX Network Server"),selected == `ipx)),
-						// radio button
-		`Left (`RadioButton (`id (`direct),_("Print &Directly to a Network Printer"),selected == `direct)),
-						// radio button
-		`Left (`RadioButton (`id (`other),_("&Other Setup"),selected == `other))
-		)
-	));
 
-	// dialog caption
-	any ret = runGenericConnectionTypeDialog (items, nil, //_("Printer Type"),
-	    // frame label
-	    nil, //_("Printer Type"),
-	    getConnectionTypeHelp (add_queue), `connection_type);
-	if (ret == `lpd)
-	    Printer::printer["proposed_raw"] = true;
 	if (is(ret, integer)) 
 		{
                   integer from_detect = -1;
@@ -392,11 +368,79 @@ if (size(printers)>0)
 tmp_map["name"] = Printer::generateQueueName(nil, tmp_map["uri"]:"", 
 	tmp_map["vendor_db"]:"", tmp_map["device_db"]:"", Printer::getForbiddenNames());
        Printer::editDetected(tmp_map);
-//Printer::runAutoprobedListDialog__current = tostring(ret);
-//Printer::selectPrinter(tointeger(ret));
        y2milestone("Configuring detected, non-configured printer");
 		 return `edit_button;
 		}
+	return `next;
+    }
+
+    /**
+      * Main connection type dialog
+      * @return symbol wizard sequencer symbol
+      */
+    define symbol runConnectionTypeDialog (boolean local) ``{
+	symbol selected = Printer::connection_type_selected;
+	boolean add_queue = false;
+	if (size (getConfiguredPrinters ()) != 0 && Printer::confmode == `adm) add_queue = true;
+  term items = `VBox();
+if (local == true)
+ {
+	items = add(items,
+	`VBox (
+	  `Frame( _("Directly Connected printers"),
+	   `VBox(
+	    `Left (`RadioButton (`id (`parallel),
+		// radio button
+		_("&Parallel Printer"),
+		 selected == `parallel)),
+	    `Left (`RadioButton (`id (`usb),
+		// radio button
+		_("&USB Printer"),
+		selected == `usb)),
+	    `Left (`RadioButton (`id (`serial),
+		// radio button
+		_("&Serial Printer"),
+		selected == `serial)),
+	    `Left (`RadioButton (`id (`irda),
+		// radio button
+		_("IrD&A Printer"),
+		selected == `irda)),
+	    `Left (`RadioButton (`id (`bluetooth),
+		// radio button
+		_("Blue&tooth Printer"),
+		selected == `bluetooth))
+		))
+	));
+ }
+	if (Arch::s390 ())
+	    items = `VBox ();
+if (local == false)
+ {
+	items = add (items,
+	 `Frame(_("Network Printers"),	
+	  `VBox(
+						// radio button
+		`Left (`RadioButton (`id (`cups),_("Print via &CUPS Network Server"),selected == `cups)),
+						// radio button
+		`Left (`RadioButton (`id (`lpd),_("Print via &LPD-Style Network Server"),selected == `lpd)),
+						// radio button
+		`Left (`RadioButton (`id (`smb),_("Print via &SMB Network Server"),selected == `smb)),
+						// radio button
+		`Left (`RadioButton (`id (`ipx),_("Print via &IPX Network Server"),selected == `ipx)),
+						// radio button
+		`Left (`RadioButton (`id (`direct),_("Print &Directly to a Network Printer"),selected == `direct)),
+						// radio button
+		`Left (`RadioButton (`id (`other),_("&Other Setup"),selected == `other))
+		)
+	));
+ }
+	// dialog caption
+	any ret = runGenericConnectionTypeDialog (items, nil, //_("Printer Type"),
+	    // frame label
+	    nil, //_("Printer Type"),
+	    getConnectionTypeHelp (add_queue), `connection_type);
+	if (ret == `lpd)
+	    Printer::printer["proposed_raw"] = true;
 	return (symbol)ret;
     }
 
