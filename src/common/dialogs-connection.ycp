@@ -163,6 +163,7 @@ only if a CUPS spooler is used.
     /**
       * Check whether connection configuration is possible
       * additionally store last selected config type
+      * @param what symbol
       * @param selected symbol selected radio button
       * @return the same as selected radio button if proceed, nil otherwise
       */
@@ -203,7 +204,7 @@ only if a CUPS spooler is used.
       *   to handle dialog-specific situations
       * @return symbol wizard sequencer symbol
       */
-    define any runGenericConnectionTypeDialog (term items,
+    define symbol runGenericConnectionTypeDialog (term items,
 	string caption, string frame, string help, symbol what)
      ``{
 
@@ -273,7 +274,10 @@ only if a CUPS spooler is used.
 	}
 	return ret;
     }
-
+    /**
+     * Dialog for select type of printer
+     * @return symbol wizard sequencer symbol
+     */
     define symbol runPrinterTypeDialog () ``{
 	term items = `VBox(
 				 `VBox(
@@ -284,13 +288,17 @@ only if a CUPS spooler is used.
 				       `Left(`RadioButton(`id(`add_remote),  _("Network Printers")))
 				 )
 		);
-	symbol ret = (symbol) runGenericConnectionTypeDialog (items, _("Printer Type"),
+	symbol ret = runGenericConnectionTypeDialog (items, _("Printer Type"),
 	    // frame label
 	    _("Printer Type"),
 	    getConnectionTypeHelp (false), `connection_type);
 	return ret;
 	}
 
+   /**
+     * Dialog for create queue for existing printer
+     * @return symbol wizard sequencer symbol
+     */
 define symbol runNewQueueDialog() ``{
 
   list<term> printers = [];
@@ -299,13 +307,16 @@ if (Spooler::Get () == "cups")
 {
 	integer row = 0;
 	list<string> used = [];
+	/*
+	 * create unique list of configured printers
+	 */
          maplist (map i, Printer::printcap, ``{
-if (contains(used, i["ppd_info", "model"]:"") == false)
-	{
-	  printers = add(printers, `item(`id(row), i["ppd_info", "model"]:"unknown"));
-	 used=add(used, i["ppd_info", "model"]:"");
-	}
-		  row = row + 1;
+		if (contains(used, i["ppd_info", "model"]:"") == false)
+		 {
+		  printers = add(printers, `item(`id(row), i["ppd_info", "model"]:"unknown"));
+		  used=add(used, i["ppd_info", "model"]:"");
+		 }
+		row = row + 1;
         });
 }
 if (size(printers)>0)
@@ -376,6 +387,7 @@ tmp_map["name"] = Printer::generateQueueName(nil, tmp_map["uri"]:"",
 
     /**
       * Main connection type dialog
+      * @param local boolean printer is local or remote
       * @return symbol wizard sequencer symbol
       */
     define symbol runConnectionTypeDialog (boolean local) ``{
@@ -488,7 +500,7 @@ if (local == false)
 		selected == `bluetooth))
 	);
 	// dialog caption
-	return (symbol) runGenericConnectionTypeDialog (items, _("Printer Type"),
+	return runGenericConnectionTypeDialog (items, _("Printer Type"),
 	    // frame label
 	    _("Printer Type"),
 	    getLocalConnectionsHelp (), `connection_local);
@@ -532,7 +544,7 @@ if (local == false)
 	);
 	Printer::printer["proposed_raw"] = true;
 	// dialog caption
-	return (symbol)runGenericConnectionTypeDialog (items, _("Connection Type"),
+	return runGenericConnectionTypeDialog (items, _("Connection Type"),
 	    // frame label
 	    _("Type of Connection to the CUPS Server"),
 	    getCupsConnectionsHelp (), `connection_cups);
@@ -572,7 +584,7 @@ if (local == false)
 	);
 	Printer::printer["proposed_raw"] = false;
 	// dialog caption
-	return (symbol)runGenericConnectionTypeDialog (items, _("Printer Type"),
+	return runGenericConnectionTypeDialog (items, _("Printer Type"),
 	    // frame label
 	    _("Printer Type"),
 	    getDirectConnectionsHelp (), `connection_direct);
@@ -613,7 +625,7 @@ if (local == false)
 	);
 	Printer::printer["proposed_raw"] = false;
 	// dialog caption
-	return (symbol)runGenericConnectionTypeDialog (items, _("Printer Type"),
+	return runGenericConnectionTypeDialog (items, _("Printer Type"),
 	    // frame label
 	    _("Printer Type"),
 	    getOtherConnectionsHelp (), `connection_other);
