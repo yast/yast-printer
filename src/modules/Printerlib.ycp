@@ -83,6 +83,7 @@ global define void SetCupsUsbDevicesInfo (list<list<string> > di) {
 
 /**
  * Return the currently stored CUPS USB devices info
+ * @return list<list<string> >
  */
 global define list<list<string> > GetCupsUsbDevicesInfo () {
     return cups_usb_devices_info;
@@ -109,6 +110,7 @@ global list<string> GetCupsUsbDeviceInfo (string device) {
 
 /**
  * Get the list of all HP all-in-one models
+ * @return list<string> all-in-one models
  */
 global define list<string> GetHPAllInOneModels () {
     if (hp_all_in_one == nil)
@@ -355,7 +357,7 @@ ECHO_PID=$!
      * and device is depending on the type. For parallel, serial, usb, file
      * it is file name. For lpd it is server/queue.
      * For socket it is server, for ipp, http it is server/path_to_queue, for
-     * samba, novell it is user:pass@server/queuename (user, pass is
+     * samba, novell it is "user:pass@server/queuename" (user, pass is
      * optional).
      *
      * Get type of printer from uri. (First part of uri before colon)
@@ -631,8 +633,11 @@ ECHO_PID=$!
 	// Unknown printer AnYtHiNg
 	return sformat (_("Unknown printer %1"), uri);
     }
-
-   // replace string "%20" to " "
+   /**
+    * replace string "%20" to " "
+    * @param device string name of device to replace (from cups format)
+    * @return string visible_string
+    */
    global define string getReplacedString(string device)
    {
     string visible_string=device;
@@ -753,10 +758,18 @@ y2milestone("replace string %1", visible_string);
 	return paper_size;
     }
 
+   /**
+    * Function to return map of bluetooth devices
+    * @return map<string,string> bluetooth devices
+    */
 global map<string,string> ListBluetoothDevices () {
     return probed_bt_devices;
 }
 
+   /**
+    * Function to detect bluetooth devices
+    * @return map<string,string> bluetooth devices
+    */
 global map<string,string> GetBluetoothDevices () {
     // popup message
     UI::OpenDialog (`Label (_("Detecting Bluetooth devices...")));
@@ -771,8 +784,6 @@ global map<string,string> GetBluetoothDevices () {
     }
     string output = out["stdout"]:"";
     list<string> lines = splitstring (output, "\n");
-
-//list<string> lines = ["   00:04:61:82:92:AB       Printer Adapter 8292AB"];
 
     probed_bt_devices = listmap (string l, lines, {
 	if (regexpmatch (l, "[0-9a-fA-Z:]{17,17}[ \t]+[^ \t].*$"))
