@@ -96,7 +96,7 @@ global define list<list<string> > GetCupsUsbDevicesInfo () {
  *   UNIX-like device
  */
 global list<string> GetCupsUsbDeviceInfo (string device) {
-    integer pos = find (device, "lp");
+    integer pos = search(device, "lp");
     string dev_num = substring (device, pos + 2);
     list<string> ret = [];
     if (dev_num != "")
@@ -473,10 +473,10 @@ ECHO_PID=$!
      */
     global define string getUriValue (string uri, string key) ``{
 	key = key + "=";
-	integer i = find (uri, "+" + key);
-	if (-1 == i)
-	    i = find (uri, "?" + key);
-	if (-1 == i)
+	integer i = search (uri, "+" + key);
+	if (nil == i)
+	    i = search (uri, "?" + key);
+	if (nil == i)
 	    return "";
 	string val = substring (uri, i + size (key) + 1);
 	i = findfirstof (val, "+");
@@ -643,7 +643,7 @@ ECHO_PID=$!
     string visible_string=device;
     while (issubstring (visible_string, "%20"))
     {
-     visible_string = substring(visible_string,0, find(visible_string, "%20")) + " " + substring(visible_string, find(visible_string, "%20")+3);
+     visible_string = substring(visible_string,0, search(visible_string, "%20")) + " " + substring(visible_string, search(visible_string, "%20")+3);
     }
 y2milestone("replace string %1", visible_string);
     return visible_string;
