@@ -12,7 +12,6 @@ dbbuild_SOURCES = dbbuild.cc
 dbbuild_LDADD = -lscr -ly2 -lycp -lz -lcups
 dbbuild_LDFLAGS = -L$(libdir)	\
 	-Xlinker --whole-archive	\
-	$(plugindir)/libpy2stdio.la	\
 	../src/libpy2ag_ppd.la	\
 	-Xlinker --no-whole-archive
 
