@@ -20,16 +20,10 @@ runppd_SOURCES = runppd.cc
 runcups_LDADD = -lscr -ly2 -lycp -lcups
 runcups_LDFLAGS = -L$(libdir)	\
 	-Xlinker --whole-archive	\
-	$(plugindir)/libpy2stdio.la	\
-	$(plugindir)/libpy2script.la	\
 	../src/libpy2ag_cups.la	\
 	-Xlinker --no-whole-archive
 
 runppd_DEPENDENCIES = ../src/PPD.o
 runppd_LDADD = -lscr -ly2 -lycp -lz
 runppd_LDFLAGS = -L$(libdir)		\
-	../src/PPD.o			\
-	-Xlinker --whole-archive	\
-	$(plugindir)/libpy2stdio.la	\
-	$(plugindir)/libpy2script.la	\
-	-Xlinker --no-whole-archive
+	../src/PPD.o			
