@@ -1,0 +1,190 @@
+/**
+ * File:
+ *   clients/proposal_printer.ycp
+ *
+ * Package:
+ *   Configuration of printer
+ *
+ * Summary:
+ *   Proposal function dispatcher.
+ *
+ * Authors:
+ *   Petr Blahos <pblahos@suse.cz>
+ *
+ * $Id$
+ *
+ * Proposal function dispatcher for printer configuration.
+ */
+
+{
+    textdomain "printer";
+    import "Arch";
+    import "CUPS";
+    import "Label";
+    import "Mode";
+    import "Popup";
+    import "Printer";
+    import "Printerlib";
+    import "PrinterTest";
+    import "Spooler";
+
+    include "printer/wizards.ycp";
+
+    string func  = (string)WFM::Args(0);
+    map    param = (map)WFM::Args(1);
+    map    ret   = $[];
+
+    integer spool_sys = Spooler::getSpoolSystem ();
+
+    if (spool_sys == 2)
+	Spooler::Set ("cups");
+    if (func == "MakeProposal")
+    {
+	if (Spooler::Get () == "cups")
+	    CUPS::StartDaemon ();
+	boolean force_reset = param["force_reset"]:false;
+	string proposal = "";
+	string warning = nil;
+	symbol warning_level = nil;
+	if (1 == spool_sys || 2 == spool_sys || 512 + 2 == spool_sys)
+	{
+	    if (force_reset || !Printerlib::proposal_valid)
+	    {
+		Printerlib::proposal_valid = true;
+		Printer::Reset ();
+		if (Mode::update ())
+		{
+		    Spooler::RestartIfNeeded (true);
+		    Printer::queuesRead ();
+		}
+		else
+		{
+		    // no queues are existing in case of fresh install
+		}
+		// S390/S390x do not have local printers,
+		// so no warning and no probing is necessary (#19186)
+		if (Arch::s390 ())
+		{
+		    Printer::detect = false;
+		}
+		if (nil == Printer::detect)
+		    Printer::detect = Popup::AnyQuestion (Label::WarningMsg(),
+			// popup
+			_("During the following step, only local printers are detected.\n") +
+			//rwalter: i need to see this one
+			// popup, continuing
+			_("In some cases, detection can cause a
+system freeze. If a freeze happens, select Skip Detection
+when next running the printer configuration.
+
+Detect your printers now?"), Label::YesButton (),
+		    // pushbutton
+		    _("&Skip Detection"), `focus_yes);
+
+		if (Printer::detect)
+		    Printer::Detect ();
+		if (size (Printer::printcap) == 0
+		    && size (Printer::autodetected) == 0
+		    && Spooler::Get () == "cups")
+		{
+		    // no local printer found
+		    y2milestone ("No local printer found, trying IPP servers");
+		    CUPS::ProposeClientOnly ();
+		}
+		Printer::Propose ();
+	    }
+	    if (size (Printer::printcap) > 0 && ! Printer::tested
+		&& Printer::inform_about_config)
+	    {
+		ret = add (ret, "warning_level", `notice);
+		// info message in the summary
+		ret = add (ret, "warning", _("If the printout is a poor quality, try selecting another PPD file for the print queue."));
+	    }
+	    proposal = Printer::Summary ([`test_proposal]);
+	    list<string> queues = maplist (
+		map<string,any> p,
+		Printer::printcap,
+	    {
+		return sformat ("printer--test_queue_%1", p["name"]:"");
+	    });
+	    ret["links"] = queues;
+	}
+	else
+	{
+	    ret = $[
+		    // warning message (part of richtext)
+		"warning" : _("The print spooler is not installed properly.
+Press <a href=\"printer_conf\">Install Spooler</a>
+to configure your printers."),
+		"warning_level" : `notice,
+	    ];
+	    proposal = " ";
+	}
+	ret["preformatted_proposal"] = proposal;
+}
+else if (func == "AskUser")
+{
+    any chosen_id = param["chosen_id"]:nil;
+    y2milestone("Printer Proposal wanted to change with id %1", chosen_id);
+
+    // user clicked on any clickable <a href> in proposal
+    if (is (chosen_id, string)
+	&& regexpmatch ((string)chosen_id, "^printer--test_queue_.*$"))
+    {
+	string queue_name = regexpsub (
+	    (string)chosen_id,
+	    "^printer--test_queue_(.*)$",
+	    "\\1");
+	y2milestone ("Test page of queue %1", queue_name);
+	Printer::selectPrinterByName (queue_name);
+	PrinterTest::testPrinter (Printer::printer, `ask);
+	ret = $[ "workflow_sequence" : `back ];
+    }
+    else
+    {
+
+	map<string, any> saved = Printer::Export ();
+	symbol seq = PrinterAutoSequence ();
+	if (`next != seq)
+	    Printer::Import (saved);
+	y2milestone ("Printer WS return: %1", seq);
+	ret = $[ "workflow_sequence" : seq, ];
+    }
+}
+else if (func == "Description")
+{
+	// richtext label
+	ret = $[ "rich_text_title" :	_("Printers"),
+		// menu title
+		 "menu_title" :		_("&Printers"),
+		 "id" :			"printer_conf",
+		 ];
+    }
+    else if (func == "Write")
+    {
+	// remove the result of CUPS server detection
+	SCR::Execute (.target.bash,
+	    "test -f /var/lib/YaST2/cups_network_server_name && /bin/rm /var/lib/YaST2/cups_network_server_name");
+
+	/**
+	 * This is rather evil but should work for this case.
+	 * As proposal is called only on the fresh installation
+	 * with nothing configured, we may just check if the list
+	 * of printers is empty (there is nothing to save).
+	 */
+//	Spooler::RestartIfNeeded (true);
+	boolean success = true;
+	if (1 == spool_sys || 2 == spool_sys)
+	{
+	    if (0 != size (Printer::printcap) || CUPS::InstallationType () == `client)
+	    success = Printer::Write ();
+	}
+	else if (512 + 2 == spool_sys) // CUPS client-only
+	{
+	    success = Printer::Write ();
+	}
+	Spooler::StopServices ();
+        ret = $[ "success" : success ];
+    }
+    return ret;
+}

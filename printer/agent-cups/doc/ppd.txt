@@ -1,0 +1,259 @@
+AGENT FOR READING PPD FILES
+===========================
+
+This is a description of the CUPS agent part for reading
+and processing the PPD files.
+
+Authors:
+Jan Holesovsky <kendy@suse.cz>
+Michal Svec <msvec@suse.cz>
+
+1. Overview
+===========
+PostScript Printer Description (PPD) describes capabilities
+of printers. One PPD file describes one printer. PPD files
+for non-PostScript printers define additional filters through
+"cupsFilter" attributes to support printer drivers. 
+
+2. Purpose of the agent
+=======================
+Three main features are needed for the configuration of CUPS:
+
+- create a database sorted by manufacturer and model
+- read options and their possible values from the PPD file
+
+3. Format of the PPD file
+=========================
+This information from the PPD file is essential for configuration:
+
+*LanguageVersion:	English			<- for the i18n
+*LanguageEncoding:	ISOLatin1
+
+*Manufacturer:		"Tektronix"		<- for the database
+*ModelName:		"Phaser 600P"
+*NickName:		"Tektronix Phaser 600P, upp"
+
+*pnpManufacturer:	"Tektronix"		<- for autodetection
+*pnpModel:		"Phaser 600P"
+*1284DeviceID:		"
+    MANUFACTURER:Tektronix;COMMAND SET:Adobe Level 2 PostScript;
+    MODEL:Phaser 600P;CLASS:Printer;DESCRIPTION:
+    Phaser 600 Wide Format Color Printer, PostScript Level 2,
+    Cut Sheet/Roll Fed; COMPATIBLE_ID:"
+
+One option (with values) looks like:
+
+*OpenUI *NameOfTheOption/Human readable explanation: <type of the option>
+*DefaultNameOfTheOption: Value2
+*NameOfTheOption Value1/Explanation of Value1: "some PostScript code"
+*NameOfTheOption Value2/Explanation of Value2: "some PostScript code"
+...
+*CloseUI: *NameOfTheOption
+
+All the information (but the PostScript code) is essential.
+
+4. Common settings
+==================
+These are the settings which do not rely on the PPD file. Check
+http://www.cups.org/sum.html#STANDARD_OPTIONS
+for a complete list.
+
+5. Interface for ppd part of ag_cups
+====================================
+The CUPS Agent is a SCR agent mounted on path ".cups".
+This path has several subpaths (according to the needed features).
+The PPD part will be mounted on .cups.ppd and contains these paths:
+
+5.1 Status of the current database
+----------------------------------
+Path:
+    .ppd.changed
+Returns:
+    A boolean if the map has changed (true) or not.
+Example:
+    Read(.ppd.changed)
+
+5.2 Creation of the database
+----------------------------
+Path:
+    .ppd.createdb
+Returns:
+    A boolean if the creation was successful (true) or not.
+Write:
+    Writing true triggers the database creation. Use the .progress
+    for its status. Writing false stops the database creation.
+Example:
+    Write(.ppd.createdb,true)
+    Read(.ppd.createdb)
+
+5.3 Creation progress (not implemented yet)
+-------------------------------------------
+Path:
+    .ppd.progress
+Returns:
+    An integer <0,100> which means the done percent.
+Example:
+    Read(.ppd.progress)
+
+5.4 Settings
+------------
+Path:
+    .cups.ppd.options, [ <string>, <map> ]
+    .cups.ppd.common_options, [ <string>, <map> ]
+Arguments:
+    <string> ppd file name
+    <map> map of currently marked option
+Returns:
+    .cups.ppd.options:
+      map $[
+        "ppd" : list_of_options,
+        "charset": <string>      // ppd file encoding (IsoLatin1, ...)
+      ];
+    .cups.ppd.common_options:
+      list_of_options
+      
+    A list of options (list_of_options):
+        [
+          $[
+            "name" : <string>,		// Human readable name
+            "type" : <string>,		// "boolean"|"pick_one"|"pick_many"|"int"|"slider"|"yesno"
+            "option" : <string>,	// Option for "lpoption -o" command
+            "default" : <string>,	// Default value
+            "marked" : <string>,        // Currently marked value
+            "values" : $[
+              <string> : <string>,	// Value : Name
+              ...
+            ]
+          ],
+          ...
+        ]
+
+For "type" == "slider" | "int" there are additional keys:
+            "lowermargin" : <int>
+            "uppermargin" : <int>
+For "type" == "slider"|"int"|"yesno" key "values" is not present.
+        
+Example:
+    Read(.cups.ppd.options, [ "/usr/share/cups/model/Canon/BJC-250-bjc600.ppd", $[] ])
+    Read(.cups.ppd.common_options, [ "/usr/share/cups/model/Canon/BJC-250-bjc600.ppd", $[] ])
+Fixme:
+    Better example
+    
+6. Printer database format
+==========================
+
+The printer database is at the "/var/lib/YaST2/ppd_db.ycp".
+It is created upon request or if any ppd file has changed or has been
+added. Read it with Read(.target.ycp).
+
+The PPD map format:
+    $[ <string> :			// Manufacturer
+        $[ <string> :			// Model
+            $[ <string> :		// Driver
+                <string ppdfile>,		// PPD file path
+               ...
+            ],
+            ...
+        ],
+        ...
+    ]
+
+Example:
+    $[
+        "Canon" : $[
+            "BJC 250" : $[
+                "Canon BJC-250, Foomatic + bj200"
+                    : "/usr/share/cups/model/Canon/BJC-250-bj200.ppd",
+                "Canon BJC-250, Foomatic + bjc600"
+                    : "/usr/share/cups/model/Canon/BJC-250-bjc600.ppd"
+            ],
+            "BJC 240" : $[
+                ...
+            ],
+        ],
+        "Tektronix" : $[
+            ...
+        ],
+    ...
+    ]
+
+6. Implementation details
+=========================
+
+6.1 Detection
+-------------
+The pnpM* options are used only in cups-o-matic free PPD files.
+The 1284DeviceID is used in some commercial PPD files.
+And all these options are often left empty.
+The Manufacturer in some commercial PPD files means the vendor of the RIP.
+Conclusion: use 1284*, pnpM*, Manufacturer, Modelname, Product and Nickname.
+
+Solution:
+As the IEEE1284 detection strings are missing in the most cases,
+one can get the right ppd file by just indexing with given vendor
+and model into the returned (read) db. The keys was created with
+the aim of this possibility and should suffice on the most cases.
+
+6.2 Common settings
+-------------------
+Names will be provided by the agent.
+
+6.3 Strings
+-----------
+All strings must be in Unicode UTF-8 (converted from the *LanguageEncoding).
+
+6.4 Gzipped PPD files
+---------------------
+PPD files may be gzipped, so they must be ungzipped before reading.
+
+6.5 PPD file processing
+-----------------------
+The processing of all PPD files is very time-consuming and gzipped
+PPD files make the process even more slow. This problem is solved
+by preprocessing the files to the ycp map only when needed.
+
+Parsing times (PentiumIII/500):
+ESP drivers (50M, 2300)		40s
+ESP drivers gzipped		1:20
+Average all files		2:10
+Maximum time (no cache)		2:30
+
+Solution:
+- prepare a ycp file with the contents
+- regenerate only if something has changed
+- use progress bar (agent<->module)
+- possibility of abort the process
+
+Code fragment:
+
+if(SCR(Read(.ppd.changed))) {
+    SCR(Write(.ppd.createdb, true));
+    integer progress = 0;
+    do {
+        progress = SCR(Read(.ppd.progress));
+        updateProgressWidget(progress);
+        if(abortWidget()) {
+            SCR(Write(.ppd.createdb,false));
+            break;
+        }
+        sleep(1);
+    } while(progress<100)
+    if(!SCR(Read(.ppd.createdb))
+        error("error creating db");
+}
+map db = ReadY2("/var/lib/YaST2/ppd_db.ycp");
+
+FIXME: take a look at cupsd for faster ppd files processing
+FIXME: maybe don't use C++
+
+6.6 Progress bar
+----------------
+FIXME: TODO
+
+6.7 I18n
+--------
+FIXME: The i18n is not solved now
+There are some PPD files in more language mutations.
+Solution: use only English ppd files and than use gettext.
+
+EOF

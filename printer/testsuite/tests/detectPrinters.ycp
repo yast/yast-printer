@@ -1,0 +1,270 @@
+/**
+ * File:
+ *  detectPrinters.ycp
+ *
+ * Module:
+ *  Printer configurator
+ *
+ * Summary:
+ *  Miscelaneous tests.
+ *
+ * Authors:
+ *  Petr Blahos <pblahos@suse.cz>
+ *
+ * $Id$
+ *
+ */
+
+{
+    import "Pkg";
+
+    include "testsuite.ycp";
+
+    // testedfiles: Printer.ycp Spooler.ycp Printerlib.ycp CUPS.ycp
+
+    map I_READ = $[
+	"target" : $[
+	    "size" : -1,
+	    "tmpdir" : "/tmp/",
+	    "yast2" : nil,
+	    "string" : "",
+	],
+	"sysconfig" : $[
+	    "console" : $[
+		"CONSOLE_FONT" : "",
+		"CONSOLE_SCREENMAP" : "",
+		"CONSOLE_UNICODEMAP" : "",
+		"CONSOLE_MAGIC" : "",
+		"CONSOLE_ENCODING" : "",
+	    ],
+	    "language" : $[
+		"RC_LANG" : "",
+		"DEFAULT_LANGUAGE" : "",
+	    ],
+	    "personal-firewall" : $[
+		"REJECT_ALL_INCOMING_CONNECTIONS" : nil,
+	    ],
+	],
+	"etc" : $[
+	    "install_inf" : $[
+		"Cmdline" : "",
+		"InstMode" : nil,
+	    ],
+	],
+	"probe" : $[
+	    "architecture" : "i386",
+	    "has_apm" : true,
+	    "has_pcmcia" : false,
+	    "has_smp" : false,
+	    "system" : [],
+	    "memory" : [],
+	    "cpu" : [],
+	    "cdrom" : $[
+		"manual" : [],
+	    ],
+	    "floppy" : $[
+		"manual" : [],
+	    ],
+	    "is_uml" : false,
+	],
+	"product" : $[
+	    "features" : $[
+		"USE_DESKTOP_SCHEDULER" : "0",
+		"ENABLE_AUTOLOGIN" : "0",
+		"EVMS_CONFIG" : "0",
+		"IO_SCHEDULER" : "cfg",
+		"UI_MODE" : "expert",
+	    ],
+	],
+    ];
+    map I_WRITE = $[];
+    map I_EXEC = $[
+        "target" : $[
+            "bash_output" : $[],
+        ],
+    ];
+    TESTSUITE_INIT ([I_READ, I_WRITE, I_EXEC], 0);
+    import "Printer";
+    import "Printerlib";
+    import "Spooler";
+
+    map READ =
+        $[
+            "probe" : $[
+                "printer" : [
+                    $[
+                        "bus":"Parallel",
+                        "class_id":265,
+                        "dev_name":"/dev/lp0",
+                        "device":"BJC-6100",
+                        "sub_class_id":0,
+                        "unique_key":"xVOt.CRhzf0_Mb88",
+                        "vendor":"Canon"
+                    ],
+                    $[
+                        "bus":"USB",
+                        "class_id":265,
+                        "dev_name":"/dev/usblp0",
+                        "device_id":200786,
+                        "resource":$["baud":[$["speed":1500000]]],
+                        "rev":"1.03",
+                        "sub_class_id":0,
+                        "sub_device":"BJC-6100",
+                        "sub_vendor":"Canon",
+                        "unique_key":"Q0jS.ZoQ4aZ8KEv3",
+                        "vendor":"Canon Inc.",
+                        "vendor_id":197801
+                    ]
+                ]
+            ],
+	    "proc" : $[ "modules" : $[ "usblp" : ""]],
+	    "ppd" : $[
+		"db" : $[
+		    "vendorname" : "",
+		    "modelname" : "",
+		],
+	    ],
+	    "target" : $[
+		"size" : -1,
+		"string" : "",
+	    ],
+	];
+    map EXEC= $[
+	"target" : $[
+	    "bash_output" : $[
+		"exit" : 0,
+		"stdout" : "",
+	    ],
+	],
+    ];
+    DUMP ("--- Detection for lprng");
+    Spooler::Set ("lprng");
+    TEST (``(Printer::Detect ()), [READ, $[], EXEC], true);
+    DUMP ("--- Detection for cups");
+    Spooler::Set ("cups");
+    TEST (``(Printer::Detect ()), [READ, $[], EXEC], true);
+
+    READ = $[
+            "probe" : $[
+                "printer" : [
+                    $[
+                        "bus":"USB",
+                        "class_id":265,
+                        "dev_name":"/dev/usblp0",
+                        "device_id":200786,
+                        "resource":$["baud":[$["speed":1500000]]],
+                        "rev":"1.03",
+                        "sub_class_id":0,
+                        "sub_device":"USB Printer",
+                        "sub_vendor":"Epson",
+                        "unique_key":"Q0jS.ZoQ4aZ8KEv3",
+                        "vendor":"Epson Inc.",
+                        "vendor_id":197801
+                    ],
+                ],
+	    ],
+	    "proc" : $[ "modules" : $[ "usblp" : ""]],
+    	    "ppd" : $[
+		"db" : $[
+		    "vendorname" : "",
+		    "modelname" : "",
+		],
+	    ],
+	    "target" : $[ "size" : -1],
+        ];
+    DUMP ("--- Detection for lprng");
+    Spooler::Set ("lprng");
+    TEST (``(Printer::Detect ()), [READ, $[], EXEC], true);
+    DUMP ("--- Detection for cups");
+    Spooler::Set ("cups");
+    TEST (``(Printer::Detect ()), [READ, $[], EXEC], true);
+
+    // try to detect for cups but without vendor_id and device_id
+    READ = $[
+            "probe" : $[
+                "printer" : [
+                    $[
+                        "bus":"USB",
+                        "class_id":265,
+                        "dev_name":"/dev/usblp0",
+                        "resource":$["baud":[$["speed":1500000]]],
+                        "rev":"1.03",
+                        "sub_class_id":0,
+                        "sub_device":"USB Printer",
+                        "sub_vendor":"Epson",
+                        "unique_key":"Q0jS.ZoQ4aZ8KEv3",
+                        "vendor":"Epson Inc.",
+                    ]
+                ]
+            ],
+	    "proc" : $[ "modules" : $[ "usblp" : ""]],
+	    "target" : $[ "size" : 555],
+       	    "ppd" : $[
+		"db" : $[
+		    "vendorname" : "",
+		    "modelname" : "",
+		],
+	    ],
+     ];
+    EXEC = $[
+	"target" : $[
+	    "bash_output" : $[
+		"exit" : 0,
+		"stderr" : "",
+		"stdout" : "direct usb://EPSON/Stylus%20Photo%20810?serial=W33040110201335050 \"EPSON Stylus Photo 810\" \"USB Printer #1\"
+direct usb:/dev/usb/lp1 \"Unknown\" \"USB Printer #2\"
+direct usb:/dev/usb/lp2 \"Unknown\" \"USB Printer #3\"",
+		]
+	    ],
+	];
+    DUMP ("--- Detection for cups");
+    Spooler::Set ("cups");
+    TEST (``(Printer::Detect ()), [READ, $[], EXEC], true);
+
+    // try to detect all-in-one device
+    READ = $[
+            "probe" : $[
+                "printer" : [
+                    $[
+                        "bus":"USB",
+                        "class_id":265,
+                        "dev_name":"/dev/usblp0",
+                        "resource":$["baud":[$["speed":1500000]]],
+                        "rev":"1.03",
+                        "sub_class_id":0,
+                        "sub_device":"USB Printer",
+                        "sub_vendor":"HP",
+                        "unique_key":"Q0jS.ZoQ4aZ8KEv3",
+                        "vendor":"HP",
+			"model" : "Hewlett-Packard PSC 2200 Series",
+                    ]
+                ]
+            ],
+            "proc" : $[ "modules" : $[ "usblp" : ""]],
+            "target" : $[ "size" : 555],
+       	    "ppd" : $[
+		"db" : $[
+		    "vendorname" : "",
+		    "modelname" : "",
+		],
+	    ],
+     ];
+
+    EXEC = $[
+	"target" : $[
+	    "bash_output" : $[
+		"exit" : 0,
+		"stderr" : "",
+		"stdout" : "direct ptal:/mlc:usb:PSC_2200_Series \"Hewlett-Packard PSC 2200 Series\" \"PTAL mlc:usb:PSC_2200_Series\"
+"
+	    ],
+	]
+    ];
+
+    DUMP ("--- Detection for cups");
+    Spooler::Set ("cups");
+    Printerlib::hp_all_in_one = ["USB Printer"];
+    TEST (``(Printer::Detect ()), [READ, $[], EXEC], true);
+
+
+}

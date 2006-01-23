@@ -1,0 +1,572 @@
+/**
+ * File:
+ *  modules/PrinterTest.ycp
+ *
+ * Module:
+ *  Printer configurator
+ *
+ * Summary:
+ *  Testpage printing defines
+ *
+ * Authors:
+ *  Petr Blahos <pblahos@suse.cz>
+ *  Jiri Srain <jsrain@suse.cz>   2002
+ *
+ * $Id$
+ *
+ */
+
+{
+    module "PrinterTest";
+
+    textdomain "printer";
+
+    import "CUPS";
+    import "Label";
+    import "Mode";
+    import "Popup";
+    import "Printer";
+    import "Printerdb";
+    import "Printerlib";
+    import "Report";
+    import "Spooler";
+
+
+// local functions
+
+    /**
+     * Prepare ascii test page. Insert localized string into it.
+     * @return string path+filename to updated test page.
+     */
+    define string prepareAsciiTestPage () ``{
+	// TRANSLATORS:
+	// You may add some text to ascii test page if you want.
+	// Fill in your encoding here! (e.g. iso-8859-2 for czech)
+	string encoding = _("!!!  YOUR  ENCODING  !!!");
+	// TRANSLATORS:
+	// This text will be added at the end of your test-page if
+	// user chooses your language. Write anything you want here.
+	// Long multiline text can be here, please break your lines
+	// at 80 characters.
+	// This text will be visible only if user chooses your
+	// language!!! If you want some text to be added in common
+	// section, send me an e-mail to <pblahos@suse.cz>. Your
+	// text must contain encoding and text. e.g.:
+	// ISO-8859-1: Some text in your language.
+	// ONLY ONE LINE PLEASE
+	string special_text = _("!!!  YOUR  TEXT  !!!");
+	// TRANSLATORS:
+	// Ascii Test Page now contains only English explanation:
+	// Following lines contain characters in various encodings.  You can check if your
+	// selection works properly.
+	// If you are English, do not translate it!
+	// If you translate it, it must be in encoding "!!!  YOUR  ENCODING !!!".
+	// Please break lines at 80 characters. DO NOT USE DIACRITICS (UMLAUTS/ACCENTS).
+	// It is possible, that proper encoding is not chosen when printing the
+	// test page.
+	// ONLY ONE LINE PLEASE. IF YOU WANT MORE LINES, PLEASE USE \\n
+	string common_text = _("!!! COMMON  EXPLANATION !!!");
+
+
+	string out_file = (string)SCR::Read (.target.tmpdir) + "/testpg.ascii";
+	string c_text = "";
+	string s_text = "";
+	if ("!!!  YOUR  ENCODING  !!!" != encoding && "" != encoding)
+	    {
+		if ("!!!  YOUR  TEXT  !!!" != special_text && "" != special_text)
+		    {
+			s_text = (string)UI::Recode ("utf-8", encoding, special_text);
+			s_text = mergestring (splitstring (s_text, "\n"), " ");
+		    }
+		if ("!!! COMMON  EXPLANATION !!!" != common_text && "" != common_text)
+		    {
+			c_text = (string)UI::Recode ("utf-8", encoding, common_text);
+			c_text = mergestring (splitstring (c_text, "\n"), " ");
+		    }
+	    }
+	string path_to_testpage = Printerlib::baseDataDir + "/testpg.ascii";
+
+	// now we have texts to replace.
+	SCR::Execute (
+	    .target.bash,
+	    sformat (
+		"/bin/cat %1 | /bin/sed -e \"s/~common~explanation~/%2/\" -e \"s/~special~text~/%3/\" > %4",
+        path_to_testpage, c_text, s_text, out_file));
+	return out_file;
+    }
+    /**
+      * Prepare test page
+      * @param queue queue name
+      * @param opt_file file with queue options
+      * @param photo boolean true ifphoto should be present
+      * @return filename of the test page
+      */
+    define string preparePsTestPage (string queue, string opt_file,
+	boolean photo)
+    ``{
+	string out_file = (string)SCR::Read (.target.tmpdir) + "/testpg.ps";
+	string command = sformat (
+	    "/usr/lib/YaST2/bin/prepare_ps_testpage.pl %1 %2 %3 %4",
+	    opt_file,
+	    out_file,
+	    "/usr/share/YaST2/theme/current/testpage/logo.eps",
+	    photo
+		? "/usr/share/YaST2/theme/current/testpage/photo.eps"
+		: ""
+	);
+	y2milestone ("Testpage prepare command: %1", command);
+	SCR::Execute (.target.bash, command);
+	return out_file;
+	// test the distribution
+	string path_to_testpage = Printerlib::baseDataDir + "/testpg.ps";
+
+	y2debug("template test file to print: %1", path_to_testpage);
+
+    }
+
+    /**
+     * Shows dialog box that allows user to stop printing.
+     * @param pr_command Command that was used to start printing.
+     * Showed in text field.
+     * @return boolean true if printing has to be stopped
+     */
+    define boolean OkOrStopPrinting (string pr_command) ``{
+	// message box with [OK] [Stop]
+	string text = sformat (_("The test page was sent to the printer using
+the command '%1'.
+Printing should start in a few seconds.
+
+If the printer is not producing the appropriate
+output, use the 'Stop' button.
+
+When the entire page is printed, press
+'Printout Finished'."), pr_command);
+	// push button
+	return Popup::AnyQuestion (Popup::NoHeadline (), text, _("Printout &Finished"), Label::StopButton (), `focus_yes);
+    }
+
+    /**
+      * Saves printer under some new name and tests it.
+      * @param printer map of printer to test
+      * @param testpage_type type of page.
+      * Supported are `ascii, `postscript, `photo, `ask
+      * @return boolean true if success
+      */
+    global define boolean testPrinter (map<string,any> printer, symbol testpage_type) ``{
+	if (Mode::config ())
+	{
+	    Printerlib::DisplayUnavailableAIPopup ();
+	    return true;
+	}
+
+	printer = Printer::assignState (printer, true);
+
+	Printerdb::loadFoomaticIfNeeded ();
+
+	if (! printer["valid"]:true)
+	{
+	    // message popup
+	    Popup::Message (_("Unable to print a test page. You are using a different spooler."));
+	    return false;
+	}
+
+	if (Spooler::Get () != "cups")
+	{
+	    // message box
+	    Popup::Message (_("Unable to print a test page. 
+Install a supported spooler 
+before printing test pages."));
+	    return true;
+	}
+
+	// set for printing using localhost
+	string cups_server_on_disk = "";
+	if (Spooler::Get () == "cups")
+	{
+	    CUPS::LoadServerHostName ();
+	    cups_server_on_disk = CUPS::server_hostname;
+	    CUPS::server_hostname = "";
+	    CUPS::SaveServerHostName ();
+	    CUPS::cups_installation = `server;
+	}
+
+	Spooler::RestartIfNeeded (true);
+
+	if (testpage_type == nil)
+	    testpage_type = `ask;
+	if (printer == nil || size (printer) == 0)
+	{
+	    Report::Error ("Internal error - printer structure empty");
+	    return false;
+	}
+	if (testpage_type != `ask)
+	{
+	    // message box
+	    if (!Popup::AnyQuestion ("", _("Ready to print a sample page.
+
+Make sure that the printer is turned
+on and online then press the 'OK' button."),
+		    Label::OKButton (), Label::CancelButton (), `focus_yes))
+	    {
+		return true;
+	    }
+	}
+	else
+	{
+	    boolean photo_exists = 0 < SCR::Read (.target.size,
+		"/usr/share/YaST2/theme/current/testpage/photo.eps");
+	    UI::OpenDialog (
+		`VBox (
+		    // label
+		    `Label (_("Ready to print a sample page.
+
+Select the test page type, make sure that 
+the printer is turned on and ONLINE, then 
+press 'OK'.")),
+		    `VSpacing (1),
+		    `RadioButtonGroup (`id (`type), `VBox (
+			photo_exists
+			    ? `Left (`RadioButton (`id (`graphic),
+				// radiobutton
+				_("Test &Graphical Printing without Photo")))
+			    : `Left (`RadioButton (`id (`graphic),
+				// radiobutton
+				_("Test &Graphical Printing"))),
+			photo_exists
+			    ? `Left (`RadioButton (`id (`photo),
+				// radiobutton
+				_("Test Graphical Printing with &Photo")))
+			    : `VSpacing (0),
+
+			`Left (`RadioButton (`id (`ascii),
+			    // radiobutton
+			    _("Test &Text Printing")))
+		    )),
+		    `VSpacing (1),
+		    `HBox (
+			// pushbutton
+			`PushButton (`id (`ok), `opt (`key_F10, `default), Label::OKButton ()),
+			// pushbutton
+			`PushButton (`id (`cancel), `opt (`key_F9), Label::CancelButton ())
+		    )
+		)
+	    );
+	    UI::ChangeWidget (`id (`type), `CurrentButton, `graphic);
+	    symbol ret = nil;
+	    while (nil == ret)
+	    {
+		ret = (symbol)UI::UserInput ();
+		if (ret == `cancel)
+		{
+		    UI::CloseDialog ();
+		    return true;
+		}
+		if (ret == `ok)
+		{
+		    symbol button = (symbol)
+			UI::QueryWidget (`id (`type), `CurrentButton);
+		    if (button == `ascii)
+		    {
+			testpage_type = `ascii;
+		    }
+		    else if (button == `graphic)
+		    {
+			testpage_type = `postscript;
+		    }
+		    else
+		    {
+			testpage_type = `photo;
+		    }
+		    break;
+		}
+		ret = nil;
+	    }
+	    UI::CloseDialog ();
+	}
+
+	// create new name for the printer
+	list forbidden_names = union (Printer::getForbiddenNames (), Printer::DeletedNames ());
+	string virtual_name = printer["name"]:"";
+	string name = Printer::adjustQueueName ("y2test", forbidden_names);
+	string uri = printer["uri"]:"";
+	string printer_type = uri == "class" ? "class" : "printer";
+	printer = add (printer, "name", name);
+	printer = add (printer, "recreate", true);
+	printer = Printer::fixPrinter (printer);
+	y2debug ("Printer for testpage: %1", printer);
+
+	if (Spooler::Get () == "cups")
+	{
+	    CUPS::StopListenCupsServers ();
+	    Spooler::restartServices (true);
+	}
+	Printer::SaveQueue (printer);
+	//
+	// print test page
+	// to queue: name
+	// but tell user it is queue: virtual_name
+	string test_page = "";
+
+	string ppd_file = printer["ppd"]:"";
+	map ppd_info = Printerdb::PpdInfo (ppd_file);
+	string manuf = ppd_info["manufacturer"]:"";
+	string model = ppd_info["model"]:"";
+	string config = ppd_info["nick"]:"";
+// print whole nick name (bug #37488)
+//	if (findfirstof (config, "(") != nil)
+//	    config = substring (config, 0, findfirstof (config, "("));
+	if (`postscript == testpage_type || `photo == testpage_type)
+	{
+	    map consolefonts = (map)SCR::Read (.target.yast2,
+		"consolefonts.ycp");
+	    string ce = consolefonts[UI::GetLanguage (false), 4]:"X";
+	    string opts = (string)SCR::Read (.target.tmpdir)
+		+ "/testpg.options";
+	    string os = "";
+	    // encoding first
+	    ce = toupper (ce);
+	    if (ce != "ISO-8859-2" && ce != "ASCII" && ce != "ISO-8859-15"
+		&& ce != "ISO-8859-1")
+	    {
+		ce = toupper (_("!!!  YOUR  ENCODING  !!!"));
+	    }
+	    if (ce != "ISO-8859-2" && ce != "ASCII" && ce != "ISO-8859-15"
+		&& ce != "ISO-8859-1")
+	    {
+		ce = "ASCII";
+	    }
+
+	    string enc = "ISO-8859-2" == ce ? "h02" : "h01";
+
+	    list<map> optlist_map =  Printerdb::getPpdFileOptions (ppd_file);
+	    list<string> optlist = maplist (map i, optlist_map, ``{
+		    string name = i["name"]:"";
+		    string label = i["gui"]:"";
+		    string value = printer["ppd_options", name]:"";
+		    if (value == "")
+			value = i["current"]:"";
+		    string valuelabel = i["values", value]:"";
+		    if (label == "")
+			label = name;
+		    if (valuelabel == "")
+			valuelabel = value;
+		    if (label != "" && valuelabel != "")
+			return sformat ("(%1: %2)", label, valuelabel);
+		    else
+			return "";
+	    });
+	    optlist = filter (string o, optlist, ``(o != "" && o != nil));
+
+// encoding
+	    os = os + sformat ("----X-ENCODING: %1\n", enc);
+
+// labels
+            // TRANSLATORS: keep this short! Only translations in languages
+            // with encodings ISO-8859-[1|2|15] will be used.
+	    os = os + sformat ("----X-HEAD: (%1)\n", _("YaST2 Test Page"));
+	    // TRANSLATORS: keep this short! Only translations in languages
+	    // with encodings ISO-8859-[1|2|15] will be used.
+	    os = os + sformat ("----X-SECT1-L: (%1)\n", _("Print Queue:"));
+            // TRANSLATORS: keep this short! Only translations in languages
+            // with encodings ISO-8859-[1|2|15] will be used.
+	    os = os + sformat ("----X-SECT2-L: (%1)\n", _("Printer:"));
+	    // TRANSLATORS: keep this short! Only translations in languages
+	    // with encodings ISO-8859-[1|2|15] will be used.
+	    os = os + sformat ("----X-SECT3-L: (%1)\n", _("PPD File:"));
+            // TRANSLATORS: keep this short! Only translations in languages
+            // with encodings ISO-8859-[1|2|15] will be used.
+	    os = os + sformat ("----X-SECT4-L: (%1)\n", _("Options:"));
+
+// border
+	    os = os + sformat ("----X-BORDER-1: (%1)\n",
+		// footnote of the test page 1/6
+		// TRANSLATORS: keep this short! Only translations in languages
+		// with encodings ISO-8859-[1|2|15] will be used.
+		_("The border lines start and end at the edges of the imageable area."));
+	    os = os + sformat ("----X-BORDER-2: (%1)\n",
+		// footnote of the test page 2/6
+		// TRANSLATORS: keep this short! Only translations in languages
+		// with encodings ISO-8859-[1|2|15] will be used.
+		_("They have 1 inch or 2 cm to the edges of the imageable area."));
+	    os = os + sformat ("----X-BORDER-3: (%1)\n",
+		// footnote of the test page 3/6
+		// TRANSLATORS: keep this short! Only translations in languages
+		// with encodings ISO-8859-[1|2|15] will be used.
+		_("The actual imageable area depends on the printer model and Ghostscript driver."));
+	    os = os + sformat ("----X-BORDER-4-LEFT: (%1)\n",
+		// footnote of the test page 4/6
+		// TRANSLATORS: keep this short! Only translations in languages
+		// with encodings ISO-8859-[1|2|15] will be used.
+		// it will be followed by a position specification
+		// (number/number) and the following part of testpage footnote
+		_("Here it begins on the bottom left at"));
+	    os = os + sformat ("----X-BORDER-4-RIGHT: (%1)\n",
+		// footnote of the test page 5/6
+		// TRANSLATORS: keep this short! Only translations in languages
+		// with encodings ISO-8859-[1|2|15] will be used.
+		// it will be followed by a position specification
+		// (number/number)
+		_("and on the top right it ends at"));
+	    os = os + sformat ("----X-BORDER-5: (%1)\n",
+		// footnote of the test page 6/6
+		// TRANSLATORS: keep this short! Only translations in languages
+		// with encodings ISO-8859-[1|2|15] will be used.
+		_("1 unit = 1 PostScript point = 0.0139 inch = 0.0353 cm."));
+
+// values
+	    os = os + sformat ("----X-SECT1: (%1)\n", virtual_name);
+
+	    list<string> sect2_values = [
+		manuf != "" || model != ""
+		// label for test page, %1 will be printer manufacturer,
+		// %2 will be model,
+		// eg. Manufacturer ane model: EPSON Stylus Photo 810
+		// TRANSLATORS: keep this short! Only translations in languages
+		// with encodings ISO-8859-[1|2|15] will be used.
+		  ? sformat (_("Manufacturer and Model: %1 %2"), manuf, model)
+		  : "",
+		printer["info"]:"" != ""
+		// label for testpage, %1 will be text specified by use as
+		// description of the printer
+		// TRANSLATORS: keep this short! Only translations in languages
+		// with encodings ISO-8859-[1|2|15] will be used.
+		  ? sformat (_("Printer Description: %1"), printer["info"]:"")
+		  : "",
+		printer["location"]:"" != ""
+		// label for testpage, %1 will be text specified by use as
+		// description of the location of the printer
+		// TRANSLATORS: keep this short! Only translations in languages
+		// with encodings ISO-8859-[1|2|15] will be used.
+		  ? sformat (_("Printer Location: %1"), printer["location"]:"")
+		  : "",
+		Printerlib::getUriNiceName (printer["uri"]:"") != ""
+		// label for testpage, %1 will be user-friendly description
+		// of the URI of the printer
+		// TRANSLATORS: keep this short! Only translations in languages
+		// with encodings ISO-8859-[1|2|15] will be used.
+		  ? sformat (_("Device URI: %1"),
+		    Printerlib::getUriNiceName (printer["uri"]:""))
+		  : "",
+	    ];
+	    sect2_values = filter (string v, sect2_values, ``(
+		v != "" && v != " "
+	    ));
+	    sect2_values = maplist (string v, sect2_values, ``(
+		sformat ("(%1)", v)
+	    ));
+	    os = os + sformat ("----X-SECT2: %1\n",
+		mergestring (sect2_values, " "));
+
+	    if (config == "")
+	    {
+		// TRANSLATORS: keep this short! Only translations in languages
+		// with encodings ISO-8859-[1|2|15] will be used.
+		// keep uppercase. Is used to replace the reall password
+		// on the testpage (security reasons)
+		string pass = _("PASSWORD");
+		// TRANSLATORS: keep this short! Only translations in languages
+		// with encodings ISO-8859-[1|2|15] will be used.
+		os = os + sformat ("----X-SECT3-L: (%1)\n", _("Printer URI:"));
+		config = printer["uri"]:"";
+		if (regexpmatch (uri, "^.+:.+@.+$"))
+		{
+		    config = regexpsub (config,
+			"^(.+):.+@(.+)$",
+			sformat ("\\1:%1@\\2", pass));
+		}
+	    }
+	    os = os + sformat ("----X-SECT3: (%1)\n", config);
+
+	    os = os + sformat ("----X-SECT4: %1\n", mergestring (optlist, " "));
+
+	    if (size (optlist) == 0)
+	    {
+		os = os + sformat ("----X-SECT4-L: (%1)\n", "");
+	    }
+
+	    if (ce != "X")
+	    {
+		    os = (string)UI::Recode ("UTF-8", ce, os);
+	    }
+	    SCR::Write (.target.string, opts, os);
+	    test_page = preparePsTestPage (virtual_name, opts,
+		`photo == testpage_type);
+	}
+	else
+	{
+	    test_page = prepareAsciiTestPage ();
+	}
+	string lpr_command = sformat ("/usr/bin/lpr -P%1 %2", name, test_page);
+	map out = (map)SCR::Execute (.target.bash_output, lpr_command);
+
+	// restore CUPS server settings
+	if (Spooler::Get () == "cups")
+	{
+	    CUPS::server_hostname = cups_server_on_disk;
+	    CUPS::SaveServerHostName ();
+	    CUPS::server_hostname = "";
+	}
+
+	if (out["exit"]:0 != 0)
+	{
+	    Popup::Message (
+		// message box
+		_("Unable to print the test page.
+
+Output from lpr:
+") +
+		out["stderr"]:"");
+	    Printer::wipePrinter ($["name": name, "type": printer_type ]);
+	    return false;
+	}
+
+	if (false == OkOrStopPrinting (sformat ("lpr -P%1 %2", virtual_name, test_page)))
+	{ // Problems, stop the printing!
+	    if (Spooler::Get () != "cups")
+	    {
+		Spooler::StopServices ();
+	    }
+
+	    string contype = Printerlib::getUriType (uri);
+	    if (contype == "parallel" || contype == "serial" || contype == "usb")
+	    {
+		string device = Printerlib::getUriDevice (uri);
+		if (device != "")
+		{
+		    SCR::Execute (.target.bash, sformat ("/bin/fuser -k %1", device));  // kill currently printing processes
+		}
+		if (contype == "parallel" && "/dev/lp" == substring (device, 0, 7))
+		{
+		    //
+		    // do printer_reset only if we are sure that the device is /dev/lp, because
+		    // now user may add anything as parallel device and we should send this ioctl
+		    // only to parallel port
+		    //
+		    SCR::Execute (.target.control.printer_reset, device);
+		}
+	    }
+
+	    SCR::Execute (.target.bash, "/bin/rm `/usr/bin/find /var/spool/lpd -name \"[cd]f*\" -type f`"); // remove all jobs
+	    if (Spooler::Get () != "cups")
+		SCR::Execute (.target.bash, "test -f /etc/init.d/lpd && /etc/init.d/lpd start"); // restart lpd
+
+	    // message box
+	    Popup::Message (_("Printing was stopped.
+
+If the printer is still printing, push the reset button
+on the printer or remove all the paper from its tray.
+After it stops printing, switch off the printer,
+wait 10 seconds, and switch it on again.
+
+Check the manufacturer and printer model entries."));
+	}
+	else
+	{ // don't show notice regarding testing in proposal more
+	    Printer::tested = true;
+	}
+	Printer::wipePrinter ($["name": name, "type": printer_type]);
+//	SCR::Execute (.target.bash, sformat ("/bin/rm /var/lib/YaST2/printers/y2test; \n"));
+	return true;
+    }
+
+}

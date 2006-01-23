@@ -1,0 +1,35 @@
+/**
+ * File:
+ *   proc_serial_devices.scr
+ * Summary:
+ *   SCR Agent for reading information from /proc/tty/driver/serial
+ * Access:
+ *   read-only
+ * Authors:
+ *   Unknown <yast2-hacker@suse.de>
+ * See:
+ *   anyagent
+ *   libscr
+ * Example:
+ *   Read(.proc.serial.devices)
+ *   (["/dev/ttyS0", 
+ *     "/dev/ttyS1"
+ *   ])
+ * 
+ * $Id$
+ *
+ * Returns a <b>list</b> serial device-files (/dev/ttyS*).
+ */
+.proc.serial.devices
+
+`ag_anyagent(
+  `Description (
+      (`Run("cat /proc/tty/driver/serial 2> /dev/null | grep -v 'uart:unknown' | grep '^[0-9]*:' | sed 's/^\\([0-9]*\\).*/\\/dev\\/ttyS\\1/'")),
+      "",			// Comment
+      true,			// read-only
+      (`List(
+        `String("^\n"),
+        "\n"
+    ))
+  )
+)
