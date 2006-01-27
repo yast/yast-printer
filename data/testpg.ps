@@ -76,40 +76,9 @@ stroke
 grestoreall
 % end marks at the edges of the imageable area
 
-% define the borderlines procedure
-/borderlines
-{ /bordervalue exch def
-  realleft bordervalue add realbottom moveto
-  realleft bordervalue add realtop lineto
-  stroke
-  realright bordervalue sub realbottom moveto
-  realright bordervalue sub realtop lineto
-  stroke
-  realleft realbottom bordervalue add moveto
-  realright realbottom bordervalue add lineto
-  stroke
-  realleft realtop bordervalue sub moveto
-  realright realtop bordervalue sub lineto
-  stroke
-  grestoreall
-} bind def
-
-% draw border lines with 2 cm distance and with 1 inch distance
-% to the edges of the imageable area
-% if the printable area inside the border lines is big enough - i.e.:
-% draw border lines for paper sizes down to a5, halfletter, isob5, c5 and jisb5
-% below this paper sizes set border to the linelenght of the marks (see above)
-realwidth 370 gt realheight 520 gt and
-{ 57 borderlines
-  72 borderlines
-  /border 72 def
-}
-{ /border edge-mark-linelenght def
-} ifelse
-
-% define the printable area inside the borders
-/xmargin { realwidth 40 div border add } bind def
-/ymargin { realheight 40 div border add } bind def
+% define the printable area inside the marks at the edges
+/xmargin { realwidth 20 div edge-mark-linelenght 2 mul add } bind def
+/ymargin { realheight 20 div edge-mark-linelenght 3 mul add } bind def
 /margin { xmargin ymargin lt { xmargin } { ymargin } ifelse } bind def
 /left { realleft margin add } bind def
 /right { realright margin sub } bind def
@@ -286,12 +255,11 @@ definefont pop
 % but most non-ASCII characters are different for latin1 and latin2 - e.g.:
 % \241 = inverted !     in case of latin1
 % \241 = A with ogonek  in case of latin2
-/border-line-text-line-1 (The border lines start and end at the edges of the imageable area.) def
-/border-line-text-line-2 (They have 1 inch resp. 2 cm distance to the edges of the imageable area.) def
-/border-line-text-line-3 (The actual imageable area depends on the printer model and/or Ghostscript driver.) def
-/border-line-text-line-4-bottom-left (Here it begins on the left/bottom at) def
-/border-line-text-line-4-right-top (and on the right/top it ends at) def
-/border-line-text-line-5 (1 unit = 1 PostScript point = 0.0139 inch = 0.0353 cm.) def
+/imageable-area-text-line-1 (The triangles at the edges mark the imageable area.) def
+/imageable-area-text-line-2 (It depends on the paper size, the printer model, and the driver.) def
+/imageable-area-text-line-3-bottom-left (Here it begins on the left/bottom at) def
+/imageable-area-text-line-3-right-top (and on the right/top it ends at) def
+/imageable-area-text-line-4 (1 unit = 1 PostScript point = 0.0139 inch = 0.0353 cm.) def
 /test-page-title-text (YaST test page) def
 /colorcircle-100-title-text (100 %) def
 /colorcircle-50-title-text (50 %) def
@@ -335,29 +303,27 @@ definefont pop
 
 % begin print general texts
 
-% print information text regarding the border lines
-% if border lines have been printed - i.e. if border > edge-mark-linelenght
-% define the maximum font size 10 because of the fixed border size 57
-border edge-mark-linelenght gt
-{ /fontsize { 10 smallfontsize lt { 10 } { smallfontsize } ifelse } bind def
-  defaultfontname findfont fontsize scalefont setfont
-  left realbottom 55 add fontsize sub moveto
-  /shownumber { round cvi 20 string cvs show } bind def
-  gsave border-line-text-line-1 show grestore
-  0 fontsize neg rmoveto
-  gsave border-line-text-line-2 show grestore
-  0 fontsize neg rmoveto
-  gsave border-line-text-line-3 show grestore
-  0 fontsize neg rmoveto
-  gsave
-  border-line-text-line-4-bottom-left show ( ) show
-  realleft shownumber (/) show realbottom shownumber ( ) show
-  border-line-text-line-4-right-top show ( ) show
-  realright shownumber (/) show realtop shownumber (.) show
-  grestore
-  0 fontsize neg rmoveto
-  gsave border-line-text-line-5 show grestore
-} if
+% print information text regarding the imageable area
+% define the maximum font size depending on the available space
+% for the 4 printed lines and have 2 lines as free vertical space
+/space { bottom realbottom sub } bind def
+/maxfontsize { space 8 div } bind def
+/fontsize { maxfontsize smallfontsize lt { maxfontsize } { smallfontsize } ifelse } bind def
+defaultfontname findfont fontsize scalefont setfont
+left realbottom space add fontsize 3 mul sub moveto
+/shownumber { round cvi 20 string cvs show } bind def
+gsave imageable-area-text-line-1 show grestore
+0 fontsize neg rmoveto
+gsave imageable-area-text-line-2 show grestore
+0 fontsize neg rmoveto
+gsave
+imageable-area-text-line-3-bottom-left show ( ) show
+realleft shownumber (/) show realbottom shownumber ( ) show
+imageable-area-text-line-3-right-top show ( ) show
+realright shownumber (/) show realtop shownumber (.) show
+grestore
+0 fontsize neg rmoveto
+gsave imageable-area-text-line-4 show grestore
 
 % print the test page title text
 /YaSTtextBottom { bottom yunit 80 mul add } bind def
@@ -457,8 +423,8 @@ grestoreall
 % begin print queue information texts
 
 % clipping
-% too long lines are cut at the right boder line
-% too many option lines are cut at the bottom border line
+% too long lines are cut at the right
+% too many option lines are cut at the bottom
 newpath
 left bottom moveto
 width 0 rlineto
