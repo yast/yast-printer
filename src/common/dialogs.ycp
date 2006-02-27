@@ -1320,7 +1320,7 @@ and test the queue after the printer model is selected."));
 	string help_text = "";
 	// determine printer type ...
 	//
-	string uri = Printer::printer["uri"]:"";
+	string uri = Printerlib::getReplacedString( Printer::printer["uri"]:"", false);
 	string uri_type = Printerlib::getUriType (uri);
 	boolean conf_type = Printer::printer["type"]:"yast2" == "yast2";
 	boolean know = conf_type || Printer::printer["type"]:"yast2" == "non-yast-now";
@@ -2098,13 +2098,13 @@ y2milestone("%1", new_spooler);
         list < map<string,any> > items = maplist (map i, Printer::printcap, ``{
 	string def = "";
 	if (i["name"]:"unknown" == Printer::default_queue) def="Default";
-                return  $[      "ID":Printerlib::getReplacedString(Printerlib::getUriDevice (i["uri"]:"")), 
+                return  $[      "ID":Printerlib::getReplacedString(Printerlib::getUriDevice (i["uri"]:""), false), 
 				"MODEL":i["ppd_info", "model"]:"unknown", 
 				"SPOOL":i["name"]:"unknown",  
 				"DESCR":("<b>" + i["ppd_info", "manufacturer"]:"none" +
 					" " + i["ppd_info", "model"]:"" + 
 					" / " + i["name"]:"" + "</b><br>" + 
-					_(" Connected As ") + i["uri"]:"none") + "<br>" + 
+					_(" Connected As ") + Printerlib::getReplacedString(i["uri"]:"none", false)) + "<br>" + 
 					_(" With Spool ") + i["name"]:"none",
 				"DEFAULT":def ];
         });
@@ -2118,14 +2118,14 @@ y2milestone("%1", new_spooler);
 	    else{
 		  boolean finded=false;
 		   foreach(map<string, any> row, items, {
-			if (row["ID"]:nil == Printerlib::getReplacedString(Printerlib::getUriDevice (i["uri"]:"")))
+			if (row["ID"]:nil == Printerlib::getReplacedString(Printerlib::getUriDevice (i["uri"]:""), false))
 				{
 				 finded=true;
 				 y2milestone("Printer %1 without ppd file already configured", row["ID"]:nil);
 				}
 			});
 	            if (finded==false) return 
-			$[      "ID":Printerlib::getReplacedString(Printerlib::getUriDevice (i["uri"]:"")),
+			$[      "ID":Printerlib::getReplacedString(Printerlib::getUriDevice (i["uri"]:""), false),
                                 "MODEL":i["info"]:"unknown",
                                 "SPOOL":i["name"]:"not configured",
                                 "DESCR": "<b>" + i["info"]:"none" + "</b><br>"
