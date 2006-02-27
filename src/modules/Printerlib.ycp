@@ -638,12 +638,30 @@ ECHO_PID=$!
     * @param device string name of device to replace (from cups format)
     * @return string visible_string
     */
-   global define string getReplacedString(string device)
+   global define string getReplacedString(string device, boolean show_pass)
    {
     string visible_string=device;
-    while (issubstring (visible_string, "%20"))
-    {
-     visible_string = substring(visible_string,0, search(visible_string, "%20")) + " " + substring(visible_string, search(visible_string, "%20")+3);
+    integer position = find(visible_string, "%");
+    while(position > 0 ){
+     string newString = "x";
+     switch(substring(visible_string, position, 3)){
+      case("%20")	:	newString = " ";
+			break;
+      case("%3a")	:	newString = ":";
+			break;
+      case("%40")	:	newString = "@";
+			break;
+     }
+     visible_string = substring(visible_string,0, position) + newString + substring(visible_string, position+3);
+     position = find(visible_string, "%");
+    }
+    list pass = regexppos(visible_string, ":[a-zA-Z]+@");
+    if (size(pass)==2 && !show_pass){
+    integer pos = pass[0]:0;
+    integer str_size= pass[1]:0;
+    string pass = substring("*****************************************************************************", 0, str_size-2);
+//     y2internal("string %1", substring(visible_string, pos+1,str_size-2));
+     visible_string = substring(visible_string,0,pos+1) + pass + substring(visible_string,pos+str_size-1);
     }
 y2milestone("replace string %1", visible_string);
     return visible_string;
@@ -666,7 +684,7 @@ y2milestone("replace string %1", visible_string);
 	    if (serial != nil && serial != "")
 	    {
 		// printer port description (%1 si printer serial number
-		return getReplacedString(sformat (_("USB port (%1)"), serial));
+		return getReplacedString(sformat (_("USB port (%1)"), serial), false);
 	    }
 	    string ret = "";
 	    foreach (list e, cups_usb_devices_info, ``{
@@ -676,15 +694,15 @@ y2milestone("replace string %1", visible_string);
 	    if (detected)
 		ret = "USB";
 	    if (ret != "" && ret != nil)
-		return getReplacedString(sformat ("%1 (%2)", ret, dev));
+		return getReplacedString(sformat ("%1 (%2)", ret, dev), false);
 	}
 	if (regexpmatch (dev, "[0-9a-fA-F:]{17,17}"))
 	{
 	    string nice_name = probed_bt_devices[dev]:"";
 	    if (nice_name != "")
-		return getReplacedString(sformat ("%1 (%2)", nice_name, dev));
+		return getReplacedString(sformat ("%1 (%2)", nice_name, dev), false);
 	    else
-		return getReplacedString(dev);
+		return getReplacedString(dev, false);
 	}
 	map descriptions = $[
 	    // Names of devices. Labels in dialog
@@ -738,7 +756,7 @@ y2milestone("replace string %1", visible_string);
             // Names of devices. Labels in dialog
             "/dev/usb/lp15" : _("Sixteenth USB Printer (/dev/usb/lp15)"),
 	];
-	return getReplacedString(descriptions[dev]:dev);
+	return getReplacedString(descriptions[dev]:dev, false);
     }
     /**
      * get paper size from system and returns `a4 for a4 or `letter for letter
