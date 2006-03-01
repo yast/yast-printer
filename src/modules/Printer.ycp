@@ -205,6 +205,32 @@
 	return false;
     }
 
+
+list<string> translateInterfaces(list<string> ifaces){
+	list<string> translated = [];
+	foreach(string ifce, ifaces, {
+	 switch(ifce){
+	  case "INT"	:
+			//translators: summary text, internal firewall interaface
+		translated = add(translated, _("internal zone"));
+		break;
+	  case "DMZ" :
+			//translators: summary text, DMZ firewall interaface
+		translated = add(translated, _("demilitarized zone"));
+		break;
+	  case "EXT" :
+			//translators: summary text, external firewall interaface
+		translated = add(translated, _("external zone"));
+		break;
+	  default:
+		translated = add(translated, ifce);
+	 }
+	});
+ return translated;
+}
+
+
+
 // global functions
 
     /**
@@ -1778,7 +1804,7 @@ the selected spooler does not support it."), name));
 	    }
 	});
 	foreach (string k, string v, other_printers, ``{
-	    summary = add (summary, Summary::Device (k, sformat (format, v)));
+	    summary = add (summary, Summary::Device (Printerlib::getReplacedString(k, false), sformat (format, v)));
 	});
 	if (Spooler::Get () == "cups")
 	{
@@ -1829,7 +1855,7 @@ the selected spooler does not support it."), name));
 		    }
 		    else
 		    {
-			string il = mergestring (allowed_interfaces, ", ");
+			string il = mergestring (translateInterfaces(allowed_interfaces), ", ");
 			il = String::EscapeTags (il);
 			summary = add (summary, "<li>" + sformat (
 			    // part of summary, %1 is list of interfaces
