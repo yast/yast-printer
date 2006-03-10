@@ -942,6 +942,7 @@ actually selected.
         string password = "";
         string queue = type == "ipp" ? "printers/" : "";
         string hostname = "";
+        string full_hostname = "";
         string workgroup = "";
         integer port = 0;
 
@@ -983,7 +984,7 @@ actually selected.
         if (nil != i)
         {
             queue = Printerlib::getUriRemoteQueue (uri);
-//            hostname = Printerlib::getUriHost (uri);
+            full_hostname = Printerlib::getUriHost (uri);
             hostname = Printerlib::getReplacedString( Printerlib::getUriHost (uri), true );
 	list tmp_list = splitstring(hostname, "@");
         if (size(tmp_list)==2){
@@ -1215,7 +1216,9 @@ actually selected.
                 list<string> queues = [];
                 if ("samba" == type)
                 {
-                    queues = (list<string>)SCR::Read (.smb.queues, hostname);
+full_hostname="mzugec:mzugec@dhcp19";
+                    queues = (list<string>)SCR::Read (.smb.queues, full_hostname);
+y2internal("%1", full_hostname);
                 }
                 else if ("ipp" == type)
                 {
