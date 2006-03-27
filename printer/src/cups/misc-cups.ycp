@@ -1,0 +1,141 @@
+/**
+ * File:
+ *  misc.ycp
+ *
+ * Module:
+ *  Printer configurator
+ *
+ * Summary:
+ *  Miscelaneous defines for CUPS.
+ *
+ * Authors:
+ *  Petr Blahos <pblahos@suse.cz>
+ *  Jiri Srain <jsrain@suse.cz>   2002
+ *
+ * $Id$
+ *
+ * Miscelaneous defines.
+ */
+
+{
+    textdomain "printer";
+
+    import "CUPS";
+    import "Printerdb";
+    import "Printerlib";
+    import "Report";
+    import "Service";
+
+    /**
+      * Write configuration to CUPS
+      * @param entry map of printer entry
+      * @return boolean true if successfull
+      */
+    global define boolean writeCupsPrinter (map entry) ``{
+	Printerdb::loadFoomaticIfNeeded ();
+        string name = entry["name"]:"";
+        if (entry["uri"]:"class" == "class")
+        {
+            return SCR::Write (.cups.classes.add, entry);
+        }
+        string uri = entry["uri"]:"";
+        string uri_type = Printerlib::getUriType (uri);
+	if (uri_type == "hp")
+	{
+	    y2milestone ("Enabling PTAL service");
+	    // for being sure, enable also hotplug
+	    Service::Enable ("hotplug");
+	    Service::Disable ("ptal");
+	    if (Service::Status ("ptal") == 0)
+		Service::Stop ("ptal");
+	    Service::Enable ("hplip");
+	    if (Service::Status ("hplip") != 0)
+		Service::Start ("hplip");
+	}
+	else if (uri_type == "ptal")
+	{
+	    y2milestone ("Enabling PTAL service");
+	    // for being sure, enable also hotplug
+	    Service::Enable ("hotplug");
+	    Service::Disable ("hplip");
+	    if (Service::Status ("hplip") == 0)
+		Service::Stop ("hplip");
+	    Service::Enable ("ptal");
+	    if (Service::Status ("ptal") != 0)
+		Service::Start ("ptal");
+	}
+        if (! entry["valid"]:true)
+        {
+            return false;
+        }
+	entry = Printerdb::getUpdatedPpdFile (entry);
+	boolean raw = entry["raw"]:false;
+	if (entry == nil)
+	    return false;
+
+        if (Printerlib::getUriType (uri) == "usb")
+        {
+	    integer i__ = 0; // suppress warning
+        }
+        else if (Printerlib::getUriType (uri) == "serial")
+        {
+            string dev_name = Printerlib::getUriDevice (uri);
+            integer baudrate = Printerlib::getUriBaudrate (uri);
+            string ty = Printerlib::getUriValue (uri, "ty");
+            string br_string = baudrate == 0 ? "" : sformat ("baud=%1", baudrate);
+            string ty_string = filterchars (ty, "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890-") == "" ? "" : sformat ("%1", ty);
+            string uri = "serial:" + dev_name;
+            if (ty_string != "")
+            {
+                if (br_string != "")
+                    uri = uri + "?" + br_string + "+" + ty_string;
+                else
+                    uri = uri + "?" + ty_string;
+            }
+            else
+            {
+                if (br_string != "")
+                    uri = uri + "?" + br_string;
+            }
+            entry = add (entry, "uri", uri);
+        }
+        else if (Printerlib::getUriType (uri) == "irda")
+        {
+            string dev_name = Printerlib::getUriDevice (uri);
+            if (dev_name != "")
+                entry = add (entry, "uri", "parallel:" + dev_name);
+        }
+        else if (Printerlib::getUriType (uri) == "samba")
+        {
+            entry = add (entry, "uri", "smb" + substring (uri, 5));
+        }
+
+	string ppd = entry["ppd"]:"";
+	if (ppd != "" && -1 == SCR::Read (.target.size, ppd))
+	{
+	    y2error ("Unexsistent PPD file: %1", ppd);
+		// error popup
+	    Report::Error (sformat (_("An error occurred while saving queue %1.
+
+The specified PPD file does not exist."), name));
+	    return false;
+	}
+	else if (raw)
+	{
+	    // remove the file
+	    SCR::Execute (.target.bash, sformat ("test -f %1 && rm %1",
+		sformat ("/etc/cups/ppd/%1.ppd", entry["name"]:"")));
+	}
+
+        boolean res = SCR::Write (.cups.printers.add, entry);
+        if (! res)
+	    // popup
+            Report::Error (sformat (_("An error occurred while communicating with the 
+CUPS server while saving queue %1.
+
+%2"), name, SCR::Read (.cups.last_error)));
+        return res;
+    }
+
+
+}

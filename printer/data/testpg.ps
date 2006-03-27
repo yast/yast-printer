@@ -1,0 +1,712 @@
+%!
+
+% license and copyright: SUSE Linux AG - YaST License
+% author: Johannes Meixner <jsmeix@suse.de>
+% feedback: http://www.suse.de/cgi-bin/feedback.cgi
+% support: http://www.suse.de/en/private/support/index.html
+
+% additional files:
+% for the logo:
+%   SUSE-logo.eps and/or UL-logo.eps
+% for the photo:
+%   chameleon-photo.level2.eps (color image requires PostScript level 2)
+%   and/or chameleon-photo.level1.eps (monochrome image)
+% source for the photo: chameleon-photo.ps (PostScript level 2)
+
+% the basic idea behind the PostScript code below is
+% that the printout should be o.k. for any paper format
+% and regardless whether it is portrait or landscape
+% in particular: A6, A5, A4, A3, Letter, Legal, 11x17, Ledger
+
+% set the PostScript interpreter to an initial state
+erasepage
+initgraphics
+% and save this state
+save
+
+% determine the actual imageable area
+% for PostScript printers it is normally smaller than the paper size
+% the exact values depend on the particular printer model
+% in case of Ghostscript the imageable area depends on which
+% Ghostscript driver is used (for X11 output it is the paper size)
+newpath clippath pathbbox
+/realtop exch def
+/realright exch def
+/realbottom exch def
+/realleft exch def
+/realwidth { realright realleft sub } bind def
+/realheight { realtop realbottom sub } bind def
+grestoreall
+
+% begin marks at the edges of the imageable area
+/edge-mark-linelenght 20 def
+
+% at the lower left
+newpath
+realleft 1 add realbottom 1 add edge-mark-linelenght add moveto
+0 edge-mark-linelenght neg rlineto
+edge-mark-linelenght 0 rlineto
+closepath
+stroke
+
+% at the lower right
+newpath
+realright 1 sub edge-mark-linelenght sub realbottom 1 add moveto
+edge-mark-linelenght 0 rlineto
+0 edge-mark-linelenght rlineto
+closepath
+stroke
+
+% at the upper right
+newpath
+realright 1 sub realtop 1 sub edge-mark-linelenght sub moveto
+0 edge-mark-linelenght rlineto
+edge-mark-linelenght neg 0 rlineto
+closepath
+stroke
+
+% at the upper left
+newpath
+realleft 1 add edge-mark-linelenght add realtop 1 sub moveto
+edge-mark-linelenght neg 0 rlineto
+0 edge-mark-linelenght neg rlineto
+closepath
+stroke
+
+grestoreall
+% end marks at the edges of the imageable area
+
+% define the printable area inside the marks at the edges
+/xmargin { realwidth 20 div edge-mark-linelenght 2 mul add } bind def
+/ymargin { realheight 20 div edge-mark-linelenght 3 mul add } bind def
+/margin { xmargin ymargin lt { xmargin } { ymargin } ifelse } bind def
+/left { realleft margin add } bind def
+/right { realright margin sub } bind def
+/top { realtop margin sub } bind def
+/bottom { realbottom margin add } bind def
+/width { right left sub } bind def
+/height { top bottom sub } bind def
+
+% define a coordinate system for the printable area
+% which has 100 units in both directions
+% regardless of the actual width/height ratio of the paper
+/xunit { width 100 div } bind def
+/yunit { height 100 div } bind def
+
+% define a special unit for scaling which is the minimum of xunit and yunit
+% so that the texts and graphics are small enough to avoid overlapping
+% regardless of the actual width/height ratio of the paper
+/scaleunit { xunit yunit lt { xunit } { yunit } ifelse } bind def
+
+% begin fonts and encodings
+
+% iso latin-1 encoding
+/isolatin1encoding
+[ /.notdef /.notdef /.notdef /.notdef /.notdef /.notdef /.notdef /.notdef
+  /.notdef /.notdef /.notdef /.notdef /.notdef /.notdef /.notdef /.notdef
+  /.notdef /.notdef /.notdef /.notdef /.notdef /.notdef /.notdef /.notdef
+  /.notdef /.notdef /.notdef /.notdef /.notdef /.notdef /.notdef /.notdef
+  /space /exclam /quotedbl /numbersign /dollar /percent /ampersand /quoteright
+  /parenleft /parenright /asterisk /plus /comma /minus /period /slash
+  /zero /one /two /three /four /five /six /seven
+  /eight /nine /colon /semicolon /less /equal /greater /question
+% \100
+  /at /A /B /C /D /E /F /G
+  /H /I /J /K /L /M /N /O
+  /P /Q /R /S /T /U /V /W
+  /X /Y /Z /bracketleft /backslash /bracketright /asciicircum /underscore
+  /quoteleft /a /b /c /d /e /f /g
+  /h /i /j /k /l /m /n /o
+  /p /q /r /s /t /u /v /w
+  /x /y /z /braceleft /bar /braceright /asciitilde /.notdef
+% \200
+  /.notdef /.notdef /.notdef /.notdef /.notdef /.notdef /.notdef /.notdef
+  /.notdef /.notdef /.notdef /.notdef /.notdef /.notdef /.notdef /.notdef
+  /.notdef /.notdef /.notdef /.notdef /.notdef /.notdef /.notdef /.notdef
+  /.notdef /.notdef /.notdef /.notdef /.notdef /.notdef /.notdef /.notdef
+  /space /exclamdown /cent /sterling /currency /yen /brokenbar /section
+  /dieresis /copyright /ordfeminine /guillemotleft /logicalnot /hyphen /registered /macron
+  /degree /plusminus /twosuperior /threesuperior /acute /mu /paragraph /periodcentered
+  /cedilla /onesuperior /ordmasculine /guillemotright /onequarter /onehalf /threequarters /questiondown
+% \300
+  /Agrave /Aacute /Acircumflex /Atilde /Adieresis /Aring /AE /Ccedilla
+  /Egrave /Eacute /Ecircumflex /Edieresis /Igrave /Iacute /Icircumflex /Idieresis
+  /Eth /Ntilde /Ograve /Oacute /Ocircumflex /Otilde /Odieresis /multiply
+  /Oslash /Ugrave /Uacute /Ucircumflex /Udieresis /Yacute /Thorn /germandbls
+  /agrave /aacute /acircumflex /atilde /adieresis /aring /ae /ccedilla
+  /egrave /eacute /ecircumflex /edieresis /igrave /iacute /icircumflex /idieresis
+  /eth /ntilde /ograve /oacute /ocircumflex /otilde /odieresis /divide
+  /oslash /ugrave /uacute /ucircumflex /udieresis /yacute /thorn /ydieresis
+] def
+
+% iso latin-2 encoding
+/isolatin2encoding
+[ /.notdef /.notdef /.notdef /.notdef /.notdef /.notdef /.notdef /.notdef
+  /.notdef /.notdef /.notdef /.notdef /.notdef /.notdef /.notdef /.notdef
+  /.notdef /.notdef /.notdef /.notdef /.notdef /.notdef /.notdef /.notdef
+  /.notdef /.notdef /.notdef /.notdef /.notdef /.notdef /.notdef /.notdef
+  /space /exclam /quotedbl /numbersign /dollar /percent /ampersand /quoteright
+  /parenleft /parenright /asterisk /plus /comma /minus /period /slash
+  /zero /one /two /three /four /five /six /seven
+  /eight /nine /colon /semicolon /less /equal /greater /question
+% \100
+  /at /A /B /C /D /E /F /G
+  /H /I /J /K /L /M /N /O
+  /P /Q /R /S /T /U /V /W
+  /X /Y /Z /bracketleft /backslash /bracketright /asciicircum /underscore
+  /quoteleft /a /b /c /d /e /f /g
+  /h /i /j /k /l /m /n /o
+  /p /q /r /s /t /u /v /w
+  /x /y /z /braceleft /bar /braceright /asciitilde /.notdef
+% \200
+  /.notdef /.notdef /.notdef /.notdef /.notdef /.notdef /.notdef /.notdef
+  /.notdef /.notdef /.notdef /.notdef /.notdef /.notdef /.notdef /.notdef
+  /.notdef /.notdef /.notdef /.notdef /.notdef /.notdef /.notdef /.notdef
+  /.notdef /.notdef /.notdef /.notdef /.notdef /.notdef /.notdef /.notdef
+  /space /Aogonek /breve /Lslash /currency /Lcaron /Sacute /section
+  /dieresis /Scaron /Scedilla /Tcaron /Zacute /hyphen /Zcaron /Zdotaccent
+  /degree /aogonek /ogonek /lslash /acute /lcaron /sacute /caron
+  /cedilla /scaron /scedilla /tcaron /zacute /hungarumlaut /zcaron /zdotaccent
+% \300
+  /Racute /Aacute /Acircumflex /Abreve /Adieresis /Lacute /Cacute /Ccedilla
+  /Ccaron /Eacute /Eogonek /Edieresis /Ecaron /Iacute /Icircumflex /Dcaron
+  /Dbar /Nacute /Ncaron /Oacute /Ocircumflex /Ohungarumlaut /Odieresis /multiply
+  /Rcaron /Uring /Uacute /Uhungarumlaut /Udieresis /Yacute /Tcedilla /germandbls
+  /racute /aacute /acircumflex /abreve /adieresis /lacute /cacute /ccedilla
+  /ccaron /eacute /eogonek /edieresis /ecaron /iacute /icircumflex /dcaron
+  /dbar /nacute /ncaron /oacute /ocircumflex /ohungarumlaut /odieresis /divide
+  /rcaron /uring /uacute /uhungarumlaut /udieresis /yacute /tcedilla /dotaccent
+] def
+
+% define the fonts
+
+/myfontname (Helvetica) def
+%/myfontname (Times-Roman) def
+%/myfontname (Courier) def
+
+/latin1
+  myfontname findfont
+  dup length dict
+  begin
+    { 1 index /FID ne { def } { pop pop } ifelse } forall
+    /Encoding isolatin1encoding def
+    currentdict
+  end
+definefont pop
+
+/latin2
+  myfontname findfont
+  dup length dict
+  begin
+    { 1 index /FID ne { def } { pop pop } ifelse } forall
+    /Encoding isolatin2encoding def
+    currentdict
+  end
+definefont pop
+
+% define (latin1) as default font name
+% YaST can replace this either with the string value in parenthesis
+%   (latin2)
+% or with the font name identifier without parenthesis
+%   myfontname
+% in case of (latin1) the isolatin1encoding from above will be used
+% in case of (latin2) the isolatin2encoding from above will be used
+% in case of myfontname the StandardEncoding will be used
+% the StandardEncoding is defined inside the PostScript interpreter
+/defaultfontname (latin1) def
+
+% define font name identifiers for isolatin1encoding and isolatin2encoding
+/latin1fontname (latin1) def
+/latin2fontname (latin2) def
+
+% define font sizes
+/bigfontsize { scaleunit 4 mul } bind def
+/normalfontsize { scaleunit 2.828 mul } bind def
+/smallfontsize { scaleunit 2 mul } bind def
+
+% define the default fonts
+/bigfont { defaultfontname findfont bigfontsize scalefont setfont } bind def
+/normalfont { defaultfontname findfont normalfontsize scalefont setfont } bind def
+/smallfont { defaultfontname findfont smallfontsize scalefont setfont } bind def
+
+% end fonts and encodings
+
+% begin define texts
+
+% define defaults for the texts
+%
+% YaST can replace them by its own texts
+% also included in parenthesis without leading or trailing blanks
+% but the length should not be much longer than the default text
+% because too long texts would be clipped
+%
+% for parenthesis in the texts use \( and \) and for backslash use \\
+%
+% when non-ASCII characters should be printed the safest way
+% is to specify such characters by \ and the octal code - e.g.:
+% \304 = A with dieresis  \344 = a with dieresis
+% \326 = O with dieresis  \366 = o with dieresis
+% \334 = U with dieresis  \374 = u with dieresis
+% \337 = sz ligature
+% the appropriate encoding must be set (see defaultfontname above)
+% because characters with dieresis don't work in StandardEncoding
+% and in StandardEncoding the sz ligature = \373
+% the characters above are the same for latin1 and latin2
+% but most non-ASCII characters are different for latin1 and latin2 - e.g.:
+% \241 = inverted !     in case of latin1
+% \241 = A with ogonek  in case of latin2
+/imageable-area-text-line-1 (The triangles at the edges mark the imageable area.) def
+/imageable-area-text-line-2 (It depends on the paper size, the printer model, and the driver.) def
+/imageable-area-text-line-3-bottom-left (Here it begins on the left/bottom at) def
+/imageable-area-text-line-3-right-top (and on the right/top it ends at) def
+/imageable-area-text-line-4 (1 unit = 1 PostScript point = 0.0139 inch = 0.0353 cm.) def
+/test-page-title-text (YaST test page) def
+/colorcircle-100-title-text (100 %) def
+/colorcircle-50-title-text (50 %) def
+/colorcircle-25-title-text (25 %) def
+/colorcircle-12-title-text (12.5 %) def
+/colorcircle-6-title-text (6.25 %) def
+/colorcircle-explanation-title-text (Explanation of the colors) def
+/colorcircle-explanation-c-text (C = Cyan) def
+/colorcircle-explanation-m-text (M = Magenta) def
+/colorcircle-explanation-y-text (Y = Yellow) def
+/colorcircle-explanation-cm-text (CM = Blue) def
+/colorcircle-explanation-cy-text (CY = Green) def
+/colorcircle-explanation-my-text (MY = Red) def
+/colorcircle-explanation-cmy-text (CMY = Black) def
+/colorcircle-explanation-k-text (K = Black) def
+% YaST can replace a single entry which is included in brackets '[...]' like
+%   [ (unknown general settings) ]
+% with multiple entries like
+%   [ (Description: HP DeskJet 990C) (Location: USB printer on /dev/usb/lp0) ]
+% the entries can be spread over several lines like
+%   [ (Description: HP DeskJet 990C)
+%     (Location: USB printer on /dev/usb/lp0) ]
+% for the value texts YaST can change defaultfontname to one of
+%   latin1fontname
+%   latin2fontname
+% to force the value texts to be printed in isolatin1encoding or isolatin2encoding
+/section1-headline-text (Queue name:) def
+/section1-value-fontname defaultfontname def
+/section1-value-text [ (unknown queue name) ] def
+/section2-headline-text (General settings:) def
+/section2-value-fontname defaultfontname def
+/section2-value-text [ (unknown general settings) ] def
+/section3-headline-text (Filter settings:) def
+/section3-value-fontname defaultfontname def
+/section3-value-text [ (unknown filter settings) ] def
+/section4-headline-text (Other settings:) def
+/section4-value-fontname defaultfontname def
+/section4-value-text [ (unknown other settings) ] def
+
+% end define texts
+
+% begin print general texts
+
+% print information text regarding the imageable area
+% define the maximum font size depending on the available space
+% for the 4 printed lines and have 2 lines as free vertical space
+/space { bottom realbottom sub } bind def
+/maxfontsize { space 8 div } bind def
+/fontsize { maxfontsize smallfontsize lt { maxfontsize } { smallfontsize } ifelse } bind def
+defaultfontname findfont fontsize scalefont setfont
+left realbottom space add fontsize 3 mul sub moveto
+/shownumber { round cvi 20 string cvs show } bind def
+gsave imageable-area-text-line-1 show grestore
+0 fontsize neg rmoveto
+gsave imageable-area-text-line-2 show grestore
+0 fontsize neg rmoveto
+gsave
+imageable-area-text-line-3-bottom-left show ( ) show
+realleft shownumber (/) show realbottom shownumber ( ) show
+imageable-area-text-line-3-right-top show ( ) show
+realright shownumber (/) show realtop shownumber (.) show
+grestore
+0 fontsize neg rmoveto
+gsave imageable-area-text-line-4 show grestore
+
+% print the test page title text
+/YaSTtextBottom { bottom yunit 80 mul add } bind def
+bigfont
+left YaSTtextBottom moveto
+test-page-title-text show
+
+grestoreall
+% end print general texts
+
+% begin color circles and gray boxes
+
+% define the colorcircle-and-gray-box procedure
+/colorcircle-and-gray-box
+{ /colorvalue exch def
+  /percentage exch def
+  defaultfontname findfont 1.5 scalefont setfont
+  0 3.5 moveto
+  percentage stringwidth pop 2 div neg 0 rmoveto
+  percentage show
+% by default use CMYK colors because on some particular printers
+% or with some particular Ghostscript drivers there is a difference
+% on the printout when black is printed as CMY or only as K
+% but if the PostScript interpreter doesn't support "setcmykcolor"
+% then RGB colors must be used - e.g. in case of PostScript level 1
+  /setcmykcolor where
+  { pop
+    /cyan { colorvalue 0 0 0 setcmykcolor } bind def
+    /magenta { 0 colorvalue 0 0 setcmykcolor } bind def
+    /yellow { 0 0 colorvalue 0 setcmykcolor } bind def
+    /blue { colorvalue colorvalue 0 0 setcmykcolor } bind def
+    /red { 0 colorvalue colorvalue 0 setcmykcolor } bind def
+    /green { colorvalue 0 colorvalue 0 setcmykcolor } bind def
+    /black { colorvalue colorvalue colorvalue 0 setcmykcolor } bind def
+  }
+  { /cyan { 1 colorvalue sub 1 1 setrgbcolor } bind def
+    /magenta { 1 1 colorvalue sub 1 setrgbcolor } bind def
+    /yellow { 1 1 1 colorvalue sub setrgbcolor } bind def
+    /blue { 1 colorvalue sub 1 colorvalue sub 1 setrgbcolor } bind def
+    /red { 1 1 colorvalue sub 1 colorvalue sub setrgbcolor } bind def
+    /green { 1 colorvalue sub 1 1 colorvalue sub setrgbcolor } bind def
+    /black { 1 colorvalue sub 1 colorvalue sub 1 colorvalue sub setrgbcolor } bind def
+  } ifelse
+  newpath
+  0 0 moveto 0 0 3 270 30 arc red fill
+  0 0 moveto 0 0 3 30 150 arc blue fill
+  0 0 moveto 0 0 3 150 270 arc green fill
+  0 0 moveto 0 0 2 330 90 arc magenta fill
+  0 0 moveto 0 0 2 90 210 arc cyan fill
+  0 0 moveto 0 0 2 210 330 arc yellow fill
+  1 0 moveto 0 0 1 0 360 arc black fill
+  -2 -4.5 moveto 4 0 rlineto 0 1 rlineto -4 0 rlineto 1 colorvalue sub setgray fill
+} bind def
+
+% define common settings for all color circles and gray boxes
+/yvalue { yunit 68 mul bottom add } bind def
+/scalefactor { scaleunit 2.2 mul } bind def
+
+% paint the "100%" color circle and gray box
+gsave
+xunit 10 mul left add yvalue translate
+scalefactor scalefactor scale
+colorcircle-100-title-text 1 colorcircle-and-gray-box
+grestore
+
+% paint the "50%" color circle and gray box
+gsave
+xunit 30 mul left add yvalue translate
+scalefactor scalefactor scale
+colorcircle-50-title-text 0.5 colorcircle-and-gray-box
+grestore
+
+% paint the "25%" color circle and gray box
+gsave
+xunit 50 mul left add yvalue translate
+scalefactor scalefactor scale
+colorcircle-25-title-text 0.25 colorcircle-and-gray-box
+grestore
+
+% paint the "12.5%" color circle and gray box
+gsave
+xunit 70 mul left add yvalue translate
+scalefactor scalefactor scale
+colorcircle-12-title-text 0.125 colorcircle-and-gray-box
+grestore
+
+% paint the "6.25%" color circle and gray box
+gsave
+xunit 90 mul left add yvalue translate
+scalefactor scalefactor scale
+colorcircle-6-title-text 0.0625 colorcircle-and-gray-box
+grestore
+
+grestoreall
+% end color circles and gray boxes
+
+% begin print queue information texts
+
+% clipping
+% too long lines are cut at the right
+% too many option lines are cut at the bottom
+newpath
+left bottom moveto
+width 0 rlineto
+0 yunit 57.5 mul rlineto
+width neg 0 rlineto
+closepath
+clip
+newpath
+
+% define the starting values
+/ystart { bottom yunit 58 mul add } bind def
+/Ydisctance { normalfontsize scaleunit add neg } bind def 
+/ydisctance { smallfontsize scaleunit add neg } bind def
+/xoffset { xunit 40 mul } bind def
+
+% define the procedures to print the texts
+/select-value-font { findfont smallfontsize scalefont setfont } bind def
+/show-value-text { { 0 ydisctance rmoveto gsave show grestore } forall } bind def
+
+% print texts
+left ystart moveto
+
+normalfont
+0 Ydisctance rmoveto
+gsave section1-headline-text show grestore
+section1-value-fontname select-value-font
+section1-value-text show-value-text
+
+normalfont
+0 Ydisctance rmoveto
+gsave section2-headline-text show grestore
+section2-value-fontname select-value-font 
+section2-value-text show-value-text
+
+normalfont
+0 Ydisctance rmoveto
+gsave section3-headline-text show grestore
+section3-value-fontname select-value-font 
+section3-value-text show-value-text
+
+normalfont
+0 Ydisctance rmoveto
+gsave section4-headline-text show grestore
+section4-value-fontname select-value-font 
+section4-value-text show-value-text
+
+grestoreall
+% end print queue information texts
+
+% begin logo
+
+/logoLeft left def
+/logoBottom { YaSTtextBottom bigfontsize add yunit add } bind def
+/logoRight { logoLeft width 2 div add xunit sub } bind def
+/logoTop top def
+/logoWidth { logoRight logoLeft sub } bind def
+/logoHeight { logoTop logoBottom sub } bind def
+
+% clipping
+newpath
+logoLeft logoBottom moveto
+logoWidth 0 rlineto
+0 logoHeight rlineto
+logoWidth neg 0 rlineto
+closepath
+clip
+newpath
+
+% HOWTO make appropriate logo EPS files
+%
+% it is very important that the "%%BoundingBox: ..." entry
+% in the EPS file is correct because YaST will read this entry
+% and change some values in this PostScript file (see below)
+% so that the content of the EPS file is scaled and translated correctly
+%
+% HOWTO make the UnitedLinux logo:
+%
+% download the "UnitedLinux Logo (eps)" from
+% http://www.suse.de/en/company/press/services/images/logos/index.html
+% results a 155 KB file with "BoundingBox: 188 556 378 596"
+%
+% convert to PostScript level 1 and strip what is not needed for printing via
+% gs -sDEVICE=epswrite -dLanguageLevel=1 -dDEVICEWIDTHPOINTS=378 -dDEVICEHEIGHTPOINTS=596
+% results a 5 KB file "logo.eps" with "BoundingBox: 0 0 378 596" which is wrong:
+% the upper right point 378,596 is o.k. but the lower left point is not 0,0
+% "gs -sDEVICE=bbox logo.eps" results the correct values:
+% BoundingBox: 188 556 378 596 (the same as in in the download file)
+%
+% set in "logo.eps" PostScript level 1 and the correct bounding box values
+%   %!PS
+%   %%BoundingBox: 188 556 378 596
+%   %%HiResBoundingBox: 188.000000 556.000000 377.188696 595.589600
+% and remove the "showpage" at the end
+% results the final "UL-logo.eps" file
+%
+% HOWTO make the SUSE logo:
+%
+% download the "SUSE Logo with claim, background white (EPS)" from
+% http://www.suse.de/en/company/press/services/images/logos/index.html
+% results a 121 KB file with "BoundingBox: 0 0 842 596"
+%
+% convert to PostScript level 1 and strip what is not needed for printing via
+% gs -sDEVICE=epswrite -dLanguageLevel=1 -dDEVICEWIDTHPOINTS=842 -dDEVICEHEIGHTPOINTS=596
+% results a 14 KB file "logo.eps" with "BoundingBox: 0 0 677 392" which is wrong:
+% the upper right point 677,392 is o.k. - test via
+% gs -dDEVICEWIDTHPOINTS=677 -dDEVICEHEIGHTPOINTS=392 logo.eps
+% but the lower left point is not 0,0
+% "gs -sDEVICE=bbox logo.eps" results: "BoundingBox: 164 226 596 392"
+% where the lower left point 164,226 is o.k. but the upper rigth point is wrong.
+%
+% to test that "BoundingBox: 164 226 677 392" is the correct value use
+% echo '164 226 677 164 sub 392 226 sub rectstroke' >bbox.ps
+% gs -dDEVICEWIDTHPOINTS=900 -dDEVICEHEIGHTPOINTS=900 bbox.ps logo.eps
+%
+% set in "logo.eps" PostScript level 1 and the correct bounding box values
+%   %!PS
+%   %%BoundingBox: 164 226 677 392
+%   %%HiResBoundingBox: 164.000000 226.000000 676.114990 391.090991
+% and remove the "showpage" at the end
+% results the final "SUSE-logo.eps" file
+
+% define a fallback for the logo
+% YaST will replace this BoundingBox values
+% with the BoundingBox values from the particular logo EPS file
+/logoBBoxLeft 0 def
+/logoBBoxBottom 0 def
+/logoBBoxRight 200 def
+/logoBBoxTop 100 def
+/logoContent
+{ defaultfontname findfont 10 scalefont setfont
+  0 90 moveto (Actual font: ) show myfontname show ( ) show defaultfontname show
+  0 79 moveto (German umlauts and sz ligature:) show
+  0 68 moveto (äÄöÖüÜß) show
+  latin1fontname findfont 10 scalefont setfont
+  0 57 moveto (Spanish latin1 inverted ! and ?:) show
+  0 46 moveto (\241\277) show
+  latin2fontname findfont 10 scalefont setfont
+  0 35 moveto (Czech latin2 characters:) show
+  0 24 moveto (áÁèÈïÏéÉìÌíÍòÒóÓøØ¹©»«úÚùÙýÝ¾®) show
+  0 13 moveto (Slovak latin2 characters:) show
+  0 2 moveto (µ¥åÅôÔàÀ) show
+} bind def
+
+% scale
+/logoBBoxWidth { logoBBoxRight logoBBoxLeft sub } bind def
+/logoBBoxHeight { logoBBoxTop logoBBoxBottom sub } bind def
+/logoWidthScale { logoWidth logoBBoxWidth div } bind def
+/logoHeightScale { logoHeight logoBBoxHeight div } bind def
+/logoScale
+{ logoWidthScale logoHeightScale lt { logoWidthScale } { logoHeightScale } ifelse
+} bind def
+logoScale logoScale scale
+
+% translate
+% because of the scaling the coordinates of the logo box are scaled too
+% to get the original place on the paper "logoScale div" is required
+/logoXtranslate { logoLeft logoScale div logoBBoxLeft sub } bind def
+/logoYtranslate { logoTop logoScale div logoBBoxTop sub } bind def
+logoXtranslate logoYtranslate translate
+
+% YaST will replace the line
+%   logoContent
+% with the content of the logo EPS file
+% YaST must not replace /logoContent above
+logoContent
+
+grestoreall
+% end logo
+
+% begin photo
+
+/photoRight right def
+/photoLeft { photoRight width 2 div sub xunit add } bind def
+/photoBottom { YaSTtextBottom } bind def
+/photoTop top def
+/photoWidth { photoRight photoLeft sub } bind def
+/photoHeight { photoTop photoBottom sub } bind def
+
+% clipping
+newpath
+photoLeft photoBottom moveto
+photoWidth 0 rlineto
+0 photoHeight rlineto
+photoWidth neg 0 rlineto
+closepath
+clip
+newpath
+
+% HOWTO make appropriate photo EPS files
+%
+% it is very important that the "%%BoundingBox: ..." entry
+% in the EPS file is correct because YaST will read this entry
+% and change some values in this PostScript file (see below)
+% so that the content of the EPS file is scaled and translated correctly
+%
+% to test whether "BoundingBox: Left Bottom Right Top" is correct use
+% echo 'Left Bottom Right Left sub Top Bottom sub rectstroke' >bbox.ps
+% gs -dDEVICEWIDTHPOINTS=900 -dDEVICEHEIGHTPOINTS=900 bbox.ps File.eps
+% replace Left Bottom Right Top and File with the actual values
+%
+% to make chameleon-photo.level2.eps use
+% gs -sDEVICE=epswrite ... chameleon-photo.ps
+% and make sure the BoundingBox is correct and remove the "showpage" at the end
+%
+% to make chameleon-photo.level1.eps use
+% gs -sDEVICE=pswrite -dLanguageLevel=1 ...
+% and then
+% gs -sDEVICE=epswrite -dLanguageLevel=1 ...
+% and make sure the BoundingBox is correct and remove the "showpage" at the end
+
+% define a fallback for the photo
+% YaST will replace this BoundingBox values
+% with the BoundingBox values from the particular photo EPS file
+/photoBBoxLeft -6 def
+/photoBBoxBottom -6 def
+/photoBBoxRight 12 def
+/photoBBoxTop 6 def
+/photoContent
+{ /fill-and-stroke { closepath 1 setgray gsave fill grestore 0 setgray stroke } bind def
+  0.05 setlinewidth
+  defaultfontname findfont 0.8 scalefont setfont
+  0 3.5 moveto
+  colorcircle-explanation-title-text stringwidth
+  pop 3 div neg 0 rmoveto
+  colorcircle-explanation-title-text show
+  defaultfontname findfont 0.6 scalefont setfont
+  newpath
+  0 0 moveto 0 0 3 270 30 arc fill-and-stroke
+  0.9 -2.3 moveto (MY) show
+  0 0 moveto 0 0 3 30 150 arc fill-and-stroke
+  -0.5 2.2 moveto (CM) show
+  0 0 moveto 0 0 3 150 270 arc fill-and-stroke
+  -1.8 -2.3 moveto (CY) show
+  0 0 moveto 0 0 2 330 90 arc fill-and-stroke
+  1 0.5 moveto (M) show
+  0 0 moveto 0 0 2 90 210 arc fill-and-stroke
+  -1.5 0.5 moveto (C) show
+  0 0 moveto 0 0 2 210 330 arc fill-and-stroke
+  -0.2 -1.7 moveto (Y) show
+  1 0 moveto 0 0 1 0 360 arc fill-and-stroke
+  -0.7 -0.2 moveto (CMY) show
+  -2 -4.5 moveto 4 0 rlineto 0 1 rlineto -4 0 rlineto closepath stroke
+  -0.2 -4.2 moveto (K) show
+  3.5 2.5 moveto colorcircle-explanation-c-text show
+  3.5 1.6 moveto colorcircle-explanation-m-text show
+  3.5 0.7 moveto colorcircle-explanation-y-text show
+  3.5 -0.2 moveto colorcircle-explanation-cm-text show
+  3.5 -1.1 moveto colorcircle-explanation-cy-text show
+  3.5 -2 moveto colorcircle-explanation-my-text show
+  3.5 -2.9 moveto colorcircle-explanation-cmy-text show
+  3.5 -4.2 moveto colorcircle-explanation-k-text show
+} bind def
+
+% scale
+/photoBBoxWidth { photoBBoxRight photoBBoxLeft sub } bind def
+/photoBBoxHeight { photoBBoxTop photoBBoxBottom sub } bind def
+/photoWidthScale { photoWidth photoBBoxWidth div } bind def
+/photoHeightScale { photoHeight photoBBoxHeight div } bind def
+/photoScale
+{ photoWidthScale photoHeightScale lt { photoWidthScale } { photoHeightScale } ifelse
+} bind def
+photoScale photoScale scale
+
+% translate
+% because of the scaling the coordinates of the photo box are scaled too
+% to get the original place on the paper "photoScale div" is required
+/photoXtranslate { photoRight photoScale div photoBBoxRight sub } bind def
+/photoYtranslate { photoTop photoScale div photoBBoxTop sub } bind def
+photoXtranslate photoYtranslate translate
+
+% YaST will replace the line
+%   photoContent
+% with the content of the photo EPS file
+% YaST must not replace /photoContent above
+photoContent
+
+grestoreall
+% end photo
+
+% restore the PostScript interpreter's initial state
+restore
+
+% finally show the page
+showpage
+

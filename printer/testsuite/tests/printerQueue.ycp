@@ -1,0 +1,160 @@
+/**
+ * File:
+ *  printerQueue.ycp
+ *
+ * Module:
+ *  Printer configurator
+ *
+ * Summary:
+ *  Printer <=> queue relationship fuctions tests.
+ *
+ * Authors:
+ *  Jiri Srain <jsrain@suse.cz>
+ *
+ * $Id$
+ *
+ */
+
+{
+    import "Pkg";
+    include "testsuite.ycp";
+
+// testedfiles: Printer.ycp Printerdb.ycp printer/misc.ycp
+
+    map I_READ = $[
+	"target" : $[
+	    "size" : -1,
+	    "tmpdir" : "/tmp/",
+	    "yast2" : nil,
+	],
+	"sysconfig" : $[
+	    "console" : $[
+		"CONSOLE_FONT" : "",
+		"CONSOLE_SCREENMAP" : "",
+		"CONSOLE_UNICODEMAP" : "",
+		"CONSOLE_MAGIC" : "",
+		"CONSOLE_ENCODING" : "",
+	    ],
+	    "language" : $[
+		"RC_LANG" : "",
+		"DEFAULT_LANGUAGE" : "",
+	    ],
+	    "personal-firewall" : $[
+		"REJECT_ALL_INCOMING_CONNECTIONS" : nil,
+	    ],
+	],
+	"etc" : $[
+	    "install_inf" : $[
+		"Cmdline" : "",
+		"InstMode" : nil,
+	    ],
+	],
+	"probe" : $[
+	    "architecture" : "i386",
+	    "has_apm" : true,
+	    "has_pcmcia" : false,
+	    "has_smp" : false,
+	    "system" : [],
+	    "memory" : [],
+	    "cpu" : [],
+	    "cdrom" : $[
+		"manual" : [],
+	    ],
+	    "floppy" : $[
+		"manual" : [],
+	    ],
+	    "is_uml" : false,
+	],
+	"ppd" : $[
+	    "db" : $[
+		"vendorname" : "EPSON",
+		"modelname" : "STYLUSPHOTO810",
+	    ],
+	],
+	"product" : $[
+	    "features" : $[
+		"USE_DESKTOP_SCHEDULER" : "0",
+		"ENABLE_AUTOLOGIN" : "0",
+		"EVMS_CONFIG" : "0",
+		"IO_SCHEDULER" : "cfg",
+		"UI_MODE" : "expert",
+	    ],
+	],
+    ];
+    map I_WRITE = $[];
+    map I_EXEC = $[
+        "target" : $[
+            "bash_output" : $[],
+        ],
+    ];
+    TESTSUITE_INIT ([I_READ, I_WRITE, I_EXEC], 0);
+    import "Printer";
+    include "printer/misc.ycp";
+
+    Printer::printcap = [$[
+"device_ieee":"Stylus Photo 810", "device_db":"STYLUSPHOTO810", "device_id":0, "device_ieee":"Stylus Photo 810", "uri":"parallel:/dev/lp0", "vendor_ieee":"EPSON", "vendor_db":"EPSON", "vendor_id":0, "vendor_ieee":"EPSON", "name":"draft",  "unique_key":"ffnC.s5K9xZzhQb4", "ppd_info" : $[ "manufacturer" : "EPSON", "model" : "Stylus Photo 810"]
+],
+
+$[
+"device_ieee":"Stylus Photo 810", "device_db":"STYLUSPHOTO810", "device_id":0, "device_ieee":"Stylus Photo 810", "name":"draft_gray", "unique_key":"ffnC.s5K9xZzhQb4", "uri":"parallel:/dev/lp0", "vendor_ieee":"EPSON", "vendor_db":"EPSON", "vendor_id":0, "vendor_ieee":"EPSON", "ppd_info" : $[ "manufacturer" : "EPSON", "model" : "Stylus Photo 810"]
+],
+
+
+$[
+"device_ieee":"Stylus Photo 810", "device_db":"STYLUSPHOTO810", "device_id":0, "device_ieee":"Stylus Photo 810", "uri":"parallel:/dev/lp0", "vendor_ieee":"EPSON", "vendor_db":"EPSON", "vendor_id":0, "vendor_ieee":"EPSON", "name":"draft",  "unique_key":"1ffnC.s5K9xZzhQb4", "ppd_info" : $[ "manufacturer" : "EPSON", "model" : "Stylus Photo 810"]
+],
+
+$[
+"device_ieee":"Stylus Photo 810", "device_db":"STYLUSPHOTO810", "device_id":0, "device_ieee":"Stylus Photo 810", "name":"draft_gray", "unique_key":"1ffnC.s5K9xZzhQb4", "uri":"parallel:/dev/lp0", "vendor_ieee":"EPSON", "vendor_db":"EPSON", "vendor_id":0, "vendor_ieee":"EPSON", "ppd_info" : $[ "manufacturer" : "EPSON", "model" : "Stylus Photo 810"]
+],
+
+];
+
+    TEST (``(getConfiguredPrinters ()), [I_READ], nil);
+    DUMP ("=============");
+/*    TEST (``(getQueuesOfPrinter ("parallel:/dev/lp0", "EPSON", "Stylus Photo 810")), [], nil);
+    DUMP ("===");
+    TEST (``(getQueuesOfPrinter ("parallel:/dev/lp0", "EPSON", "STYLUSPHOTO810")), [], nil);
+    DUMP ("===");
+    TEST (``(getQueuesOfPrinter ("parallel:/dev/lp0", "EPSON", "STYLUSPHOTO820")), [], nil);
+    DUMP ("=============");*/
+    TEST (``(isPrinterConfigured ("EPSON", "Stylus Photo 810", "parallel:/dev/lp0", "")), [I_READ], nil);
+    DUMP ("===");
+    TEST (``(isPrinterConfigured ("EPSON", "STYLUSPHOTO810", "parallel:/dev/lp0", "")), [I_READ], nil);
+    DUMP ("===");
+    TEST (``(isPrinterConfigured ("EPSON", "Stylus Photo 810", "parallel:/dev/lp1", "")), [I_READ], nil);
+    DUMP ("===");
+    TEST (``(isPrinterConfigured ("", "", "", "")), [I_READ], nil);
+    DUMP ("===");
+    TEST (``(isPrinterConfigured ("", "", "", "ffnC.s5K9xZzhQb4")), [I_READ], nil);
+    DUMP ("==========================================");
+
+    Printer::printcap = add (Printer::printcap,
+
+$[
+
+"device_ieee":"Stylus Photo 820", "device_db":"STYLUSPHOTO820", "device_id":0, "device_ieee":"Stylus Photo 820", "uri":"parallel:/dev/lp0", "vendor_ieee":"EPSON", "vendor_db":"EPSON", "vendor_id":0, "vendor_ieee":"EPSON", "name":"draft", "ppd_info" : $[ "manufacturer" : "EPSON", "model" : "Stylus Photo 820" ]
+
+]);
+
+    TEST (``(getConfiguredPrinters ()), [I_READ], nil);
+    DUMP ("=============");
+/*    TEST (``(getQueuesOfPrinter ("parallel:/dev/lp0", "EPSON", "Stylus Photo 810")), [], nil);
+    DUMP ("===");
+    TEST (``(getQueuesOfPrinter ("parallel:/dev/lp0", "EPSON", "STYLUSPHOTO810")), [], nil);
+    DUMP ("===");
+    TEST (``(getQueuesOfPrinter ("parallel:/dev/lp0", "EPSON", "STYLUSPHOTO820")), [], nil);
+    DUMP ("=============");*/
+    TEST (``(isPrinterConfigured ("EPSON", "Stylus Photo 810", "parallel:/dev/lp0", "")), [I_READ], nil);
+    DUMP ("===");
+    TEST (``(isPrinterConfigured ("EPSON", "STYLUSPHOTO810", "parallel:/dev/lp0", "")), [I_READ], nil);
+    DUMP ("===");
+    TEST (``(isPrinterConfigured ("EPSON", "Stylus Photo 810", "parallel:/dev/lp1", "")), [I_READ], nil);
+    DUMP ("===");
+    TEST (``(isPrinterConfigured ("", "", "", "")), [I_READ], nil);
+    DUMP ("===");
+    TEST (``(isPrinterConfigured ("", "", "", "nonsense")), [I_READ], nil);
+    DUMP ("==========================================");
+
+
+}

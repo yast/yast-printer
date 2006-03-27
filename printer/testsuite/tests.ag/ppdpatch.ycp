@@ -1,0 +1,47 @@
+/**
+ * File:
+ *  ppdpatch.ycp
+ *
+ * Module:
+ *  Printer configurator
+ *
+ * Summary:
+ *  Testsuite
+ *
+ * Authors:
+ *  Jiri Srain <jsrain@suse.cz>
+ *
+ * $Id$
+ *
+ */
+
+{
+
+    integer old = WFM::SCRGetDefault ();
+
+    integer h = WFM::SCROpen ("ag_ppd_file_modify", false);
+    if (h < 1)
+    {
+        return;
+    }
+    WFM::SCRSetDefault (h);
+
+    y2error ("%1", SCR::Write (., ["tests.ag/Postscript.ppd", "output", $[]]));
+
+    WFM::SCRSetDefault (old);
+    y2error ("%1", SCR::Execute (.target.bash_output, "diff output tests.ag/Postscript.ppd"));
+
+    WFM::SCRSetDefault (h);
+    y2error ("%1", SCR::Write (., ["tests.ag/Postscript.ppd", "output", $["PageSize" : "B5", "PageRegion" : "B5"]]));
+
+    WFM::SCRSetDefault (old);
+    y2error ("%1", SCR::Execute (.target.bash_output, "diff output tests.ag/Postscript.ppd"));
+
+    WFM::SCRSetDefault (h);
+    y2error ("%1", SCR::Write (., ["tests.ag/Postscript.ppd", "output", $["PageSize" : "B5", "PageRegion" : "B5", "*XXX" : "YYY"]]));
+
+    WFM::SCRSetDefault (old);
+    y2error ("%1", SCR::Execute (.target.bash_output, "diff output tests.ag/Postscript.ppd"));
+
+    WFM::SCRClose (h);
+}

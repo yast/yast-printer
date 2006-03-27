@@ -1,0 +1,122 @@
+/**
+ * File:
+ *  getQueueSuffix.ycp
+ *
+ * Module:
+ *  Printer configurator
+ *
+ * Summary:
+ *  Miscelaneous tests.
+ *
+ * Authors:
+ *  Petr Blahos <pblahos@suse.cz>
+ *
+ * $Id$
+ *
+ */
+
+{
+    import "Pkg";
+
+// testedfiles: Printer.ycp
+
+    include "testsuite.ycp";
+    map I_READ = $[
+	"target" : $[
+	    "size" : -1,
+	    "tmpdir" : "/tmp/",
+	    "yast2" : nil,
+	],
+	"sysconfig" : $[
+	    "console" : $[
+		"CONSOLE_FONT" : "",
+		"CONSOLE_SCREENMAP" : "",
+		"CONSOLE_UNICODEMAP" : "",
+		"CONSOLE_MAGIC" : "",
+		"CONSOLE_ENCODING" : "",
+	    ],
+	    "language" : $[
+		"RC_LANG" : "",
+		"DEFAULT_LANGUAGE" : "",
+	    ],
+	    "personal-firewall" : $[
+		"REJECT_ALL_INCOMING_CONNECTIONS" : nil,
+	    ],
+	],
+	"etc" : $[
+	    "install_inf" : $[
+		"Cmdline" : "",
+		"InstMode" : nil,
+	    ],
+	],
+	"probe" : $[
+	    "architecture" : "i386",
+	    "has_apm" : true,
+	    "has_pcmcia" : false,
+	    "has_smp" : false,
+	    "system" : [],
+	    "memory" : [],
+	    "cpu" : [],
+	    "cdrom" : $[
+		"manual" : [],
+	    ],
+	    "floppy" : $[
+		"manual" : [],
+	    ],
+	    "is_uml" : false,
+	],
+	"product" : $[
+	    "features" : $[
+		"USE_DESKTOP_SCHEDULER" : "0",
+		"ENABLE_AUTOLOGIN" : "0",
+		"EVMS_CONFIG" : "0",
+		"IO_SCHEDULER" : "cfg",
+		"UI_MODE" : "expert",
+	    ],
+	],
+    ];
+    map I_WRITE = $[];
+    map I_EXEC = $[
+        "target" : $[
+            "bash_output" : $[],
+        ],
+    ];
+    TESTSUITE_INIT ([I_READ, I_WRITE, I_EXEC], 0);
+    import "Printer";
+
+    list<map<string,any> > queues = [
+	$[ "name" : "lp", ],
+	$[ "name" : "other", ],
+	];
+
+    Printer::printcap = [
+	$[  "name" : "color",	],
+	$[  "name" : "high",	],
+    ];
+
+    DUMP (sformat ("-->%1<--", Printer::getQueueSuffix (queues)));
+
+    Printer::printcap = [
+	$[  "name" : "lp",	],
+	$[  "name" : "color",	],
+	$[  "name" : "high",	],
+    ];
+
+    DUMP (Printer::getQueueSuffix (queues));
+
+    Printer::printcap = [
+	$[  "name" : "lp1",	],
+	$[  "name" : "color3",	],
+	$[  "name" : "high2",	],
+    ];
+
+    DUMP (Printer::getQueueSuffix (queues));
+
+    Printer::printcap = [
+	$[  "name" : "lp2",	],
+	$[  "name" : "other1",	],
+	$[  "name" : "high5",	],
+    ];
+
+    DUMP (Printer::getQueueSuffix (queues));
+}
