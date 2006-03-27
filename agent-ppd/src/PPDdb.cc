@@ -1862,7 +1862,7 @@ bool PPD::cleanupEmptyEntries () {
 
 string PPD::fileChecksum (const string &filename) {
     FILE* f;
-    char buf[16];
+    char buf[16] __attribute__ ((aligned));
     char sum[33];
     string ret = "";
 
