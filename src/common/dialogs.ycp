@@ -139,6 +139,19 @@
 		UI::ReplaceWidget (`id (`modelsel_rep), modelsel);
 		if (! haskey (Printerdb::foomatic[manuf_db]:$[], model_db))
 		{
+
+		 while(size(model_db)>0){
+		  foreach (any k, any v, Printerdb::foomatic[manuf_db]:$[],``{
+		   if (is(k, string) && issubstring((string)k, model_db)){ 
+			y2internal("matched %1", k);
+			model_db=tostring(k);
+			break;
+		    }
+		  });
+		  if (haskey (Printerdb::foomatic[manuf_db]:$[], model_db)) break;
+		  model_db=substring(model_db,0,size(model_db)-1);
+		 }
+
 		    foreach (any k, any v, Printerdb::foomatic[manuf_db]:$[],``{
 			if ((model_db == "" || model_db == nil)
 			    && is (k, string) && k != "" && k != nil)
@@ -146,6 +159,7 @@
 			    model_db = (string)k;
 			}
 		    });
+
 		}
 		if (model_db != "")
 		    UI::ChangeWidget (`id (`modelsel), `CurrentItem, model_db);
@@ -1310,7 +1324,8 @@ and test the queue after the printer model is selected."));
      * Create contents for edit dialog. Calls Setwizardcontents at the end.
      */
     define void createEditDialog () ``{
-	map ppd_info = Printer::printer["ppd_info"]:$[];		//["ppd_info"]:$[];
+	map ppd_info = Printer::printer["ppd_info"]:$[];
+	if (ppd_info == $[]) ppd_info = Printer::printer["detected", "ppd_info"]:$[];
 	string manuf_db = ppd_info["manufacturer_db"]:"";
 	string model_db = ppd_info["model_db"]:"";
 	string nick = ppd_info["nick"]:"";
@@ -1328,8 +1343,7 @@ and test the queue after the printer model is selected."));
 	//
 	// texts
 	//
-	string model_text = sformat ("%1 %2", ppd_info["manufacturer"]:"",
-	    ppd_info["model"]:"");
+	string model_text = sformat ("%1 %2", ppd_info["manufacturer"]:"", ppd_info["model"]:"");
 	string config_text = GetPpdFileDescription (
 	    nick,
 	    lang,
@@ -2237,8 +2251,9 @@ y2milestone("%1", new_spooler);
 	    ]);
 	SetHWDialogData ();
 
-	WizardHW::SetSelectedItem (Printer::runAutoprobedListDialog__current);
+	Wizard::SetNextButton(`next, _("Finish"));
 
+	WizardHW::SetSelectedItem (Printer::runAutoprobedListDialog__current);
 
 
 	boolean cont = true;
