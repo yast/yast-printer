@@ -2174,7 +2174,6 @@ y2milestone("%1", new_spooler);
                                            ] ];
 	}
   WizardHW::SetContents ( printers );
-
 }
 
 
@@ -2340,26 +2339,27 @@ y2milestone("%1", new_spooler);
 					  integer from_detect = -1;
 					  integer count = 0;
 					  string prn_id="";
+
 					foreach(map<string, any> temp_printer, Printer::Detect(), {
 						string temp_string = splitstring(temp_printer["uri"]:"", ":")[1]:"";
                                               if (tointeger(selected) >= count)
 						{
-						if (temp_string == Printer::conf_unconf_printers[tointeger(selected), "ID"]:"")
-						 {
+						 if (Printerlib::getReplacedString(temp_string, false) ==
+								Printer::conf_unconf_printers[tointeger(selected), "ID"]:"")
+						  {
 						   from_detect = from_detect + 1;
 						   break;
-						 }
-						if (temp_string != prn_id)
+						  }
+						 if (temp_string != prn_id)
 							{
 							from_detect = from_detect+1;
 							prn_id = temp_printer["ID"]:"";
 							}
-						count=count + 1;
-						}
-
+						  count=count + 1;
+						 }
 						});
 					 Printer::editDetected(Printer::Detect()[from_detect]:$[]);
-					 y2milestone("Configuring detected, non-configured printer");
+				 y2milestone("Configuring detected, non-configured printer %1", Printer::Detect()[from_detect]:$[]);
 					}
 				if (Printer::printer["ppd_info", "model"]:nil == nil) ret=`edit_unconf;
 				 	else ret = `edit_button;
