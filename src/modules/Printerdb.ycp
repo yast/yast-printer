@@ -254,7 +254,7 @@ global boolean GetDriversAreInstalled () {
      * @param filename string file name of the PPD file
      * @return a list of all options of the PPD file (in UTF-8)
      */
-    global define list<map> getPpdFileOptions (string filename) ``{
+    global define list<map> getPpdFileOptions (string filename, boolean checkLocale) ``{
 	map options = (map)SCR::Read (.ppd.file.options, [filename, ""]);
 	list<map> optlist = options["data"]:[];
 	y2debug ("First option: %1", optlist[0]:$[]);
@@ -287,14 +287,17 @@ global boolean GetDriversAreInstalled () {
 	    });
 	}
 
+
 	// bug #88286 - change media size to Letter, if US locales
-	optlist = maplist (map o, optlist, ``{
+	if (checkLocale == true)
+	 {
+	  optlist = maplist (map o, optlist, ``{
 		if ((o["name"]:"" == "PageSize")&&(contains(o["valorder"]:[], "Letter"))&&(contains(o["valorder"]:[], "A4")))
 		 {
 		  string new_size=((map<string, any>)SCR::Read (.ppd.paper_size))["value"]:"";
-		  if ((new_size==o["current"]:"")||(new_size==nil))
+		  if ((new_size==o["current"]:"")||(size(new_size)==0))
 		   {
-		    y2milestone("Media size %1 is same or nil", new_size);
+		    y2milestone("Media size %1 is same (or nil)", new_size);
 		   } else{
 			 y2milestone("Changing media size from %1 to %2", o["current"]:"", new_size);
 			 o["current"]=new_size;
@@ -302,6 +305,7 @@ global boolean GetDriversAreInstalled () {
 		 }
 		return o;
             });
+	}
 
 	return optlist;
     }
@@ -693,7 +697,6 @@ global define string getAutoPpdFile (string vendor_db, string device_db) {
 Try selecting the printer model again."), entry["name"]:""));
 	    return nil;
 	}
-
 	SCR::Write (.ppd.file.modify,
 	    [src_ppd, dst_ppd, entry["ppd_options"]:$[]]);
 	entry["ppd"] = dst_ppd;

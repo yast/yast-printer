@@ -1097,7 +1097,12 @@ and test the queue after the printer model is selected."));
 	map ppd_selected = Printer::printer["ppd_options"]:$[];
 
 	list opts = [];
-	list<map> optlist = Printerdb::getPpdFileOptions (filename);
+	boolean checkLocales = true;
+
+	foreach(map<string, any> row, Printer::printcap, {
+	 if (Printer::printer["name"]:"" == row["name"]:"") checkLocales = false;
+	});
+	list<map> optlist = Printerdb::getPpdFileOptions (filename, checkLocales);
 
 	// and now add options without their location in PPD file
 	optlist = add (optlist, $[
