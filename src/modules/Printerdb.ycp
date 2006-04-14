@@ -262,7 +262,6 @@ global boolean GetDriversAreInstalled () {
 	    o["name"]:"" != "PageRegion"
 	    && o["name"]:"" != "ImageableArea"
 	    && o["mame"]:"" != "PaperDimension"));
-
 	// change the encoding of printable strings
 	map ppdinfo = (map)SCR::Read (.ppd.file.ppdinfo, filename);
 	string encoding = ppdinfo["lang_encoding"]:"";
@@ -287,6 +286,23 @@ global boolean GetDriversAreInstalled () {
 		return o;
 	    });
 	}
+
+	// bug #88286 - change media size to Letter, if US locales
+	optlist = maplist (map o, optlist, ``{
+		if ((o["name"]:"" == "PageSize")&&(contains(o["valorder"]:[], "Letter"))&&(contains(o["valorder"]:[], "A4")))
+		 {
+		  string new_size=((map<string, any>)SCR::Read (.ppd.paper_size))["value"]:"";
+		  if ((new_size==o["current"]:"")||(new_size==nil))
+		   {
+		    y2milestone("Media size %1 is same or nil", new_size);
+		   } else{
+			 y2milestone("Changing media size from %1 to %2", o["current"]:"", new_size);
+			 o["current"]=new_size;
+			 }
+		 }
+		return o;
+            });
+
 	return optlist;
     }
 
