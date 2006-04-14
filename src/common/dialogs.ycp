@@ -1322,6 +1322,21 @@ and test the queue after the printer model is selected."));
 	    }
 	    Printer::printer["options"] = selected;
 	    Printer::printer["ppd_options"] = ppd_selected;
+
+
+	// fixed #164851 - check for conflict choices in PPD
+	string src_ppd = Printer::printer["ppd"]:"";
+	string dst_ppd = (string)SCR::Read (.target.tmpdir) + "/patched_ppd_" + Printer::printer["name"]:"";
+	SCR::Write (.ppd.file.modify,[src_ppd, dst_ppd, Printer::printer["ppd_options"]:$[]]);
+	string warning = parseWarn( ((map<string, any>)SCR::Execute(.target.bash_output,
+										"cupstestppd $PPD", $["PPD":dst_ppd]))["stdout"]:"");
+	SCR::Execute(.target.remove, dst_ppd);
+	 if (size(warning)>0){
+		 Popup::Error(warning);
+		}
+
+
+
 	}
 	return (symbol)ret;
     }

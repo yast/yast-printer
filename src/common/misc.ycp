@@ -722,7 +722,17 @@ define boolean checkIppQueueName (string name) {
 	);
     }
 
-
+string parseWarn(string incoming_text){
+ y2internal("%1", incoming_text);
+ list <string> rows = splitstring(incoming_text, "\n");
+ rows = filter(string row, rows, {
+	 if (find(row, "PASS")!=-1 || find(row, "Obsolete PPD")!=-1 || find(row, "REF: Page")!=-1) return false;
+		else return true;
+	});
+ incoming_text = mergestring(rows, "\n");
+y2internal("%1", rows);
+ return incoming_text;
+}
 
 
 }
