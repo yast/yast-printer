@@ -1019,6 +1019,7 @@ accessible under the same names as on the remote host."))),
 	Wizard::SetContentsButtons (_("CUPS Server Settings"), contents, getCupsServerHelp () + firewall_help, Label::BackButton (), Label::NextButton ());
 
 	list<string> addresses = CUPS::cups_server_settings["BrowseAddress"]:[];
+y2internal("BrowseAddress %1", addresses);
 
 	UI::ChangeWidget (`id (`browsing), `CurrentButton, CUPS::cups_server_settings["Browsing"]:["On"] == ["Off"] ? `off : `on);
 	// selectionbox
@@ -1110,10 +1111,9 @@ accessible under the same names as on the remote host."))),
 		= UI::QueryWidget (`id (`browsing), `CurrentButton) == `on
 		    ? ["On"]
 		    : ["Off"];
-	    CUPS::cups_server_settings["BrowseAddress"] = addresses;
-	    CWMFirewallInterfaces::OpenFirewallStore (firewall_widget,
-		"", event);
+	    CWMFirewallInterfaces::OpenFirewallStore (firewall_widget, "", event);
 	}
+	    CUPS::cups_server_settings["BrowseAddress"] = addresses;
 	return (symbol)ret;
     }
 }
