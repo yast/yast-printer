@@ -1019,7 +1019,6 @@ accessible under the same names as on the remote host."))),
 	Wizard::SetContentsButtons (_("CUPS Server Settings"), contents, getCupsServerHelp () + firewall_help, Label::BackButton (), Label::NextButton ());
 
 	list<string> addresses = CUPS::cups_server_settings["BrowseAddress"]:[];
-y2internal("BrowseAddress %1", addresses);
 
 	UI::ChangeWidget (`id (`browsing), `CurrentButton, CUPS::cups_server_settings["Browsing"]:["On"] == ["Off"] ? `off : `on);
 	// selectionbox
@@ -1046,9 +1045,11 @@ y2internal("BrowseAddress %1", addresses);
 		break;
 	    else if (`propose_server == ret)
 	    {
-		CUPS::ProposeServerSettings ();
-		addresses = CUPS::cups_server_settings["BrowseAddress"]:[];
-		UI::ReplaceWidget (`id (`replace_addr), `SelectionBox (`id (`addr), _("Browse Addre&sses"), addresses));
+		if ((size(addresses)>0 && Popup::ContinueCancel(_("Really replace with proposed value?")))||(size(addresses)==0)){
+		 CUPS::ProposeServerSettings ();
+		 addresses = CUPS::cups_server_settings["BrowseAddress"]:[];
+		 UI::ReplaceWidget (`id (`replace_addr), `SelectionBox (`id (`addr), _("Browse Addre&sses"), addresses));
+		}
 	    }
 	    else if (`change == ret)
 	    {
