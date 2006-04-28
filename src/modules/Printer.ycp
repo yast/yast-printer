@@ -1826,8 +1826,10 @@ the selected spooler does not support it."), name));
 		if (! Mode::config () && SuSEFirewall::IsEnabled ())
 		{
 		    map<string,boolean> service_status = $[];
-		    map<string,map<string,boolean> > ifaces_info
-			= SuSEFirewall::GetServices ([ "ipp-udp" ]);
+		    map<string,map<string,boolean> > ifaces_info = SuSEFirewall::GetServices ([ "ipp-udp" ]);
+
+
+
 		    foreach (string s, map<string,boolean> status, ifaces_info,{
 			foreach (string iface, boolean en, status, {
 			    service_status[iface]
@@ -1846,6 +1848,16 @@ the selected spooler does not support it."), name));
 		    {
 			return iface;
 		    });
+	// fixed #169763 - do not include not used zones
+	 list <string> used_zones = [];
+	 boolean others_in_EXT = contains(SuSEFirewall::GetSpecialInterfacesInZone("EXT"), "any");
+	 foreach(map<string, any> interface, SuSEFirewall::GetAllKnownInterfaces (), {
+	  string zone=(string)interface["zone"]:"";
+	  if (zone == nil && others_in_EXT==true) zone="EXT";
+	  if (!contains(used_zones, zone)) used_zones=add(used_zones, zone);
+	 });
+	allowed_interfaces = filter(string ifce, allowed_interfaces, {return (contains(used_zones, ifce));});
+
 		    if (size (allowed_interfaces) == 0)
 		    {
 			summary = add (summary, "<li>" + sformat (
