@@ -1,0 +1,136 @@
+<?xml version="1.0" encoding='ISO-8859-1'?>
+
+    <section id="dbbuild">
+        <title>Database file building</title>
+	<section>
+	    <title>Detection of need to rebuild</title>
+	    <para>
+The database must be rebuilt only if some PPD file is added/changed/removed. Otherwise, there is no need to recreate the pre-built database file, and can be used as is.
+For checking is used comparison of last modification time of file with pre-built database and of all PPD files.
+	    </para>
+	    <para>
+Since database rebuild takes a lot of time and it would hurt before first use of the database, first check is different.
+Package <computeroutput>yast2-printerdb</computeroutput> contains pre-built database and list of all PPD files (both created during build process, required packages are in
+needed-for-build list). When starting first time, if pre-built database and list of PPD files are found, there is done comparison of
+number of PPD files (list vs. real) and installed packages (PPD files are contained in <computeroutput>cups</computeroutput>, <computeroutput>cups-drivers</computeroutput>
+and <computeroutput>cups-drivers-stp</computeroutput>). If all of them are installed and the count of PPD files is the same, then there isn't done any detection
+of last change dates, the database file is "touched" (for ensuring it will be the last) and database is used as is. Otherwise the database is completely rebuilt.
+Additionally (doesn't matter whether pre-built database can be used) list of PPD files in database will be removed to ensure it won't be used more.
+	    </para>
+	    <para>
+The pre-built database and list of files contained in package <computeroutput>yast2-printerdb</computeroutput> is created during package building process. 
+<computeroutput>yast2-printerdb</computeroutput> has in needed-for-build list all packages containing PPD files, and pre-builds the database the same way
+as on running system, file list is created using <computeroutput>find</computeroutput>.
+	    </para>
+	    <para>
+Once database file is created (as it is done during building process), it isn't needed to get rebuilt complete if only one PPD file changes.
+Because of this fast rebuilding feature was added.
+	    </para>
+	</section>
+	<section>
+	    <title>Building process (from scratch)</title>
+	    <para>
+Database building process consists from 3 steps:
+	    </para>
+	    <orderedlist>
+		<listitem><para>Collect info about PPD files</para></listitem>
+		<listitem><para>Merge additional data from SuSE database</para></listitem>
+		<listitem><para>Flush data as YCP map to a file</para></listitem>
+	    </orderedlist>
+	    <section>
+		<title>Collecting informations about PPD files</title>
+		<para>
+Each PPD file must be parsed and important entries from the PPD file must be fetched. Most important are entries describing manufacturer and model of the printer, and PPD file description.
+Problem of PPD files is that there isn't possible to use only one entry to get printer model, because different PPD files providers use different entries of PPD file to store this
+information. Because of this problem there are hard-coded some rules inside (according to one entry decide what entry will be used to get real model name).
+		</para>
+		<para>
+Additionally, there are problems with multiple different names of one printer manufacturer (eg. HP vs. Hewlett-Packard) and the same problem for printer models (usually added "series"
+to the end of model name). Because of this there are lists of equivalences between both vendors and models.
+		</para>
+		<para>
+Once required info is fetched from PPD file, the info about filename, vendor, model (both twice - for detection and display) is stored into internal structure, which is used in following steps.
+		</para>
+	    </section>
+	    <section>
+		<title>Data from SuSE database</title>
+		<para>
+Important information from SuSE database are stored in special file. It contains one line per printer, each line contains (except vendor and model) support status and comments.
+This information are added to internal structures. It is possible to add printer without any PPD file, in this case it is upon Printconf to switch to use SuSE database for
+this printer.
+		</para>
+	    </section>
+	    <section>
+		<title>Flushing database to file</title>
+		<para>
+Flushing database to file is only simple walk through the map of settings and writing it to file in the YCP syntax.
+Two multi-level maps are merged together, target data are organized as one big YCP map.
+		</para>
+	    </section>
+	</section>
+	<section>
+	    <title>Database update</title>
+	    <para>
+Database update consists from 5 steps.
+	    </para>
+	    <orderedlist>
+		<listitem><para>Parse current pre-built database</para></listitem>
+		<listitem><para>Get informations about PPD files</para></listitem>
+		<listitem><para>Clean up database</para></listitem>
+		<listitem><para>Insert new and changed PPD files</para></listitem>
+		<listitem><para>Clean up printers without PPD file</para></listitem>
+		<listitem><para>Flush data as YCP map to file</para></listitem>
+	    </orderedlist>
+	    <para>
+If any of these steps fails, the database must be rebuilt from scratch.
+	    </para>
+	    <section>
+		<title>Parsing current pre-built database</title>
+		<para>
+Parsing is done by YCP parser, which creates YCP structure describing the database. After this is done, YCP structures are translated to internally used 
+and easier to work STL structures. Types checking is done, if something is wrong, database must be rebuilt completely.
+		</para>
+	    </section>
+	    <section>
+		<title>Getting informations about PPD files</title>
+		<para>
+List of PPD files is created, and each gets attributes saying whether it is newer than pre-built database (or some directory in path from 
+<computeroutput>/usr/share/cups/model</computeroutput> is newer - because of file moving).
+		</para>
+	    </section>
+            <section>
+                <title>Cleaning up database</title>
+                <para>
+Database of PPD files is walked through, and each PPD file is checked. Informations about PPD files, which are no longer present on disk are removed, 
+files which are newer than pre-built database are checked whether size of checksum has changed (depending on current checking mode set by SCR call), and 
+if file was really changed, entry is removed from database. At the end of this stage only unchanged files are present in internal structures.
+                </para>
+            </section>
+            <section>
+                <title>Inserting new and changed PPD files</title>
+                <para>
+Files are inserted to internal structures the same way as in creation of database from scratch.
+                </para>
+            </section>
+            <section>
+                <title>Cleaning up printers without PPD file</title>
+                <para>
+not implemented yet.
+                </para>
+            </section>
+            <section>
+                <title>Flushing data as YCP map to file</title>
+                <para>
+Flushing data is done the same way as during creating database from scratch.
+                </para>
+            </section>
+	</section>
+	<section>
+	    <title>Used structures</title>
+	    <para>
+The structure to hold the data is one big multi-level map, each level contains as key structure, one of entries is map for level bellow. The structure is similar to
+result in YCP format. Contains all required informations, like vendor and model keys and labels, vendor and model comments, support status and informations about PPD files.
+Entries come from PPD files and SuSE database informations.
+	    </para>
+	</section>
+    </section>

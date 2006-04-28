@@ -1,0 +1,66 @@
+/*
+ * Authors:
+ *  Petr Blahos <blahos@suse.cz>, 2001
+ *
+ * $Id$
+ *
+ */
+
+/* class may be default too*/
+{
+
+    list pr = [];
+    list cl = [];
+
+    SCR::Write (.cups.printers, []);
+    SCR::Write (.cups.classes, []);
+
+    pr = [
+	$[
+	    "Name":"lp0",
+	    "Uri":"parallel:/dev/lp0",
+	    "ppd":"/usr/share/cups/model/epson9.ppd",
+	    "options" : $[],
+	    ],
+	$[
+	    "Name":"lp1",
+	    "Uri":"parallel:/dev/lp0",
+	    "ppd":"/usr/share/cups/model/epson9.ppd",
+	    "options" : $[],
+	    ],
+	$[
+	    "Name":"lp2",
+	    "Uri":"parallel:/dev/lp0",
+	    "ppd":"/usr/share/cups/model/epson9.ppd",
+	    "options" : $[],
+	    ],
+	];
+    cl = [
+	$[
+	    "Name":"class1",
+	    "Printers":["lp0", "lp1"],
+	    "options" : $[],
+	    ],
+	$[
+	    "Name":"class2",
+	    "Printers":["lp1", "lp2"],
+	    "options" : $[],
+	    ],
+	$[
+	    "Name":"class3",
+	    "Printers":["lp0", "lp2"],
+	    "options" : $[],
+	    ],
+	];
+    
+    SCR::Write (.cups.printers, pr);
+    SCR::Write (.cups.classes, cl);
+    SCR::Write (.cups.default_dest, "class1");
+    y2error ("%1", SCR::Read (.cups.default_dest));
+    SCR::Write (.cups.default_dest, "class2");
+    y2error ("%1", SCR::Read (.cups.default_dest));
+    SCR::Write (.cups.default_dest, "class3");
+    y2error ("%1", SCR::Read (.cups.default_dest));
+    SCR::Write (.cups.default_dest, "class4");
+    y2error ("%1", SCR::Read (.cups.default_dest));
+}

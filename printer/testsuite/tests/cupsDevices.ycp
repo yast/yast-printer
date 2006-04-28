@@ -1,0 +1,50 @@
+/**
+ * File:
+ *  misc.ycp
+ *
+ * Module:
+ *  Printer configurator
+ *
+ * Summary:
+ *  CUPS device names handling testsuite
+ *
+ * Authors:
+ *  Jiri Srain <jsrain@suse.cz>
+ *
+ * $Id$
+ *
+ */
+
+{
+
+// testedfiles: CUPS.ycp Printerlib.ycp
+
+
+    include "testsuite.ycp";
+
+    map READ = $[
+	"target" : $[
+	    "size" : 0,
+	],
+    ];
+    map WRITE = $[];
+    map EXEC = $[
+        "target" : $[
+            "bash_output" : $[],
+        ],
+    ];
+
+    TESTSUITE_INIT ([READ, WRITE, EXEC], nil);
+
+    import "Printerlib";
+    import "CUPS";
+
+    TEST (``(Printerlib::SetCupsUsbDevicesInfo ([
+	[ "EPSON", "EPSON", "usblp0" ],
+	[ "CANON", "CANON", "usblp1" ],
+	[ "EPSON", "EPSON", "usblp2" ],
+    ])), [READ, WRITE, EXEC], "");
+
+    TEST (``(CUPS::GetProblematicCupsUsbDevices ()), [READ, WRITE, EXEC], "");
+
+}

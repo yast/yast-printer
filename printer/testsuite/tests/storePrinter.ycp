@@ -1,0 +1,151 @@
+/**
+ * File:
+ *  storePrinter.ycp
+ *
+ * Module:
+ *  Printer configurator
+ *
+ * Summary:
+ *  Tests for basic translation functions.
+ *
+ * Authors:
+ *  Petr Blahos <blahos@suse.cz>, 2001
+ *
+ * $Id$
+ *
+ */
+
+
+{
+    import "Pkg";
+
+    include "testsuite.ycp";
+
+// testedfiles: Printer.ycp Printerdb.ycp Spooler.ycp CUPS.ycp
+
+    map I_READ = $[
+	"target" : $[
+	    "size" : -1,
+	    "tmpdir" : "/tmp/",
+	    "yast2" : nil,
+	],
+	"sysconfig" : $[
+	    "console" : $[
+		"CONSOLE_FONT" : "",
+		"CONSOLE_SCREENMAP" : "",
+		"CONSOLE_UNICODEMAP" : "",
+		"CONSOLE_MAGIC" : "",
+		"CONSOLE_ENCODING" : "",
+	    ],
+	    "language" : $[
+		"RC_LANG" : "",
+		"DEFAULT_LANGUAGE" : "",
+	    ],
+	    "personal-firewall" : $[
+		"REJECT_ALL_INCOMING_CONNECTIONS" : nil,
+	    ],
+	],
+	"etc" : $[
+	    "install_inf" : $[
+		"Cmdline" : "",
+		"InstMode" : nil,
+	    ],
+	],
+	"probe" : $[
+	    "architecture" : "i386",
+	    "has_apm" : true,
+	    "has_pcmcia" : false,
+	    "has_smp" : false,
+	    "system" : [],
+	    "memory" : [],
+	    "cpu" : [],
+	    "cdrom" : $[
+		"manual" : [],
+	    ],
+	    "floppy" : $[
+		"manual" : [],
+	    ],
+	    "is_uml" : false,
+	],
+	"product" : $[
+	    "features" : $[
+		"USE_DESKTOP_SCHEDULER" : "0",
+		"ENABLE_AUTOLOGIN" : "0",
+		"EVMS_CONFIG" : "0",
+		"IO_SCHEDULER" : "cfg",
+		"UI_MODE" : "expert",
+	    ],
+	],
+    ];
+    map I_WRITE = $[];
+    map I_EXEC = $[
+        "target" : $[
+            "bash_output" : $[],
+        ],
+    ];
+    TESTSUITE_INIT ([I_READ, I_WRITE, I_EXEC], 0);
+    import "Printerdb";
+    import "Printer";
+    import "Spooler";
+
+    Spooler::Set ("cups");
+
+    Printerdb::foomatic = $[
+	"" : $[
+	    "" : $[
+		"" : $[
+		    "filter" : "foomatic-rip"
+		]
+	    ]
+	]
+    ];
+
+    Printer::default_queue = "";
+    Printer::printcap = [];
+    Printer::index = -1;
+    Printer::printer = $[
+	"name" : "lp",
+	"uri" : "parallel:/dev/lp0",
+	"ppd_info" : $[ "filter" : "foomatic-rip" ],
+	];
+    TEST (``(Printer::storePrinter ()), [], []);
+    DUMP (Printer::printcap);
+    DUMP (Printer::default_queue);
+
+    Printer::default_queue = "";
+    Printer::printcap = [];
+    Printer::index = -1;
+    Printer::printer = $[
+	"name" : "zzz",
+	"uri" : "lpd://unknown.suse.de/lp_rem",
+	"ppd_info" : $[ "filter" : "foomatic-rip" ],
+	"database" : "foomatic",
+    ];
+    TEST (``(Printer::storePrinter ()), [], []);
+    DUMP (Printer::printcap);
+    DUMP (Printer::default_queue);
+
+    Printer::index = -1;
+    Printer::default_queue = "";
+    Printer::printer = $[
+	"name" : "lp",
+	"uri" : "filtering://localhost/zzz",
+	"ppd_info" : $[ "filter" : "foomatic-rip" ],
+	"database" : "foomatic",
+	];
+    TEST (``(Printer::storePrinter ()), [], []);
+    DUMP (Printer::printcap);
+    DUMP (Printer::default_queue);
+
+    Printer::default_queue = "";
+    Printer::index = 0;
+    Printer::printer = $[
+	"name" : "zzz",
+	"uri" : "lpd://known.suse.de/lp",
+	"ppd_info" : $[ "filter" : "foomatic-rip" ],
+	"database" : "foomatic",
+	];
+    TEST (``(Printer::storePrinter ()), [], []);
+    DUMP (Printer::printcap);
+    DUMP (Printer::default_queue);
+}
