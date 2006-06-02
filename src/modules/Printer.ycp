@@ -125,6 +125,27 @@
      */
     global list<map<string,any> > autodetected = [];
 
+    string default_paper_size = nil;
+
+global string getPaperSize(){
+
+ if(default_paper_size == nil){
+  string p_size="A4";
+  map <string, any> output = (map <string, any>) SCR::Execute (.target.bash_output,
+        ". /etc/sysconfig/language >/dev/null
+        h=$(locale -k LC_PAPER|grep height)
+        case $h in
+            height=297) echo 'A4'         ;;
+            height=279) echo 'Letter' ;;
+            *)          echo 'nil';;
+        esac", $[]);
+  if (output["exit"]:0==0) p_size = (splitstring(output["stdout"]:"", "\n"))[0]:"";
+   default_paper_size = p_size;
+ }
+
+ return default_paper_size;
+}
+
 
     /**
      * List of unique keys of the printers read at the beginning.
@@ -1215,6 +1236,8 @@ Detect your printers?"));
 
 	printcap = maplist (map<string,any> e, printcap,``{return assignState (e, false);});
 
+	default_paper_size = getPaperSize();
+	y2milestone("Default paper size is %1", default_paper_size);
 	if (!skip_autodetection)
 	{
 	    Progress::NextStageStep (16); // step 16-19 - autodetection
@@ -2018,7 +2041,6 @@ the selected spooler does not support it."), name));
 	    return;
 	// settings are read and hw is detected
 	list<string> forbidden_names = getForbiddenNames ();
-	symbol page_size = Printerlib::getDefaultPaperSize ();
 	foreach (map i, autodetected, ``{
 	    if (!alreadyConfigured (i["unique_key"]:""))
 	    {
@@ -2048,10 +2070,7 @@ the selected spooler does not support it."), name));
 		    foreach (string paperentry, ["ImageableArea",
 			"PageRegion", "PageSize", "PaperDimension"],
 		    ``{
-			if (page_size == `letter)
-			    printer["ppd_options", paperentry] = "Letter";
-			else
-			    printer["ppd_options", paperentry] = "A4";
+			    printer["ppd_options", paperentry] = getPaperSize();
 		    });
 		    if (ok)
 		    {

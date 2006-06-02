@@ -243,6 +243,20 @@ using an additional PostScript module.");
 	    {
 		ret = `next_propose_queues;
 	    }
+
+map ppd_options = Printer::printer["ppd_options"]:$[];
+
+       if (ppd_options == $[]) {
+               string ps = Printer::getPaperSize();
+               ppd_options = $["PageSize":ps,
+                "PageRegion":ps,
+                "ImageableArea":ps,
+                "PaperDimension":ps];
+              }
+       Printer::printer["ppd_options"]=ppd_options;
+
+
+
 	}
 	y2milestone ("Returning %1, printer set to %2", ret, Printer::printer);
 	return ret;
@@ -1061,6 +1075,22 @@ and test the queue after the printer model is selected."));
 	return ret;
     }
 
+/*
+void saveOptions(){
+        // fixed #164851 - check for conflict choices in PPD
+        string src_ppd = Printer::printer["ppd"]:"";
+        string dst_ppd = (string)SCR::Read (.target.tmpdir) + "/patched_ppd_" + Printer::printer["name"]:"";
+        SCR::Write (.ppd.file.modify,[src_ppd, dst_ppd, Printer::printer["ppd_options"]:$[]]);
+        string warning = parseWarn( ((map<string, any>)SCR::Execute(.target.bash_output,
+                                                                                "cupstestppd $PPD", $["PPD":dst_ppd]))["stdout"]:"");
+        SCR::Execute(.target.remove, dst_ppd);
+         if (size(warning)>0){
+                 Popup::Error(warning);
+                }
+
+}
+*/
+
     /**
      * Configuration of the filter. It is quite complicated because there can
      * be depended options so change of value (lower list) can change content
@@ -1100,9 +1130,9 @@ and test the queue after the printer model is selected."));
 
 	// check locales (for printer size) only for new queue, not modified
 	boolean checkLocales = true;
-	foreach(map<string, any> row, Printer::printcap, {
-	 if (Printer::printer["name"]:"" == row["name"]:"") checkLocales = false;
-	});
+//	foreach(map<string, any> row, Printer::printcap, {
+//	 if (Printer::printer["name"]:"" == row["name"]:"") checkLocales = false;
+//	});
 	list<map> optlist = Printerdb::getPpdFileOptions (filename, checkLocales);
 
 	// and now add options without their location in PPD file
@@ -1323,7 +1353,7 @@ and test the queue after the printer model is selected."));
 	    Printer::printer["options"] = selected;
 	    Printer::printer["ppd_options"] = ppd_selected;
 
-
+/*
 	// fixed #164851 - check for conflict choices in PPD
 	string src_ppd = Printer::printer["ppd"]:"";
 	string dst_ppd = (string)SCR::Read (.target.tmpdir) + "/patched_ppd_" + Printer::printer["name"]:"";
@@ -1334,8 +1364,8 @@ and test the queue after the printer model is selected."));
 	 if (size(warning)>0){
 		 Popup::Error(warning);
 		}
-
-
+*/
+//saveOptions();
 
 	}
 	return (symbol)ret;
@@ -1360,7 +1390,19 @@ and test the queue after the printer model is selected."));
 	boolean know = conf_type || Printer::printer["type"]:"yast2" == "non-yast-now";
 	boolean raw = Printer::printer["raw"]:false;
 	string model = Printer::printer["detected", "ppd_info", "model"]:"";		//["device"]:"";
-
+	map ppd_options = Printer::printer["ppd_options"]:$[];
+/*
+	if (ppd_options == $[]) {
+		string ps = Printer::getPaperSize();
+		ppd_options = $["PageSize":ps,
+                "PageRegion":ps,
+                "ImageableArea":ps,
+                "PaperDimension":ps];
+	       }
+	Printer::printer["ppd_options"]=ppd_options;
+y2internal("Printer %1", Printer::printer);
+*/
+//saveOptions();
 	//
 	// texts
 	//
@@ -1412,7 +1454,7 @@ and test the queue after the printer model is selected."));
 	    if (! raw)
 	    {
 		// table entry
-		items = add (items, `item (`id (`settings), _("Filter settings"), ""));
+		items = add (items, `item (`id (`settings), _("Filter settings"), ppd_options["PageSize"]:""+" ..."));
 		// table entry
 		items = add (items, `item (`id (`perm), _("Restriction settings"), ""));
 		// table entry
@@ -1877,7 +1919,7 @@ the current configuration."));
 	// new queue to existing printer
 	if (Printer::runAutoprobedListDialog__current == "-2")
 	{
-	    y2milestone ("Configuring queue for isntalled printer");
+	    y2milestone ("Configuring queue for installed printer");
 	    return `installed_printer;
 	}
 	// not detected printer
@@ -2309,51 +2351,9 @@ y2milestone("%1", new_spooler);
 			{
 			 Printer::selectPrinter(-1);
 			 ret = `configure_button; 
-/*
-			if (new_spooler == "cups")
-			 {
-			  if ( size(Printer::printcap)>0 && true == Popup::AnyQuestion( Label::WarningMsg(),
-							// message box : configure new queue or add a new printer
-							"Do want to configure new queue ?", "Yes", "No", `focus_no )) {
-                                          integer from_detect = -1;
-                                          integer count = 0;
-                                          string prn_id="";
-                                        foreach(map<string, any> temp_printer, Printer::Detect(), {
-                                                string temp_string = splitstring(temp_printer["uri"]:"", ":")[1]:"";
-                                              if (tointeger(selected) >= count)
-                                                {
-                                                if (temp_string == Printer::conf_unconf_printers[tointeger(selected), "ID"]:"")
-                                                 {
-                                                   from_detect = from_detect + 1;
-                                                   break;
-                                                 }
-                                                if (temp_string != prn_id)
-                                                        {
-                                                        from_detect = from_detect+1;
-                                                        prn_id = temp_printer["ID"]:"";
-                                                        }
-                                                count=count + 1;
-                                                }
-
-                                                });
-					 map <string, any> tmp_map = Printer::Detect()[from_detect]:$[];
-                                         Printer::editDetected(tmp_map);
-                                         y2milestone("Configuring detected, non-configured printer");
-                                 ret = `edit_button;
-							}
-				else
-				 {
-				Printer::selectPrinter(-1);
-				ret = `configure_button;
-				}
-			 } else {
-				continue;
-				}
-*/
-
 			}
-			if (ret == `edit)
-			    {
+		if (ret == `edit)
+		    {
 			   if (new_spooler == "cups")
 				{
 				 if (Printer::printer == $["type":"yast2"]) 
@@ -2386,7 +2386,7 @@ y2milestone("%1", new_spooler);
 				if (Printer::printer["ppd_info", "model"]:nil == nil) ret=`edit_unconf;
 				 	else ret = `edit_button;
 				} else ret=`connection_cups;
-			     }
+		     }
 			 else if (ret == `redetect) ret = `restart_button;
 	        cont = false;
 	}
