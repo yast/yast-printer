@@ -207,8 +207,22 @@ only if a CUPS spooler is used.
     define symbol runGenericConnectionTypeDialog (term items,
 	string caption, string frame, string help, symbol what)
      ``{
+	  term contents = `VBox();
 
-	  term contents = `VBox (
+	if ( size(caption)==0 || size(frame)==0 )
+	 {
+	  contents = `VBox (
+	    `VSpacing (2),
+	    `HBox (
+		`HSpacing (5),
+		    `VBox (
+			`RadioButtonGroup (`id (`connection_type), items),
+			`VSpacing (1)
+		    ),
+		`HSpacing (5)
+	    ), `VSpacing (2)
+	  );
+	} else contents = `VBox (
 	    `VSpacing (2),
 	    `HBox (
 		`HSpacing (5),
@@ -223,20 +237,6 @@ only if a CUPS spooler is used.
 	    ), `VSpacing (2)
 	  );
 
-	if (caption==nil || frame==nil)
-	 {
-	  contents = `VBox (
-	    `VSpacing (2),
-	    `HBox (
-		`HSpacing (5),
-		    `VBox (
-			`RadioButtonGroup (`id (`connection_type), items),
-			`VSpacing (1)
-		    ),
-		`HSpacing (5)
-	    ), `VSpacing (2)
-	  );
-	}
 
 	// dialog caption
 	Wizard::SetContentsButtons (caption, contents,
@@ -309,7 +309,6 @@ if (size(Printer::printcap) ==0) items = `VBox(
      * @return symbol wizard sequencer symbol
      */
 define symbol runNewQueueDialog() ``{
-
   list<term> printers = [];
   term contents = `VBox();
 if (Spooler::Get () == "cups")
@@ -359,7 +358,6 @@ if (size(printers)>0)
                 }
             }
         }
-
 
 	if (is(ret, integer)) 
 		{
@@ -456,9 +454,9 @@ if (local == false)
 	));
  }
 	// dialog caption
-	any ret = runGenericConnectionTypeDialog (items, nil, //_("Printer Type"),
+	any ret = runGenericConnectionTypeDialog (items, "", //_("Printer Type"),
 	    // frame label
-	    nil, //_("Printer Type"),
+	    "", //_("Printer Type"),
 	    getConnectionTypeHelp (add_queue), `connection_type);
 	if (ret == `lpd)
 	    Printer::printer["proposed_raw"] = true;
