@@ -839,6 +839,7 @@ Install it now?"));
 		{
 		    uri = e["uri"]:"";
 		    y2milestone ("Read samba URI: %1", uri);
+		// mzugec comment: parsing samba URI with URL::Parse() is not good idea, output is useless
 		    map tokens = URL::Parse (uri);
 		    list<string> pth = splitstring (tokens["path"]:"", "/");
 		    pth = filter (string c, pth, {return c != "" && ! issubstring (c, "@");});
@@ -850,7 +851,9 @@ Install it now?"));
 			pth[0] = "";
 			tokens["path"] = mergestring (pth, "/");
 		    }
-		    uri = URL::Build (tokens);
+		// URL::Build() is not opposite of URL::Parse() in this case, so output is broken
+		// comment this part because of bug #181780
+//		    uri = URL::Build (tokens);
 		    uri = regexpsub (uri,
 			"^smb(:\/\/.*)$",
 			"samba\\1");
