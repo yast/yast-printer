@@ -1529,14 +1529,19 @@ the selected spooler does not support it."), name));
 //	ret = Spooler::AdjustServices (size (printcap) > 0) && ret;
 	if (with_daemon)
 	{
+	// fixed #190173 - lpd printer doesn't get installed (in other MODEs cupsd already is running)
+	if (Mode::autoinst()) {
+		y2milestone("autoyast mode - starting CUPS");
+		CUPS::StartDaemon();
+		}
+
 	    Progress::NextStage (); // delete old printers
+
 	    if (testAbort ()) return false;
 	    ret = deleteDeletedPrinters () && ret;
-
 	    Progress::NextStage (); // save printers
 	    if (testAbort ()) return false;
 	    ret = savePrinters () && ret;
-
 	    Progress::NextStage (); // set default queue
 	    if (testAbort ()) return false;
 	    ret = saveDefaultQueue () && ret;
