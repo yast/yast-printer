@@ -131,7 +131,8 @@ global string getPaperSize(){
 
  if(default_paper_size == nil){
   string p_size="A4";
-  map <string, any> output = (map <string, any>) SCR::Execute (.target.bash_output,
+  if (Mode::test()==false){
+   map <string, any> output = (map <string, any>) SCR::Execute (.target.bash_output,
         ". /etc/sysconfig/language >/dev/null
         h=$(locale -k LC_PAPER|grep height)
         case $h in
@@ -139,7 +140,8 @@ global string getPaperSize(){
             height=279) echo 'Letter' ;;
             *)          echo 'nil';;
         esac", $[]);
-  if (output["exit"]:0==0) p_size = (splitstring(output["stdout"]:"", "\n"))[0]:"";
+   if (output["exit"]:0==0) p_size = (splitstring(output["stdout"]:"", "\n"))[0]:"";
+   }
    default_paper_size = p_size;
  }
 
