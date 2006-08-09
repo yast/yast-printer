@@ -27,6 +27,8 @@ import "Popup";
 import "Report";
 import "String";
 import "Arch";
+import "FileUtils";
+import "Service";
 include "printer/texts.ycp";
 
 
@@ -69,9 +71,26 @@ map<string,string> probed_bt_devices = $[];
 
 // local functions
 
-
-
 // global functions
+
+boolean hplip_before = false;
+boolean hplip_status = false;
+
+global void readHplip(){
+ hplip_before = false;
+ if (Service::Status("hplip")==3) hplip_before = true;
+}
+
+global void setHplip(boolean status){
+ hplip_status = status;
+}
+
+global void writeHplip(){
+ if (hplip_status == true) {
+   if (hplip_before == false) Popup::Warning(_("Service hplip will be enabled because of hp:// backend"));
+	Service::Enable("hplip");
+  } else Service::Disable("hplip");
+}
 
 /**
  * Set the USB devices info got through the CUPS backend
@@ -190,11 +209,15 @@ ECHO_PID=$!
       * @return a list of HPLIP devices
       */
     global define list<list<string> > getHplipDevices () ``{
-	SCR::Execute (.target.bash, "test -f /etc/init.d/hplip && /etc/init.d/hplip restart");
+      if (FileUtils::IsFile("/etc/init.d/hplip")){
+	boolean hplip_before = false;
+	if (Service::Status("hplip")==3) hplip_before = true;
+		else Service::Start("hplip");
         if (SCR::Read (.target.size, Arch::i386() ? "/usr/lib/cups/backend/hp" : "/usr/lib64/cups/backend/hp" ) <= 0)
             return [];
         map out = (map)SCR::Execute (.target.bash_output,
             Arch::i386() ? "/usr/lib/cups/backend/hp" : "/usr/lib64/cups/backend/hp" );
+	if (hplip_before == false) Service::Stop("hplip");
         list<string> lines = splitstring (out["stdout"]:"", "\n");
         lines = filter (string l, lines, ``(l != "" && l != nil));
 	list<list<string> > hp_devs = (list<list<string> >) maplist (string l, lines, ``{
@@ -212,6 +235,7 @@ ECHO_PID=$!
 	});
 	y2milestone ("hp devices: %1", hp_devs);
 	return hp_devs;
+     } else return [];
     }
 
     /**
