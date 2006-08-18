@@ -13,7 +13,7 @@ html_DATA = $(wildcard html/*.html) \
 pdf: printer.pdf
 
 html/index.html: printer.xml
-	XML_CATALOG_FILES=@XML_CATALOG@\
+	XML_CATALOG_FILES=@XML_CATALOG@ \
 	@XSLTPROC@ @XSLTPROC_FLAGS@ --xinclude \
 	@STYLESHEET_HTML@ $<
 
