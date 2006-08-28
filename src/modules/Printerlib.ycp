@@ -27,6 +27,8 @@ import "Popup";
 import "Report";
 import "String";
 import "Arch";
+import "FileUtils";
+import "Service";
 include "printer/texts.ycp";
 
 
@@ -69,9 +71,26 @@ map<string,string> probed_bt_devices = $[];
 
 // local functions
 
-
-
 // global functions
+
+boolean hplip_before = false;
+boolean hplip_status = false;
+
+global void readHplip(){
+ hplip_before = false;
+ if (Service::Status("hplip")==3) hplip_before = true;
+}
+
+global void setHplip(boolean status){
+ hplip_status = status;
+}
+
+global void writeHplip(){
+ if (hplip_status == true) {
+   if (hplip_before == false) Popup::Warning(_("Service hplip will be enabled because of hp:// backend"));
+	Service::Enable("hplip");
+  } else Service::Disable("hplip");
+}
 
 /**
  * Set the USB devices info got through the CUPS backend
@@ -190,11 +209,15 @@ ECHO_PID=$!
       * @return a list of HPLIP devices
       */
     global define list<list<string> > getHplipDevices () ``{
-	SCR::Execute (.target.bash, "test -f /etc/init.d/hplip && /etc/init.d/hplip restart");
+      if (FileUtils::IsFile("/etc/init.d/hplip")){
+	boolean hplip_before = false;
+	if (Service::Status("hplip")==3) hplip_before = true;
+		else Service::Start("hplip");
         if (SCR::Read (.target.size, Arch::i386() ? "/usr/lib/cups/backend/hp" : "/usr/lib64/cups/backend/hp" ) <= 0)
             return [];
         map out = (map)SCR::Execute (.target.bash_output,
             Arch::i386() ? "/usr/lib/cups/backend/hp" : "/usr/lib64/cups/backend/hp" );
+	if (hplip_before == false) Service::Stop("hplip");
         list<string> lines = splitstring (out["stdout"]:"", "\n");
         lines = filter (string l, lines, ``(l != "" && l != nil));
 	list<list<string> > hp_devs = (list<list<string> >) maplist (string l, lines, ``{
@@ -212,6 +235,7 @@ ECHO_PID=$!
 	});
 	y2milestone ("hp devices: %1", hp_devs);
 	return hp_devs;
+     } else return [];
     }
 
     /**
@@ -520,13 +544,17 @@ ECHO_PID=$!
 	    if (size (uri_list) >= 3)
 		return uri_list[1]:"";
 	}
+/*
 	i = findfirstof (dev, "/");
 	if (nil != i)
 	    dev = substring (dev, 0, i);
 	i = findfirstof (dev, ":");
         if (nil != i)
             dev = substring (dev, 0, i);
-
+*/
+	list<string> params = splitstring(dev, "/");
+	if (size(params)<3) dev=params[0]:"";
+		else dev=params[1]:"";
 	return dev;
     }
 
@@ -544,6 +572,7 @@ ECHO_PID=$!
 	while ("/" == substring (uri, 0, 1))
 	    uri = substring (uri, 1);
 	integer len = findfirstof (uri, "@");
+
 	if (nil == len)
 	{
 	    if (type == "samba")
@@ -555,6 +584,9 @@ ECHO_PID=$!
 	    }
 	    return [ "", "" ];
 	}
+	string workgroup = "";
+	list <string>  params = splitstring (substring(uri, len+1), "/");
+	if (size(params)==3) workgroup = params[0]:"";
 	string user = substring (uri, 0, len);
 	string pass = "";
 	len = findfirstof (user, ":");
@@ -563,11 +595,10 @@ ECHO_PID=$!
 	    pass = substring (user, len + 1);
 	    user = substring (user, 0, len);
 	}
-	string workgroup = "";
 	len = findfirstof (user, "/");
 	if (len != nil)
 	{
-	    workgroup = substring (user, 0, len);
+//	    workgroup = substring (user, 0, len);
 	    user = substring (user, len + 1);
 	}
 	return [ user, pass, workgroup];
