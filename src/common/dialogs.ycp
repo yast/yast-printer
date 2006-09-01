@@ -1416,8 +1416,7 @@ y2internal("Printer %1", Printer::printer);
 		nick,
 		lang)
 	);
-	if (config_text == "")
-	    config_text = _("Unknown");
+	if (config_text == "") config_text = _("Unknown");
 
 	string name_text = Printer::printer["name"]:"";
 	string connection_text = "";
@@ -1461,13 +1460,12 @@ y2internal("Printer %1", Printer::printer);
 		items = add (items, `item (`id (`state), _("State and banner settings"), ""));
 	    }
 	}
-if (Printer::printer["ppd_info"]:nil == nil) 
+	if (Printer::printer["ppd_info"]:nil == nil) 
 		{
 		 Printer::printer["ppd_info"] = Printer::printer["detected", "ppd_info"]:$[];
 		 Printer::printer["valid"] = Printer::printer["detected", "valid"]:false;
 		 Printer::printer["ppd"] = Printer::printer["detected", "ppd"]:"";
 		}
-
 	term allow_cbox = Printer::index >= 0 && Spooler::Get () != "cups"
 	    ? `VBox (
 		`Left (`CheckBox (`id (`yast), `opt (`notify),
@@ -1598,7 +1596,8 @@ with a preassigned name?")))
 			"serial" : `con_local,
 			"usb" : `con_local,
 			"irda" : `con_local,
-			"bluetooth" : `con_local
+			"bluetooth" : `con_local,
+			"hp" : `con_local
 		    ];
 		    if (uri_type == "ipp")
 		    {
@@ -2162,13 +2161,10 @@ the current configuration."));
      */
 void SetHWDialogData () {
         string new_spooler = Spooler::Get ();
-        if (new_spooler == "cups" && CUPS::InstallationType () == `client)
-        {
-            new_spooler = "cups-client";
-        }
-y2milestone("%1", new_spooler);
-  list < map<string,any> > printers = [];
-  if (new_spooler == "cups")
+        if (new_spooler == "cups" && CUPS::InstallationType () == `client) new_spooler = "cups-client";
+	y2milestone("%1", new_spooler);
+	  list < map<string,any> > printers = [];
+     if (new_spooler == "cups")
       {
         list < map<string,any> > items = maplist (map i, Printer::printcap, ``{
 	y2milestone("printcap %1", i);

@@ -231,25 +231,19 @@ define string GetPpdFileDescription (string nick, string language,
       * @param unique_key string unique_key of the printer
       * @return boolean true if already configured
       */
-    define boolean isPrinterConfigured (string manuf, string model,
-	string uri, string unique_key)
+    define boolean isPrinterConfigured (string manuf, string model, string uri, string unique_key)
     ``{
 	string manuf_db = (string)SCR::Read (.ppd.db.vendorname, manuf);
-	string model_db = (string)SCR::Read (.ppd.db.modelname,
-	    [manuf_db, model]);
+	string model_db = (string)SCR::Read (.ppd.db.modelname, [manuf_db, model]);
 	boolean exists = false;
-
 	foreach (map p, Printer::printcap, ``{
 	    if ((p["unique_key"]:"" == unique_key && unique_key != "")
 		|| (p["uri"]:"" == uri && uri != ""
-		    && ((p["ppd_info", "manufacturer_db"]:".." == manuf_db
-			    && p["ppd_info", "model_db"]:".." == model_db)
-			|| (p["ppd_info", "manufacturer"]:".." == manuf
-			    && p["ppd_info", "model"]:".." == model))
-		   ))
-	    {
-		exists = true;
-	    }
+		    && ((p["ppd_info", "manufacturer_db"]:".." == manuf_db && p["ppd_info", "model_db"]:".." == model_db)
+			|| (p["ppd_info", "manufacturer"]:".." == manuf && p["ppd_info", "model"]:".." == model))
+		   ))  exists = true;
+		else if ((manuf == "HEWLETT-PACKARD" && p["ppd_info", "manufacturer"]:""=="HP")&&
+				(toupper(deletechars(model, " ")) == toupper(deletechars(p["ppd_info", "model"]:"", " ")))) exists = true;
 	});
 	return exists;
     }
@@ -520,18 +514,16 @@ Really leave without saving?
 	list device_val = [];
 	boolean default_selected = false;
 	foreach (string dev, devices, ``{
-	    boolean this_is_selected = (("" != device && dev == device)
-					 || ("" == device));/* && (
+	    boolean this_is_selected = (("" != device && dev == device) || ("" == device));
+						/* && (
 					    dev == "/dev/lp0"
 					    || dev == "/dev/usblp0"
 					    || dev == "/dev/usb/lp0"
 					    || dev == "/dev/ttyS0")));*/
-	    if (this_is_selected)
-		default_selected = true;
+	    if (this_is_selected) default_selected = true;
 	    device_val = add (device_val, `item (`id (dev), Printerlib::getDeviceNiceName (dev, false), this_is_selected));
 	});
-	if (!default_selected && device != "")
-	    device_val = add (device_val, `item (`id (device), device, true));
+	if (!default_selected && device != "") device_val = add (device_val, `item (`id (device), device, true));
 	return device_val;
     }
     /**
