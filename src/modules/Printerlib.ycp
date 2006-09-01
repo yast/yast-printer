@@ -78,18 +78,26 @@ boolean hplip_status = false;
 
 global void readHplip(){
  hplip_before = false;
- if (Service::Status("hplip")==3) hplip_before = true;
+ if (Service::Status("hplip")==0) hplip_before = true;
 }
 
 global void setHplip(boolean status){
  hplip_status = status;
 }
 
-global void writeHplip(){
- if (hplip_status == true) {
-   if (hplip_before == false) Popup::Warning(_("Service hplip will be enabled because of hp:// backend"));
+global boolean setHplipStatus(){
+ map<string, any> hptest = (map<string, any>)SCR::Execute(.target.bash_output, "/usr/bin/lpstat -v | /bin/grep -q ': hp:/'");
+ if (hptest["exit"]:255 == 0) {
+   // bug #115888 /1 - user information that hplip will be enabled
+   if (hplip_before == false && !Mode::autoinst()) Popup::Warning(_("Service hplip will be enabled because hp:// backend is used."));
 	Service::Enable("hplip");
-  } else Service::Disable("hplip");
+	Service::Start("hplip");
+	return true;
+  } else {
+	Service::Disable("hplip");
+	Service::Stop("hplip");
+	}
+ return false;
 }
 
 /**
@@ -211,7 +219,7 @@ ECHO_PID=$!
     global define list<list<string> > getHplipDevices () ``{
       if (FileUtils::IsFile("/etc/init.d/hplip")){
 	boolean hplip_before = false;
-	if (Service::Status("hplip")==3) hplip_before = true;
+	if (Service::Status("hplip")==0) hplip_before = true;
 		else Service::Start("hplip");
         if (SCR::Read (.target.size, Arch::i386() ? "/usr/lib/cups/backend/hp" : "/usr/lib64/cups/backend/hp" ) <= 0)
             return [];
@@ -403,12 +411,10 @@ ECHO_PID=$!
      * @see getUriType
      */
     global define string getUriDevice (string uri) ``{
-	if ("" == uri || nil == uri || nil == findfirstof (uri, ":"))
-	    return "";
+	if ("" == uri || nil == uri || nil == findfirstof (uri, ":")) return "";
 	string uri_type = getUriType (uri);
 	integer i = findfirstof (uri, ":");
-	if (nil == i)
-	    return "";
+	if (nil == i) return "";
 	uri = substring (uri, i + 1);
 	if (uri_type == "bluetooth")
 	{
@@ -418,10 +424,9 @@ ECHO_PID=$!
 	    return uri;
 	}
 	if (uri_type != "usb")
-	    while ("//" == substring (uri, 0, 2))
-		uri = substring (uri, 1);
+	    while ("//" == substring (uri, 0, 2)) uri = substring (uri, 1);
 	i = findfirstof (uri, "?");
-	if (nil != i && uri_type != "usb")
+	if (nil != i && uri_type != "usb" && uri_type != "hp")
 	    uri = substring (uri, 0, i);
 	return uri;
     }
