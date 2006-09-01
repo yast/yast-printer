@@ -427,7 +427,11 @@ if (local == true)
 	    `Left (`RadioButton (`id (`bluetooth),
 		// radio button
 		_("Blue&tooth Printer"),
-		selected == `bluetooth))
+		selected == `bluetooth)),
+	    `Left (`RadioButton (`id (`hp),
+		// radio button
+		_("&hplip backend for HP devices"),
+		selected == `hp))
 		))
 	));
  }
@@ -470,19 +474,20 @@ if (local == false)
     define symbol runLocalConnectionDialog () ``{
 	symbol selected = `parallel;
 	string uri_type = Printerlib::getUriType (Printer::printer["uri"]:"");
-	if (uri_type == "irda")
-	    selected = `irda;
-	else if (uri_type == "bluetooth")
-	    selected = `bluetooth;
-	else if (uri_type == "serial")
-	    selected = `serial;
-	else if (uri_type == "usb")
-	    selected = `usb;
-	if (contains ([`parallel, `irda, `bluetooth, `serial, `usb],
-	    Printer::connection_subtype_selected))
-	{
-	    selected = Printer::connection_subtype_selected;
+	switch(uri_type){
+	 case "irda" : selected = `irda;
+			break;
+	 case "bluetooth" : selected = `bluetooth;
+			break;
+	 case "serial" : selected = `serial;
+			break;
+	 case "usb" : selected = `usb;
+			break;
+	 case "hp" : selected = `hp;
+			break;
 	}
+	if (contains ([`parallel, `irda, `bluetooth, `serial, `usb], Printer::connection_subtype_selected))
+	{ selected = Printer::connection_subtype_selected; }
 
 	term items = `VBox (
 	    `Left (`RadioButton (`id (`parallel),
@@ -504,7 +509,11 @@ if (local == false)
 	    `Left (`RadioButton (`id (`bluetooth),
 		// radio button
 		_("Blue&tooth Printer"),
-		selected == `bluetooth))
+		selected == `bluetooth)),
+	    `Left (`RadioButton (`id (`hp),
+		// radio button
+		_("&hplip backend for HP devices"),
+		selected == `hp))
 	);
 	// dialog caption
 	return runGenericConnectionTypeDialog (items, _("Printer Type"),
@@ -652,13 +661,11 @@ if (local == false)
     define symbol runDeviceDialog (string type) ``{
         boolean problematic_usb = false;
         string uri = Printer::printer["tmpuri"]:"";
-        if ("" == uri)
-            uri = Printer::printer["uri"]:"parallel";
-        if ("" == type)
-        {
-            type = Printerlib::getUriType ("uri");
-        }
-        string device = Printerlib::getUriDevice (uri);
+        if ("" == uri) uri = Printer::printer["uri"]:"parallel";
+        if ("" == type) type = Printerlib::getUriType ("uri");
+        string device = "";
+	if (type !="hp") Printerlib::getUriDevice (uri);
+
         list<string> devices = [];
         path read_devs = "parallel" == type
 	    ? .proc.parport.devices
@@ -671,16 +678,11 @@ if (local == false)
 	      );
         integer baudrate = Printerlib::getUriBaudrate (uri);
         string ser_settings = Printerlib::getUriValue (uri, "ty");
-        if (0 == baudrate && -1 == Printer::index)
-            baudrate = 9600;
+        if (0 == baudrate && -1 == Printer::index) baudrate = 9600;
 	integer i = search (device, "?");
-        if (nil != i)
-            device = substring (device, 0, i);
-        if ("irda" != type && "bluetooth" != type)
-            devices = (list<string>)SCR::Read (read_devs);
-        else
-            devices = [];
-
+        if (nil != i) device = substring (device, 0, i);
+        if ("irda" != type && "bluetooth" != type && type != "hp") devices = (list<string>)SCR::Read (read_devs);
+	        else devices = [];
 	map<string,string> cups_devices_mapping = $[];
 
         if (type == "usb" && Spooler::Get () == "cups")
@@ -698,14 +700,8 @@ if (local == false)
                 problematic_usb = true;
                 list problematic = CUPS::GetProblematicCupsUsbDevices ();
                 devices = maplist (list d, Printerlib::GetCupsUsbDevicesInfo (), ``{
-                    if (contains (problematic, d))
-                    {
-                        return d[2]:"";
-                    }
-                    else
-                    {
-                        return d[0]:"";
-                    }
+                    if (contains (problematic, d)) return d[2]:"";
+	                    else return d[0]:"";
                 });
             }
         }
@@ -740,12 +736,12 @@ that your serial ports are not properly configured."));
             {
                 devices = ["/dev/irlpt0", "/dev/irlpt1", "/dev/irlpt2",
 		    "/dev/irlpt3"];
-            }
+            } else if (type == "hp"){
+		devices = maplist (list d, Printerlib::getHplipDevices (), ``{ return d[0]:""; });
+		}
         }
-        if (type != Printerlib::getUriType (uri))
-            device = "";
-        if (device == "")
-            device = devices[0]:"";
+        if (type != Printerlib::getUriType (uri)) device = "";
+        if (device == "") device = devices[0]:"";
         list device_val = getDevicesItems (devices, device);
 /*	if (size (device_val) == 0)
 	{
@@ -755,7 +751,6 @@ that your serial ports are not properly configured."));
             // PushButton
             `HBox (`HStretch (), `PushButton (`id (`details), _("&Other...")))
         );
-
         if ("parallel" == type || "serial" == type)
         {
             if (!Mode::config ())
@@ -908,14 +903,11 @@ actually selected.
 		    ret = nil;
 		}
 	    }
-        } until (ret == `abort || ret == `back || ret == `next
-	    || `ppdetails == ret || `spdetails == ret);
+        } until (ret == `abort || ret == `back || ret == `next || `ppdetails == ret || `spdetails == ret);
         if (`spdetails == ret)
         {
             uri = type + ":" + device;
-            if ("serial" == type)
-                uri = uri + sformat ("?baudrate=%1+ty=%2", baudrate,
-		    ser_settings);
+            if ("serial" == type) uri = uri + sformat ("?baudrate=%1+ty=%2", baudrate, ser_settings);
             Printer::printer = add (Printer::printer, "tmpuri", uri);
         }
         else
@@ -926,12 +918,8 @@ actually selected.
         if (`next == ret)
         {
             uri = type + ":" + device;
-            if ("serial" == type)
-                uri = uri + sformat ("?baudrate=%1+ty=%2", baudrate,
-		    ser_settings);
-	    else if (type == "bluetooth")
-		uri = type + "://" + filterchars (device,
-		    "0123456789aAbBcCdDeEfF");
+            if ("serial" == type) uri = uri + sformat ("?baudrate=%1+ty=%2", baudrate, ser_settings);
+		else if (type == "bluetooth") uri = type + "://" + filterchars (device, "0123456789aAbBcCdDeEfF");
             Printer::printer["uri"] = uri;
         }
         return ret;
