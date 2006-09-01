@@ -1520,7 +1520,6 @@ the selected spooler does not support it."), name));
 	    CUPS::server_hostname = "";
 	    CUPS::SaveServerHostName ();
 	    CUPS::WriteCupsSettings ();
-	    Printerlib::writeHplip();
     if (((map<string, any>)SCR::Execute(.target.bash_output,
         "diff /etc/cups/cupsd.conf /etc/cups/cupsd.conf.old|grep -c ''"))["stdout"]:"" != "0\n")
                 write_only=false;
@@ -1585,7 +1584,8 @@ the selected spooler does not support it."), name));
 		Progress::set (progress_orig);
 	    }
 	}
-
+	// enable/disable hplip service and restart spooler if (enable and wasn't enabled before)
+	if (Printerlib::setHplipStatus()) Spooler::restartServices (size (printcap)>0);
 	Progress::Finish (); // finished
 	if (testAbort ()) return false;
 	// progress step
