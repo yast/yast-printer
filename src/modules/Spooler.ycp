@@ -32,6 +32,7 @@
     import "Popup";
     import "Report";
     import "Service";
+    import "FileUtils";
 
 // local variables
 
@@ -211,6 +212,7 @@ global list GetSystemForbiddenNames () {
      *    2 if cups is installed<br>
      *      (therefore 0 if none is installed)<br>
      *      (therefore 3 if both are installed)<br>
+     *	  4 if only iprint is installed<br>
      *  256 is added if the instalation doesn't seem to be complete
      */
     global define integer getSpoolSystem () ``{
@@ -218,12 +220,12 @@ global list GetSystemForbiddenNames () {
 	boolean cups_exists = PackageSystem::Installed("cups-client");
 	// for lpd we need to check the file because
 	boolean lpd_exists = PackageSystem::Installed ("lprng");
-	y2milestone ("CUPS exists: %1, LPRng exists: %2",
-	    cups_exists, lpd_exists);
+	boolean iprint_exists = FileUtils::Exists("/opt/novell/iprint/bin/ipsmd");
+	y2milestone ("CUPS exists: %1, LPRng exists: %2, iPrint exists: %3",
+	    cups_exists, lpd_exists, iprint_exists);
 	boolean cups_complete = PackageSystem::InstalledAll (
 	    ["cups", "cups-client"]);
 	boolean lpd_complete = true;
-
 	if (cups_exists && !lpd_exists)
 	    {
 		if (cups_complete)
@@ -250,6 +252,7 @@ global list GetSystemForbiddenNames () {
 	    {
 		return 3;
 	    }
+	if (iprint_exists) return 4;
 	return 0;
     }
 
@@ -486,7 +489,7 @@ global list GetSystemForbiddenNames () {
 	    return "cups";
 	}
 	else if (0 == spool_sys || 3 == spool_sys || 256 + 1 == spool_sys
-	    || 256 + 2 == spool_sys || 1 == spool_sys)
+	    || 256 + 2 == spool_sys || 1 == spool_sys|| spool_sys == 4)
 	{
 	    string message = "";
 	    if (0 == spool_sys) //none installed
@@ -524,6 +527,15 @@ CUPS full server installation.
 If you leave the current status, CUPS
 may not run properly.");
 	    }
+	    else if (spool_sys==4)
+		{
+		message=_("The iPrint printing system is recognized,
+but YaST supports supports only CUPS.
+Select the CUPS installation type
+to install and configure or abort setup.
+Attention: CUPS and iPrint can't work together.
+");
+		}
 	    symbol result = chooseSpooler (message,
 		// pushbutton
 		_("Abo&rt Setup"));
