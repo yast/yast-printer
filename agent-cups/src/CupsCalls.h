@@ -35,7 +35,7 @@ using namespace std;
  */ //FIXME: return value
 bool setPrinter(const char*name,const char*info,const char*loc,const char*state,const char*statemsg,
                 const char*bannerstart,const char*bannerend,const char*deviceuri,
-                const set<string>allowusers,const set<string>denyusers,const char*ppd,const char*accepting);
+                const set<string>allowusers,const set<string>denyusers,const char*ppd,const char*accepting, const char*shared);
 
 
 /**

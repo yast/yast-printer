@@ -38,7 +38,7 @@ const char*getPPD(const char*name)
 // FIXME: return value...?
 bool setPrinter(const char*name,const char*info,const char*loc,const char*state,const char*statemsg,
                 const char*bannerstart,const char*bannerend,const char*deviceuri,
-                const set<string>allowusers,const set<string>denyusers,const char*ppd,const char*accepting)
+                const set<string>allowusers,const set<string>denyusers,const char*ppd,const char*accepting, const char*shared)
 {
   http_t	*http;		/* Connection to server */
   ipp_t		*request,		/* IPP Request */
@@ -89,6 +89,13 @@ bool setPrinter(const char*name,const char*info,const char*loc,const char*state,
         ippAddBoolean(request,IPP_TAG_PRINTER,"printer-is-accepting-jobs",1);
       else if(!strcasecmp(accepting,"no"))
         ippAddBoolean(request,IPP_TAG_PRINTER,"printer-is-accepting-jobs",0);
+    }
+  if(NULL!=shared)
+    {
+      if(!strcasecmp(shared,"yes"))
+        ippAddBoolean(request,IPP_TAG_PRINTER,"printer-is-shared",1);
+      else if(!strcasecmp(shared,"no"))
+        ippAddBoolean(request,IPP_TAG_PRINTER,"printer-is-shared",0);
     }
   if(NULL!=info)
     ippAddString(request,IPP_TAG_PRINTER,IPP_TAG_TEXT,"printer-info",NULL,info);

@@ -73,10 +73,9 @@ bool PrintersConf::getPrinters ()
     /*
      * Do the request and get back a response...
      */
-
     if ((response = cupsDoRequest(http, request, "/")) != NULL)
         {
-            Y2_DEBUG("cupsDoRequest to get printers succeded");
+            Y2_DEBUG("cupsDoRequest to get printers succeded %s", response);
             if (response->request.status.status_code > IPP_OK_CONFLICT)
                 {
                     Y2_DEBUG("lpstat: get-printers failed: %s\n",
@@ -138,6 +137,10 @@ bool PrintersConf::getPrinters ()
                             else if (strcmp(attr->name, "printer-is-accepting-jobs") == 0 && attr->value_tag == IPP_TAG_BOOLEAN)
                                 {
                                     newprinter.setAccepting(attr->values[0].boolean);
+                                }
+                            else if (strcmp(attr->name, "printer-is-shared") == 0 && attr->value_tag == IPP_TAG_BOOLEAN)
+                                {
+                                    newprinter.setShared(attr->values[0].boolean);
                                 }
                             else if (strcmp(attr->name, "job-sheets-default") == 0 && attr->value_tag == IPP_TAG_NAME)
                                 {
@@ -324,6 +327,7 @@ YCPValue PrinterEntry::Read() const
   
   m->add(YCPString("default"),YCPBoolean(Default));
   m->add(YCPString("accepting"),YCPBoolean(Accepting));
+  m->add(YCPString("shared"),YCPBoolean(Shared));
   m->add(YCPString("allowusers"),set2YCPList(AllowUsers));
   m->add(YCPString("denyusers"),set2YCPList(DenyUsers));
   m->add(YCPString("options"),map2YCPMap(options));
@@ -350,7 +354,6 @@ YCPValue PrintersConf::Read()
 
 YCPBoolean PrintersConf::Write(const YCPPath &path, const YCPValue& value, const YCPValue& arg)
 {
-//  Y2_ERROR("Write .cups.printers");
     if(2==path->length() && path->component_str(1) == "add")
     {
         if(value->isVoid())
@@ -418,6 +421,7 @@ bool newPrinter(const YCPValue&value)
     const char*xState = NULL;
     const char*xStateMsg = NULL;
     const char*xAccepting = NULL;
+    const char*xShared = NULL;
     const char*xBannerStart = NULL;
     const char*xBannerEnd = NULL;
     const char*xppd = NULL;
@@ -439,6 +443,7 @@ bool newPrinter(const YCPValue&value)
     if(!(v = m->value(YCPString("uri"))).isNull())        if(v->isString())       xUri = v->asString()->value_cstr();
     if(!(v = m->value(YCPString("state"))).isNull())      if(v->isString())       xState = v->asString()->value_cstr();
     if(!(v = m->value(YCPString("statemessage"))).isNull())if(v->isString())      xStateMsg = v->asString()->value_cstr();
+    if(!(v = m->value(YCPString("shared"))).isNull())  if(v->isBoolean())         xShared = v->asBoolean()->value() ? "Yes" : "No";
     if(!(v = m->value(YCPString("accepting"))).isNull())  if(v->isBoolean())      xAccepting = v->asBoolean()->value() ? "Yes" : "No";
     if(!(v = m->value(YCPString("bannerstart"))).isNull())if(v->isString())       xBannerStart = v->asString()->value_cstr();
     if(!(v = m->value(YCPString("bannerend"))).isNull())  if(v->isString())       xBannerEnd = v->asString()->value_cstr();
@@ -454,9 +459,8 @@ bool newPrinter(const YCPValue&value)
             YCPList l = v->asList();
             xDenyUsers = YCPList2set(l);
         }
-
     if(!(v = m->value(YCPString("ppd"))).isNull())        if(v->isString())       xppd = v->asString()->value_cstr();
-    ret = ::setPrinter(xPrinter,xInfo,xLoc,xState,xStateMsg,xBannerStart,xBannerEnd,xUri,xAllowUsers,xDenyUsers,xppd,xAccepting);
+    ret = ::setPrinter(xPrinter,xInfo,xLoc,xState,xStateMsg,xBannerStart,xBannerEnd,xUri,xAllowUsers,xDenyUsers,xppd,xAccepting, xShared);
 
     if(!(v = m->value(YCPString("options"))).isNull())
         if(v->isMap())
@@ -478,6 +482,7 @@ bool PrinterEntry::changePrinter(const YCPValue&value)
     const char*xStateMsg = NULL;
     bool acc = Accepting;
     const char*xAccepting = NULL;
+    const char*xShared = NULL;
     const char*xBannerStart = NULL;
     const char*xBannerEnd = NULL;
     set<string>xAllowUsers;
@@ -500,6 +505,7 @@ bool PrinterEntry::changePrinter(const YCPValue&value)
     if(!(v = m->value(YCPString("state"))).isNull())      if(v->isString())       xState = v->asString()->value_cstr();
     if(!(v = m->value(YCPString("statemessage"))).isNull())if(v->isString())      xStateMsg = v->asString()->value_cstr();
     if(!(v = m->value(YCPString("accepting"))).isNull())  if(v->isBoolean())      xAccepting = (acc = v->asBoolean()->value()) ? "Yes" : "No";
+    if(!(v = m->value(YCPString("shared"))).isNull())  if(v->isBoolean())      	  xShared = (acc = v->asBoolean()->value()) ? "Yes" : "No";
     if(!m->value(YCPString("bannerstart")).isNull() || !m->value(YCPString("bannerstart")).isNull())
         {
             xBannerStart = m->value(YCPString("bannerstart"))->asString()->value_cstr();
@@ -535,7 +541,7 @@ bool PrinterEntry::changePrinter(const YCPValue&value)
     if(NULL!=xppd && ppd==xppd)                     xppd = NULL;
     if(Accepting==acc)                              xAccepting = NULL;
 
-    ret = ::setPrinter(xPrinter,xInfo,xLoc,xState,xStateMsg,xBannerStart,xBannerEnd,xUri,xAllowUsers,xDenyUsers,xppd,xAccepting);
+    ret = ::setPrinter(xPrinter,xInfo,xLoc,xState,xStateMsg,xBannerStart,xBannerEnd,xUri,xAllowUsers,xDenyUsers,xppd,xAccepting, xShared);
     Y2_DEBUG ("Change printer: %s", ret ? "OK" : "Error");
 
     //
@@ -650,7 +656,6 @@ bool PrintersConf::modifyPrinter(YCPMap printer)
             return false;
         }
     string name = temp->asString()->value();
-
     //
     // find this printer in list of printers
     //

@@ -48,6 +48,7 @@
       * @return `abort if aborted and `next otherwise
       */
     define symbol WriteDialog() ``{
+	Printer::validateShared();
 	Wizard::RestoreHelp (getWriteProgressHelp ());
 	boolean ret = Printer::Write();
 	return ret ? `next : `abort;
@@ -689,6 +690,7 @@ Select the model."));
 	string uri = Printer::printer["uri"]:"";
 	string uri_type = Printerlib::getUriType (uri);
 	boolean raw = (boolean) (Printer::printer["raw"]:nil);
+	boolean shared = (boolean)Printer::printer["shared"]:false;
 
 	if (raw == nil)
 	{
@@ -731,11 +733,6 @@ Select the model."));
 		// check box
 		_("Print &Form Feed between Jobs"), ff);
 
-//	term aa_insert = allow_auto
-//	    ? `CheckBox (`id (`auto), `opt (`notify, `hstretch),
-//		// check box
-//		_("Automatically Propose &Multiple Queues"), auto_propose)
-//	    : `VSpacing (0);
 
 	term contents = `VBox (
 	    `TextEntry (`id (`name), `opt (`hstretch),
@@ -752,6 +749,7 @@ Select the model."));
 		? _("&Class Location")
 		// text entry
 		: _("Printer &Location"), loc),
+	    `Left(`CheckBox(`id(`shared), _("Share Printer"), shared)),
 	    `VSpacing (0.5),
 	    raw_insert,
 	    ff_insert,
@@ -876,6 +874,7 @@ and test the queue after the printer model is selected."));
 		name = (string)UI::QueryWidget (`id (`name), `Value);
 		info = (string)UI::QueryWidget (`id (`info), `Value);
 		loc = (string)UI::QueryWidget (`id (`loc), `Value);
+		shared = (boolean)UI::QueryWidget (`id (`shared), `Value);
 //		if (allow_auto)
 //		{
 //		    auto_propose = (boolean) UI::QueryWidget (`id (`auto), `Value);
@@ -900,6 +899,7 @@ and test the queue after the printer model is selected."));
 	    Printer::printer["info"] = info;
 	    Printer::printer["location"] = loc;
 	    Printer::printer["auto_propose"] = auto_propose;
+	    Printer::printer["shared"] = shared;
 	    if (raw)
 	    {
 		ret = `raw;
@@ -2173,9 +2173,10 @@ void SetHWDialogData () {
                 return  $[      "ID":Printerlib::getReplacedString(Printerlib::getUriDevice (i["uri"]:""), false), 
 				"MODEL":i["ppd_info", "model"]:"unknown", 
 				"SPOOL":i["name"]:"unknown",  
-				"DESCR":("<b>" + i["ppd_info", "manufacturer"]:"none" +
+				"DESCR":("<b>" + i["ppd_info", "manufacturer"]:"none" + "<br>" +
 					" " + i["ppd_info", "model"]:"" + 
 					" / " + i["name"]:"" + "</b><br>" + 
+					(((boolean)i["shared"]:false)?_("Shared"):_("Not Shared")) + "<br>" +
 					_(" Connected As ") + Printerlib::getReplacedString(i["uri"]:"none", false)) + "<br>" + 
 					_(" With Spool ") + i["name"]:"none",
 				"DEFAULT":def ];
