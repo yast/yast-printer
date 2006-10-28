@@ -40,6 +40,7 @@ private:
   string Uri;
   string State;
   string StateMessage;
+  bool Shared;
   bool   Accepting;
   string BannerStart;
   string BannerEnd;
@@ -60,7 +61,7 @@ public:
    * Default constructor.
    */
   PrinterEntry() 
-    : Name(), Default(false), Info(), Location(), Uri(), State(), StateMessage(),
+    : Name(), Default(false), Info(), Location(), Uri(), State(), StateMessage(), Shared(false),
       Accepting(false), BannerStart(), BannerEnd(), AllowUsers(), DenyUsers(), ppd(), options(),
       saved(false)
       {
@@ -98,6 +99,7 @@ public:
 #define CREATE_SET(x,y) void set##x(const y x##_){x = x##_;}
   CREATE_SET(Name,string);
   CREATE_SET(Default,bool);
+  CREATE_SET(Shared,bool);
   CREATE_SET(Info,string);
   CREATE_SET(Location,string);
   CREATE_SET(Uri,string);
