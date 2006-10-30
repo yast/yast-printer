@@ -48,7 +48,7 @@
       * @return `abort if aborted and `next otherwise
       */
     define symbol WriteDialog() ``{
-	Printer::validateShared();
+//	Printer::validateShared();
 	Wizard::RestoreHelp (getWriteProgressHelp ());
 	boolean ret = Printer::Write();
 	return ret ? `next : `abort;
@@ -690,7 +690,7 @@ Select the model."));
 	string uri = Printer::printer["uri"]:"";
 	string uri_type = Printerlib::getUriType (uri);
 	boolean raw = (boolean) (Printer::printer["raw"]:nil);
-	boolean shared = (boolean)Printer::printer["shared"]:false;
+	boolean shared = (boolean)Printer::printer["shared"]:true;
 
 	if (raw == nil)
 	{
@@ -1400,7 +1400,6 @@ void saveOptions(){
                 "PaperDimension":ps];
 	       }
 	Printer::printer["ppd_options"]=ppd_options;
-y2internal("Printer %1", Printer::printer);
 */
 //saveOptions();
 	//
@@ -2307,7 +2306,8 @@ void SetHWDialogData () {
 		[ `redetect, _("Restart Detection") ],
 		[ `default_q, _("Set Default") ],
 		[ `cups_expert , _("CUPS Expert Settings") ],
-		[ `change_ipp_listen, _("Change IPP Listen") ]
+		[ `change_ipp_listen, _("Change IPP Listen") ],
+		[ `change_remote_access, _("Change Remote Access Settings") ]
 	    ]);
 	SetHWDialogData ();
 
@@ -2389,6 +2389,64 @@ void SetHWDialogData () {
 	}
 	return ret; // FIXME
     }
+
+define symbol runRemoteAccessDialog(){
+ term contents = `HBox (`HStretch (), `VBox (
+            `VStretch (),
+            `RadioButtonGroup (`id (`rb),
+                        // frame
+                `Frame (_("Remote Access"),`HBox (
+                    `HSpacing (3),
+                    `VBox (
+                        `VSpacing (3),
+                                // radiobutton
+          `Left(`RadioButton( `id(0), _("Enable"))),
+          `Left(`RadioButton( `id(1), _("Disable"))),
+                        // radiobutton
+                        `VSpacing (3)
+                    ),
+                    `HSpacing (3)
+                )
+            )),
+            `VStretch ()
+        ), `HStretch ());
+
+  Wizard::SetContentsButtons (_("CUPS Remote Access Settings"), contents,  getRemoteAccessHelp(),
+                Label::BackButton (), Label::NextButton () );
+boolean allow=true;
+foreach(string row, CUPS::cups_server_settings["Listen"]:[], {
+ if (row=="localhost:631") allow=false;
+});
+	if (allow) UI::ChangeWidget (`id (`rb), `CurrentButton,0);
+		else UI::ChangeWidget (`id (`rb), `CurrentButton,1);
+
+
+  symbol ret = (symbol)UI::UserInput();
+  if (ret == `next){
+     integer option = tointeger(UI::QueryWidget(`id(`rb), `CurrentButton));
+     switch (option){
+      case 0 : 
+		y2milestone("Changing remote access to enable");
+
+		CUPS::cups_server_settings["Listen"]=
+			["*:631", "/var/run/cups/cups.sock"];
+		CUPS::cups_server_permissions["/"]=$["Allow":["localhost", "127.0.0.2", "@LOCAL"],
+						"Order":["allow,deny"]];
+		break;
+      case 1 : 
+		y2milestone("Changing remote access to disable");
+		CUPS::cups_server_settings["Listen"]=
+			["localhost:631", "127.0.0.2:631", "/var/run/cups/cups.sock"];
+		CUPS::cups_server_permissions["/"]=$["Allow":["localhost", "127.0.0.2"],
+						"Order":["allow,deny"]];
+		break;
+     };
+  }
+
+ return ret;
+}
+
+
     /**
      * Complex dialog.
      * @return symbol for ws

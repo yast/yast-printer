@@ -61,7 +61,7 @@ public:
    * Default constructor.
    */
   PrinterEntry() 
-    : Name(), Default(false), Info(), Location(), Uri(), State(), StateMessage(), Shared(false),
+    : Name(), Default(false), Info(), Location(), Uri(), State(), StateMessage(), Shared(true),
       Accepting(false), BannerStart(), BannerEnd(), AllowUsers(), DenyUsers(), ppd(), options(),
       saved(false)
       {

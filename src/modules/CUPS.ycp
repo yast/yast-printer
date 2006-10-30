@@ -412,15 +412,16 @@ global list<list<string> > DetectCupsUsbDevicesInfo () {
     cups_usb_devices = maplist (string l, lines, {
 	string model = regexpsub (l, "[^\"]*\"([^\"]*)\".*", "\\1");
 	string c_dev = regexpsub (l, "direct usb:([^ ]*) .*", "\\1");
-	string u_dev = sformat ("/dev/usb/lp%1", counter);
+/*	string u_dev = sformat ("/dev/usb/lp%1", counter);
 	if (usb_dev_names == `never
 	    || (usb_dev_names == `serial
 		&& ! issubstring (c_dev, "serial")))
 	{
 	    c_dev = u_dev;
 	}
+*/
 	counter = counter + 1;
-	return [c_dev, model, u_dev];
+	return [c_dev, model];
     });
     Printerlib::SetCupsUsbDevicesInfo (cups_usb_devices);
     return cups_usb_devices;
