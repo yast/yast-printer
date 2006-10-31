@@ -3,6 +3,8 @@
 #
 
 yncludedir = @yncludedir@/printer
+rncdir =  $(schemadir)/autoyast/rnc
+rnc_DATA = printer.rnc
 
 
 desktop_DATA =                           \
