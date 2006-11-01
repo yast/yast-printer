@@ -638,8 +638,19 @@ global define string getAutoPpdFile (string vendor_db, string device_db) {
 		foomatic[vendor_db, device_db, p, "filter"]:"");
 	});
     }
-    string first_nick
-	= foomatic[vendor_db, device_db, ppds[0]:"", "nickname"]:"";
+   // #210924 - choose correct PPD
+ string first_nick="";
+ foreach(string row, ppds, {
+  list<string> tmp_list = splitstring(row, "/");
+  string tmp_row = toupper(tmp_list[size(tmp_list)-1]:"");
+  integer pos = findfirstof(device_db, "0123456789");
+  string str1 = substring(device_db, 0,pos);
+  string str2 = substring(device_db, pos, (size(device_db)-pos));
+  if (issubstring(device_db, str1) && issubstring(device_db, str2))
+       first_nick = foomatic[vendor_db, device_db, row, "nickname"]:"";
+  });
+    if (first_nick == "") first_nick = foomatic[vendor_db, device_db, ppds[0]:"", "nickname"]:"";
+
     ppds = filter (string p, ppds, {
 	return foomatic[vendor_db, device_db, p, "nickname"]:"" == first_nick;
     });
