@@ -1562,6 +1562,15 @@ the selected spooler does not support it."), name));
 
 	if (with_daemon && Spooler::Get () == "cups")
 	{
+	// fixed #190173 - lpd printer doesn't get installed (in other MODEs cupsd already is running)
+	if (Mode::autoinst()) {
+		y2milestone("autoyast mode - starting CUPS");
+		CUPS::StartDaemon();
+		//wait until daemon runing - maximum 10 seconds
+		string wait_for_daemon = "for i in $(seq 10);do echo -n '.';pgrep -x cupsd && break;sleep 1;done";
+		SCR::Execute(.target.bash, wait_for_daemon);
+		}
+
 	    CUPS::server_hostname = "";
 	    CUPS::SaveServerHostName ();
 	    CUPS::WriteCupsSettings ();
@@ -1577,12 +1586,6 @@ the selected spooler does not support it."), name));
 //	ret = Spooler::AdjustServices (size (printcap) > 0) && ret;
 	if (with_daemon)
 	{
-	// fixed #190173 - lpd printer doesn't get installed (in other MODEs cupsd already is running)
-	if (Mode::autoinst()) {
-		y2milestone("autoyast mode - starting CUPS");
-		CUPS::StartDaemon();
-		}
-
 	    Progress::NextStage (); // delete old printers
 
 	    if (testAbort ()) return false;
