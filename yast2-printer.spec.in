@@ -5,6 +5,7 @@
 BuildRequires:	blocxx-devel cups-devel cups-drivers cups-drivers-stp gcc-c++ libxcrypt-devel openssl-devel docbook-xsl-stylesheets doxygen libxslt perl-XML-Writer popt-devel sgml-skel update-desktop-files yast2 yast2-devtools yast2-testsuite  yast2-core-devel zlib-devel
 Requires:     yast2 netcat zlib blocxx
 Requires:     /usr/bin/host cups-libs
+Requires:     cups >= 1.2
 Provides:     yast2-config-cups yast2-agent-printerdb yast2-agent-cups yast2-lib-printer yast2-config-printer y2c_cups y2c_prnt y2l_printer y2a_cups y2a_printerdb yast2-trans-printer yast2-trans-libprinter yast2-trans-printerdb yast2-trans-cups yast2-printerdb-devel yast2-cups-devel
 Obsoletes:    yast2-config-cups yast2-agent-printerdb yast2-agent-cups yast2-lib-printer yast2-config-printer y2c_cups y2c_prnt y2l_printer y2a_cups y2a_printerdb yast2-trans-printer yast2-trans-libprinter yast2-trans-printerdb yast2-trans-cups yast2-printerdb-devel yast2-cups-devel
 Provides:     yast2-agent-cups-devel yast2-agent-printerdb-devel y2d_prnt y2t_prnt yast2-db-printer yast2-printerdb
@@ -20,8 +21,14 @@ Summary:      YaST2 Modules for printer configuration
 @BUILD@
 
 @INSTALL@
-PPD_DB=/var/lib/YaST2/ppd_db.ycp
-if test -f $PPD_DB ;  then   rm $PPD_DB; fi
+#mkdir -p $RPM_BUILD_ROOT/var/lib/YaST2/
+#touch $RPM_BUILD_ROOT/var/lib/YaST2/ppd_db.ycp
+
+%post
+# delete ppd_db.ycp because of CUPS 1.1->1.2 (bugzilla #214265)
+rm -f /var/lib/YaST2/ppd_db.ycp
+
+
 
 @CLEAN@
 
@@ -59,7 +66,7 @@ if test -f $PPD_DB ;  then   rm $PPD_DB; fi
 #PPD agent stuff
 @plugindir@/libpy2ag_ppd.so.*
 #PPD agent prebuilt data
-/var/lib/YaST2/ppd_db.ycp
+%ghost /var/lib/YaST2/ppd_db.ycp
 #Devel stuff
 @plugindir@/libpy2ag_cups.so
 @plugindir@/libpy2ag_cups.la
