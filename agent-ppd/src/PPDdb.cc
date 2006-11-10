@@ -1745,7 +1745,9 @@ bool PPD::cleanupLists () {
     for(; it1 != db.end(); it1++) {
         PPD::Models::iterator it2 = (*it1).second.models.begin();
         for(; it2 != (*it1).second.models.end(); it2++) {
-            PPD::Drivers::iterator it3 = (*it2).second.drivers.begin();
+            PPD::Drivers::iterator it3;
+driver_init:
+	    it3 = (*it2).second.drivers.begin();
             while(it3 != (*it2).second.drivers.end()){
 		DriverInfo di = it3->second;
 		string driver_name = di.nickname;
@@ -1754,7 +1756,8 @@ bool PPD::cleanupLists () {
 		if (it4 == ppdfiles.end())
 		{ // no more existing file
 		    y2debug ("Erasing file %s", driver_name.c_str());
-		    (*it2).second.drivers.erase (filename);
+		     (*it2).second.drivers.erase (filename);
+			goto driver_init;
 		}
 		else if (it4->second.dir_newer || it4->second.file_newer)
 		{ // parent dir changed or file changed,
@@ -1766,6 +1769,7 @@ bool PPD::cleanupLists () {
 			{
 			    y2debug ("Erasing %s", driver_name.c_str());
 			    (*it2).second.drivers.erase (driver_name);
+			    goto driver_init;
 			}
 			else
 			{
@@ -1779,6 +1783,7 @@ bool PPD::cleanupLists () {
 			{
 			    y2debug ("Erasing %s", driver_name.c_str());
 			    (*it2).second.drivers.erase (driver_name);
+			    goto driver_init;
 			}
 		        else
 			{
