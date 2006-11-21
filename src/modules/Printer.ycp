@@ -861,7 +861,16 @@ Install it now?"));
         {
 	    Spooler::RestartIfNeeded (true);
             list<map<string,any> > ret = (list<map<string,any> >) SCR::Read (.cups.printers);
-	    ret = filter (map<string,any> e, ret, ``(e["uri"]:"" != ""));
+// #221245 - remote printers are allowed to modify
+// because of CUPS1.1->CUPS1.2 cups provide uri also for printers from broadcast
+// so YaST now show only printers from /etc/cups/printers.conf
+//	    ret = filter (map<string,any> e, ret, ``(e["uri"]:"" != ""));
+string cmd="grep '<Printer' /etc/cups/printers.conf|sed -r s/\"<Printer\\s+\"//g |sed s/\\s*\\>//g";
+list<string> tmp_prns =
+       splitstring(((map<string,any>)SCR::Execute(.target.bash_output, cmd))["stdout"]:"", "\n");
+
+           ret = filter (map<string,any> e, ret, { return (contains(tmp_prns, e["name"]:""));});
+
 	    ret = maplist (map<string,any> e, ret, ``{
 		if (SCR::Read (.target.size, e["ppd"]:"") > 0)
 		{
