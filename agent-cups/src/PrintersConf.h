@@ -241,7 +241,7 @@ private:
    * @param fn filename of the printers.conf.
    * @return True if file was read successfully.
    */
-  bool readSettings(const char*fn);
+  bool readSettings();
   bool getPrinters ();
   /**
    * Returns printer entry by printer name. If the printer does not have an entry, it is created.

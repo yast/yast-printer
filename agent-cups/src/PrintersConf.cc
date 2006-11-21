@@ -24,7 +24,7 @@
 
 bool newPrinter(const YCPValue&value);
 
-bool PrintersConf::readSettings(const char*fn)
+bool PrintersConf::readSettings()
 {
   Clear();
   if(!getPrinters())
@@ -342,7 +342,7 @@ YCPValue PrintersConf::Read()
     //
     YCPList l; 
     Clear();
-    if(!readSettings("/etc/cups/printers.conf"))
+    if(!readSettings())
         return l; // empty list
 
     list<PrinterEntry>::const_iterator it = Printers.begin();
@@ -373,7 +373,7 @@ YCPBoolean PrintersConf::Write(const YCPPath &path, const YCPValue& value, const
             if(value->isMap())
             {
                 Clear ();
-                readSettings ("/etc/cups/printers.conf");
+                readSettings ();
 		YCPMap printer = value->asMap();
                 return YCPBoolean (modifyPrinter(printer));  // save changes
             }
@@ -397,7 +397,7 @@ YCPBoolean PrintersConf::Write(const YCPPath &path, const YCPValue& value, const
             if(value->isString())
             {
                 Clear ();
-                readSettings ("/etc/cups/printers.conf");
+                readSettings ();
                 YCPString printer = value->asString();
 		string name = printer->asString()->value();
                 deletePrinter(name.c_str());  // save changes
