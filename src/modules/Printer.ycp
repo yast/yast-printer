@@ -1336,6 +1336,10 @@ Detect your printers?"));
 	boolean default_printer_found = false;
 	foreach (map<string,any> entry, printcap, ``{
 	    string uri = entry["uri"]:"";
+	    if ( regexpmatch (uri, "^hp:\/\/.*") && Service::Status("hplip")!=0 ) {
+		 Service::Start("hplip");
+		 Printerlib::setHplip(true);
+		}
 	    string name = entry["name"]:"";
 	    entry["default"] = (name == default_queue);
 	    // progress title, %1 is queue name
