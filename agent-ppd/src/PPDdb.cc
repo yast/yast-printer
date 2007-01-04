@@ -1749,6 +1749,7 @@ bool PPD::cleanupLists () {
 driver_init:
 	    it3 = (*it2).second.drivers.begin();
             while(it3 != (*it2).second.drivers.end()){
+y2debug("it3 cycle");
 		DriverInfo di = it3->second;
 		string driver_name = di.nickname;
 		string filename = it3->first;
@@ -1757,6 +1758,7 @@ driver_init:
 		{ // no more existing file
 		    y2debug ("Erasing file %s", driver_name.c_str());
 		     (*it2).second.drivers.erase (filename);
+		y2debug("goto driver_init");
 			goto driver_init;
 		}
 		else if (it4->second.dir_newer || it4->second.file_newer)
@@ -1767,9 +1769,9 @@ driver_init:
 			off_t size = fileSize (filename);
 			if (size != di.size)
 			{
-			    y2debug ("Erasing %s", driver_name.c_str());
+			    y2debug ("Erasing 1 %s", driver_name.c_str());
 			    (*it2).second.drivers.erase (driver_name);
-			    goto driver_init;
+//			    goto driver_init;
 			}
 			else
 			{
@@ -1781,9 +1783,9 @@ driver_init:
 			string checksum = fileChecksum (filename);
 			if (checksum != di.checksum)
 			{
-			    y2debug ("Erasing %s", driver_name.c_str());
+			    y2debug ("Erasing 2 %s", driver_name.c_str());
 			    (*it2).second.drivers.erase (driver_name);
-			    goto driver_init;
+//			    goto driver_init;
 			}
 		        else
 			{
