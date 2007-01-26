@@ -1769,7 +1769,7 @@ driver_init:
 			{
 			    y2debug ("Erasing %s", driver_name.c_str());
 			    (*it2).second.drivers.erase (driver_name);
-			    goto driver_init;
+//			    goto driver_init;
 			}
 			else
 			{
@@ -1783,7 +1783,7 @@ driver_init:
 			{
 			    y2debug ("Erasing %s", driver_name.c_str());
 			    (*it2).second.drivers.erase (driver_name);
-			    goto driver_init;
+//			    goto driver_init;
 			}
 		        else
 			{
