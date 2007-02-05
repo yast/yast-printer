@@ -866,13 +866,21 @@ Install it now?"));
 // so YaST now show only printers from /etc/cups/printers.conf
 //	    ret = filter (map<string,any> e, ret, ``(e["uri"]:"" != ""));
 //string cmd="grep -E '<Printer|<DefaultPrinter' /etc/cups/printers.conf|sed -r s/\"<[a-zA-Z]*Printer\\s+\"//g |sed s/\\s*\\>//g";
-string cmd = "grep -E 'DeviceURI' /etc/cups/printers.conf|cut -d' ' -f2";
-list<string> tmp_prns =
+	string cmd = "grep -E 'DeviceURI' /etc/cups/printers.conf|cut -d' ' -f2";
+	list<string> tmp_prns =
        splitstring(((map<string,any>)SCR::Execute(.target.bash_output, cmd))["stdout"]:"", "\n");
+	y2milestone("List of local printers before correcting : %1", tmp_prns);
 
-//           ret = filter (map<string,any> e, ret, { return (contains(tmp_prns, e["name"]:""));});
-           ret = filter (map<string,any> e, ret, { return (contains(tmp_prns, e["uri"]:""));});
+	//for samba printers remove "user/password@" entry (#240727)
+	list<string> smb_corrected_printers = [];
+	foreach(string row, tmp_prns, {
+	 if ( Printerlib::getUriType(row)=="smb" && issubstring(row, "@")){
+	  row="smb://" + substring(row, findfirstof(row, "@")+1, size(row));
+	  }
+	smb_corrected_printers = add(smb_corrected_printers, row);
+	});
 
+           ret = filter (map<string,any> e, ret, { return (contains(smb_corrected_printers, e["uri"]:""));});
 	    ret = maplist (map<string,any> e, ret, ``{
 		if (SCR::Read (.target.size, e["ppd"]:"") > 0)
 		{
