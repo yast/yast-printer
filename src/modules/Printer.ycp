@@ -615,7 +615,7 @@ Install it now?"));
 	});
 	if (found_default)
 	{
-	    y2debug ("Default queue found");
+	    y2milestone ("Default queue found");
 	}
 	else if (found_lp)
 	{
@@ -634,7 +634,8 @@ Install it now?"));
 	}
 	else
 	{
-	    default_queue = first;
+	y2milestone("No Default queue found");
+//	    default_queue = first;
 	    dirty = true;
 	}
     }
@@ -976,9 +977,13 @@ Install it now?"));
 	    classes = maplist (map<string,any> e, classes,
 		``(add (e, "uri", "class")));
 	    ret = ret + classes;
-	    default_queue = (string)SCR::Read (.cups.default_dest);
-	    if (default_queue == "" || default_queue == nil)
-		default_queue = (string) (ret[0, "name"]:nil);
+	    map<string, any> output = (map<string, any>)SCR::Execute(.target.bash_output,
+				"su - -c 'lpstat -h localhost -d'|cut -d':' -f2|tr -d '\n'");
+	    y2milestone("Default printer: %1", output);
+	    if (output["exit"]:0==0) default_queue = String::CutBlanks(output["stdout"]:"");
+//	    default_queue = ""; //(string)SCR::Read (.cups.default_dest);
+//	    if (default_queue == "" || default_queue == nil)
+//		default_queue = (string) (ret[0, "name"]:nil);
 	    CUPS::ReadCupsSettings ();
 	    return ret;
         }
