@@ -1361,7 +1361,10 @@ Detect your printers?"));
 	boolean default_printer_found = false;
 	foreach (map<string,any> entry, printcap, ``{
 	    string uri = entry["uri"]:"";
-           if ( regexpmatch (uri, "^hp:\/\/.*") && Service::Status("hplip")!=0 ) {
+           if ( regexpmatch (uri, "^hp:\/\/.*") &&
+		( regexpmatch(uri, "parallel") || regexpmatch(uri, "serial") || regexpmatch(uri, "usb") || regexpmatch(uri, "irda") || regexpmatch(uri, "bluetooth") || regexpmatch(uri, "pipe") )
+		 && Service::Status("hplip")!=0 )
+	       {
                 Service::Start("hplip");
                 Printerlib::setHplip(true);
                }
