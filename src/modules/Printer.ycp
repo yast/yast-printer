@@ -43,7 +43,7 @@
     import "Stage";
     import "SuSEFirewall";
     import "URL";
-
+    import "PackageSystem";
 
 
 
@@ -1167,10 +1167,7 @@ Detect your printers?"));
      * @return boolean success?
      */
     global define boolean Read () ``{
-	if (Arch::s390 ())
-	    skip_autodetection = true;
-	if (Mode::config ())
-	    skip_autodetection = true;
+	if (Arch::s390 () || Mode::config()) skip_autodetection = true;
 	list<string> stages = [
 	    // progress stage, text in dialog (short) (infinitive)
 	    _("Check environment"),
@@ -1206,15 +1203,14 @@ Detect your printers?"));
 	Progress::NextStageStep (0); // step 0 - check root permission
 	if (testAbort ()) return false;
 
-	if (! Confirm::MustBeRoot ())
-	    return false;
+	if (! Confirm::MustBeRoot ()) return false;
 
 	Progress::NextStep (); // step 1 - check installed spooler
-	Printerlib::readHplip();
 	if (testAbort ()) return false;
 
-	if (! checkSpooler ())
-	    return false;
+	Printerlib::readHplip();
+
+	if (! checkSpooler ()) return false;
 
 	Progress::NextStep (); // step 2 - check ghostscript package
 	if (testAbort ()) return false;
@@ -1548,10 +1544,14 @@ the selected spooler does not support it."), name));
 
 	if (with_daemon && Spooler::Get () == "cups")
 	{
+
+	// #218760 - cups-drivers is not automatically included
+	if (size(printcap)>0) PackageSystem::CheckAndInstallPackagesInteractive([ "cups", "cups-drivers", "gutenprint" ]);
 	// fixed #190173 - lpd printer doesn't get installed (in other MODEs cupsd already is running)
+	Spooler::AdjustServices (size (printcap) > 0);
 	if (Mode::autoinst()) {
-		y2milestone("autoyast mode - starting CUPS");
-		CUPS::StartDaemon();
+//		y2milestone("autoyast mode - starting CUPS");
+//		CUPS::StartDaemon();
 		//wait until daemon runing - maximum 10 seconds
 		string wait_for_daemon = "for i in $(seq 10);do echo -n '.';pgrep -x cupsd && break;sleep 1;done";
 		SCR::Execute(.target.bash, wait_for_daemon);
@@ -1569,7 +1569,6 @@ the selected spooler does not support it."), name));
 
 	Progress::NextStage (); 
 	// adjst services
-	if (Spooler::AdjustServices (size (printcap) > 0)) return false;
 	if (with_daemon)
 	{
 	    Progress::NextStage (); // delete old printers

@@ -354,29 +354,28 @@ global boolean GetDriversAreInstalled () {
 		    _("The list of installed drivers has changed.
 Building database of drivers..."));
 	    }
-	    else
-	    {
-		UI::OpenDialog (`VBox (
+	    else if (Mode::autoinst()){
+		y2milestone("The list of installed drivers has changed.
+Building database of drivers...");
+	    } else
+		{
+		 UI::OpenDialog (`VBox (
 		    `HSpacing (50),
 		    `ProgressBar (`id(`pr),
                         // progress bar label
                         _("The list of installed drivers has changed.
 Building database of drivers..."), 100, 0)));
-	    }
+		}
             integer result = 0;
             while (true)
             {
                     result = (integer)SCR::Read (.ppd.db.creation_status);
-                    if (result < 0)
-                        break;
-                    if (result == 100)
-                        break;
-		    if (! Mode::commandline ())
-			UI::ChangeWidget (`id (`pr), `Value, result);
+                    if (result < 0) break;
+                    if (result == 100) break;
+		    if (! Mode::commandline () && !Mode::autoinst()) UI::ChangeWidget (`id (`pr), `Value, result);
                     sleep (1000);
             }
-	    if (! Mode::commandline ())
-		UI::CloseDialog ();
+	    if (! Mode::commandline () && !Mode::autoinst() ) UI::CloseDialog ();
             if (result < 0)
             {
                     // error report
