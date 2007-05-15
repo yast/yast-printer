@@ -28,7 +28,8 @@
     import "Stage";
     import "Wizard";
     import "Wizard_hw";
-    import "WizardHW";
+    import "CWMTab";
+    import "CWM";
 
     include "printer/helps.ycp";
     include "printer/misc.ycp";
@@ -2144,87 +2145,6 @@ the current configuration."));
 	return add (items, `item (`id (-1), _("Other (not detected)"),
 	    !selected));
     }
-    /**
-     * Function to set the data to the hardware dialog
-     * get inspired by summary and getAutoprobedSelectionBox when writing it
-     */
-void SetHWDialogData () {
-        string new_spooler = Spooler::Get ();
-        if (new_spooler == "cups" && CUPS::InstallationType () == `client) new_spooler = "cups-client";
-	y2milestone("%1", new_spooler);
-	  list < map<string,any> > printers = [];
-     if (new_spooler == "cups")
-      {
-        list < map<string,any> > items = maplist (map i, Printer::printcap, ``{
-	y2milestone("printcap %1", i);
-	string def = "";
-	if (i["name"]:"unknown" == Printer::default_queue) def="Default";
-                return  $[      "ID":Printerlib::getReplacedString(Printerlib::getUriDevice (i["uri"]:""), false), 
-				"MODEL":i["ppd_info", "model"]:"unknown", 
-				"SPOOL":i["name"]:"unknown",  
-				"DESCR":("<b>" + i["ppd_info", "manufacturer"]:"none" + "<br>" +
-					" " + i["ppd_info", "model"]:"" + 
-					" / " + i["name"]:"" + "</b><br>" + 
-					(((boolean)i["shared"]:false)?_("Shared"):_("Not Shared")) + "<br>" +
-					_(" Connected As ") + Printerlib::getReplacedString(i["uri"]:"none", false)) + "<br>" + 
-					_(" With Spool ") + i["name"]:"none",
-				"DEFAULT":def ];
-        });
-
-	items=(list < map<string,any> >) merge((list < map<string,any> >) items, (list < map<string,any> >) maplist (map i, Printer::autodetected, ``{
-	    if (isPrinterConfigured (i["vendor"]:"", i["device"]:"", i["uri"]:"", i["unique_key"]:""))
-	    {
-		y2milestone ("Skipping %1, already configured", i);
-		return nil;
-	    }
-	    else{
-		  boolean finded=false;
-		   foreach(map<string, any> row, items, {
-			if (row["ID"]:nil == Printerlib::getReplacedString(Printerlib::getUriDevice (i["uri"]:""), false))
-				{
-				 finded=true;
-				 y2milestone("Printer %1 without ppd file already configured", row["ID"]:nil);
-				}
-			});
-	            if (finded==false) return 
-			$[      "ID":Printerlib::getReplacedString(Printerlib::getUriDevice (i["uri"]:""), false),
-                                "MODEL":i["info"]:"unknown",
-                                "SPOOL":i["name"]:"not configured",
-                                "DESCR": "<b>" + i["info"]:"none" + "</b><br>"
-					+ i["location"]:"" + "<br>"
-					+ _("This printer is not configured") ];
-		}
-
-	}));
-	items = (list < map<string,any> >) filter (any i, items, ``(i != nil));
-	integer pos=0;
-	Printer::conf_unconf_printers = items;
-	maplist(map<string,any> s, items, {
-		printers = add(printers,  $[ 
-						"id" : tostring(pos), 
-						"rich_descr" : s["DESCR"]:"none",
-						"table_descr":[  
-								s["SPOOL"]:"unknown", 
-								s["ID"]:"unknown" ,
-								s["MODEL"]:"unknown", 
-								s["DEFAULT"]:"" ]
-					   ]);
-		pos = pos + 1;
-		});
-       } else {
-	printers = [ $[
-                                                "id" : "0",
-                                                "rich_descr" : "<b>" + CUPS::server_hostname + "</b><br>" 
-						+ ((CUPS::server_default == true) ? _("Default Queue") : (_(" With Spool ") + Printer::default_queue)),
-                                                "table_descr":[
-                                                                "CUPS",
-                                                                "",
-                                                                "",
-                                                                "" ]
-                                           ] ];
-	}
-  WizardHW::SetContents ( printers );
-}
 
 
 
@@ -2282,14 +2202,209 @@ void SetHWDialogData () {
   return (symbol) ret;
  }
 
+void initServerType (string key) {
+ CUPS::ReadCupsSettings ();
+ if (CUPS::InstallationType () == `server){
+  UI::ChangeWidget(`id(`server_type), `CurrentButton, `local);
+  } else {
+	  UI::ChangeWidget(`id(`server_type), `CurrentButton, `remote);
+	 }
+ if ( contains (CUPS::cups_server_settings["Browsing"]:["On"],"On") ) UI::ChangeWidget(`ipp_listen, `Value, true);
+}
+
+list<string> getAddresses(list<string> addr_orig){
+ list<string> addresses=addr_orig;
+ term contents = `Frame (_("Browsing Settings"), `VBox (
+		// selectionbox label
+		`HBox (`HSpacing (3), `SelectionBox (`id (`addr), _("Browse Addre&sses")), `HSpacing (3)),
+		`HBox (
+		    `HSpacing (3),
+		    `PushButton (`id (`add), `opt (`key_F3), Label::AddButton ()),
+		    `PushButton (`id (`edit), `opt (`key_F4), Label::EditButton ()),
+		    `PushButton (`id (`del), `opt (`key_F5), Label::DeleteButton ()),
+		    `HStretch (),
+		    // push button
+//		    `PushButton (`id (`propose_server), _("&Propose")),
+		    `PushButton (`id (`ok), Label::OKButton()),
+		    `HSpacing (3)
+		)
+	    ));
+ UI::OpenDialog(contents);
+ symbol ret = nil;
+ do {
+     UI::ChangeWidget(`addr, `Items, addresses);
+     boolean enabled = (size(addresses)>0);
+     UI::ChangeWidget(`edit, `Enabled, enabled);
+     UI::ChangeWidget(`del, `Enabled, enabled);
+     ret = (symbol) UI::UserInput();
+     string curr = (string)UI::QueryWidget(`addr, `CurrentItem);
+     switch(ret){
+      case `add:
+		curr="";
+      case `edit:
+		UI::OpenDialog(`VBox(`TextEntry(`id(`ip_addr), _("IP Address"), curr),
+				`HBox(`PushButton(`id(`cancel), Label::CancelButton()), `PushButton(`id(`ok), Label::OKButton()))));
+		if ((symbol)UI::UserInput()==`ok){
+		 list<string> tmp_list = [];
+		 foreach(string row, addresses, {
+		 if (row==curr && curr!="") tmp_list = add(tmp_list, (string)UI::QueryWidget(`ip_addr, `Value));
+			else tmp_list = add(tmp_list, row);
+		 });
+		 if (curr=="") tmp_list = add(tmp_list, (string)UI::QueryWidget(`ip_addr, `Value));
+		addresses = tmp_list;
+		}
+		UI::CloseDialog();
+		break;
+      case `del:
+		addresses = filter(string item, addresses, {return (item != curr);});
+		break;
+      case `cancel:
+		addresses = addr_orig;
+      case `ok:
+		ret = nil;
+		break;
+     }
+    }while (ret !=nil);
+
+ UI::CloseDialog();
+ return addresses;
+}
+
+symbol handleServerType (string key, map event) ``{
+ boolean local = (UI::QueryWidget(`id(`server_type), `CurrentButton) == `local);
+
+ UI::ChangeWidget(`ipp_listen, `Enabled, local);
+ if (local){
+	 boolean listen = (boolean)UI::QueryWidget(`ipp_listen, `Value);
+	 UI::ChangeWidget(`select_addr, `Enabled, listen);
+	}
+ UI::ChangeWidget(`server_name, `Enabled, !local);
+ UI::ChangeWidget(`lookup_server, `Enabled, !local);
+ UI::ChangeWidget(`test_ipp, `Enabled, !local);
+ UI::ChangeWidget(`use_default, `Enabled, !local);
+
+  boolean use_def=false;
+ if (!local) use_def=!(boolean) UI::QueryWidget(`use_default, `Value);
+ UI::ChangeWidget(`queues, `Enabled, use_def);
+ UI::ChangeWidget(`lookup_queue, `Enabled, use_def);
+ if (event["EventReason"]:""=="Activated" && event["ID"]:`nil==`select_addr) {
+	CUPS::cups_server_settings["BrowseAddress"] = getAddresses(CUPS::cups_server_settings["BrowseAddress"]:[]);
+ }
+ return nil;
+}
+
+void storeServerType(string key, map event){
+ boolean local = (UI::QueryWidget(`id(`server_type), `CurrentButton) == `local);
+ if (local){
+	 CUPS::cups_installation=`server;
+	 boolean listen = (boolean)UI::QueryWidget(`ipp_listen, `Value);
+         CUPS::cups_server_settings["Browsing"] = listen ? ["On"] : ["Off"];
+	}else{
+	 CUPS::cups_installation=`client;
+	}
+}
+
+
+    /**
+     * Function to set the data to the hardware dialog
+     * get inspired by summary and getAutoprobedSelectionBox when writing it
+     */
+
+list<map<string,any> > o_items = nil;
+
+void initHWDialogData (string key) {
+        string new_spooler = Spooler::Get ();
+        if (new_spooler == "cups" && CUPS::InstallationType () == `client) new_spooler = "cups-client";
+	y2milestone("%1", new_spooler);
+	  o_items = [];
+     if (new_spooler == "cups")
+      {
+        list < map<string,any> > items = maplist (map i, Printer::printcap, ``{
+	y2milestone("printcap %1", i);
+	string def = "";
+	if (i["name"]:"unknown" == Printer::default_queue) def="Default";
+                return  $[      "ID":Printerlib::getReplacedString(Printerlib::getUriDevice (i["uri"]:""), false), 
+				"MODEL":i["ppd_info", "model"]:"unknown", 
+				"SPOOL":i["name"]:"unknown",  
+				"DESCR":("<b>" + i["ppd_info", "manufacturer"]:"none" + "<br>" +
+					" " + i["ppd_info", "model"]:"" + 
+					" / " + i["name"]:"" + "</b><br>" + 
+					(((boolean)i["shared"]:false)?_("Shared"):_("Not Shared")) + "<br>" +
+					_(" Connected As ") + Printerlib::getReplacedString(i["uri"]:"none", false)) + "<br>" + 
+					_(" With Spool ") + i["name"]:"none",
+				"DEFAULT":def ];
+        });
+
+	items=(list < map<string,any> >) merge((list < map<string,any> >) items, (list < map<string,any> >) maplist (map i, Printer::autodetected, ``{
+	    if (isPrinterConfigured (i["vendor"]:"", i["device"]:"", i["uri"]:"", i["unique_key"]:""))
+	    {
+		y2milestone ("Skipping %1, already configured", i);
+		return nil;
+	    }
+	    else{
+		  boolean finded=false;
+		   foreach(map<string, any> row, items, {
+			if (row["ID"]:nil == Printerlib::getReplacedString(Printerlib::getUriDevice (i["uri"]:""), false))
+				{
+				 finded=true;
+				 y2milestone("Printer %1 without ppd file already configured", row["ID"]:nil);
+				}
+			});
+	            if (finded==false) return 
+			$[      "ID":Printerlib::getReplacedString(Printerlib::getUriDevice (i["uri"]:""), false),
+                                "MODEL":i["info"]:"unknown",
+                                "SPOOL":i["name"]:"not configured",
+                                "DESCR": "<b>" + i["info"]:"none" + "</b><br>"
+					+ i["location"]:"" + "<br>"
+					+ _("This printer is not configured") ];
+		}
+
+	}));
+	items = (list < map<string,any> >) filter (any i, items, ``(i != nil));
+	integer pos=0;
+	Printer::conf_unconf_printers = items;
+	maplist(map<string,any> s, items, {
+		o_items = add(o_items,  $[ 
+						"id" : tostring(pos), 
+						"rich_descr" : s["DESCR"]:"none",
+						"table_descr":[  
+								s["SPOOL"]:"unknown", 
+								s["ID"]:"unknown" ,
+								s["MODEL"]:"unknown", 
+								s["DEFAULT"]:"" ]
+					   ]);
+		pos = pos + 1;
+		});
+       } else {
+	o_items = [ $[
+                                                "id" : "0",
+                                                "rich_descr" : "<b>" + CUPS::server_hostname + "</b><br>" 
+						+ ((CUPS::server_default == true) ? _("Default Queue") : (_(" With Spool ") + Printer::default_queue)),
+                                                "table_descr":[
+                                                                "CUPS",
+                                                                "",
+                                                                "",
+                                                                "" ]
+                                           ] ];
+	}
+    list<term> term_items = maplist (map<string,any> i, o_items, {
+        term t = `item (`id (i["id"]:""));
+        foreach (string l, i["table_descr"]:[], {
+            t = add (t, l);
+        });
+        return t;
+    });
+    UI::ChangeWidget (`id (`_hw_items), `Items, term_items);
+}
     /**
      * Common detected hardware dialog.
      * @return symbol for ws
      */
-    define symbol runDetectedDialog () ``{
+    define symbol handleDetected (string key, map event) ``{
 	y2milestone ("Starting detected dialog");
 
 	// several functions dialog
+/*
     	WizardHW::CreateHWDialog (_("Printer Configuration"), getComplexHelp (),
 	    [_("Queue Name"),_("Device"), _("Model"),  _("Default Queue") ],
 	    [
@@ -2299,87 +2414,213 @@ void SetHWDialogData () {
 		[ `change_ipp_listen, _("Change IPP Listen") ],
 		[ `change_remote_access, _("Change Remote Access Settings") ]
 	    ]);
-	SetHWDialogData ();
+*/
+//  Wizard::SetContentsButtons (_("Expert CUPS Settings"), contents,  "" ,
+//                Label::BackButton (), Label::NextButton () );
+	
+//	initHWDialogData ();
 
-	Wizard::SetNextButton(`next, _("Finish"));
+//	Wizard::SetNextButton(`next, _("Finish"));
 
-	WizardHW::SetSelectedItem (Printer::runAutoprobedListDialog__current);
+//	WizardHW::SetSelectedItem (Printer::runAutoprobedListDialog__current);
 
 
-	boolean cont = true;
 	symbol ret=nil;
         string new_spooler = Spooler::Get ();
-	while (cont)
-	{
-	    map<string,any> hw_ret = WizardHW::WaitForEvent ();
-	    map event = hw_ret["event"]:$[];
-	    string selected = hw_ret["selected"]:"";
-	    ret = (symbol) event["ID"]:nil;
-		if (tointeger(selected) != nil) Printer::selectPrinter(tointeger(selected));
+	    integer selected = tointeger( UI::QueryWidget(`id(`_hw_items), `CurrentItem));
+		if (selected != nil) Printer::selectPrinter(selected);
 			else Printer::selectPrinter(-1);
-        if (new_spooler == "cups" && CUPS::InstallationType () == `client)
-        {
-            new_spooler = "cups-client";
-        }
-	if (ret == `delete)
-	    {
-		if (new_spooler == "cups-client") {CUPS::cups_installation=`server;new_spooler="cups";}
-			else if ( (Printer::conf_unconf_printers[tointeger(selected), "SPOOL"]:"" != "not configured") && Popup::YesNo (sformat (_("Really delete printer %1?"), Printer::printer["name"]:""))) Printer::deletePrinter ();
-		SetHWDialogData();
-		continue;
-	    }
-// TODO handle all events here
-	    else
-		if (ret == `default_q) 
-			{
-			Printer::setDefaultPrinter ();
-			ret = `restart_button;
-			}
-		if (ret == `add) 
-			{
-			 Printer::selectPrinter(-1);
-			 ret = `configure_button; 
-			}
-		if (ret == `edit)
-		    {
-			   if (new_spooler == "cups")
-				{
-				 if (Printer::printer == $["type":"yast2"]) 
-					{
-					  integer from_detect = -1;
-					  integer count = 0;
-					  string prn_id="";
+        if (new_spooler == "cups" && CUPS::InstallationType () == `client) new_spooler = "cups-client";
 
-					foreach(map<string, any> temp_printer, Printer::Detect(), {
-						string temp_string = splitstring(temp_printer["uri"]:"", ":")[1]:"";
-                                              if (tointeger(selected) >= count)
-						{
-						 if (Printerlib::getReplacedString(temp_string, false) ==
-								Printer::conf_unconf_printers[tointeger(selected), "ID"]:"")
-						  {
-						   from_detect = from_detect + 1;
-						   break;
-						  }
-						 if (temp_string != prn_id)
-							{
-							from_detect = from_detect+1;
-							prn_id = temp_printer["ID"]:"";
-							}
-						  count=count + 1;
-						 }
-						});
-					 Printer::editDetected(Printer::Detect()[from_detect]:$[]);
-				 y2milestone("Configuring detected, non-configured printer %1", Printer::Detect()[from_detect]:$[]);
-					}
-				if (Printer::printer["ppd_info", "model"]:nil == nil) ret=`edit_unconf;
-				 	else ret = `edit_button;
-				} else ret=`connection_cups;
-		     }
-			 else if (ret == `redetect) ret = `restart_button;
-	        cont = false;
+	// FIXME : test if this is string or term
+	if ( (symbol)event["ID"]:nil==nil ) { ret=nil; }
+	 else{
+	  ret = (symbol) event["ID"]:nil;
+	switch((symbol) event["ID"]:nil){
+	 case `delete :
+		if (new_spooler == "cups-client") {CUPS::cups_installation=`server;new_spooler="cups";}
+			else if ( (Printer::conf_unconf_printers[selected, "SPOOL"]:"" != "not configured") && Popup::YesNo (sformat (_("Really delete printer %1?"), Printer::printer["name"]:""))) Printer::deletePrinter ();
+		initHWDialogData("");
+		ret=nil;
+		break;
+// TODO handle all events here
+	case `default_q :
+		Printer::setDefaultPrinter ();
+		ret = `restart_button;
+		break;
+	case `add :
+		Printer::selectPrinter(-1);
+		ret = `configure_button; 
+		break;
+	case `edit :
+		if (new_spooler == "cups")
+		 {
+		  if (Printer::printer == $["type":"yast2"]) 
+		   {
+		    integer from_detect = -1;
+		    integer count = 0;
+		    string prn_id="";
+		    foreach(map<string, any> temp_printer, Printer::Detect(), {
+			string temp_string = splitstring(temp_printer["uri"]:"", ":")[1]:"";
+                        if (selected >= count)
+			 {
+			  if (Printerlib::getReplacedString(temp_string, false) ==
+								Printer::conf_unconf_printers[selected, "ID"]:"")
+			   {
+			    from_detect = from_detect + 1;
+			    break;
+			   }
+			  if (temp_string != prn_id)
+			   {
+			    from_detect = from_detect+1;
+			    prn_id = temp_printer["ID"]:"";
+			   }
+			  count=count + 1;
+			 }
+		    });
+		    Printer::editDetected(Printer::Detect()[from_detect]:$[]);
+		    y2milestone("Configuring detected, non-configured printer %1", Printer::Detect()[from_detect]:$[]);
+		   }
+		  if (Printer::printer["ppd_info", "model"]:nil == nil) ret=`edit_unconf;
+			else ret = `edit_button;
+		 } else ret=`connection_cups;
+		break;
+	case `redetect:
+		ret = `restart_button;
+		break;
 	}
-	return ret; // FIXME
-    }
+       }
+
+  string descr = "";
+  foreach(map<string, any> row, o_items, {
+   if (row["id"]:"" == tostring(selected)) descr = row["rich_descr"]:"";
+  });
+  UI::ChangeWidget(`_hw_sum, `Value, descr);
+
+  boolean enabled=size((list)UI::QueryWidget(`id(`_hw_items), `Items))>0;
+  UI::ChangeWidget(`id(`edit), `Enabled, enabled);
+  UI::ChangeWidget(`id(`delete), `Enabled, enabled);
+
+ return ret; // FIXME
+}
+
+void runCups(string key){
+ runCupsServerDialog ();
+}
+
+
+map<string, map<string,any> > wd = $[
+          "SERVER_TYPE" : $[
+            "widget" : `custom,
+            "custom_widget" :
+	     `MarginBox(1,0,
+	      `VBox(
+	        `Frame(_("Print via"),
+		 `RadioButtonGroup( `id( `server_type ),
+		  `VBox(
+		        `VBox(
+		         `Left( `RadioButton(`id(`local), `opt(`notify), "Local CUPS Server")),
+			  `HBox(`CheckBox(`id(`ipp_listen), `opt(`notify), _("Listen to IPP Broadcast Packets")),
+				`PushButton(`id(`select_addr), _("Select Addresses"))
+			      )
+			     ),
+		        `VBox(
+		         `Left(`RadioButton(`id(`remote), `opt(`notify), "Remote CUPS Server" )),
+			 `HBox(
+				`TextEntry(`id(`server_name), _("Server Name")),
+				`PushButton(`id(`lookup_server), _("Lookup")),
+				`PushButton(`id(`test_ipp), _("Test Remote IPP Access"))
+			      ),
+			 `CheckBox(`id(`use_default), `opt(`notify), _("Use Server's Default Queue")),
+			 `HBox(
+				`ComboBox(`id(`queues), _("Queues")),
+				`PushButton(`id(`lookup_queue), _("Lookup"))
+			      )
+			)
+		 ))),
+		`VStretch()
+	     )),
+	    "init"   : initServerType,
+	    "handle" : handleServerType,
+	    "store"  : storeServerType
+	  ],
+          "OVERVIEW" : $[
+            "widget" : `custom,
+            "custom_widget" :
+                `VBox(
+                  `VWeight(2,`Table (`id (`_hw_items), `opt (`notify, `immediate), 
+					`header(_("Queue Name"),_("Device"), _("Model"),  _("Default Queue")))),
+                  `VWeight(1,`RichText (`id (`_hw_sum), "")),
+                  `HBox (
+                        `PushButton (`id (`add), Label::AddButton ()),
+                        `PushButton (`id (`edit), _("Configure")),
+                        `PushButton (`id (`delete), Label::DeleteButton ()),
+                        `HStretch ()
+                        )
+                ),
+            "init" : initHWDialogData,
+            "handle" : handleDetected,
+//          "store" : storeOverview,
+//            "help" : help["overview"]:""
+          ],
+          "SERVER" : $[
+            "widget" : `custom,
+            "custom_widget" : `Empty(),
+	    "init" : runCups
+	   ]
+        ];
+
+map tabs_descr = $[
+        "global" : $[
+          "header" : _("Global Settings"),
+          "contents" : `VBox (
+            "SERVER_TYPE"
+          ),
+         "widget_names" : ["SERVER_TYPE"]
+        ],
+        "overview" : $[
+          "header" : _("Printers and Queues"),
+          "contents" : `VBox (
+            "OVERVIEW"
+          ),
+         "widget_names" : ["OVERVIEW"]
+        ],
+        "server" : $[
+          "header" : _("Some server settings"),
+          "contents" : `VBox (),
+         "widget_names" : ["SERVER"]
+        ],
+];
+
+
+symbol runDetectedDialog(){
+
+    string caption = _("Detected Printers");
+    map widget_descr = $[
+        "tab": CWMTab::CreateWidget($[
+            "tab_order":  [ "global", "overview", "server" ],
+            "tabs": tabs_descr,
+            "widget_descr": wd,
+            "initial_tab" :  "overview",
+            "tab_help" : "",
+        ]),
+    ];
+    term contents = `VBox( "tab");
+
+    list<map <string, any> > w = CWM::CreateWidgets (["tab"], (map <string, map <string, any> >)widget_descr);
+    string help = CWM::MergeHelps(w);
+    contents = CWM::PrepareDialog(contents, w);
+
+    Wizard::SetContentsButtons(caption, contents, help, Label::NextButton (), Label::FinishButton ());
+    Wizard::HideBackButton();
+
+    symbol ret = CWM::Run(w, $[]);
+
+    return ret;
+
+}
+
+
 
 define symbol runRemoteAccessDialog(){
  term contents = `HBox (`HStretch (), `VBox (
