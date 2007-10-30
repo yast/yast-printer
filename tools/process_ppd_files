@@ -13,7 +13,8 @@
 #set -x
 
 COPIED=0;
-EXIT=1;
+PASSED=0;
+EXIT=0;
 
 LOG_OUT=$3;
 
@@ -65,14 +66,12 @@ test -d $TARGET_DIR || mkdir -p $TARGET_DIR;
 
 #check files and copy them to the appropriate location
 for I in `find -iname '*.ppd'` ; do
-    echo "Checking file \"$I\"" >>$LOG_OUT; \
-    /usr/bin/cupstestppd "$I" >>$LOG_OUT \
-	&& echo "file $I is ok" >>$LOG_OUT \
-	&& cp "$I" $TARGET_DIR \
-	&& COPIED=$(($COPIED+1)) \
-	&& EXIT=0 ;
+    echo "Checking file \"$I\"" >>$LOG_OUT
+    /usr/bin/cupstestppd "$I" >>$LOG_OUT && { echo "file $I is ok" >>$LOG_OUT ; PASSED=$(($PASSED+1)) ; } || EXIT=1
+    cp "$I" $TARGET_DIR && COPIED=$(($COPIED+1)) || EXIT=1
 done
 
-echo "$COPIED files passed" >>$LOG_OUT;
+echo "$PASSED files passed" >>$LOG_OUT;
 echo "$COPIED" >./count;
 exit $EXIT;
+
