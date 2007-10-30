@@ -764,20 +764,24 @@ Try selecting the printer model again."), entry["name"]:""));
 	    term text = `VBox ();
 	    if (log_text != "" && log_text != nil)
 		text = `RichText (`opt (`plainText), log_text);
-	    UI::OpenDialog(`opt ( `decorated ),
-		`VBox (`HSpacing(75),
-		// heading
-		`Heading(_("Error: No Suitable PPD File Downloaded")),
-		text,
-		`PushButton( `id(`ok), `opt(`default),
-		     Label::OKButton ())
-		)
-	    );
 
-	    UI::SetFocus(`id(`ok) );
-	    any r = UI::UserInput();
-	    UI::CloseDialog();
-	    return false;
+            UI::OpenDialog(`opt ( `decorated ),
+                `VBox (`HSpacing(75),
+                // heading
+                `Heading(_("Error: Detected Error in PPD File")),
+                text,
+                `HBox (
+                `PushButton( `id(`continue),
+                     Label::ContinueButton ()),
+                `PushButton( `id(`cancel), `opt(`default),
+                     Label::CancelButton ())
+                )
+                )
+            );
+            UI::SetFocus( `id(`cancel) );
+            any r = UI::UserInput();
+            UI::CloseDialog();
+            if (`cancel == r) return false;
 	}
 	integer count = tointeger (SCR::Read (.target.string, dir + "/count"));
 	if (count != nil)
