@@ -188,6 +188,9 @@ global boolean SaveCupsClient (string default_queue) {
  * @return boolean true on success
  */
 global boolean ReadCupsSettings () {
+ if (cups_server_settings==nil || cups_server_permissions==nil)
+  {
+
     list<string> options = (list<string>)
 	SCR::Dir (.etc.cups.cupsd_conf.value);
     options = toset (options);
@@ -222,6 +225,7 @@ global boolean ReadCupsSettings () {
     y2milestone ("CUPS permissions read: %1", permissions);
     cups_server_settings = settings;
     cups_server_permissions = permissions;
+  } else y2warning("CUPS already readed");
     return true;
 }
 
