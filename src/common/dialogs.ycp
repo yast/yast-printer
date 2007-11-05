@@ -1076,21 +1076,6 @@ and test the queue after the printer model is selected."));
 	return ret;
     }
 
-/*
-void saveOptions(){
-        // fixed #164851 - check for conflict choices in PPD
-        string src_ppd = Printer::printer["ppd"]:"";
-        string dst_ppd = (string)SCR::Read (.target.tmpdir) + "/patched_ppd_" + Printer::printer["name"]:"";
-        SCR::Write (.ppd.file.modify,[src_ppd, dst_ppd, Printer::printer["ppd_options"]:$[]]);
-        string warning = parseWarn( ((map<string, any>)SCR::Execute(.target.bash_output,
-                                                                                "cupstestppd $PPD", $["PPD":dst_ppd]))["stdout"]:"");
-        SCR::Execute(.target.remove, dst_ppd);
-         if (size(warning)>0){
-                 Popup::Error(warning);
-                }
-
-}
-*/
 
     /**
      * Configuration of the filter. It is quite complicated because there can
@@ -2207,6 +2192,9 @@ void initServerType (string key) {
   UI::ChangeWidget(`id(`server_type), `CurrentButton, `local);
   } else {
 	  UI::ChangeWidget(`id(`server_type), `CurrentButton, `remote);
+	  UI::ChangeWidget(`id(`server_name), `Items, [ CUPS::server_hostname ]);
+ 	if (CUPS::server_default) UI::ChangeWidget(`use_default, `Value, true);
+		else UI::ChangeWidget(`queues, `Items, [ Printer::default_queue ]);
 	 }
  if ( contains (CUPS::cups_server_settings["Browsing"]:["On"],"On") ) UI::ChangeWidget(`ipp_listen, `Value, true);
 }
@@ -2232,9 +2220,6 @@ list<string> getAddresses(list<string> addr_orig){
  symbol ret = nil;
  do {
      UI::ChangeWidget(`addr, `Items, addresses);
-     boolean enabled = (size(addresses)>0);
-     UI::ChangeWidget(`edit, `Enabled, enabled);
-     UI::ChangeWidget(`del, `Enabled, enabled);
      ret = (symbol) UI::UserInput();
      string curr = (string)UI::QueryWidget(`addr, `CurrentItem);
      switch(ret){
@@ -2273,10 +2258,9 @@ symbol handleServerType (string key, map event) ``{
  boolean local = (UI::QueryWidget(`id(`server_type), `CurrentButton) == `local);
 
  UI::ChangeWidget(`ipp_listen, `Enabled, local);
- if (local){
-	 boolean listen = (boolean)UI::QueryWidget(`ipp_listen, `Value);
-	 UI::ChangeWidget(`select_addr, `Enabled, listen);
-	}
+ boolean listen = (boolean)UI::QueryWidget(`ipp_listen, `Value);
+ UI::ChangeWidget(`select_addr, `Enabled, listen && local);
+
  UI::ChangeWidget(`server_name, `Enabled, !local);
  UI::ChangeWidget(`lookup_server, `Enabled, !local);
  UI::ChangeWidget(`test_ipp, `Enabled, !local);
@@ -2289,6 +2273,30 @@ symbol handleServerType (string key, map event) ``{
  if (event["EventReason"]:""=="Activated" && event["ID"]:`nil==`select_addr) {
 	CUPS::cups_server_settings["BrowseAddress"] = getAddresses(CUPS::cups_server_settings["BrowseAddress"]:[]);
  }
+  symbol id = event["ID"]:`nil;
+  switch(id){
+   case `get_hosts_listen:
+   case `get_hosts_special:
+   case `get_hosts:
+		list hosts = [];
+		if (id == `get_hosts_listen) hosts = CUPS::ListenCupsServers ();
+		else hosts = getHostnames ( `get_hosts_special == id ? "ipp" : "");
+		UI::ChangeWidget(`server_name, `Items, hosts);
+		break;
+    case `test_ipp:
+		string n = (string)UI::QueryWidget (`id(`server_name), `Value);
+                if (nil == n || "" == n)
+		    // popup
+		    Popup::Message (_("Enter a valid server name."));
+		else
+		    Printerlib::testRemote (n, "", "ipp_server", 0);
+		break;
+    case `lookup_queue:
+		list queues = (list)SCR::Read (.cups.remote, UI::QueryWidget (`id (`server_name), `Value));
+		queues = toset (queues);
+		UI::ChangeWidget(`queues, `Items, queues);
+		break;
+  }
  return nil;
 }
 
@@ -2299,8 +2307,12 @@ void storeServerType(string key, map event){
 	 boolean listen = (boolean)UI::QueryWidget(`ipp_listen, `Value);
          CUPS::cups_server_settings["Browsing"] = listen ? ["On"] : ["Off"];
 	}else{
-	 CUPS::cups_installation=`client;
+		CUPS::cups_installation=`client;
+		CUPS::server_hostname = (string)UI::QueryWidget(`server_name, `Value);
+		CUPS::server_default = ((boolean)UI::QueryWidget(`use_default, `Value));
+		if (!CUPS::server_default) Printer::default_queue = (string)UI::QueryWidget(`queues, `Value);
 	}
+ Printer::dirty = true;
 }
 
     /**
@@ -2320,17 +2332,17 @@ void initHWDialogData (string key) {
 	y2milestone("printcap %1", i);
 	string def = "";
 	if (i["name"]:"unknown" == Printer::default_queue) def="Default";
-                return  $[      "ID":Printerlib::getReplacedString(Printerlib::getUriDevice (i["uri"]:""), false),
-				"MODEL":i["ppd_info", "model"]:"unknown",
-				"SPOOL":i["name"]:"unknown",
-				"DESCR": sformat("<b>%1 %2 / %3</b><br>%4<br>%5 %6<br>%7 %8",
-						i["ppd_info", "manufacturer"]:"none", i["ppd_info", "model"]:"", i["name"]:"",
-						(((boolean)i["shared"]:false)?_("Shared"):_("Not Shared")),
-						_("Connected As"), Printerlib::getReplacedString(i["uri"]:"none", false),
-						_("With Spool"), i["name"]:"none"
-						),
-
-				"DEFAULT":def ];
+                return  $[
+		"ID":Printerlib::getReplacedString(Printerlib::getUriDevice (i["uri"]:""), false),
+		"MODEL":i["ppd_info", "model"]:"unknown",
+		"SPOOL":i["name"]:"unknown",
+		"DESCR": sformat("<b>%1 %2 / %3</b><br>%4<br>%5 %6<br>%7 %8",
+			i["ppd_info", "manufacturer"]:"none", i["ppd_info", "model"]:"", i["name"]:"",
+			(((boolean)i["shared"]:false)?_("Shared"):_("Not Shared")),
+			_("Connected As"), Printerlib::getReplacedString(i["uri"]:"none", false),
+			_("With Spool"), i["name"]:"none"
+			),
+		"DEFAULT":def ];
         });
 
 	items=(list < map<string,any> >) merge((list < map<string,any> >) items, (list < map<string,any> >) maplist (map i, Printer::autodetected, ``{
@@ -2359,32 +2371,19 @@ void initHWDialogData (string key) {
 
 	}));
 	items = (list < map<string,any> >) filter (any i, items, ``(i != nil));
-	integer pos=0;
 	Printer::conf_unconf_printers = items;
 	maplist(map<string,any> s, items, {
-		o_items = add(o_items,  $[ 
-						"id" : tostring(pos), 
-						"rich_descr" : s["DESCR"]:"none",
-						"table_descr":[  
-								s["SPOOL"]:"unknown", 
-								s["ID"]:"unknown" ,
-								s["MODEL"]:"unknown", 
-								s["DEFAULT"]:"" ]
+		o_items = add(o_items,  $[
+				"id" : tostring(size(o_items)),
+				"rich_descr" : s["DESCR"]:"none",
+				"table_descr":[
+						s["SPOOL"]:"unknown",
+						s["ID"]:"unknown" ,
+						s["MODEL"]:"unknown",
+						s["DEFAULT"]:"" ]
 					   ]);
-		pos = pos + 1;
 		});
-       } else {
-	o_items = [ $[
-                                                "id" : "0",
-                                                "rich_descr" : "<b>" + CUPS::server_hostname + "</b><br>" 
-						+ ((CUPS::server_default == true) ? _("Default Queue") : (_(" With Spool ") + Printer::default_queue)),
-                                                "table_descr":[
-                                                                "CUPS",
-                                                                "",
-                                                                "",
-                                                                "" ]
-                                           ] ];
-	}
+       }
     list<term> term_items = maplist (map<string,any> i, o_items, {
         term t = `item (`id (i["id"]:""));
         foreach (string l, i["table_descr"]:[], {
@@ -2435,7 +2434,7 @@ void initHWDialogData (string key) {
 		break;
 	case `add :
 		Printer::selectPrinter(-1);
-		ret = `configure_button; 
+		ret = `configure_button;
 		break;
 	case `edit :
 		if (new_spooler == "cups")
@@ -2492,19 +2491,14 @@ void initHWDialogData (string key) {
 	 ret = nil;
 	}
     }
-/*
-  boolean exists=size((list)UI::QueryWidget(`id(`_hw_items), `Items))>0;
-  UI::ChangeWidget(`id(`edit), `Enabled, exists);
-  UI::ChangeWidget(`id(`delete), `Enabled, exists);
-*/
  return ret; // FIXME
 }
 
-
+/*
 void runCups(string key){
  runCupsServerDialog ();
 }
-
+*/
 
 map<string, map<string,any> > wd = $[
           "SERVER_TYPE" : $[
@@ -2524,13 +2518,22 @@ map<string, map<string,any> > wd = $[
 		        `VBox(
 		         `Left(`RadioButton(`id(`remote), `opt(`notify), "Remote CUPS Server" )),
 			 `HBox(
-				`TextEntry(`id(`server_name), _("Server Name")),
-				`PushButton(`id(`lookup_server), _("Lookup")),
+				`ComboBox(`id(`server_name), `opt(`editable), _("Server Name")),
+		    // menubutton
+                    `MenuButton (`id(`lookup_server), _("&Look Up"), [
+			// menu entry
+                        `item (`id (`get_hosts_special), _("Scan for &IPP Servers")),
+			// menu item
+			`item (`id (`get_hosts_listen),_("Listen for IPP &Broadcasts")),
+			// menu entry
+                        `item (`id (`get_hosts), _("Look Up &All Hosts")),
+                    ]),
+//				`PushButton(`id(`lookup_server), _("Lookup")),
 				`PushButton(`id(`test_ipp), _("Test Remote IPP Access"))
 			      ),
 			 `CheckBox(`id(`use_default), `opt(`notify), _("Use Server's Default Queue")),
 			 `HBox(
-				`ComboBox(`id(`queues), _("Queues")),
+				`ComboBox(`id(`queues), `opt(`editable), _("Queues")),
 				`PushButton(`id(`lookup_queue), _("Lookup"))
 			      )
 			)
@@ -2562,8 +2565,51 @@ map<string, map<string,any> > wd = $[
           ],
           "SERVER" : $[
             "widget" : `custom,
-            "custom_widget" : `Empty(),
-	    "init" : runCups
+            "custom_widget" :
+	`HBox (`HSpacing (2), `VBox (
+	    `VSpacing (1),
+	    // frame
+	    `Frame (_("Browsing Settings"), `VBox (
+		`HBox (`HSpacing (3), `RadioButtonGroup (`id (`browsing), `HBox (
+		    // label
+		    `Label (_("Browsing")),
+		    // radiobutton
+		    `RadioButton (`id (`on), _("On")),
+		    // radiobutton
+		    `RadioButton (`id (`off), _("Off"))
+		)),
+		`HSpacing (3)),
+		// selectionbox label
+		`HBox (`HSpacing (3), `ReplacePoint (`id( `replace_addr), `SelectionBox (`id (`addr), _("Browse Addre&sses"))), `HSpacing (3)),
+		`HBox (
+		    `HSpacing (3),
+		    `PushButton (`id (`add), `opt (`key_F3), Label::AddButton ()),
+		    `PushButton (`id (`edit), `opt (`key_F4), Label::EditButton ()),
+		    `PushButton (`id (`del), `opt (`key_F5), Label::DeleteButton ()),
+		    `HStretch (),
+		    // push button
+		    `PushButton (`id (`propose_server), _("&Propose")),
+		    `HSpacing (3)
+		)
+	    )),
+	    // frame
+	    `Frame (_("Access Settings"), `VBox (
+		`RadioButtonGroup (`id (`loc), `VBox (
+		    `HBox (
+			`RadioButton (`id (`root), `opt (`hstretch), "/ (r&oot)", true),
+			`RadioButton (`id (`admin), `opt (`hstretch), "/ad&min")
+		    ),
+		    `HBox (
+			`RadioButton (`id (`printers), `opt (`hstretch), "/&printers"),
+			`RadioButton (`id (`classes), `opt (`hstretch), "/&classes")
+		    )
+		)),
+		// pushbutton
+		`PushButton (`id (`change), _("Change P&ermissions"))
+	    ))
+//	    firewall_layout
+	), `HSpacing (2)),
+	    "init" : runCupsServerDialog
 	   ]
         ];
 
@@ -2583,8 +2629,10 @@ map tabs_descr = $[
          "widget_names" : ["OVERVIEW"]
         ],
         "server" : $[
-          "header" : _("Some server settings"),
-          "contents" : `VBox (),
+          "header" : _("CUPS server settings"),
+          "contents" : `VBox (
+		"SERVER"
+		),
          "widget_names" : ["SERVER"]
         ],
 ];
