@@ -966,7 +966,7 @@ accessible under the same names as on the remote host."))),
      * CUPS server settings dialog
      * @return symbol `next or `back
      */
-    define symbol runCupsServerDialog () ``{
+    define void runCupsServerDialog (string key) ``{
 
 	map<string,any> firewall_settings = $[
 	    "services" : [ "ipp-tcp" ],
@@ -976,7 +976,7 @@ accessible under the same names as on the remote host."))),
 	  = CWMFirewallInterfaces::CreateOpenFirewallWidget (firewall_settings);
 	string firewall_help = firewall_widget["help"]:"";
 	term firewall_layout = firewall_widget["custom_widget"]:`VBox ();
-
+/*
 	term contents = `HBox (`HSpacing (2), `VBox (
 	    `VSpacing (1),
 	    // frame
@@ -1020,9 +1020,10 @@ accessible under the same names as on the remote host."))),
 	    )),
 	    firewall_layout
 	), `HSpacing (2));
+*/
 
 	// dialog caption
-	Wizard::SetContentsButtons (_("CUPS Server Settings"), contents, getCupsServerHelp () + firewall_help, Label::BackButton (), Label::NextButton ());
+//	Wizard::SetContentsButtons (_("CUPS Server Settings"), contents, getCupsServerHelp () + firewall_help, Label::BackButton (), Label::NextButton ());
 
 	list<string> addresses = CUPS::cups_server_settings["BrowseAddress"]:[];
 
@@ -1030,7 +1031,7 @@ accessible under the same names as on the remote host."))),
 	// selectionbox
 	UI::ReplaceWidget (`id (`replace_addr), `SelectionBox (`id (`addr), _("Browse Addre&sses"), addresses));
 
-	CWMFirewallInterfaces::OpenFirewallInit (firewall_widget, "");
+//	CWMFirewallInterfaces::OpenFirewallInit (firewall_widget, "");
 
 	map event = $[];
 	any ret = nil;
@@ -1038,8 +1039,7 @@ accessible under the same names as on the remote host."))),
 	{
 	    event = UI::WaitForEvent ();
 	    ret = event["ID"]:nil;
-            if (ret == `cancel)
-                ret = `abort;
+            if (ret == `cancel) ret = `abort;
 	    CWMFirewallInterfaces::OpenFirewallHandle (firewall_widget,
 		"", event);
 	    if (`abort == ret)
@@ -1047,9 +1047,8 @@ accessible under the same names as on the remote host."))),
 		if (reallyAbort ())
 		    break;
 	    }
-	    else if (`back == ret)
-		break;
-	    else if (`propose_server == ret)
+//	    else if (`back == ret) break;
+	    if (`propose_server == ret)
 	    {
 		if ((size(addresses)>0 && Popup::ContinueCancel(_("Really replace with the suggested value?")))||(size(addresses)==0)){
 		 CUPS::ProposeServerSettings ();
@@ -1121,6 +1120,6 @@ accessible under the same names as on the remote host."))),
 	    CWMFirewallInterfaces::OpenFirewallStore (firewall_widget, "", event);
 	}
 	    CUPS::cups_server_settings["BrowseAddress"] = addresses;
-	return (symbol)ret;
+//	return (symbol)ret;
     }
 }
