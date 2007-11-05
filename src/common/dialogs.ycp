@@ -2193,7 +2193,7 @@ void initServerType (string key) {
   } else {
 	  UI::ChangeWidget(`id(`server_type), `CurrentButton, `remote);
 	  UI::ChangeWidget(`id(`server_name), `Items, [ CUPS::server_hostname ]);
- 	if (CUPS::server_default) UI::ChangeWidget(`use_default, `Value, true);
+	  if (CUPS::server_default) UI::ChangeWidget(`use_default, `Value, true);
 		else UI::ChangeWidget(`queues, `Items, [ Printer::default_queue ]);
 	 }
  if ( contains (CUPS::cups_server_settings["Browsing"]:["On"],"On") ) UI::ChangeWidget(`ipp_listen, `Value, true);
@@ -2360,7 +2360,7 @@ void initHWDialogData (string key) {
 				 y2milestone("Printer %1 without ppd file already configured", row["ID"]:nil);
 				}
 			});
-	            if (finded==false) return 
+	            if (finded==false) return
 			$[      "ID":Printerlib::getReplacedString(Printerlib::getUriDevice (i["uri"]:""), false),
                                 "MODEL":i["info"]:"unknown",
                                 "SPOOL":i["name"]:"not configured",
@@ -2394,6 +2394,11 @@ void initHWDialogData (string key) {
     UI::ChangeWidget (`id (`_hw_items), `Items, term_items);
 	   if (size(o_items)>0) UI::ChangeWidget(`_hw_sum, `Value, o_items[0, "rich_descr"]:"");
 		else UI::ChangeWidget(`_hw_sum, `Value, "");
+ boolean local = (CUPS::InstallationType() == `server);
+ UI::ChangeWidget(`_hw_items,	`Enabled, local);
+ UI::ChangeWidget(`add,		`Enabled, local);
+ UI::ChangeWidget(`edit,	`Enabled, local);
+ UI::ChangeWidget(`delete,	`Enabled, local);
 }
 
 
@@ -2548,7 +2553,7 @@ map<string, map<string,any> > wd = $[
             "widget" : `custom,
             "custom_widget" :
                 `VBox(
-                  `VWeight(2,`Table (`id (`_hw_items), `opt (`notify, `immediate), 
+                  `VWeight(2,`Table (`id (`_hw_items), `opt (`notify, `immediate),
 					`header(_("Queue Name"),_("Device"), _("Model"),  _("Default Queue")))),
                   `VWeight(1,`RichText (`id (`_hw_sum), "")),
                   `HBox (
