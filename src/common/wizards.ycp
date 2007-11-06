@@ -53,8 +53,8 @@
 	    // real dialogs
 	    "name_auto" :	``(runNameDialog (true)),
 	    "name" :		``(runNameDialog (false)),
-            "detected" :        ``(runDetectedDialog ()),
-            "complex" :         ``(runComplexDialog ()),
+            "main" :        ``(runMainDialog ()),
+//            "complex" :         ``(runComplexDialog ()),
 	    "model" :           ``(runManufModelDialog ()),
 	    "model_unknown" :   ``(runManufModelDialog ()),
 	    "inst_printer" :    ``(runInstalledPrinterDialog ()),
@@ -63,7 +63,7 @@
 	    // connection selection
 //	    "connection_type" :	``(runConnectionTypeDialog ()),
 	    "connection_local" :``(runLocalConnectionDialog ()),
-	    "connection_cups" : ``(runCupsConnectionDialog ()),
+//	    "connection_cups" : ``(runCupsConnectionDialog ()),
 	    "connection_direct":``(runDirectConnectionDialog ()),
 	    "connection_other": ``(runOtherConnectionDialog ()),
 		// by connection type
@@ -87,9 +87,9 @@
 	    "pipe" :            ``(runPipeDialog ()),
 	    "other" :           ``(runUriDialog()),
 		    // cups-only
-	    "listen_ipp_bcast": ``(runListenIPPDialog ()),
-	    "cups_client" :     ``(runCupsClientDialog (false)),
-	    "cups_expert" :	``(runCupsExpertDialog ()),
+//	    "listen_ipp_bcast": ``(runListenIPPDialog ()),
+//	    "cups_client" :     ``(runCupsClientDialog (false)),
+//	    "cups_expert" :	``(runCupsExpertDialog ()),
 	    "remote_access"	: ``(runRemoteAccessDialog()),
 
 		// cups only
@@ -100,14 +100,14 @@
 	    "add_local_printer":``(runConnectionTypeDialog(true)),
 	    "add_remote_printer":``(runConnectionTypeDialog(false)),
 	    "add_new_queue" :	``(runNewQueueDialog()),
-	    "advanced" :	``(runAdvancedDialog ()),
+//	    "advanced" :	``(runAdvancedDialog ()),
 //	    "cupsd" :		``(runCupsServerDialog ("")),
             "cupsaclroot" :	``(runCupsAclDialog (`root)),
             "cupsacladmin" :	``(runCupsAclDialog (`admin)),
             "cupsaclprinters" :	``(runCupsAclDialog (`printers)),
             "cupsaclclasses" :	``(runCupsAclDialog (`classes)),
 	    "cupsaclbcast" :	``(runCupsAclDialog (`bcast)),
-	    "cups_client_main":	``(runCupsClientDialog (true)),
+//	    "cups_client_main":	``(runCupsClientDialog (true)),
 	    "useppd" :		``(runSelectPpdFile ()),
 	    "downloadppd" :	``(runDownloadPpdFile ()),
 	    "ppdselect" :	``(runPpdSelectDialog (false)),
@@ -121,7 +121,7 @@
 	    "storeprinter" :	[ ``(storePrinter ()) , true ],
 
 
-	    "cups_usb" :	``(runCupsUsbDeviceTypeDialog ()),
+//	    "cups_usb" :	``(runCupsUsbDeviceTypeDialog ()),
 	];
     }
     /**
@@ -137,7 +137,7 @@
 	];
 	Printer::default_queue = "lp";
 	Printer::selectPrinter (3);
-	list<string> seq = [ "detected", "configdetected", "quick", "complex", "connection_local", "usb", "name", "model", "filter", "featues", "edit", ];
+	list<string> seq = [ "main", "configdetected", "quick", "complex", "connection_local", "usb", "name", "model", "filter", "featues", "edit", ];
 	foreach (string i, seq, ``{
 	    eval (getAliases ()[i]:nil);
 	});
@@ -295,7 +295,7 @@
 	    ],
 	    "add_remote_printer" : $[
 		`abort : `abort,
-		`cups : "connection_cups",
+		`ipp : "ipp",
 		`lpd : "lpd",
 		`smb : "samba",
 		`ipx : "novell",
@@ -307,13 +307,14 @@
                 `next: `next,
                 `abort : `abort,
             ],
-
+/*
 	    "connection_cups" : $[
-		`cups_client : "cups_client",
-		`listen_ipp : "listen_ipp_bcast",
+//		`cups_client : "cups_client",
+//		`listen_ipp : "listen_ipp_bcast",
 		`ipp : "ipp",
 		`abort : `abort,
 	    ],
+*/
 	    "connection_direct" : $[
 		`socket : "socket",
 		`lpd : "lpd",
@@ -350,13 +351,15 @@
 	    "other" : $[ `next : "name_auto", `abort : `abort, ],
             "ppdetails" : $[ `abort : `abort, `next : "parallel", ],
             "spdetails" : $[ `abort : `abort, `next : "serial", ],
+/*
 	    "listen_ipp_bcast" : $[
 		`abort : `abort,
 		`next : "storeprinter",
 		`perm : "cupsaclbcast",
 	    ],
-	    "cupsaclbcast" : $[ `abort : `abort, `next : "listen_ipp_bcast"],
-	    "cups_client" : $[ `abort : `abort, `next : `next ],
+*/
+//	    "cupsaclbcast" : $[ `abort : `abort, `next : "listen_ipp_bcast"],
+//	    "cups_client" : $[ `abort : `abort, `next : `next ],
 	    // end of connection types
 	    "inst_printer" : $[ `next : `edit, `abort : `abort, ],
 
@@ -444,38 +447,48 @@
     define symbol MainSequence() ``{
 	map<string,any> aliases = getAliases ();
 	map sequence = $[
-	    "ws_start" : "detected",
+	    "ws_start" : "main",
+/*
 	    "config_type" : $[
-		`server : "detected",
-		`client : "cups_client_main",
+		`server : "main",
+//		`client : "cups_client_main",
 	    ],
+*/
 //old dialogs
-           "detected" : $[
+           "main" : $[
                 `next : `next,
                 `abort : `abort,
                 `configure_button : "add_printer_wz",
-                `restart_button : "redetect",
+//                `restart_button : "redetect",
                 `edit_button : "edit_printer_wz",
                 `edit_unconf : "edit_printer_unconf",
-                `change_ipp_listen : "listen_ipp_bcast",
-		`cups_expert	: "cups_expert",
+//                `change_ipp_listen : "listen_ipp_bcast",
+//		`cups_expert	: "cups_expert",
 		`change_remote_access	: "remote_access",
 //		`cupsd : "cupsd",
 //		`cupsusb : "cups_usb",
-		`connection_cups : "cups_client"
+//		`connection_cups : "cups_client"
+		`root : "cupsaclroot",
+		`admin : "cupsacladmin",
+		`printers : "cupsaclprinters",
+		`classes : "cupsaclclasses",
             ],
+/*
             "cups_client" : $[
 		`next  : "detected",
                 `abort : `abort,
             ],
-
-	    "redetect" : $[`next : "detected", ],
+*/
+	    "redetect" : $[`next : "main", ],
+/*
             "listen_ipp_bcast" : $[
                 `next : "detected",
                 `abort : `abort,
                 `perm : "cupsaclbcast",
             ],
-	    "cupsaclbcast" : $[ `abort : `abort, `next : "listen_ipp_bcast"],
+*/
+//	    "cupsaclbcast" : $[ `abort : `abort, `next : "listen_ipp_bcast"],
+/*
 	    "advanced" : $[
 		`next : "config_type",
 		`this : "advanced",
@@ -484,21 +497,26 @@
 		`switch : `switch,
 		`abort : `abort,
 	    ],
+*/
+/*
 	    "cups_expert" : $[
 		`abort : `abort,
 		`next  : `next,
-		`change_ipp_listen : "listen_ipp_bcast",
+//		`change_ipp_listen : "listen_ipp_bcast",
 //		`cupsd : "cupsd",
 		`cupsusb : "cups_usb"
 	    ],
+*/
 	    "remote_access" : $[
 		`abort	: `abort,
-		`next	: "detected"
+		`next	: "main"
 	    ],
+/*
 	    "cups_usb" : $[
-		`next : "detected",
+		`next : "main",
 		`abort : `abort,
 	    ],
+*/
 /*
 	    "cupsd" : $[
 		`next : "detected",
@@ -510,39 +528,41 @@
 	    ],
 */
 	    "cupsaclroot" : $[
-//		`next : "cupsd",
+		`next : "main",
 		`abort : `abort,
 	    ],
             "cupsacladmin" : $[
-//                `next : "cupsd",
+                `next : "main",
                 `abort : `abort,
             ],
             "cupsaclprinters" : $[
-//                `next : "cupsd",
+                `next : "main",
                 `abort : `abort,
             ],
             "cupsaclclasses" : $[
-//                `next : "cupsd",
+                `next : "main",
                 `abort : `abort,
             ],
 	    "add_printer_wz" : $[
-		`next: "detected",
+		`next: "main",
 		`abort : `abort,
 	    ],
 	    "edit_printer_wz": $[
-		`next: "detected",
+		`next: "main",
 		`abort : `abort,
 	    ],
 	    "edit_printer_unconf": $[
-		`next: "detected",
+		`next: "main",
 		`abort : `abort,
 	    ],
+/*
 	    "cups_client_main" : $[
 		`next : `next,
 		`abort : `abort,
 		`advanced : "advanced",
 		`switch : `switch,
 	    ],
+*/
 	];
 	aliases = (map<string,any>)filter (string k, any v, aliases, ``(haskey (sequence, k)));
 	return Sequencer::Run(aliases, sequence);

@@ -34,6 +34,7 @@
     include "printer/helps.ycp";
     include "printer/misc.ycp";
 
+    string initial_tab = "overview";
     /**
       * Read settings dialog
       * @return `abort if aborted and `next otherwise
@@ -1634,6 +1635,7 @@ with a preassigned name?")))
       * Start dialog with advanced spooler settings
       * @return symbol for wizzard seq
       */
+/*
     define symbol runAdvancedDialog () ``{
 	string new_spooler = Spooler::Get ();
 	if (new_spooler == "cups"
@@ -1829,11 +1831,13 @@ the current configuration."));
 	}
 	return ret;
     }
+*/
 
     /**
       * Dialog for choosing what kind of devices to use
       * @return wizard sequencer symbol
       */
+/*
     define symbol runCupsUsbDeviceTypeDialog () ``{
 	term contents = `HBox (`HStretch (), `VBox (
 	    `VStretch (),
@@ -1882,6 +1886,7 @@ the current configuration."));
 	}
 	return ret;
     }
+*/
 
     /**
       * Decide how to configure autodetected printer
@@ -2145,6 +2150,7 @@ the current configuration."));
     * Run dialog for expert settings
     * @return symbol ret (`change_ipp_listen, `cupsd, `cupsusb)
     */
+/*
    define symbol runCupsExpertDialog() ``{
 
 
@@ -2185,6 +2191,7 @@ the current configuration."));
   }
   return (symbol) ret;
  }
+*/
 
 void initServerType (string key) {
  CUPS::ReadCupsSettings ();
@@ -2300,6 +2307,20 @@ symbol handleServerType (string key, map event) ``{
  return nil;
 }
 
+boolean validateServerType(string key, map event){
+ if (! (UI::QueryWidget(`id(`server_type), `CurrentButton) == `local)){
+  if (size((string)UI::QueryWidget (`id (`server_name), `Value))==0){
+   Popup::Warning (_("Enter a valid server name."));
+   return false;
+  }
+  if (!(boolean)UI::QueryWidget(`use_default, `Value) && size((string)UI::QueryWidget(`queues, `Value))==0){
+   Popup::Warning (sformat("%1 \"%2\".", _("Select default queue or check"), _("Use Server's Default Queue")));
+   return false;
+  }
+ }
+ return true;
+}
+
 void storeServerType(string key, map event){
  boolean local = (UI::QueryWidget(`id(`server_type), `CurrentButton) == `local);
  if (local){
@@ -2321,7 +2342,7 @@ void storeServerType(string key, map event){
      */
 list<map<string,any> > o_items = nil;
 
-void initHWDialogData (string key) {
+void initOverview (string key) {
         string new_spooler = Spooler::Get ();
         if (new_spooler == "cups" && CUPS::InstallationType () == `client) new_spooler = "cups-client";
 	y2milestone("%1", new_spooler);
@@ -2407,7 +2428,7 @@ void initHWDialogData (string key) {
      * Common detected hardware dialog.
      * @return symbol for ws
      */
-    define symbol handleDetected (string key, map event) ``{
+    define symbol handleOverview (string key, map event) ``{
 	y2milestone ("Starting detected dialog");
 
 	// several functions dialog
@@ -2429,7 +2450,7 @@ void initHWDialogData (string key) {
 	 case `delete :
  		if (new_spooler == "cups-client") {CUPS::cups_installation=`server;new_spooler="cups";}
 			else if ( (Printer::conf_unconf_printers[selected, "SPOOL"]:"" != "not configured") && Popup::YesNo (sformat (_("Really delete printer %1?"), Printer::printer["name"]:""))) Printer::deletePrinter ();
-		initHWDialogData("");
+		initOverview("");
 		ret=nil;
 		break;
 // TODO handle all events here
@@ -2499,11 +2520,89 @@ void initHWDialogData (string key) {
  return ret; // FIXME
 }
 
-/*
-void runCups(string key){
- runCupsServerDialog ();
+ map<string,any> firewall_widget =
+		CWMFirewallInterfaces::CreateOpenFirewallWidget ($["services":[ "ipp-tcp" ], "display_details":true]);
+ list<string> addresses = [];
+
+void initCupsServer(string key){
+ string firewall_help = firewall_widget["help"]:"";
+ term firewall_layout = firewall_widget["custom_widget"]:`VBox ();
+ UI::ReplaceWidget(`fw, firewall_layout);
+ addresses = CUPS::cups_server_settings["BrowseAddress"]:[];
+ UI::ChangeWidget (`id (`browsing), `CurrentButton, CUPS::cups_server_settings["Browsing"]:["On"] == ["Off"] ? `off : `on);
+ // selectionbox
+ UI::ReplaceWidget (`id (`replace_addr), `SelectionBox (`id (`addr), _("Browse Addre&sses"), addresses));
+ CWMFirewallInterfaces::OpenFirewallInit (firewall_widget, "");
+ boolean enable = true;
+ if (CUPS::InstallationType () != `server) enable=false;
+ UI::ChangeWidget(`f_browsing, `Enabled, enable);
+ UI::ChangeWidget(`f_address, `Enabled, enable);
+
 }
-*/
+
+define symbol handleCupsServer (string key, map event) {
+ CWMFirewallInterfaces::OpenFirewallHandle (firewall_widget, "", event);
+ symbol id = event["ID"]:`nil;
+ any ret = nil;
+ if (id!=`nil) switch(id){
+   case `propose_server:
+	if ((size(addresses)>0 && Popup::ContinueCancel(_("Really replace with the suggested value?")))
+	 ||(size(addresses)==0)){
+	   CUPS::ProposeServerSettings ();
+	   addresses = CUPS::cups_server_settings["BrowseAddress"]:[];
+	   UI::ReplaceWidget (`id (`replace_addr), `SelectionBox (`id (`addr), _("Browse Addre&sses"), addresses));
+	}
+	break;
+  case `change:
+	ret = (symbol)UI::QueryWidget (`id (`loc), `CurrentButton);
+        break;
+  case `add:
+	// popup request
+	UI::OpenDialog (ipAddrPopup (false, _("&IP Address"), "", nil));
+	symbol r = nil;
+	while (nil == r) r = (symbol)UI::UserInput ();
+	string ad = (string)UI::QueryWidget (`id (`ad), `Value);
+	UI::CloseDialog ();
+	if (r != `ok) break;
+	if (ad != "") addresses = toset (add (addresses, ad));
+	// selectionbox label
+	UI::ReplaceWidget (`id (`replace_addr), `SelectionBox (`id (`addr), _("Browse Addre&sses"), addresses));
+	break;
+  case `del:
+        addresses = (list<string>)DeleteItem (addresses, UI::QueryWidget (`id (`addr), `CurrentItem));
+	// selectionbox label
+	UI::ReplaceWidget (`id (`replace_addr), `SelectionBox (`id (`addr), _("Browse Addre&sses"), addresses));
+	break;
+  case `edit:
+	if (UI::QueryWidget (`id (`addr), `CurrentItem) == nil) break;
+	// popup request
+	UI::OpenDialog (ipAddrPopup (false, _("&IP Address"), (string)UI::QueryWidget (`id (`addr), `CurrentItem), nil));
+        symbol r2 = nil;
+        while (nil == r2) r2 = (symbol)UI::UserInput ();
+        string ad2 = (string)UI::QueryWidget (`id (`ad), `Value);
+        UI::CloseDialog ();
+        if (r2 != `ok) break;
+        if (ad2 != "")
+	 {
+	  addresses = (list<string>)DeleteItem (addresses, UI::QueryWidget (`id (`addr), `CurrentItem));
+          addresses = (list<string>)toset (add (addresses, ad2));
+	 }
+	// selectionbox label
+        UI::ReplaceWidget (`id (`replace_addr), `SelectionBox (`id (`addr), _("Browse Addre&sses"), addresses));
+	break;
+    }
+ UI::ChangeWidget(`edit, `Enabled, (size(addresses)>0));
+ UI::ChangeWidget(`del,  `Enabled, (size(addresses)>0));
+ if (ret!=nil)initial_tab = "server";
+	else initial_tab = "overview";
+ return (symbol)ret;
+}
+
+void storeCupsServer(string key, map event){
+ CUPS::cups_server_settings["BrowseAddress"] = addresses;
+ CUPS::cups_server_settings["Browsing"] = UI::QueryWidget (`id (`browsing), `CurrentButton) == `on ? ["On"] : ["Off"];
+ CWMFirewallInterfaces::OpenFirewallStore (firewall_widget, "", event);
+}
 
 map<string, map<string,any> > wd = $[
           "SERVER_TYPE" : $[
@@ -2547,6 +2646,8 @@ map<string, map<string,any> > wd = $[
 	     )),
 	    "init"   : initServerType,
 	    "handle" : handleServerType,
+	    "validate_type" : `function,
+            "validate_function" : validateServerType,
 	    "store"  : storeServerType
 	  ],
           "OVERVIEW" : $[
@@ -2563,8 +2664,8 @@ map<string, map<string,any> > wd = $[
                         `HStretch ()
                         )
                 ),
-            "init" : initHWDialogData,
-            "handle" : handleDetected,
+            "init" : initOverview,
+            "handle" : handleOverview,
 //          "store" : storeOverview,
 //            "help" : help["overview"]:""
           ],
@@ -2574,7 +2675,7 @@ map<string, map<string,any> > wd = $[
 	`HBox (`HSpacing (2), `VBox (
 	    `VSpacing (1),
 	    // frame
-	    `Frame (_("Browsing Settings"), `VBox (
+	    `Frame (`id(`f_browsing), _("Browsing Settings"), `VBox (
 		`HBox (`HSpacing (3), `RadioButtonGroup (`id (`browsing), `HBox (
 		    // label
 		    `Label (_("Browsing")),
@@ -2598,7 +2699,7 @@ map<string, map<string,any> > wd = $[
 		)
 	    )),
 	    // frame
-	    `Frame (_("Access Settings"), `VBox (
+	    `Frame (`id(`f_address), _("Access Settings"), `VBox (
 		`RadioButtonGroup (`id (`loc), `VBox (
 		    `HBox (
 			`RadioButton (`id (`root), `opt (`hstretch), "/ (r&oot)", true),
@@ -2611,10 +2712,13 @@ map<string, map<string,any> > wd = $[
 		)),
 		// pushbutton
 		`PushButton (`id (`change), _("Change P&ermissions"))
-	    ))
+	    )),
 //	    firewall_layout
+	    `ReplacePoint( `id( `fw ), `Empty() )
 	), `HSpacing (2)),
-	    "init" : runCupsServerDialog
+	    "init"   : initCupsServer,
+	    "handle" : handleCupsServer,
+	    "store" :  storeCupsServer
 	   ]
         ];
 
@@ -2643,15 +2747,14 @@ map tabs_descr = $[
 ];
 
 
-symbol runDetectedDialog(){
-
+symbol runMainDialog(){
     string caption = _("Detected Printers");
     map widget_descr = $[
         "tab": CWMTab::CreateWidget($[
             "tab_order":  [ "global", "overview", "server" ],
             "tabs": tabs_descr,
             "widget_descr": wd,
-            "initial_tab" :  "overview",
+            "initial_tab" :  initial_tab,
             "tab_help" : "",
         ]),
     ];
@@ -2665,9 +2768,7 @@ symbol runDetectedDialog(){
     Wizard::DisableBackButton();
 
     symbol ret = CWM::Run(w, $[]);
-
     return ret;
-
 }
 
 
@@ -2733,6 +2834,7 @@ foreach(string row, CUPS::cups_server_settings["Listen"]:[], {
      * Complex dialog.
      * @return symbol for ws
      */
+/*
     define symbol runComplexDialog () ``{
 	Printer::confmode = `adm;
 	string spoolerlabel = "";
@@ -2749,9 +2851,7 @@ foreach(string row, CUPS::cups_server_settings["Listen"]:[], {
 	Wizard::SetContentsButtons (
 	// Header of the dialog with all the printers
 	    sformat (_("Printer Administration for %1"), spoolerlabel),
-	    Wizard_hw::ConfiguredContent (
-		(Spooler::Get () == "cups")
-		?
+	    Wizard_hw::ConfiguredContent ( (Spooler::Get () == "cups") ?
 			// table header
 		    `header (_("Default"),
 			// table header
@@ -2857,13 +2957,13 @@ foreach(string row, CUPS::cups_server_settings["Listen"]:[], {
 	    }
 	return ret;
     }
+*/
     /**
       * Detect installation type
       * @return symbol `server or `client
       */
     define symbol getInstType () ``{
-	if (Spooler::Get () != "cups")
-	    return `server;
+	if (Spooler::Get () != "cups") return `server;
 	return CUPS::InstallationType ();
     }
 
