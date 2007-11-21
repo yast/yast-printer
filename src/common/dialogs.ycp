@@ -559,6 +559,8 @@ Select the model."));
 	string caption = _("PPD Files");
 	Wizard::SetContentsButtons (caption, contents, getPpdSelectHelp (all_ppds), Label::BackButton (), all_ppds ? Label::NextButton () : Label::OKButton ());
 
+//	UI::ChangeWidget(`test, `Enabled, Printer::printer["raw"]:false);
+
 	if (file != "" && file != nil)
 	{
 	    UI::ChangeWidget (`id (`selection), `CurrentItem, file);
@@ -726,7 +728,7 @@ Select the model."));
 
 	term raw_insert = is_class
 	    ? `VSpacing (0)
-	    : `CheckBox (`id (`raw), `opt (`hstretch),
+	    : `CheckBox (`id (`raw), `opt (`notify, `hstretch),
 		// checkbox
 		_("Do Local &Filtering"), ! raw);
 
@@ -783,6 +785,8 @@ Select the model."));
 	Wizard::RestoreBackButton ();
 	Wizard::RestoreAbortButton ();
 	UI::ChangeWidget (`id (`name), `ValidChars, "-_0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ");
+	// disable test printing when local filtering (#186597)
+	UI::ChangeWidget(`test, `Enabled, raw);
 
 	if (name == "")
 	{
@@ -800,10 +804,9 @@ Select the model."));
 	string fwd = "";
 	repeat {
 	    ret = UI::UserInput ();
-	    if (ret == `cancel)
-		ret = `abort;
-	    if (ret == `auto)
-	    {
+	    switch ((symbol)ret)
+	     {
+	      case `auto :
 		auto_propose = (boolean)UI::QueryWidget (`id (`auto), `Value);
 		if (auto_propose)
 		{
@@ -845,30 +848,23 @@ Select the model."));
 			UI::ChangeWidget (`id (`ff), `Value, ff);
 		    }
 		}
-	    }
-	    else if (ret == `test)
-	    {
-		raw = ! (boolean)UI::QueryWidget (`id (`raw), `Value);
-		if (! raw)
-		{
+		break;
+	      case `test :
 		    // error report
+/*
 		    Report::Error (_("Queues that do local filtering cannot be tested
 here. Proceed to the next dialog to select the printer model
 and test the queue after the printer model is selected."));
-		}
-		else
-		{
+*/
 		    map<string,any> p = Printer::printer;
 		    if (Spooler::Get () != "cups")
 			p["ff"] = UI::QueryWidget (`id (`ff), `Value);
 		    p["name"] = UI::QueryWidget (`id (`name), `Value);
 		    p["raw"] = true;
 		    PrinterTest::testPrinter (p, `ask);
-		}
 		ret = nil;
-	    }
-	    else if (ret == `next)
-	    {
+	     break;
+	    case `next:
 		if (! is_class)
 		    raw = ! (boolean)UI::QueryWidget (`id (`raw), `Value);
 		if (Spooler::Get () != "cups")
@@ -886,11 +882,16 @@ and test the queue after the printer model is selected."));
 		    break;
 		}
 		ret = nil;
-	    }
-	    if (`abort == ret || `cancel == ret)
-	    {
+	    break;
+	    case `abort :
+	    case `cancel:
 		ret = reallyAbort () ? `abort : nil;
-	    }
+		break;
+	// disable test printing when local filtering (#186597)
+	case `raw :
+		UI::ChangeWidget(`test, `Enabled, !(boolean)UI::QueryWidget(`raw, `Value));
+		break;
+	  }
 	} until (`abort == ret || ret == `back || ret == `next);
 
 	if (ret == `next)
@@ -1497,7 +1498,7 @@ and test the queue after the printer model is selected."));
 	    UI::ChangeWidget (`id (`test), `Enabled, false);
 	    UI::ChangeWidget (`id (`edit), `Enabled, false);
 	}
-
+	UI::ChangeWidget(`test, `Enabled, Printer::printer["raw"]:false);
 
 	while (nil == ret)
 	    {
@@ -2442,8 +2443,8 @@ void initOverview (string key) {
 			else Printer::selectPrinter(-1);
         if (new_spooler == "cups" && CUPS::InstallationType () == `client) new_spooler = "cups-client";
 
-	// FIXME : test if this is string or term
-	if ( (symbol)event["ID"]:nil==nil ) { ret=nil; }
+	// to avoid some warnings into log file
+	if ( !is(event["ID"]:nil, symbol) || (symbol)event["ID"]:nil==nil ) { ret=nil; }
 	 else{
 	  ret = (symbol) event["ID"]:nil;
 	switch((symbol) event["ID"]:nil){
