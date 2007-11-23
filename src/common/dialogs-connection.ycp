@@ -27,6 +27,7 @@
     import "Report";
     import "Spooler";
     import "Wizard";
+    import "URL";
 
     include "printer/helps-connection.ycp";
     include "printer/misc.ycp";
@@ -935,13 +936,14 @@ actually selected.
      */
     define symbol runRemoteDialog (string type) ``{
         string uri = Printer::printer["uri"]:"";
-        string user = "";
-        string password = "";
-        string queue = type == "ipp" ? "printers/" : "";
-        string hostname = "";
-        string full_hostname = "";
-        string workgroup = "";
-        integer port = 0;
+	map token = URL::Parse(uri) ;
+	y2milestone("parsed token %1", token);
+        string user = token["user"]:"";
+        string password = token["pass"]:"";
+        string queue = token["path"]:""; //type == "ipp" ? "printers/" : "";
+        string hostname = token["host"]:"";
+        string workgroup = token["domain"]:"";
+        integer port = (integer)token["port"]:631;
 
         // check necessary packages
         list<string> packages_to_check = [];
@@ -976,7 +978,7 @@ actually selected.
         // label
         string hent_str = _("&Hostname of Print Server");
         term uspas = `VSpacing (0.2);
-
+/*
         integer i = findlastof (uri, "/");
         if (nil != i)
         {
@@ -986,23 +988,17 @@ actually selected.
 	list tmp_list = splitstring(hostname, "@");
         if (size(tmp_list)==2){
 	  hostname = tmp_list[1]:"";
-
-/*
-	  tmp_list = splitstring(tmp_list[0]:"", ":");
-	  if (size(tmp_list)>0){
-	   user = tmp_list[0]:"";
-	   password = tmp_list[1]:"";
-	  }
-*/
-
          }
         }
+*/
         if (has_user_password)
         {
+/*
             list l = Printerlib::getUriUsernamePassWorkgroup ( Printerlib::getReplacedString(uri, true) );
             user = l[0]:"";
             password = l[1]:"";
 	    workgroup = l[2]:"";
+*/
             uspas = `VSquash (`VBox (
                 // text entry label
                 `TextEntry (`id (`userent), _("&Username"), user),
@@ -1152,35 +1148,30 @@ actually selected.
 	Wizard::RestoreBackButton ();
 	Wizard::RestoreAbortButton ();
 
-        if (type != "socket")
-            UI::ChangeWidget (`id (`queueent), `Value, queue);
-        else
-            UI::ChangeWidget (`id (`port), `ValidChars, "1234567890");
+        if (type != "socket") UI::ChangeWidget (`id (`queueent), `Value, queue);
+		else UI::ChangeWidget (`id (`port), `ValidChars, "1234567890");
         UI::ChangeWidget (`id (`hostnameent), `Value, hostname);
 
         symbol ret = nil;
         repeat {
             ret = (symbol)UI::UserInput ();
-            if (ret == `cancel)
-                ret = `abort;
-            hostname = (string)UI::QueryWidget (`id (`hostnameent), `Value);
+            if (ret == `cancel) ret = `abort;
+            hostname = /*URL::EscapeString(*/(string)UI::QueryWidget (`id (`hostnameent), `Value)/*, URL::transform_map_passwd)*/;
             if (type == "samba")
-                workgroup = (string)UI::QueryWidget (`id (`workgroup), `Value);
-            if (type != "socket")
-                queue = (string)UI::QueryWidget (`id (`queueent), `Value);
-            else
-            {
+			workgroup = /*URL::EscapeString(*/(string)UI::QueryWidget (`id (`workgroup), `Value)/*, URL::transform_map_passwd)*/;
+            if (type != "socket") queue = /*URL::EscapeString(*/(string)UI::QueryWidget (`id (`queueent), `Value)/*, URL::transform_map_passwd)*/;
+             else
+              {
                 string tmp = (string)UI::QueryWidget (`id (`port), `Value);
                 while (substring (tmp, 0, 1) == "0")
                     tmp = substring (tmp, 1);
-                if (tmp == "")
-                    tmp = "9100";
+                if (tmp == "") tmp = "9100";
                 port = tointeger (tmp);
-            }
+              }
             if (has_user_password)
             {
-                user = (string)UI::QueryWidget (`id (`userent), `Value);
-                password = (string)UI::QueryWidget (`id (`passwordent), `Value);
+                user = /*URL::EscapeString(*/(string)UI::QueryWidget (`id (`userent), `Value)/*, URL::transform_map_passwd)*/;
+                password = /*URL::EscapeString(*/(string)UI::QueryWidget (`id (`passwordent), `Value)/*, URL::transform_map_passwd)*/;
             }
             if (`get_hosts == ret || `get_hosts_special == ret || `get_hosts_listen == ret)
             {
@@ -1193,14 +1184,8 @@ actually selected.
                     if (type == "0" || type == "")
                         type = "9100";
                 }
-		if (`get_hosts_listen == ret)
-		{
-		    hosts = CUPS::ListenCupsServers ();
-		}
-		else
-		{
-		    hosts = getHostnames (`get_hosts_special == ret ? type :"");
-		}
+		if (`get_hosts_listen == ret) hosts = CUPS::ListenCupsServers ();
+			else hosts = getHostnames (`get_hosts_special == ret ? type :"");
                 type = save_type;
                 UI::ReplaceWidget (
                     `id (`hostent_replace),
@@ -1211,37 +1196,28 @@ actually selected.
             if (`get_printers == ret && checkHostName (hostname))
             {
                 list<string> queues = [];
-                if ("samba" == type)
-                {
-                    queues = (list<string>)SCR::Read (.smb.queues, hostname);
+                if ("samba" == type) queues = (list<string>)SCR::Read (.smb.queues, hostname);
+			else if ("ipp" == type)
+			 {
+			  queues = (list<string>)SCR::Read (.cups.remote, hostname);
+			  queues = maplist (string i, queues, ``{
+                          return "printers/" + i;
+			 });
                 }
-                else if ("ipp" == type)
-                {
-		    queues = (list<string>)SCR::Read (.cups.remote, hostname);
-                    queues = maplist (string i, queues, ``{
-                        return "printers/" + i;
-                    });
-                }
-		if (queues == nil)
-		    queues = [];
+		if (queues == nil) queues = [];
                 queue_entry = `ComboBox (`id (`queueent),
 		    `opt (`editable, `hstretch),
                     // text entry label
                     _("Remote &Queue Name"), queues);
                 UI::ReplaceWidget (`id (`queueent_replace), queue_entry);
             }
-            if (ret == `test
-		&& checkHostName (hostname)
-		&& (type == "socket" || checkRemoteQueueName (queue))
-		&& (type != "ipp" || checkIppQueueName (queue))
-		&& (!has_user_password
+            if (ret == `test && checkHostName (hostname) && (type == "socket" || checkRemoteQueueName (queue))
+		&& (type != "ipp" || checkIppQueueName (queue)) && (!has_user_password
 		    || ( checkUserName (user) && checkPassword (password))))
             {
                 string test_queue = "";
-                if (type == "ipp" && "printers/" == substring (queue, 0, 9))
-                    test_queue = substring (queue, 9);
-                else
-                    test_queue = queue;
+                if (type == "ipp" && "printers/" == substring (queue, 0, 9)) test_queue = substring (queue, 9);
+			else test_queue = queue;
                 if ("samba" == type || "novell" == type)
                 {
                     Printerlib::testRemoteUP (workgroup, hostname, test_queue, user, password, type);
@@ -1249,30 +1225,21 @@ actually selected.
                 else
                     Printerlib::testRemote (hostname, test_queue, type, port);
             }
-            if (`abort == ret || `cancel == ret)
-            {
-                ret = reallyAbort () ? `abort : (symbol)nil;
-            }
-        } until (ret == `abort || ret == `back
-	    || ret == `next
-		&& checkHostName (hostname)
-		&& (type == "socket" || checkRemoteQueueName (queue))
-		&& (type != "ipp" || checkIppQueueName (queue))
-		&& (!has_user_password
-		    || (checkUserName (user) && checkPassword (password))));
+
+            if (`abort == ret || `cancel == ret) ret = reallyAbort () ? `abort : (symbol)nil;
+        } until (ret == `abort || ret == `back || ret == `next
+		&& checkHostName (hostname) && (type == "socket" || checkRemoteQueueName (queue))
+		&& (type != "ipp" || checkIppQueueName (queue)));
+/*
         uri = type + "://";
 
-//	    uri = uri + "/";
-	if (password != "")
-	    uri = uri + (has_user_password ? user + ":" + password + "@" : "");
-	else if (user != "")
-	    uri = uri + (has_user_password ? user + "@" : "");
+	if (password != "") uri = uri + (has_user_password ? user + ":" + password + "@" : "");
+		else if (user != "") uri = uri + (has_user_password ? user + "@" : "");
 	 if ( workgroup != "" ) uri = uri + workgroup + "/";
 
         uri = uri + hostname;
-        if (type == "ipp"
-	    && "printers/" != substring (queue, 0, 9)
-	    && "classes/" != substring (queue, 0, 8))
+*/
+        if (type == "ipp" && "printers/" != substring (queue, 0, 9) && "classes/" != substring (queue, 0, 8))
         {
             string tmp = queue;
             while (substring (tmp, 0, 1) == "/")
@@ -1280,12 +1247,21 @@ actually selected.
             if (filterchars (tmp, "/") == "")
                 queue = "printers/" + tmp;
         }
-        queue = substring (queue, 0, 1) == "/" ? queue : "/" + queue;
-        uri = uri + (type == "socket" ? ":" + port : queue);
-        if (ret == `next)
-        {
-            Printer::printer["uri"] = uri;
-        }
+//        queue = substring (queue, 0, 1) == "/" ? queue : "/" + queue;
+//        uri = uri + (type == "socket" ? ":" + port : queue);
+	map token2 = $["user"   : user,
+		   "pass"   : password,
+		   "domain" : workgroup,
+		   "host"   : hostname,
+		   "path"   : queue,
+		   "scheme" : type,
+		   "fragment": "",
+		   "query"  : "",
+		   "port"   : ""
+		];
+	if (port != nil) token2["port"] = tostring(port);
+	uri = URL::Build(token2);
+        if (ret == `next) Printer::printer["uri"] = uri;
         return ret;
     }
 

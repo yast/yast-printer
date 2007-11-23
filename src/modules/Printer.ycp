@@ -44,7 +44,7 @@
     import "SuSEFirewall";
     import "URL";
     import "PackageSystem";
-
+    import "URL";
 
 
     //////////
@@ -827,13 +827,19 @@ Install it now?"));
 	string cmd = "grep -E 'DeviceURI' /etc/cups/printers.conf|cut -d' ' -f2-";
 	list<string> tmp_prns =
        splitstring(((map<string,any>)SCR::Execute(.target.bash_output, cmd))["stdout"]:"", "\n");
+	tmp_prns = filter(string row, tmp_prns, {return (size(row)>0);});
 	y2milestone("List of local printers before correcting : %1", tmp_prns);
 
-	//for samba printers remove "user/password@" entry (#240727)
+	//for samba printers remove "user:password@" entry (#240727)
 	list<string> smb_corrected_printers = [];
 	foreach(string row, tmp_prns, {
-	 if ( Printerlib::getUriType(row)=="smb" && issubstring(row, "@")){
-	  row="smb://" + substring(row, findfirstof(row, "@")+1, size(row));
+	 if ( Printerlib::getUriType(row)=="smb"){
+	  map token=URL::Parse(row);
+	  token["path"]   = URL::EscapeString(token["path"]:"", URL::transform_map_passwd);
+	  token["host"]   = URL::EscapeString(token["host"]:"", URL::transform_map_passwd);
+	  token["domain"] = URL::EscapeString(token["domain"]:"", URL::transform_map_passwd);
+	  string full_hostname = (size(token["domain"]:"")>0)?sformat("%1/%2", token["domain"]:"", token["host"]:""):token["host"]:"";
+	  row=sformat("smb://%1/%2", full_hostname, token["path"]:"");
 	  }
 	smb_corrected_printers = add(smb_corrected_printers, row);
 	});
