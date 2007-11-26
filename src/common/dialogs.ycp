@@ -692,7 +692,7 @@ Select the model."));
 	string info = Printer::printer["info"]:"";
 	string loc = Printer::printer["location"]:"";
 	string uri = Printer::printer["uri"]:"";
-	string uri_type = Printerlib::getUriType (uri);
+	string uri_type = URL::Parse(uri)["scheme"]:"";
 	boolean raw = (boolean) (Printer::printer["raw"]:nil);
 	boolean shared = (boolean)Printer::printer["shared"]:true;
 
@@ -1372,8 +1372,9 @@ and test the queue after the printer model is selected."));
 	string help_text = "";
 	// determine printer type ...
 	//
-	string uri = Printerlib::getReplacedString( Printer::printer["uri"]:"", false);
-	string uri_type = Printerlib::getUriType (uri);
+//	string uri = Printerlib::getReplacedString( Printer::printer["uri"]:"", false);
+string uri = Printer::printer["uri"]:"";
+	string uri_type = URL::Parse(uri)["scheme"]:"";
 	boolean conf_type = Printer::printer["type"]:"yast2" == "yast2";
 	boolean know = conf_type || Printer::printer["type"]:"yast2" == "non-yast-now";
 	boolean raw = Printer::printer["raw"]:false;
@@ -1562,9 +1563,9 @@ with a preassigned name?")))
 		else if (`connection == ret)
 		{
 		    string uri = Printer::printer["uri"]:"";
-		    string uri_type = Printerlib::getUriType (uri);
+		    string uri_type = URL::Parse(uri)["scheme"]:"";
 		    map<string,symbol> retvals = $[
-			"samba": `con_samba,
+			"smb": `con_samba,
 			"novell": `con_novell,
 			"lpd": `con_lpd,
 			"socket": `con_socket,
@@ -2351,17 +2352,18 @@ void initOverview (string key) {
      if (new_spooler == "cups")
       {
         list < map<string,any> > items = maplist (map i, Printer::printcap, ``{
+y2internal("i %1", i);
 	y2milestone("printcap %1", i);
 	string def = "";
 	if (i["name"]:"unknown" == Printer::default_queue) def="Default";
                 return  $[
-		"ID":Printerlib::getReplacedString(Printerlib::getUriDevice (i["uri"]:""), false),
-		"MODEL":i["ppd_info", "model"]:"unknown",
-		"SPOOL":i["name"]:"unknown",
-		"DESCR": sformat("<b>%1 %2 / %3</b><br>%4<br>%5 %6<br>%7 %8",
+		"ID"    : Printerlib::getReplacedString(i["uri"]:"", false),
+		"MODEL" : i["ppd_info", "model"]:"unknown",
+		"SPOOL" : i["name"]:"unknown",
+		"DESCR" : sformat("<b>%1 %2 / %3</b><br>%4<br>%5 %6<br>%7 %8",
 			i["ppd_info", "manufacturer"]:"none", i["ppd_info", "model"]:"", i["name"]:"",
 			(((boolean)i["shared"]:false)?_("Shared"):_("Not Shared")),
-			_("Connected As"), Printerlib::getReplacedString(i["uri"]:"none", false),
+			_("Connected As"), Printerlib::getReplacedString(i["uri"]:"none", true),
 			_("With Spool"), i["name"]:"none"
 			),
 		"DEFAULT":def ];

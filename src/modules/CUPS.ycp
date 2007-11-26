@@ -28,6 +28,7 @@ import "Report";
 import "Service";
 import "SuSEFirewall";
 import "Arch";
+import "URL";
 
 // local variables
 
@@ -275,7 +276,7 @@ global boolean WriteQueue (map entry) {
 	return SCR::Write (.cups.classes.add, entry);
     }
     string uri = entry["uri"]:"";
-    string uri_type = Printerlib::getUriType (uri);
+    string uri_type = URL::Parse(uri)["scheme"]:"";
     if (uri_type == "ptal")
     {
 	y2milestone ("Enabling PTAL service");
@@ -303,7 +304,7 @@ global boolean WriteQueue (map entry) {
     if (entry == nil)
 	return false;
 
-    if (Printerlib::getUriType (uri) == "serial")
+    if (URL::Parse(uri)["scheme"]:"" == "serial")
     {
 	string dev_name = Printerlib::getUriDevice (uri);
 	integer baudrate = Printerlib::getUriBaudrate (uri);
@@ -325,13 +326,13 @@ global boolean WriteQueue (map entry) {
 	}
 	entry = add (entry, "uri", uri);
     }
-    else if (Printerlib::getUriType (uri) == "irda")
+    else if (URL::Parse(uri)["scheme"]:"" == "irda")
     {
 	string dev_name = Printerlib::getUriDevice (uri);
 	if (dev_name != "")
 	    entry = add (entry, "uri", "parallel:" + dev_name);
     }
-    else if (Printerlib::getUriType (uri) == "samba")
+    else if (URL::Parse(uri)["scheme"]:"" == "smb")
     {
 	entry = add (entry, "uri", "smb" + substring (uri, 5));
     }
@@ -629,7 +630,7 @@ global list<string> GetSupportedUriTypes () {
 	    "serial",
 	    "lpd",
 	    "ipp",
-	    "samba",
+	    "smb",
 	    "socket",
 	    "irda",
 	    "novell",
