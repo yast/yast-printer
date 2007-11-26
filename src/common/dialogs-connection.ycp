@@ -474,7 +474,7 @@ if (local == false)
       */
     define symbol runLocalConnectionDialog () ``{
 	symbol selected = `parallel;
-	string uri_type = Printerlib::getUriType (Printer::printer["uri"]:"");
+	string uri_type = URL::Parse(Printer::printer["uri"]:"")["scheme"]:"";
 	switch(uri_type){
 	 case "irda" : selected = `irda;
 			break;
@@ -576,7 +576,7 @@ if (local == false)
       */
     define symbol runDirectConnectionDialog () ``{
 	symbol selected = `socket;
-	string uri_type = Printerlib::getUriType (Printer::printer["uri"]:"");
+	string uri_type = URL::Parse(Printer::printer["uri"]:"")["scheme"]:"";
 	if (uri_type == "lpd")
 	    selected = `lpd;
 	else if (uri_type == "ipp")
@@ -617,7 +617,7 @@ if (local == false)
       */
     define symbol runOtherConnectionDialog () ``{
 	symbol selected = `uri;
-	string uri_type = Printerlib::getUriType (Printer::printer["uri"]:"");
+	string uri_type = URL::Parse(Printer::printer["uri"]:"")["scheme"]:"";
 	if (uri_type == "pipe")
 	    selected = `pipe;
 	else if (uri_type == "class")
@@ -665,7 +665,7 @@ if (local == false)
         boolean problematic_usb = false;
         string uri = Printer::printer["tmpuri"]:"";
         if ("" == uri) uri = Printer::printer["uri"]:"parallel";
-        if ("" == type) type = Printerlib::getUriType ("uri");
+        if ("" == type) type = URL::Parse(uri)["scheme"]:"";
         string device = "";
 	if (type !="hp") Printerlib::getUriDevice (uri);
 
@@ -743,7 +743,7 @@ that your serial ports are not properly configured."));
 		devices = maplist (list d, Printerlib::getHplipDevices (), ``{ return d[0]:""; });
 		}
         }
-        if (type != Printerlib::getUriType (uri)) device = "";
+        if (type != URL::Parse(uri)["scheme"]:"") device = "";
         if (device == "") device = devices[0]:"";
         list device_val = getDevicesItems (devices, device);
 /*	if (size (device_val) == 0)
@@ -947,7 +947,7 @@ actually selected.
 
         // check necessary packages
         list<string> packages_to_check = [];
-        if (type == "samba")
+        if (type == "smb")
         {
             packages_to_check = ["samba-client"];
         }
@@ -973,7 +973,7 @@ actually selected.
 	    }
         }
 
-        boolean has_user_password = (type == "samba" || type == "novell");
+        boolean has_user_password = (type == "smb" || type == "novell");
 
         // label
         string hent_str = _("&Hostname of Print Server");
@@ -1032,7 +1032,7 @@ actually selected.
 		// pushbutton
                 _("&Test Remote Novell Access"));
         }
-        else if (type == "samba")
+        else if (type == "smb")
         {
             test_button = `PushButton (`id (`test), `opt (`key_F6),
                 // pushbutton
@@ -1157,7 +1157,7 @@ actually selected.
             ret = (symbol)UI::UserInput ();
             if (ret == `cancel) ret = `abort;
             hostname = /*URL::EscapeString(*/(string)UI::QueryWidget (`id (`hostnameent), `Value)/*, URL::transform_map_passwd)*/;
-            if (type == "samba")
+            if (type == "smb")
 			workgroup = /*URL::EscapeString(*/(string)UI::QueryWidget (`id (`workgroup), `Value)/*, URL::transform_map_passwd)*/;
             if (type != "socket") queue = /*URL::EscapeString(*/(string)UI::QueryWidget (`id (`queueent), `Value)/*, URL::transform_map_passwd)*/;
              else
@@ -1196,7 +1196,7 @@ actually selected.
             if (`get_printers == ret && checkHostName (hostname))
             {
                 list<string> queues = [];
-                if ("samba" == type) queues = (list<string>)SCR::Read (.smb.queues, hostname);
+                if ("smb" == type) queues = (list<string>)SCR::Read (.smb.queues, hostname);
 			else if ("ipp" == type)
 			 {
 			  queues = (list<string>)SCR::Read (.cups.remote, hostname);
@@ -1218,7 +1218,7 @@ actually selected.
                 string test_queue = "";
                 if (type == "ipp" && "printers/" == substring (queue, 0, 9)) test_queue = substring (queue, 9);
 			else test_queue = queue;
-                if ("samba" == type || "novell" == type)
+                if ("smb" == type || "novell" == type)
                 {
                     Printerlib::testRemoteUP (workgroup, hostname, test_queue, user, password, type);
                 }
@@ -1398,13 +1398,11 @@ actually selected.
             {
 		// get the file name
                 string uri = (string)UI::QueryWidget (`id (`name), `Value);
-		string uri_type = Printerlib::getUriType (uri);
-		if ((uri_type == "hp" || uri_type == "ptal")
-		    && Printer::hp_driver != uri_type)
+		string uri_type = URL::Parse(uri)["scheme"]:"";
+		if ((uri_type == "hp" || uri_type == "ptal") && Printer::hp_driver != uri_type)
 		{
-		    if (Printer::hp_driver == nil)
-			Printer::hp_driver = uri_type;
-		    else
+		    if (Printer::hp_driver == nil) Printer::hp_driver = uri_type;
+		      else
 			Report::Message (
 // popup message
 _("It is not possible to use both HPLIP

@@ -29,6 +29,7 @@ import "String";
 import "Arch";
 import "FileUtils";
 import "Service";
+import "URL";
 include "printer/texts.ycp";
 
 
@@ -329,7 +330,7 @@ ECHO_PID=$!
 	}
 	UI::OpenDialog (`opt (`decorated), `Label (sformat (textTestRemotePrinter (false), hname)));
 	map test_return = $[];
-	if ("samba" == type)
+	if ("smb" == type)
 	    test_return = (map)SCR::Execute (.target.bash_output, sformat ("/usr/lib/YaST2/bin/test_remote_smb \"%1\" \"%2\" \"%3\" \"%4\" \"%5\" 5", wg, hname, rname, user, pass));
 	else if ("novell" == type)
 	    test_return = (map)SCR::Execute (.target.bash_output, sformat ("/usr/lib/YaST2/bin/test_remote_novell \"%1\" \"%2\" \"%3\" \"%4\" 5", hname, rname, user, pass));
@@ -400,6 +401,7 @@ ECHO_PID=$!
      * @param uri printer uri (file://tmp/pr.tmp, lpd://d11.suse.de)
      * @return string type of printer or ""
      */
+/*
     global define string getUriType (string uri) ``{
 	if ("" == uri || nil == uri)
 	    return "";
@@ -408,6 +410,7 @@ ECHO_PID=$!
 	    ss = "ipp";
 	return ss;
     }
+*/
     /**
      * Get printer device from its uri.
      * @param uri printer uri
@@ -416,7 +419,7 @@ ECHO_PID=$!
      */
     global define string getUriDevice (string uri) ``{
 	if ("" == uri || nil == uri || nil == findfirstof (uri, ":")) return "";
-	string uri_type = getUriType (uri);
+	string uri_type = URL::Parse(uri)["scheme"]:"";
 	integer i = findfirstof (uri, ":");
 	if (nil == i) return "";
 	uri = substring (uri, i + 1);
@@ -459,7 +462,7 @@ ECHO_PID=$!
             return s;
 	s = substring (s, i + 1);
 	i = findfirstof (s, "/");
-	if (getUriType (uri) == "samba" && i != nil)
+	if (URL::Parse(uri)["scheme"]:"" == "smb" && i != nil)
 	{
 	    s = substring (s, i + 1);
 	}
@@ -546,7 +549,7 @@ ECHO_PID=$!
 	integer i = findfirstof (dev, "@");
 	if (nil != i)
 	    dev = substring (dev, i + 1);
-	else if (getUriType (uri) == "samba")
+	else if (URL::Parse(uri)["scheme"]:"" == "smb")
 	{
 	    list<string> uri_list = splitstring (dev, "/");
 	    uri_list = filter (string c, uri_list, {return c != "";});
@@ -574,42 +577,11 @@ ECHO_PID=$!
      * @see getUriType
      */
     global define list getUriUsernamePassWorkgroup (string uri) ``{
-	string type = getUriType (uri);
-	if (size (uri) < 8)
-	    return [ "", "" ];
-	uri = substring (uri, 8);
-	while ("/" == substring (uri, 0, 1))
-	    uri = substring (uri, 1);
-	integer len = findfirstof (uri, "@");
-
-	if (nil == len)
-	{
-	    if (type == "samba")
-	    {
-		list<string> parts = splitstring (uri, "/");
-		parts = filter (string s, parts, {return s != "";});
-		if (size (parts) >= 3)
-		    return [ "", "", parts[0]:""];
-	    }
-	    return [ "", "" ];
-	}
-	string workgroup = "";
-	list <string>  params = splitstring (substring(uri, len+1), "/");
-	if (size(params)==3) workgroup = params[0]:"";
-	string user = substring (uri, 0, len);
-	string pass = "";
-	len = findfirstof (user, ":");
-	if (nil != len)
-	{
-	    pass = substring (user, len + 1);
-	    user = substring (user, 0, len);
-	}
-	len = findfirstof (user, "/");
-	if (len != nil)
-	{
-//	    workgroup = substring (user, 0, len);
-	    user = substring (user, len + 1);
-	}
+	map tokens = URL::Parse(uri);
+	string type = tokens["scheme"]:"";
+	string workgroup = tokens["domain"]:"";
+	string user = tokens["user"]:"";
+	string pass = tokens["pass"]:"";
 	return [ user, pass, workgroup];
     }
     /**
@@ -618,7 +590,7 @@ ECHO_PID=$!
      * @return nice name of printer uri (device, network printer...)
      */
     global define string getUriNiceName (string uri) ``{
-	string type = getUriType (uri);
+	string type = URL::Parse(uri)["scheme"]:"";
 	if ("parallel" == type)
 	    // Parallel printer on /dev/lp0
 	    return sformat (_("Parallel printer on %1"), getUriDevice (uri));
@@ -658,7 +630,7 @@ ECHO_PID=$!
 	if ("novell" == type)
 	    // Queue QUEUENAME on novell server SERVERNAME
 	    return sformat (_("Queue %1 on Novell server %2"), getUriRemoteQueue (uri), getUriHost (uri));
-	if ("samba" == type)
+	if ("smb" == type)
 	    // Queue QUEUENAME on SMB server SERVERNAME
 	    return sformat (_("Queue %1 on SMB server %2"), getUriRemoteQueue (uri), getUriHost (uri));
 	if ("ipp" == type || "http" == type)
@@ -680,31 +652,19 @@ ECHO_PID=$!
     */
 global define string getReplacedString(string device, boolean show_pass)
 {
-    string visible_string=device;
-    integer position = find(visible_string, "%");
-    while(position > 0 ){
-     string newString = "x";
-     switch(substring(visible_string, position, 3)){
-      case("%20")	:	newString = " ";
-			break;
-      case("%3a")	:	newString = ":";
-			break;
-      case("%40")	:	newString = "@";
-			break;
-     }
-     visible_string = substring(visible_string,0, position) + newString + substring(visible_string, position+3);
-     position = find(visible_string, "%");
-    }
-    list pass = regexppos(visible_string, ":[^@]+@");
-    if (size(pass)==2 && !show_pass){
-    integer pos = pass[0]:0;
-    integer str_size= pass[1]:0;
-    string pass = substring("*****************************************************************************", 0, str_size-2);
-     visible_string = substring(visible_string,0,pos+1) + pass + substring(visible_string,pos+str_size-1);
-    }
-   while(substring(visible_string, 0,1) == "/"){visible_string=substring(visible_string, 1);}
-   y2milestone("replace string %1", visible_string);
-    return visible_string;
+ string replaced = "";
+ map tokens = URL::Parse(device);
+y2internal("tokens %1", tokens);
+y2internal("device %1", device);
+
+ if (show_pass){
+  replaced = sformat("%1://", tokens["scheme"]:"");
+  if (size(tokens["user"]:"")>0 || size(tokens["pass"]:"")>0) replaced=sformat("%1****@", replaced);
+ }
+ if (size(tokens["domain"]:"")>0) replaced=sformat("%1%2", replaced, tokens["domain"]:"");
+ if (size(tokens["host"]:"")>0) replaced=sformat("%1%2%3", replaced, (size(tokens["domain"]:"")>0)?"/":"", tokens["host"]:"");
+ replaced = sformat("%1%2%3", replaced,(substring(tokens["path"]:"",0,1)=="/")?"":"/", tokens["path"]:"");
+ return replaced;
 }
 
 
