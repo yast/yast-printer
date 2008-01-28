@@ -2271,14 +2271,14 @@ symbol handleServerType (string key, map event) ``{
  UI::ChangeWidget(`select_addr, `Enabled, listen && local);
 
  UI::ChangeWidget(`server_name, `Enabled, !local);
- UI::ChangeWidget(`lookup_server, `Enabled, !local);
- UI::ChangeWidget(`test_ipp, `Enabled, !local);
+ UI::ChangeWidget(`lookup_server, `Enabled, !local && CUPS::enable_netcat);
+ UI::ChangeWidget(`test_ipp, `Enabled, !local && CUPS::enable_netcat);
  UI::ChangeWidget(`use_default, `Enabled, !local);
 
   boolean use_def=false;
  if (!local) use_def=!(boolean) UI::QueryWidget(`use_default, `Value);
  UI::ChangeWidget(`queues, `Enabled, use_def);
- UI::ChangeWidget(`lookup_queue, `Enabled, use_def);
+ UI::ChangeWidget(`lookup_queue, `Enabled, use_def && CUPS::enable_netcat);
  if (event["EventReason"]:""=="Activated" && event["ID"]:`nil==`select_addr) {
 	CUPS::cups_server_settings["BrowseAddress"] = getAddresses(CUPS::cups_server_settings["BrowseAddress"]:[]);
  }

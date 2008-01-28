@@ -978,27 +978,8 @@ actually selected.
         // label
         string hent_str = _("&Hostname of Print Server");
         term uspas = `VSpacing (0.2);
-/*
-        integer i = findlastof (uri, "/");
-        if (nil != i)
-        {
-            queue = Printerlib::getUriRemoteQueue (uri);
-            full_hostname = Printerlib::getUriHost (uri);
-            hostname = Printerlib::getReplacedString( Printerlib::getUriHost (uri), true );
-	list tmp_list = splitstring(hostname, "@");
-        if (size(tmp_list)==2){
-	  hostname = tmp_list[1]:"";
-         }
-        }
-*/
         if (has_user_password)
         {
-/*
-            list l = Printerlib::getUriUsernamePassWorkgroup ( Printerlib::getReplacedString(uri, true) );
-            user = l[0]:"";
-            password = l[1]:"";
-	    workgroup = l[2]:"";
-*/
             uspas = `VSquash (`VBox (
                 // text entry label
                 `TextEntry (`id (`userent), _("&Username"), user),
@@ -1018,7 +999,7 @@ actually selected.
             queue);
 	term workgroup_entry = `VSpacing (0);
         // menu button
-        term lookup_hosts = `MenuButton (_("&Look Up"), [
+        term lookup_hosts = `MenuButton (`id(`lookup), _("&Look Up"), [
             // menuentry
             `item (`id (`get_hosts_special), _("Scan for &LPD Servers")),
             // menuentry
@@ -1073,7 +1054,7 @@ actually selected.
 		// push button
 		_("L&ook Up")));
             // menu button
-            lookup_hosts = `MenuButton (_("&Look Up"), [
+            lookup_hosts = `MenuButton (`id(`lookup), _("&Look Up"), [
                 // menu item
                 `item (`id (`get_hosts_special), _("Scan for &IPP Servers")),
 		// menu item
@@ -1094,7 +1075,7 @@ actually selected.
 		// text entry label
 		_("&TCP Port Number"), sformat("%1", port)));
             // menu button
-            lookup_hosts = `MenuButton (_("&Look Up"), [
+            lookup_hosts = `MenuButton (`id(`lookup), _("&Look Up"), [
                 // menu item
                 `item (`id (`get_hosts_special), _("Scan for &Direct Socket Servers")),
                 // menu item
@@ -1151,6 +1132,12 @@ actually selected.
         if (type != "socket") UI::ChangeWidget (`id (`queueent), `Value, queue);
 		else UI::ChangeWidget (`id (`port), `ValidChars, "1234567890");
         UI::ChangeWidget (`id (`hostnameent), `Value, hostname);
+
+	if (UI::WidgetExists(`test)) UI::ChangeWidget(`test, `Enabled, CUPS::enable_netcat);
+	if (UI::WidgetExists(`get_hosts_special)) UI::ChangeWidget(`get_hosts_special, `Enabled, CUPS::enable_netcat);
+	if (UI::WidgetExists(`get_hosts)) UI::ChangeWidget(`get_hosts, `Enabled, CUPS::enable_netcat);
+	if (UI::WidgetExists(`lookup)) UI::ChangeWidget(`lookup, `Enabled, CUPS::enable_netcat);
+	if (UI::WidgetExists(`get_printers)) UI::ChangeWidget(`get_printers, `Enabled, CUPS::enable_netcat);
 
         symbol ret = nil;
         repeat {

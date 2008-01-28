@@ -5,13 +5,26 @@
 # Exits:   0 doesn't seem to have a problem
 #          1 remote host $1 or queue $2 not set
 #          4 queue does not accept a print job (queue does not exist or queueing disabled ?)
+#         (10=ping,11=netcat,12=fuser,13=mktemp,14=sed,15=lp,16=smbclient: see test_remote_smb)
+#         17 nprint not executable (no ncpfs RPM installed?)
 #
-# Johannes Meixner <jsmeix@suse.de>, 2000, 2002
+# Johannes Meixner <jsmeix@suse.de>, 2000, 2002, 2007
 # Jan Holesovsky <kendy@suse.cz>, 2000
 # Jiri Srain <jsrain@suse.cz>, 2002
 # $Id$
 
 #set -x
+
+# Make sure to have a clean environment:
+export PATH="/sbin:/usr/sbin:/usr/bin:/bin"
+export LC_ALL="POSIX"
+export LANG="POSIX"
+umask 022
+
+# Use the binaries of the operating system (no aliases, functions, /usr/local/):
+export NPRINT=$( type -ap nprint | head -n 1 )
+[ -z "$NPRINT" ] && { echo -en "\nnprint not executable\n" 1>&2 ; exit 17 ; }
+
 MY_NAME=${0##*/}
 HOST=$1
 QUEUE=$2
@@ -22,15 +35,9 @@ TIMEOUT="$5"
 
 [ -z "$TIMEOUT" ] && TIMEOUT=10
 
-# test the queue and server
-echo -en "\r" | nprint -S "$HOST" -U "$USER" -P "$PASSWORD" -q "$QUEUE" - 2>&1
-
-RES=$?
-
-if [ $RES -eq 0 ];
- then
-    exit 0;
-else
-    exit 4;
-fi
+# test whether the queue on the server accepts print jobs
+echo -en "\r" | $NPRINT -S "$HOST" -U "$USER" -P "$PASSWORD" -q "$QUEUE" - 2>&1
+[ "$?" = "0" ] && { echo -en "\nQueue $QUEUE on host $HOST accepts print jobs\n" ; exit 0 ; }
+echo -en "\nQueue $QUEUE on host $HOST does not accept print jobs\n"
+exit 4
 
