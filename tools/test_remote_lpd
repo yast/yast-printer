@@ -10,13 +10,35 @@
 #          2 the remote host $1 is unreachable
 #          3 no connection possible to port 515 on host $1 (no lpd running ?)
 #          4 queue does not accept a print job (queue does not exist or queueing disabled ?)
+#         10 ping not executable (no iputils RPM installed?)
+#         11 netcat not executable (no netcat RPM installed?)
+#         12 fuser not executable (no psmisc RPM installed?)
+#         13 mktemp not executable (no mktemp RPM installed?)
+# The programs head, mkfifo, sleep, tr, rm are in the coreutils RPM and therefore assumed to exist.
 #
-# Johannes Meixner <jsmeix@suse.de>, 2000, 2002
+# Johannes Meixner <jsmeix@suse.de>, 2000, 2002, 2007
 # Jan Holesovsky <kendy@suse.cz>, 2000
 # Jiri Srain <jsrain@suse.cz>, 2002
 # $Id$
 
 #set -x
+
+# Make sure to have a clean environment:
+export PATH="/sbin:/usr/sbin:/usr/bin:/bin"
+export LC_ALL="POSIX"
+export LANG="POSIX"
+umask 022
+
+# Use the binaries of the operating system (no aliases, functions, /usr/local/):
+export PING=$( type -ap ping | head -n 1 )
+[ -z "$PING" ] && { echo -en "\nping not executable\n" 1>&2 ; exit 10 ; }
+export NETCAT=$( type -ap netcat | head -n 1 )
+[ -z "$NETCAT" ] && { echo -en "\nnetcat not executable\n" 1>&2 ; exit 11 ; }
+export FUSER=$( type -ap fuser | head -n 1 )
+[ -z "$FUSER" ] && { echo -en "\nfuser not executable\n" 1>&2 ; exit 12 ; }
+export MKTEMP=$( type -ap mktemp | head -n 1 )
+[ -z "$MKTEMP" ] && { echo -en "\nmktemp not executable\n" 1>&2 ; exit 13 ; }
+
 MY_NAME=${0##*/}
 HOST="$1"
 QUEUE="$2"
@@ -25,25 +47,25 @@ TIMEOUT="$3"
 [ -z "$TIMEOUT" ] && TIMEOUT=10
 
 # test whether the remote host is accessible
-ping -c 1 -w $TIMEOUT $HOST || { echo -en "\nHost $HOST unreachable\n" ; exit 2 ; }
+$PING -c 1 -w $TIMEOUT $HOST || { echo -en "\nHost $HOST unreachable\n" ; exit 2 ; }
 
 # test whether connection is possible to port 515 (lpd) on the remote host
-netcat -w $TIMEOUT -z $HOST 515 || { echo -en "\nNo connection possible to port 515 (lpd)\n" ; exit 3 ; }
+$NETCAT -w $TIMEOUT -z $HOST 515 || { echo -en "\nNo connection possible to port 515 (lpd)\n" ; exit 3 ; }
 
 # Find an available local port for connecting
 PORT=$(for I in 721 722 723 724 725 726 727 728 729 730 731
        do
-         fuser -n tcp $I &>/dev/null || { echo $I ; break ; }
+         $FUSER -n tcp $I &>/dev/null || { echo $I ; break ; }
        done)
 
 # Create temporary fifos
-TMP_IN=$(mktemp -u /tmp/$MY_NAME.in.XXXXXX)
-TMP_OUT=$(mktemp -u /tmp/$MY_NAME.out.XXXXXX)
+TMP_IN=$( $MKTEMP -u /tmp/$MY_NAME.in.XXXXXX )
+TMP_OUT=$( $MKTEMP -u /tmp/$MY_NAME.out.XXXXXX)
 mkfifo $TMP_IN
 mkfifo $TMP_OUT
 
 # Test the queue:
-# Use source port $PORT and destination port 515 (lpd)
+# Use source port $PORT and destination port 515 (LPD)
 # "\002$QUEUE\n" is a request to receive a new job for $QUEUE
 # The remote lpd sends '\000' if it accepts the request. Then we must
 # send "\001\n" back which is a request to cancel the new job.
@@ -52,26 +74,25 @@ mkfifo $TMP_OUT
 # But as there may be no response from the remote port we have additionally
 # a time bomb which would kill the netcat process after $TIMEOUT.
 
-netcat -w $TIMEOUT -p $PORT $HOST 515 <$TMP_IN >$TMP_OUT 2>/dev/null &
+$NETCAT -w $TIMEOUT -p $PORT $HOST 515 <$TMP_IN >$TMP_OUT 2>/dev/null &
 NETCAT_PID=$!
 { sleep ${TIMEOUT}s ; kill $NETCAT_PID &>/dev/null ; } &
 
 RESULT=""
 { echo -en "\002$QUEUE\n" ; \
-  RESULT=$(head --bytes=1 <$TMP_OUT | tr '\000' '0') ; \
+  RESULT=$( head --bytes=1 <$TMP_OUT | tr '\000' '0' ) ; \
   [ "$RESULT" = "0" ] && echo -en "\001\n" ; } >$TMP_IN
 
 rm $TMP_IN
 rm $TMP_OUT
 
-[ "$RESULT" = "0" ] \
-  && { echo -en "\nQueue $QUEUE on host $HOST accepts print jobs\n" ; exit 0 ; } \
-  || echo -en "\nQueue $QUEUE on host $HOST does not accept print jobs\n"
+[ "$RESULT" = "0" ] && { echo -en "\nQueue $QUEUE on host $HOST accepts print jobs\n" ; exit 0 ; }
+
+echo -en "\nQueue $QUEUE on host $HOST does not accept print jobs\n"
 
 # If $QUEUE does not accept jobs, print $QUEUE status in long format.
 # "\004$QUEUE\n" is a request to receive $QUEUE status (very long output in case of LPRng).
-
 echo -en "\nStatus of the queue $QUEUE\n"
-echo -en "\004$QUEUE\n" | netcat -w $TIMEOUT -p $PORT $HOST 515
+echo -en "\004$QUEUE\n" | $NETCAT -w $TIMEOUT -p $PORT $HOST 515
 exit 4
 
