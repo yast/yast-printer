@@ -145,10 +145,18 @@ global string getPaperSize(){
    }
    default_paper_size = p_size;
  }
-
  return default_paper_size;
 }
 
+
+global boolean isPrinterLocal(){
+ map tokens = URL::Parse(printer["uri"]:"");
+ string type = tokens["scheme"]:"";
+ list<string> local = ["serial", "parallel", "usb", "irda"];
+ list<string> remote = ["http", "https", "ftp", "nfs", "smb"];
+ if (!contains(remote, type)) return true;
+  else return false;
+}
 
     /**
      * List of unique keys of the printers read at the beginning.
