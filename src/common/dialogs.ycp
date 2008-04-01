@@ -2022,15 +2022,24 @@ list<term> buildItemsList(string t_filter){
  return term_items;
 }
 
-void refreshOverview(boolean editable){
-list<term> items = buildItemsList((string)UI::QueryWidget(`filter, `Value));
- UI::ChangeWidget (`id (`_hw_items), `Items, items);
-  if (size(items)>0) UI::ChangeWidget(`_hw_sum, `Value, o_items[0, "rich_descr"]:"");
-	else
-	 {
-	  UI::ChangeWidget(`_hw_sum, `Value, "");
-	  editable = false;
-	 }
+void refreshOverview(integer selected, boolean rebuild_items){
+ if (rebuild_items){
+  list<term> items = buildItemsList((string)UI::QueryWidget(`filter, `Value));
+  UI::ChangeWidget (`id (`_hw_items), `Items, items);
+ }
+ boolean editable = (selected==nil || selected==-1) ? false : true;
+  if (size((list<term>)UI::QueryWidget(`id (`_hw_items), `Items))>0)
+   {
+    integer old_selection = selected;
+    selected = tointeger( UI::QueryWidget(`id(`_hw_items), `CurrentItem));
+    if (selected != old_selection) Printer::selectPrinter(selected);
+    UI::ChangeWidget(`_hw_sum, `Value, o_items[selected, "rich_descr"]:"");
+   }
+    else
+     {
+      UI::ChangeWidget(`_hw_sum, `Value, "");
+      editable = false;
+     }
  boolean local = (CUPS::InstallationType() == `server);
  UI::ChangeWidget(`_hw_items,	`Enabled, local);
  UI::ChangeWidget(`add,		`Enabled, local);
@@ -2053,11 +2062,10 @@ list<term> items = buildItemsList((string)UI::QueryWidget(`filter, `Value));
 	symbol ret=nil;
         string new_spooler = Spooler::Get ();
 	integer selected = -1;
-	if (size(o_items)>0) selected = tointeger( UI::QueryWidget(`id(`_hw_items), `CurrentItem));
-y2internal("selected %1, items %2", UI::QueryWidget(`id(`_hw_items), `CurrentItem), UI::QueryWidget(`id(`_hw_items), `Items));
+	if (size((list<term>)UI::QueryWidget(`id (`_hw_items), `Items))>0) selected = tointeger( UI::QueryWidget(`id(`_hw_items), `CurrentItem));
 	Printer::selectPrinter(selected);
-	refreshOverview(selected!=-1);
-
+y2internal("event %1", event);
+	refreshOverview(selected, (event["EventReason"]:nil=="SelectionChanged"||event["ID"]:nil==`delete)?false:true);
 	y2milestone("selected printer %1", selected);
         if (new_spooler == "cups" && CUPS::InstallationType () == `client) new_spooler = "cups-client";
 
@@ -2067,9 +2075,13 @@ y2internal("selected %1, items %2", UI::QueryWidget(`id(`_hw_items), `CurrentIte
 	  ret = (symbol) event["ID"]:nil;
 	switch((symbol) event["ID"]:nil){
 	 case `delete :
+	y2internal("selected printer %1", selected);
  		if (new_spooler == "cups-client") {CUPS::cups_installation=`server;new_spooler="cups";}
-			else if ( (Printer::conf_unconf_printers[selected, "SPOOL"]:"" != "not configured") && Popup::YesNo (sformat (_("Really delete printer %1?"), Printer::printer["name"]:""))) Printer::deletePrinter ();
-	        refreshOverview(selected!=-1);
+			else if ( (Printer::conf_unconf_printers[selected, "SPOOL"]:"" != "not configured") && Popup::YesNo (sformat (_("Really delete printer %1?"), Printer::printer["name"]:"")))
+		{
+		 Printer::deletePrinter ();
+	         refreshOverview(selected, true);
+		}
 		ret=nil;
 		break;
 // TODO handle all events here
@@ -2128,21 +2140,6 @@ and test the queue after the printer model is selected."));
 		    ret=nil;
 	     break;
 	default:
-	 if (event["EventReason"]:"" == "SelectionChanged")
-	  {
-	   if (size(o_items)>0)
-	    {
-	     UI::ChangeWidget(`_hw_sum, `Value, o_items[selected, "rich_descr"]:"");
-						// #247336 - don't allow to edit queues without local filtering (raw:true)
-	     UI::ChangeWidget(`id(`edit), `Enabled, !Printer::printer["raw"]:true);
-	     UI::ChangeWidget(`id(`delete), `Enabled, true);
-	    } else
-	       {
-		UI::ChangeWidget(`_hw_sum, `Value, "");
-		UI::ChangeWidget(`id(`edit), `Enabled, false);
-                UI::ChangeWidget(`id(`delete), `Enabled, false);
-	       }
-	  } else y2warning("Invalid return: %1, %2", ret, event);
 	 ret = nil;
 	}
     }
