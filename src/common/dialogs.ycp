@@ -1805,6 +1805,7 @@ void initServerType (string key) {
 		else UI::ChangeWidget(`queues, `Items, [ Printer::default_queue ]);
 	 }
  if ( contains (CUPS::cups_server_settings["Browsing"]:["On"],"On") ) UI::ChangeWidget(`ipp_listen, `Value, true);
+ if (Printer::lpd_enable) UI::ChangeWidget(`lpd_enable, `Value, true);
 }
 
 list<string> getAddresses(list<string> addr_orig){
@@ -1866,6 +1867,7 @@ symbol handleServerType (string key, map event) ``{
  boolean local = (UI::QueryWidget(`id(`server_type), `CurrentButton) == `local);
 
  UI::ChangeWidget(`ipp_listen, `Enabled, local);
+ UI::ChangeWidget(`lpd_enable, `Enabled, local);
  boolean listen = (boolean)UI::QueryWidget(`ipp_listen, `Value);
  UI::ChangeWidget(`select_addr, `Enabled, listen && local);
 
@@ -1918,6 +1920,10 @@ boolean validateServerType(string key, map event){
    Popup::Warning (sformat("%1 \"%2\".", _("Select default queue or check"), _("Use Server's Default Queue")));
    return false;
   }
+ } else{
+  if ((boolean)UI::QueryWidget(`lpd_enable, `Value) && !Printer::lpd_enable){
+   if (!Popup::YesNo(_("To enable LPD support, you must enable also xinetd service."))) return false;
+  }
  }
  return true;
 }
@@ -1928,6 +1934,7 @@ void storeServerType(string key, map event){
 	 CUPS::cups_installation=`server;
 	 boolean listen = (boolean)UI::QueryWidget(`ipp_listen, `Value);
          CUPS::cups_server_settings["Browsing"] = listen ? ["On"] : ["Off"];
+	 Printer::lpd_enable = (boolean)UI::QueryWidget(`lpd_enable, `Value);
 	}else{
 		CUPS::cups_installation=`client;
 		CUPS::server_hostname = (string)UI::QueryWidget(`server_name, `Value);
@@ -2241,8 +2248,11 @@ map<string, map<string,any> > wd = $[
 		  `VBox(
 		        `VBox(
 		         `Left( `RadioButton(`id(`local), `opt(`notify), "Local CUPS Server")),
+			  `VBox(
 			  `HBox(`CheckBox(`id(`ipp_listen), `opt(`notify), _("Listen to IPP Broadcast Packets")),
 				`PushButton(`id(`select_addr), _("Select Addresses"))
+			       ),
+			      `Left(`CheckBox(`id(`lpd_enable), `opt(`notify), _("enable LPD clients")))
 			      )
 			     ),
 		        `VBox(
@@ -2459,134 +2469,6 @@ foreach(string row, CUPS::cups_server_settings["Listen"]:[], {
 }
 
 
-    /**
-     * Complex dialog.
-     * @return symbol for ws
-     */
-/*
-    define symbol runComplexDialog () ``{
-	Printer::confmode = `adm;
-	string spoolerlabel = "";
-	if (Spooler::Get () == "cups")
-	{
-	    spoolerlabel = "CUPS";
-	}
-	else
-	{
-	    // is %1 in following translation text
-	    // "Printer administration for %1"
-	    spoolerlabel = _("Any Spooler");
-	}
-	Wizard::SetContentsButtons (
-	// Header of the dialog with all the printers
-	    sformat (_("Printer Administration for %1"), spoolerlabel),
-	    Wizard_hw::ConfiguredContent ( (Spooler::Get () == "cups") ?
-			// table header
-		    `header (_("Default"),
-			// table header
-			 _("Name"),
-			// table header
-			 _("Type"),
-			// table header
-			 `Center(_("Ready")))
-		:
-			// table header
-		    `header (_("Default"),
-			// table header
-			 _("Name"),
-			// table header
-			 _("Type")),
-		printcapTable (),
-		nil, nil,
-		`HBox (
-		    `HStretch (),
-		// push button
-		`PushButton (`id (`setdefault), _("&Set as Default")),
-		// push button
-		`PushButton (`id (`advanced), `opt (`key_F7), _("Ad&vanced")),
-
-		    `HStretch ()
-		),
-		nil
-	    ),
-	    getComplexHelp (),
-	    Label::BackButton (),
-	    Label::FinishButton ()
-	);
-	Wizard::RestoreBackButton ();
-	Wizard::RestoreAbortButton ();
-	UI::ChangeWidget (`id (`table), `CurrentItem, -1 == Printer::index ? 0 : Printer::index);
-	symbol ret = nil;
-	while (true)
-	    {
-		ret = (symbol)UI::UserInput ();
-		if (ret == `table)
-		{
-		    ret = `edit_button;
-		}
-		if (ret == `cancel)
-		    ret = `abort;
-
-		if (ret == `add_button)
-		{
-		    Printer::selectPrinter (-1);
-		    Printer::conf_detected = false;
-		    return `add;
-		}
-		else if (ret == `edit_button || ret == `delete_button || ret == `setdefault)
-		{
-		    Printer::selectPrinter ((integer)UI::QueryWidget (`id (`table), `CurrentItem));
-		    if (-1 != Printer::index)
-		    {
-			if (ret == `edit_button)
-			{
-			    return `edit;
-			}
-			else if (`delete_button == ret)
-			{
-			    // message box, %1 is replaced by printer name
-			    if (Popup::YesNo (sformat (_("Really delete printer %1?"), Printer::printer["name"]:"")))
-				Printer::deletePrinter ();
-			    UI::ChangeWidget (`id (`table), `Items, printcapTable ());
-			    UI::ChangeWidget (`id (`table), `CurrentItem, Printer::index);
-			}
-			else
-			{
-			    Printer::setDefaultPrinter ();
-			    UI::ChangeWidget (`id (`table), `Items, printcapTable ());
-			    UI::ChangeWidget (`id (`table), `CurrentItem, Printer::index);
-			}
-		    }
-		    else
-		    {
-			// message box
-			Popup::Message (_("Select a printer."));
-		    }
-		}
-		else if (`advanced == ret)
-		{
-		    break;
-		}
-		else if (`cancel == ret || `abort == ret)
-		{
-		    ret = `abort;
-		    if (reallyAbort ())
-		    {
-			break;
-		    }
-		}
-		if (`back == ret)
-		{
-		    break;
-		}
-		if (`next == ret)
-		{
-		    break;
-		}
-	    }
-	return ret;
-    }
-*/
     /**
       * Detect installation type
       * @return symbol `server or `client
