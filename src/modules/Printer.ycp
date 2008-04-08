@@ -45,7 +45,7 @@
     import "URL";
     import "PackageSystem";
     import "URL";
-    import "PackageSystem";
+    import "Inetd";
 
     //////////
     ////////// Module data
@@ -125,6 +125,9 @@
      */
     global list<map<string,any> > autodetected = [];
 
+    // support for LPD style printing (FaTE#120086)
+    global boolean lpd_enable=false;
+
     string default_paper_size = nil;
 
 
@@ -148,6 +151,60 @@ global string getPaperSize(){
  return default_paper_size;
 }
 
+boolean getLPDSupport(){
+ boolean enabled=false;
+ enabled = Service::Enabled("xinetd");
+ y2milestone("xinetd enabled: %1", enabled);
+ boolean old_progress = Progress::set (false);
+ Inetd::Read();
+ Progress::set (old_progress);
+ if (enabled) {
+  string ids = "";
+  integer i = 0;
+  integer lpd_id = nil;
+
+  while (size(Inetd::netd_conf) > i) {
+   ids = tostring( Inetd::netd_conf[i,"iid"]:nil);
+   if (regexpmatch(ids, "cups-lpd")) lpd_id = i;
+   i=i+1;
+  }
+
+  if (lpd_id!=nil) enabled=Inetd::netd_conf[lpd_id, "enabled"]:false;
+        else {
+		y2warning("cups-lpd not found");
+		enabled=false;
+	     }
+
+ }
+ y2milestone("LPD enabled: %1", enabled);
+ return enabled;
+}
+
+void saveLPD(){
+ y2milestone("saving LPD enabled: %1", lpd_enable);
+  string ids = "";
+  integer i=0;
+  integer lpd_id = nil;
+
+  while (size(Inetd::netd_conf) > i) {
+   ids = tostring( Inetd::netd_conf[i,"iid"]:nil);
+   if (regexpmatch(ids, "cups-lpd")) lpd_id = i;
+   i=i+1;
+  }
+  if (lpd_id!=nil) {
+		Inetd::netd_conf[lpd_id, "enabled"]=lpd_enable;
+		Inetd::netd_conf[lpd_id, "changed"]=true;
+		}
+        else {
+                y2warning("cups-lpd not found");
+             }
+
+  if (lpd_enable){
+   Service::Enable("xinetd");
+   Inetd::netd_status = 0;
+  }
+  Inetd::Write();
+}
 
 global boolean isPrinterLocal(){
  map tokens = URL::Parse(printer["uri"]:"");
@@ -1273,6 +1330,8 @@ Detect your printers?"));
 	printcap = maplist (map<string,any> e, printcap,``{return assignState (e, false);});
 
 	default_paper_size = getPaperSize();
+	lpd_enable = getLPDSupport();
+
 	y2milestone("Default paper size is %1", default_paper_size);
 	if (!skip_autodetection)
 	{
@@ -1594,6 +1653,7 @@ the selected spooler does not support it."), name));
 	    Progress::NextStage (); // save system settings
 	    if (testAbort ()) return false;
 	    ret = saveTheConfiguration() && ret;
+	    saveLPD();
 
 	    Progress::NextStage (); // save firewall settings
 	    if (testAbort ()) return false;
