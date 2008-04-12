@@ -20,7 +20,8 @@ liby2ag_ppd_la_SOURCES = 	\
 	PPDdb.h			\
 	PPDVendors.h		\
 	PPDfile.cc		\
-	PPDfile.h		
+	PPDfile.h		\
+	md5.c
 
 liby2ag_ppd_la_LDFLAGS = -version-info 2:0
 
