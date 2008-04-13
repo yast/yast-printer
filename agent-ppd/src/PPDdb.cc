@@ -1867,7 +1867,7 @@ bool PPD::cleanupEmptyEntries () {
     return true;
 }
 
-extern int md5_stream (FILE *stream, void *resblock);
+extern "C" int md5_stream (FILE *stream, void *resblock);
 
 string PPD::fileChecksum (const string &filename) {
     FILE* f;
