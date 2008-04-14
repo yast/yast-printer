@@ -30,6 +30,7 @@
     import "Wizard_hw";
     import "CWMTab";
     import "CWM";
+    import "IP";
 
     include "printer/helps.ycp";
     include "printer/misc.ycp";
@@ -61,16 +62,14 @@
      * Uses global printer
      * @return symbol `back, `next, `abort
      */
-    define symbol runManufModelDialog () ``{
+    define symbol ManufModelPopup () ``{
 	y2milestone ("Manuf/model dialog started for %1", Printer::printer);
 	Printerdb::InstallDrivers ();
 	map ppd_info = Printer::printer["ppd_info"]:$[];
 	string manuf_db = ppd_info["manufacturer_db"]:"";
 	string model_db = ppd_info["model_db"]:"";
-	if (manuf_db == "")
-	    manuf_db = Printer::printer["detected", "vendor_db"]:"";
-	if (model_db == "")
-	    model_db = Printer::printer["detected", "device_db"]:"";
+	if (manuf_db == "") manuf_db = Printer::printer["detected", "vendor_db"]:"";
+	if (model_db == "") model_db = Printer::printer["detected", "device_db"]:"";
 	Printerdb::loadFoomaticIfNeeded ();
 
         // selection box label
@@ -86,35 +85,33 @@
 	    `HWeight (1, `ReplacePoint (`id (`modelsel_rep), `HSpacing ()))),
 	    `HBox (
 		`HStretch (),
-		// menubutton
+/*
 		`MenuButton (`id (`other_ppd), _("Add &PPD File to Database"), [
-		    // menubutton item
 		    `item (`id (`specifyppd), _("&Local PPD File")),
-		    // menubutton item
 		    `item (`id (`downloadppd), _("&Download PPD File")),
 		]),
-		// push button
 		`PushButton (`id (`select_ppd), _("Select PPD File")),
-		`HStretch ()
+*/
+		`HBox(
+			`PushButton(`id(`cancel), Label::CancelButton()),
+			`PushButton(`id(`next), Label::OKButton()))
 	    ));
 	// dialog box label
 	Wizard::SetContentsButtons (_("Printer Model"),
-	    contents, getManufModelHelp (), Label::BackButton (),
-	    Label::NextButton ());
+	    contents, getManufModelHelp (), Label::CancelButton (),
+	    Label::OKButton ());
 	Wizard::RestoreAbortButton ();
 	Wizard::RestoreBackButton ();
 
 	if (manuf_db == "" || manuf_db == nil)
 	{
 	    foreach (string k, map v, Printerdb::foomatic, ``{
-		if (manuf_db == "" || manuf_db == nil)
-		    manuf_db = k;
+		if (manuf_db == "" || manuf_db == nil) manuf_db = k;
 	    });
 	}
 	UI::ChangeWidget (`id (`manufsel), `CurrentItem, manuf_db);
 	symbol ret = `manufsel;
-	while (`abort != ret && `back != ret && ret != `next
-	    && ret != `specifyppd && ret != `downloadppd)
+	while (`abort != ret && `back != ret && ret != `next && ret != `specifyppd && ret != `downloadppd)
 	{
 	    if (ret == `manufsel)
 	    {
@@ -180,10 +177,6 @@
                 ret = reallyAbort () ? `abort : `cont;
                 if (ret == `abort) break;
             }
-	    if (ret == `select_ppd)
-	    {
-		break;
-	    }
 	    if (ret == `next && (model_db == "" || model_db == nil))
 	    {
 		// popup
@@ -226,28 +219,22 @@ using an additional PostScript module.");
 		ret = nil;
 	    }
 	}
-
+y2internal("ret %1", ret);
 	if (ret == `next || ret == `select_ppd)
 	{
-	    string ppd_file
-		= Printerdb::getAutoPpdFile (manuf_db, model_db);
+	    string ppd_file = Printerdb::getAutoPpdFile (manuf_db, model_db);
 
-	    if (ppd_file == nil)
-		ppd_file = "";
+	    if (ppd_file == nil) ppd_file = "";
 
-	    ppd_file = (string)SCR::Read (.ppd.file.open,
-		[ppd_file, SCR::Read (.target.tmpdir)]);
+	    ppd_file = (string)SCR::Read (.ppd.file.open, [ppd_file, SCR::Read (.target.tmpdir)]);
 
 	    Printer::printer = (map<string,any>)union (Printer::printer, $[
 		"ppd" : ppd_file,
 		"ppd_info" : Printerdb::PpdInfo (ppd_file),
 	    ]);
-	    if ( ret==`next && Printer::printer["auto_propose"]:false )
-	    {
-		ret = `next_propose_queues;
-	    }
+	    if ( ret==`next && Printer::printer["auto_propose"]:false ) ret = `next_propose_queues;
 
-map ppd_options = Printer::printer["ppd_options"]:$[];
+	map ppd_options = Printer::printer["ppd_options"]:$[];
 
        if (ppd_options == $[]) {
                string ps = Printer::getPaperSize();
@@ -262,6 +249,7 @@ map ppd_options = Printer::printer["ppd_options"]:$[];
 
 	}
 	y2milestone ("Returning %1, printer set to %2", ret, Printer::printer);
+return nil;
 	return ret;
     }
 
@@ -499,11 +487,8 @@ Select the model."));
 
 	    string filename = k;
 	    string label = GetPpdFileDescription (
-		Printerdb::foomatic[manuf_db, model_db,
-		    filename, "nickname"]:"",
-		Printerdb::foomatic[manuf_db, model_db,
-		    filename, "language"]:"",
-		filename
+		Printerdb::foomatic[manuf_db, model_db, filename, "nickname"]:"",
+		Printerdb::foomatic[manuf_db, model_db, filename, "language"]:"", filename
 	    );
 	    cfgs = add (cfgs, `item (`id (k), label));
 	  });
@@ -630,8 +615,7 @@ Select the model."));
 		ret = reallyAbort () ? `abort : nil;
 	    }
 	    ret = UI::UserInput ();
-            if (ret == `cancel)
-                ret = `abort;
+            if (ret == `cancel) ret = `abort;
 	}
 
 	if (ret == `advanced || ret == `next)
@@ -649,8 +633,7 @@ Select the model."));
 		Printer::printer["ppd_info"] = Printerdb::PpdInfo (filename);
 	    }
 	    // add comment
-	    if (Printer::printer["info"]:"" == "")
-		Printer::printer["info"] = Printerdb::foomatic[manuf_db, model_db, file, "nickname"]:"";
+	    if (Printer::printer["info"]:"" == "") Printer::printer["info"] = Printerdb::foomatic[manuf_db, model_db, file, "nickname"]:"";
 	}
 	return (symbol)ret;
     }
@@ -1034,6 +1017,17 @@ Select the model."));
     }
 
 
+void storePageSize(string PageSize){
+  map sizes = $[];
+  foreach(map option, Printerdb::getPpdFileOptions (Printer::printer["ppd"]:"", true), {
+   if (option["name"]:""=="PageSize") sizes=option;
+  });
+ Printer::printer["ppd_options", "PageRegion"] = PageSize;
+ Printer::printer["ppd_options", "ImageableArea"] = PageSize;
+ Printer::printer["ppd_options", "PaperDimension"] = PageSize;
+ Printer::printer["ppd_options", "PageSize"] = PageSize;
+}
+
     /**
      * Configuration of the filter. It is quite complicated because there can
      * be depended options so change of value (lower list) can change content
@@ -1057,10 +1051,9 @@ Select the model."));
 	Wizard::SetContentsButtons (_("Configuration Options"), `VBox (
 		`VWeight (1, `ReplacePoint (`id (`upper), `VSpacing (1))),
 		`VWeight (1, `ReplacePoint (`id (`lower), `VSpacing (1)))
-		), getFilterHelp (), Label::BackButton (),Label::NextButton ());
+		), getFilterHelp (), Label::CancelButton (),Label::OKButton ());
 	Wizard::RestoreBackButton ();
 	Wizard::RestoreAbortButton ();
-
 	map selected = Printer::printer["options"]:$[];
 	map ppd_selected = Printer::printer["ppd_options"]:$[];
 
@@ -1275,17 +1268,13 @@ Select the model."));
 	if (`next == ret)
 	{
 	    string ps = (string) (ppd_selected["PageSize"]:nil);
-	    if (ps != nil)
-	    {
-		ppd_selected["PageRegion"] = ps;
-		ppd_selected["ImageableArea"] = ps;
-		ppd_selected["PaperDimension"] = ps;
-	    }
+	    if (ps != nil) storePageSize(ps);
 	    Printer::printer["options"] = selected;
 	    Printer::printer["ppd_options"] = ppd_selected;
 
 
 	}
+return nil;
 	return (symbol)ret;
     }
 
@@ -2072,7 +2061,7 @@ void refreshOverview(integer selected, boolean rebuild_items){
 	if (size((list<term>)UI::QueryWidget(`id (`_hw_items), `Items))>0) selected = tointeger( UI::QueryWidget(`id(`_hw_items), `CurrentItem));
 	Printer::selectPrinter(selected);
 y2internal("event %1", event);
-	refreshOverview(selected, (event["EventReason"]:nil=="SelectionChanged"||event["ID"]:nil==`delete)?false:true);
+	refreshOverview(selected, (event["EventReason"]:nil=="SelectionChanged"||event["ID"]:nil==`delete||event["ID"]:nil==`edit)?false:true);
 	y2milestone("selected printer %1", selected);
         if (new_spooler == "cups" && CUPS::InstallationType () == `client) new_spooler = "cups-client";
 
@@ -2487,4 +2476,449 @@ foreach(string row, CUPS::cups_server_settings["Listen"]:[], {
 	return `next; // because of wizard sequencer
     }
 
+void initOptions(string key){
+ // TODO : fix olicies
+ UI::ChangeWidget(`policy, `Enabled, false);
+
+ string info = Printer::printer["info"]:"";
+ string loc = Printer::printer["location"]:"";
+ UI::ChangeWidget(`description, `Value, info);
+ UI::ChangeWidget(`location, `Value, loc);
+ UI::ChangeWidget(`default_printer, `Value, Printer::default_queue==Printer::printer["name"]:"");
+ boolean has_ppd = (Printer::printer["raw"]:true==false);
+ UI::ChangeWidget(`chb_driver, `Value, has_ppd);
+
+ if(has_ppd){
+  y2internal("PPD %1", Printer::printer["ppd"]:"");
+  map sizes = $[];
+  foreach(map option, Printerdb::getPpdFileOptions (Printer::printer["ppd"]:"", true), {
+   if (option["name"]:""=="PageSize") sizes=option;
+  });
+  y2internal("sizes %1", sizes);
+  //y2internal("selected %1", ((map)SCR::Read (.ppd.file.options,[Printer::printer["ppd"]:"", ""]))["data"]:$[]);
+  y2internal("options %1", Printer::printer["options"]:nil);
+  list vals = maplist (string k, sizes["valorder"]:[], ``( [k, sizes["values", k]:k]));
+  string default_size = Printer::printer["ppd_options", "PageSize"]:"";
+  if (default_size==nil || default_size=="") default_size = sizes["current"]:"";
+  if (default_size == "") default_size = sizes["valorder", 0]:"";
+  list items=[];
+  foreach (list i, (list<list>)vals, {
+  items=add(items, `item(`id(i[0]:""), i[1]:"", (i[0]:""==default_size)));
+  });
+
+        // read list of banners
+        list<string> banners = CUPS::getBannerList ();
+        banners = sort (banners);
+        // read current settings
+        string banner_start = Printer::printer["bannerstart"]:"none";
+        string banner_end = Printer::printer["bannerend"]:"none";
+
+        if ("" == banner_start) banner_start = "none";
+        if ("" == banner_end) banner_end = "none";
+  UI::ChangeWidget(`start_banner, `Items, maplist (string i, banners, ``{ return `item (`id (i), i, i == banner_start); }));
+  UI::ChangeWidget(`end_banner, `Items, maplist (string i, banners, ``{ return `item (`id (i), i, i == banner_end); }));
+
+  y2internal("items %1", items);
+  y2internal("printer %1", Printer::printer);
+//        ));
+  UI::ChangeWidget(`paper_size, `Items, items);
+ } else {}
+}
+
+
+symbol handleOptions(string key, map event){
+ y2internal("event %1", event);
+ if (event["EventReason"]:""=="Activated" && event["ID"]:nil==`more_driver_options){
+ y2internal("show popup");
+ UI::OpenDialog(`VBox(
+                `ReplacePoint (`id (`contents), `VSpacing (1)),
+		`HBox(
+			`PushButton(`id(`cancel), Label::CancelButton()),
+			`PushButton(`id(`next), Label::OKButton())))
+	);
+  runOptionsDialog();
+  UI::CloseDialog();
+  initOptions("");
+ } else if (event["EventReason"]:""=="ValueChanged" && event["ID"]:nil ==`paper_size){
+  storePageSize((string)UI::QueryWidget(`paper_size, `Value));
+ }
+ return nil;
+}
+
+void storeOptions(string key, map event){
+y2internal("storing");
+ string info = (string)UI::QueryWidget(`description, `Value);
+ string loc = (string)UI::QueryWidget(`location, `Value);
+ Printer::printer["info"] = info;
+ Printer::printer["location"] = loc;
+
+ Printer::printer["bannerstart"] = (string) UI::QueryWidget(`start_banner, `Value);
+ Printer::printer["bannerend"]   = (string) UI::QueryWidget(`end_banner, `Value);
+ if((boolean)UI::QueryWidget(`default_printer, `Value)) Printer::default_queue = Printer::printer["name"]:"";
+}
+
+void initBasic(string key){
+ string uri = Printer::printer["uri"]:"";
+ UI::ChangeWidget(`curr_conn, `Value, uri);
+	map selected = Printer::printer["options"]:$[];
+	map ppd_selected = Printer::printer["ppd_options"]:$[];
+ UI::ChangeWidget(`model_name, `Value, Printer::printer["ppd_info", "nick"]:"");
+
+
+Printerdb::InstallDrivers ();
+	Printerdb::loadFoomaticIfNeeded ();
+ string manuf_db = Printer::printer["manuf_db"]:"";
+ string model_db = Printer::printer["model_db"]:"";
+    list cfgs = [];
+  list<string> ppds = Printerdb::sortPpds (manuf_db, model_db);
+  foreach (string k, ppds, ``{
+    y2debug ("V: %1, M: %2, K: %3", manuf_db, model_db, k);
+
+    string filename = k;
+    string label = GetPpdFileDescription (
+        Printerdb::foomatic[manuf_db, model_db, filename, "nickname"]:"",
+        Printerdb::foomatic[manuf_db, model_db, filename, "language"]:"", filename
+    );
+    cfgs = add (cfgs, `item (`id (k), label));
+  });
+y2internal("cfgs %1", cfgs);
+}
+
+symbol handleBasic(string key, map event){
+ if (event["EventReason"]:""=="Activated" && event["WidgetID"]:nil==`change_conn){
+       term contents = `VBox(
+       `ReplacePoint(`id(`contents),
+	`VBox(
+         `Frame(_("New Queue for Existing Printer"),
+           `VBox(
+                `SelectionBox(`id(`connection_type), _("Printer"),
+                 []
+                ))))),
+		`HBox(
+			`PushButton(`id(`cancel), Label::CancelButton()),
+			`PushButton(`id(`next), Label::OKButton()))
+        );
+  UI::OpenDialog(contents);
+  runNewQueueDialog();
+  UI::CloseDialog();
+  initBasic("");
+ }
+ if (event["EventReason"]:""=="Activated" && event["ID"]:nil==`change_model){
+        // selection box label
+        term manufsel = `SelectionBox (`id (`manufsel), `opt (`notify, `immediate),
+            // selection boc title
+            _("Manufacturer"),
+            maplist (string k, map v, Printerdb::foomatic, ``(
+                `item (`id (k), v[`label]:k))));
+	term contents = 
+       `ReplacePoint(`id(`contents),
+	`VBox (`HBox (`HWeight (1, manufsel),
+	    `HWeight (1, `ReplacePoint (`id (`modelsel_rep), `HSpacing ()))),
+	    `HBox (
+		`HStretch (),
+/*
+		`MenuButton (`id (`other_ppd), _("Add &PPD File to Database"), [
+		    `item (`id (`specifyppd), _("&Local PPD File")),
+		    `item (`id (`downloadppd), _("&Download PPD File")),
+		]),
+		`PushButton (`id (`select_ppd), _("Select PPD File")),
+*/
+		`HBox(
+			`PushButton(`id(`cancel), Label::CancelButton()),
+			`PushButton(`id(`next), Label::OKButton()))
+	    )));
+ UI::OpenDialog( `ReplacePoint(`id(`contents), `Empty()));
+ ManufModelPopup();
+ UI::CloseDialog();
+ initBasic("");
+//  runSelectPpdFile();
+ }
+// if (event["EventReason"]:""=="Activated" && event["WidgetID"]:nil==`conn_wizard){
+//runSelectPpdFile();
+// }
+ return nil;
+}
+
+void initStatus(string key){
+ boolean accept = Printer::printer["accepting"]:true;
+ UI::ChangeWidget(`job_status, `CurrentButton, accept ? `accept_job : `reject_job);
+ boolean idle = Printer::printer["state"]:"idle" != "stopped";
+ UI::ChangeWidget(`print_status,  `CurrentButton, idle ? `enable_print : `disable_print);
+}
+
+void storeStatus(string key, map event){
+ Printer::printer["accepting"] = UI::QueryWidget(`job_status, `CurrentButton)==`accept_job;
+ Printer::printer["state"] = (UI::QueryWidget(`print_status, `CurrentButton)==`enable_print) ? "idle" : "stopped";
+}
+
+void initSharing(string key){
+y2internal("initSharing");
+ UI::ChangeWidget(`publish_exclude, `Value, !(Printer::printer["shared"]:true));
+ UI::ChangeWidget(`hosts, `CurrentButton, `host_allow);
+ UI::ChangeWidget(`users, `CurrentButton, `user_allow);
+
+ UI::ChangeWidget(`hosts, `Enabled, false);
+ UI::ChangeWidget(`users, `Enabled, false);
+ UI::ChangeWidget(`host_exception, `Enabled, false);
+ UI::ChangeWidget(`user_exception, `Enabled, false);
+ UI::ChangeWidget(`add_host, `Enabled, false);
+ UI::ChangeWidget(`add_user, `Enabled, false);
+ UI::ChangeWidget(`del_host, `Enabled, false);
+ UI::ChangeWidget(`del_user, `Enabled, false);
+}
+
+define symbol handleSharing(string key, map event);
+
+boolean IPPopup(symbol widget, string title, boolean validateIP){
+	UI::OpenDialog(
+	 `VBox(
+	  `InputField(`id(`ip), title, ""),
+	`HBox(
+	 `PushButton(`id(`cancel), Label::CancelButton()),
+	 `PushButton(`id(`ok), Label::OKButton())
+	 ))
+	);
+	any ret = UI::UserInput();
+	do{
+        if (ret==`cancel) {
+		UI::CloseDialog();
+		return false;
+	       }
+	 if (ret == `ok){
+	 string ip = (string)UI::QueryWidget(`ip, `Value);
+	  boolean valid = true;
+	  if(validateIP)  {
+		if (!IP::Check(ip)) Popup::Error (_("Invalid IP address."));
+		valid=false;
+		}
+	      if (valid) {
+		UI::CloseDialog();
+		list items = (list)UI::QueryWidget(widget, `Items);
+		items = add(items, ip);
+		UI::ChangeWidget(widget, `Items, items);
+		handleSharing("", $[]);
+		return true;
+	 }}
+	ret = UI::UserInput();
+	} while (!(ret == `cancel || ret == `ok));
+}
+
+void deleteCurrent(symbol widget){
+ list items = (list)UI::QueryWidget(`host_exception, `Items);
+ string current = (string)UI::QueryWidget(`host_exception, `CurrentItem);
+ items = filter(term row, (list<term>)items, { return (row[1]:""!=current); });
+ UI::ChangeWidget(`host_exception, `Items, items);
+}
+
+symbol handleSharing(string key, map event){
+ UI::ChangeWidget(`del_host, `Enabled, (size((list)UI::QueryWidget(`host_exception, `Items))>0));
+ UI::ChangeWidget(`del_user, `Enabled, (size((list)UI::QueryWidget(`user_exception, `Items))>0));
+y2internal("event %1", event);
+ if (event["EventReason"]:"" == "Activated"){
+  switch ((symbol)event["ID"]:nil){
+   case `add_host:
+		IPPopup(`host_exception, _("IP address"), true);
+	break;
+   case `del_host:
+		deleteCurrent(`host_exception);
+	break;
+   case `add_user:
+		IPPopup(`user_exception, _("Username"), false);
+	break;
+   case `del_user:
+		deleteCurrent(`user_exception);
+	break;
+  }
+ }
+ return nil;
+}
+
+void storeSharing(string key, map event){
+ Printer::printer["shared"] = !(boolean)UI::QueryWidget(`publish_exclude, `Value);
+}
+
+ define symbol runNewEditDialog () ``{
+  symbol ret=`nil;
+ map<string, map <string, any> > widgets = $[
+ "options" : $[
+	"widget" : `custom,
+	"custom_widget" : `VBox(
+		`Left( `CheckBox(`id(`default_printer), _("Set As Default")) ),
+	`VStretch(),
+		`Left( `InputField(`id(`description), _("Description")) ),
+		`Left( `InputField(`id(`location), _("Location")) ),
+	`VStretch(),
+		`CheckBoxFrame(`id(`chb_driver), _("Driver Options"), false, `HBox(
+		  `ComboBox(`id(`paper_size), `opt(`notify), _("Default Paper in Your Printer")),
+		  `HStretch(),
+		  `PushButton(`id(`more_driver_options), _("More Driver Options"))
+		)),
+	`VStretch(),
+	        `HBox(
+		 `Frame(`id(`policy), _("Policies"), `HBox(
+			`ComboBox(`id(`err_policy), _("Error Policy"), []),
+			`ComboBox(`id(`oper_policy), _("Operation Policy"), [])
+			)),
+		  `HStretch(),
+		 `Frame(_("Banners"),  `HBox(
+			`ComboBox(`id(`start_banner), _("Starting Banner"), []),
+			`ComboBox(`id(`end_banner), _("Ending Banner"), [])
+			))
+		),
+	`VStretch()
+	),
+	"init" : initOptions,
+	"handle" : handleOptions,
+	"store" : storeOptions,
+	"opt" : [`notify],
+	"help" : ""
+ ],
+  "basic" : $[
+        "widget" : `custom,
+	"custom_widget" : `VBox(
+	`HBox(
+	  `Left( `TextEntry(`id(`curr_conn),`opt(`disabled), _("Current Connection"), "") ),
+	  `PushButton(`id(`change_conn), _("Change Connection")),
+	   `PushButton(`id(`conn_wizard), _("Connection Wizard"))
+	 ),
+	 `VStretch(),
+	`HBox(
+	  `Left( `TextEntry(`id(`model_name),`opt(`disabled), _("Model Name"), "") ),
+	  `PushButton(`id(`change_model), _("Change Model"))
+	 ),
+	 `VBox(
+/*
+	  `HBox(
+	   `Left( `InputField(`id(`driver_filter), _("Driver Filter"), "") ),
+	   `PushButton(`id(`filter_drivers), _("Show Matching Driver")),
+	   ),
+*/
+		`SelectionBox(`id(`drivers), _("Driver"), []),
+		`Right(`PushButton(`id(`add_driver),_("Add Driver")) )
+		),
+	 `VStretch()
+	 ),
+	"init" : initBasic,
+	"handle" : handleBasic,
+/*
+                "init"  : initServiceStatus,
+                "handle" : handleServiceStatus,
+                "store"  : storeServiceStatus,
+                "handle_events" : [ "enabled", "disabled" ],
+*/
+                "opt" : [ `notify ],
+                "help" : "",
+            ],
+ "status" : $[
+	"widget" : `custom,
+	"custom_widget" : `VBox(
+	 `Frame(_("Printout Status"),
+	  `RadioButtonGroup(`id(`print_status),
+	   `VBox(
+	    `Left(`RadioButton(`id(`enable_print), _("Enable Printout"))),
+	    `Left(`RadioButton(`id(`disable_print), _("Disable Printout")))
+	 ))
+	),
+	 `Frame(_("Print Job Status"),
+	  `RadioButtonGroup(`id(`job_status),
+	   `VBox(
+	    `Left(`RadioButton(`id(`accept_job), _("Accept Print Jobs"))),
+	    `Left(`RadioButton(`id(`reject_job), _("Reject Print Jobs")))
+	 ))
+	 ),
+	`VStretch()
+	),
+	"opt" : [`notify],
+	"init" : initStatus,
+	"store" : storeStatus,
+	"help": ""
+ ],
+ "sharing" : $[
+	"widget" : `custom,
+	"custom_widget" : `VBox(
+//	`CheckBoxFrame(`id(`publish_exclude), _("Exclude From Publishing in the Network") , true,
+	`Left( `CheckBox(`id(`publish_exclude), _("Exclude From Publishing in the Network")) ),
+	 `VBox(
+	  `Frame(_("Hosts"),
+	   `VBox(
+	    `RadioButtonGroup(`id(`hosts), `VBox(
+	    `Left(`RadioButton(`id(`host_allow), _("Allow Access for Every Host Except those Specified Below"))),
+	    `Left(`RadioButton(`id(`host_deny),  _("Deny Access for Every Host Except those Specified Below")))
+	    )),
+	  `SelectionBox(`id(`host_exception), "", []),
+	  `Left(`HBox(
+	   `PushButton(`id(`add_host), Label::AddButton()),
+	   `PushButton(`id(`del_host),  Label::DeleteButton())
+	   ))
+	  )
+	 ),
+	`Frame(_("Users"),
+	 `VBox(
+	  `RadioButtonGroup(`id(`users), `VBox(
+	   `Left(`RadioButton(`id(`user_allow), _("Allow Printing for Everyone Except Users Specified Below"))),
+	   `Left(`RadioButton(`id(`user_deny),  _("Deny Printing for Everyone Except Users Specified Below")))
+	   )),
+	  `SelectionBox(`id(`user_exception), "", []),
+	  `Left(`HBox(
+	   `PushButton(`id(`add_user), Label::AddButton()),
+	   `PushButton(`id(`del_user),  Label::DeleteButton())
+	   ))
+	  )
+	 ))
+	),
+	"init": initSharing,
+	"handle": handleSharing,
+	"store": storeSharing,
+	"opt" : [`notify],
+	"help": ""
+]
+];
+
+
+
+map tabs_descr =
+$[
+"options" : $[
+	"header" : _("Printer Options"),
+	"contents" : `VBox("options"),
+	"widget_names" : ["options"]
+	],
+"basic"	  : $[
+	"header" : _("Basic Settings"),
+	"contents" : `VBox ( "basic"),
+	"widget_names" : ["basic"]
+	],
+"status"  : $[
+	"header" : _("Status"),
+	"contents" : `VBox("status"),
+	"widget_names" : ["status"]
+	],
+"sharing" : $[
+	"header" : _("Sharing"),
+	"contents" : `VBox("sharing"),
+	"widget_names" : ["sharing"]
+	]
+];
+
+    map widget_descr = $[
+        "tab": CWMTab::CreateWidget($[
+            "tab_order": ["options", "basic", "status", "sharing"],
+            "tabs": tabs_descr,
+            "widget_descr": widgets,
+            "initial_tab" : "options",
+            "tab_help" : "",
+        ]),
+    ];
+    string caption = _("Printer Queue Edit Dialog");
+    term contents = `VBox( "tab");
+    list<map <string, any> > w = CWM::CreateWidgets (["tab"], (map <string, map <string, any> >)widget_descr);
+    contents = CWM::PrepareDialog(contents, w);
+    Wizard::SetContentsButtons(caption, contents, "", Label::BackButton (), Label::NextButton ());
+    Wizard::RestoreAbortButton();
+//    Wizard::DisableBackButton();
+
+    ret = CWM::Run(w, $[]);
+  if (ret==`next) Printer::storePrinter();
+  return ret;
+ }
 }

@@ -311,10 +311,10 @@ if (size(Printer::printcap) ==0) items = `VBox(
      */
 define symbol runNewQueueDialog() ``{
   list<term> printers = [];
+	integer current = 0;
   term contents = `VBox();
 if (Spooler::Get () == "cups")
 {
-	integer row = 0;
 	list<string> used = [];
 	/*
 	 * create unique list of configured printers
@@ -322,28 +322,25 @@ if (Spooler::Get () == "cups")
          maplist (map i, Printer::printcap, ``{
 		if (contains(used, i["uri"]:"") == false)
 		 {
-		  printers = add(printers, `item(`id(row), i["uri"]:"unknown"));
+		  if (i["uri"]:""==Printer::printer["uri"]:"") current = size(printers);
+		  printers = add(printers, `item(`id(size(printers)), i["uri"]:"unknown"));
 		  used=add(used, i["uri"]:"");
 		 }
-		row = row + 1;
         });
 }
-if (size(printers)>0)
- {
 	contents = `VBox(
 	 `Frame(_("New Queue for Existing Printer"),
 	   `VBox(
 		`SelectionBox(`id(`connection_type), _("Printer"),
-		 printers 
+		 printers
 		)
 	  )
 	));
- }
         Wizard::SetContentsButtons (_("New Queue for Existing Printer"), contents, /*_("TODO help")*/"", 
-				Label::BackButton (), Label::NextButton ());
+				Label::CancelButton (), Label::OKButton ());
         Wizard::RestoreBackButton ();
         Wizard::RestoreAbortButton ();
-	UI::ChangeWidget(`connection_type, `CurrentItem, 0);
+	UI::ChangeWidget(`connection_type, `CurrentItem, current);
         any ret = nil;
 
         while (ret == nil)
@@ -388,8 +385,10 @@ tmp_map["name"] = Printer::generateQueueName(nil, tmp_map["uri"]:"",
 	tmp_map["vendor_db"]:"", tmp_map["device_db"]:"", Printer::getForbiddenNames());
        Printer::editDetected(tmp_map);
        y2milestone("Configuring detected, non-configured printer");
+return nil;
 		 return `edit_button;
 		}
+return nil;
 	return `next;
     }
 
@@ -523,51 +522,6 @@ if (local == false)
 	    getLocalConnectionsHelp (), `connection_local);
     }
 
-    /**
-      * Dialog asking about connection type for connection to remote CUPS server
-      * @return symbol wizard sequencer symbol
-      */
-/*
-    define symbol runCupsConnectionDialog () ``{
-	symbol selected = `cups_client;
-	string uri_type = Printerlib::getUriType (Printer::printer["uri"]:"");
-	if (uri_type == "ipp")
-            selected = `ipp;
-	if (uri_type == "listen_ipp")
-	    selected = `listen_ipp;
-	if (contains ([`cups_client, `ipp, `listen_ipp],
-	    Printer::connection_subtype_selected))
-	{
-	    selected = Printer::connection_subtype_selected;
-	}
-
-	term items = `VBox (
-	    `Left (`RadioButton (`id (`cups_client),
-		// radio button
-		_("CUPS &Client-Only
-(the most secure solution)
-"),
-		selected == `cups_client)),
-	    `Left (`RadioButton (`id (`listen_ipp),
-		// radio button
-		_("CUPS &Using Broadcasting
-(recommended for trusted networks)
-"), selected == `listen_ipp)),
-	    `Left (`RadioButton (`id (`ipp),
-		// radio button
-		_("Remote &IPP Queue
-(only for special cases)
-"),
-		selected == `ipp))
-	);
-	Printer::printer["proposed_raw"] = true;
-	// dialog caption
-	return runGenericConnectionTypeDialog (items, _("Connection Type"),
-	    // frame label
-	    _("Type of Connection to the CUPS Server"),
-	    getCupsConnectionsHelp (), `connection_cups);
-    }
-*/
 
     /**
       * Dialog asking about connection type for small print servers
