@@ -2105,11 +2105,22 @@ the selected spooler does not support it."), name));
      * @param det map of detected printer
      */
     global define void editDetected (map det) ``{
+    // (FaTE#120083) Avoid the Automated Setup For "Non-Recommended" Printers
+    boolean problematic = false;
+    map<string, any> cmd = (map<string, any>)SCR::Execute(.target.bash_output, sformat("grep '%1' %2|tr -d '\n'", det["device"]:"",
+			"/usr/share/YaST2/data/printer/printers_support"));
+y2internal("%1", cmd);
+	if (cmd["exit"]:-1==0) {
+	 string status = splitstring(cmd["stdout"]:"", "|")[2]:"";
+	 if (status!="full"){
+		problematic=true;
+		Popup::Warning(sformat("%1 %2 %3 '%4'", _("Selected printer"),  splitstring(cmd["stdout"]:"", "|")[1]:"",  _("will not be autoconfigured\n because it's not fully supported. Supported status is"), status));
+	 }
+	}
 	Printerdb::InstallDrivers ();
 	index = -1;
 	y2debug ("Editing printer %1", det);
-	string filename = Printerdb::getAutoPpdFile (
-	    det["vendor_db"]:"", det["device_db"]:"");
+	string filename = (problematic) ? "" : Printerdb::getAutoPpdFile ( det["vendor_db"]:"", det["device_db"]:"" );
 	y2debug ("Filename: %1", filename);
 	printer = $[
 	    "detected" : det,

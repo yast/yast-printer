@@ -180,9 +180,9 @@ preparation for autoinstallation."));
 	if (haskey ((map)SCR::Read (.proc.modules), "usblp"))
 	    SCR::Execute (.target.bash, sformat ("
 MAIN_PID=$$
-{/bin/echo -en %1 > %2 ; kill $MAIN_PID;} &
+{ /bin/echo -en %1 > %2 ; kill $MAIN_PID; } &
 ECHO_PID=$!
-{sleep 2s ; kill $ECHO_PID &>/dev/null ;} &", sequence, device));
+{ sleep 2s; kill $ECHO_PID &>/dev/null; } &", sequence, device));
     }
 
     /**
@@ -374,7 +374,6 @@ ECHO_PID=$!
 	}
 
 	map test_return = (map)SCR::Execute (.target.bash_output, test_command);
-y2internal("exit_code %1", test_return["exit"]:0);
 	integer tst = test_return["exit"]:0;
 	if (4 == tst && type == "ipp_server")
 	    tst = 0;
@@ -655,8 +654,6 @@ global define string getReplacedString(string device, boolean show_pass)
 {
  string replaced = "";
  map tokens = URL::Parse(device);
-y2internal("tokens %1", tokens);
-y2internal("device %1", device);
 
  if (show_pass){
   replaced = sformat("%1://", tokens["scheme"]:"");
