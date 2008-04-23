@@ -309,7 +309,7 @@ if (size(Printer::printcap) ==0) items = `VBox(
      * Dialog for create queue for existing printer
      * @return symbol wizard sequencer symbol
      */
-define symbol runNewQueueDialog() ``{
+define symbol runNewQueueDialog(symbol retval) ``{
   list<term> printers = [];
 	integer current = 0;
   term contents = `VBox();
@@ -381,12 +381,15 @@ if (Spooler::Get () == "cups")
 
                });
        map <string, any> tmp_map = Printer::printcap[from_detect]:$[];
-tmp_map["name"] = Printer::generateQueueName(nil, tmp_map["uri"]:"", 
+       tmp_map["name"] = Printer::generateQueueName(nil, tmp_map["uri"]:"", 
 	tmp_map["vendor_db"]:"", tmp_map["device_db"]:"", Printer::getForbiddenNames());
        Printer::editDetected(tmp_map);
        y2milestone("Configuring detected, non-configured printer");
-return nil;
+	return retval;
+/*
+		return nil;
 		 return `edit_button;
+*/
 		}
 return nil;
 	return `next;
@@ -398,6 +401,7 @@ return nil;
       * @return symbol wizard sequencer symbol
       */
     define symbol runConnectionTypeDialog (boolean local) ``{
+y2internal("runConnectionTypeDialog");
 	symbol selected = Printer::connection_type_selected;
 	boolean add_queue = false;
 	if (size (getConfiguredPrinters ()) != 0 && Printer::confmode == `adm) add_queue = true;
@@ -462,8 +466,7 @@ if (local == false)
 	    // frame label
 	    "", //_("Printer Type"),
 	    getConnectionTypeHelp (add_queue), `connection_type);
-	if (ret == `lpd)
-	    Printer::printer["proposed_raw"] = true;
+	if (ret == `lpd) Printer::printer["proposed_raw"] = true;
 	return (symbol)ret;
     }
 

@@ -99,7 +99,7 @@
 	    "printer_type" :	``(runPrinterTypeDialog()),
 	    "add_local_printer":``(runConnectionTypeDialog(true)),
 	    "add_remote_printer":``(runConnectionTypeDialog(false)),
-	    "add_new_queue" :	``(runNewQueueDialog()),
+	    "add_new_queue" :	``(runNewQueueDialog(`edit_button)),
 //	    "advanced" :	``(runAdvancedDialog ()),
 //	    "cupsd" :		``(runCupsServerDialog ("")),
             "cupsaclroot" :	``(runCupsAclDialog (`root)),
@@ -138,7 +138,7 @@
 	];
 	Printer::default_queue = "lp";
 	Printer::selectPrinter (3);
-	list<string> seq = [ "main", "configdetected", "quick", "complex", "connection_local", "usb", "name", "model", "filter", "featues", "edit", ];
+	list<string> seq = [ "main", "configdetected", "quick", "complex", "connection_local", "usb", "name", /*"model",*/ "filter", "featues", "edit", ];
 	foreach (string i, seq, ``{
 	    eval (getAliases ()[i]:nil);
 	});
@@ -261,7 +261,14 @@
 		"edit2" : $[
 		 `next : `next,
 		 `abort: `abort
+//		 `add : "add_printer_sub_wz"
 		]
+/*
+		"add_printer_sub_wz" : $[
+                 `next : `next,
+                 `abort: `abort
+		]
+*/
 		];
 //        if (configured == false) sequence["ws_start"] = "model";
 	aliases = (map<string,any>)filter (string k, any v, aliases, ``(haskey (sequence, k)));
@@ -375,10 +382,16 @@
 
 	    "name_auto" : $[
 		`abort : `abort,
-		`next : "model",
+//		`next : "model",
+		`next : "edit2",
 		`raw : "storeprinter",
 		`class : "members",
 	    ],
+	    "edit2" : $[
+	    `next : `next,
+	    `abort : `abort
+	    ],
+/*
 	    "model" : $[
 		`abort : `abort,
 		`next : `edit,
@@ -387,18 +400,19 @@
 		`downloadppd : "downloadppd",
 		`select_ppd : "ppdselect_all",
 	    ],
+*/
 	    "ppdselect_all" : $[
 		`abort : `abort,
 		`next : `edit,
-		`select_model : "model",
+//		`select_model : "model",
 	    ],
 	    "useppd" : $[
 		`abort : `abort,
-		`next : "model",
+//		`next : "model",
 	    ],
 	    "downloadppd" : $[
 		`abort : `abort,
-		`next: "model",
+//		`next: "model",
 	    ],
 	    "members" : $[
 		`abort : `abort,
@@ -470,6 +484,7 @@
                 `abort : `abort,
                 `configure_button : "add_printer_wz",
 //                `restart_button : "redetect",
+		`add_button : "add_printer_wz",
                 `edit_button : "edit2",
                 `edit_unconf : "edit_printer_unconf",
 //                `change_ipp_listen : "listen_ipp_bcast",

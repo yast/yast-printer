@@ -2107,20 +2107,28 @@ the selected spooler does not support it."), name));
     global define void editDetected (map det) ``{
     // (FaTE#120083) Avoid the Automated Setup For "Non-Recommended" Printers
     boolean problematic = false;
-    map<string, any> cmd = (map<string, any>)SCR::Execute(.target.bash_output, sformat("grep '%1' %2|tr -d '\n'", det["device"]:"",
-			"/usr/share/YaST2/data/printer/printers_support"));
-y2internal("%1", cmd);
-	if (cmd["exit"]:-1==0) {
-	 string status = splitstring(cmd["stdout"]:"", "|")[2]:"";
-	 if (status!="full"){
+    string model = String::CutBlanks(det["device"]: det["ppd_info", "model"]:"");
+    if (size(model)==0) y2warning("Couldn't detect model from %1", det);
+	else {
+		string command = sformat("grep '%1' %2|tr -d '\n'", model, "/usr/share/YaST2/data/printer/printers_support");
+		y2internal("executing command %1", command);
+		map<string, any> cmd = (map<string, any>)SCR::Execute(.target.bash_output, command);
+	y2internal("%1", cmd);
+	 if (cmd["exit"]:-1==0) {
+	  string status = splitstring(cmd["stdout"]:"", "|")[2]:"";
+	  if (status!="full" && size(status)>0){
 		problematic=true;
 		Popup::Warning(sformat("%1 %2 %3 '%4'", _("Selected printer"),  splitstring(cmd["stdout"]:"", "|")[1]:"",  _("will not be autoconfigured\n because it's not fully supported. Supported status is"), status));
+	  }
 	 }
 	}
 	Printerdb::InstallDrivers ();
 	index = -1;
 	y2debug ("Editing printer %1", det);
-	string filename = (problematic) ? "" : Printerdb::getAutoPpdFile ( det["vendor_db"]:"", det["device_db"]:"" );
+y2internal ("Editing printer %1", det);
+string vendor = det["vendor_db"]: det["ppd_info", "manufacturer_db"]:"";
+string device = det["device_db"]: det["ppd_info", "model_db"]:"";
+	string filename = (problematic) ? "" : Printerdb::getAutoPpdFile ( vendor, device );
 	y2debug ("Filename: %1", filename);
 	printer = $[
 	    "detected" : det,
