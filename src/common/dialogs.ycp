@@ -27,8 +27,9 @@
     import "Spooler";
     import "Stage";
     import "Wizard";
-    import "Wizard_hw";
+//    import "Wizard_hw";
     import "CWMTab";
+//    import "DialogTree";
     import "CWM";
     import "IP";
 
@@ -2230,45 +2231,63 @@ map<string, map<string,any> > wd = $[
           "SERVER_TYPE" : $[
             "widget" : `custom,
             "custom_widget" :
-	     `MarginBox(1,0,
-	      `VBox(
-	        `Frame(_("Print via"),
-		 `RadioButtonGroup( `id( `server_type ),
-		  `VBox(
-		        `VBox(
-		         `Left( `RadioButton(`id(`local), `opt(`notify), "Local CUPS Server")),
-			  `VBox(
-			  `HBox(`CheckBox(`id(`ipp_listen), `opt(`notify), _("Listen to IPP Broadcast Packets")),
-				`PushButton(`id(`select_addr), _("Select Addresses"))
-			       ),
-			      `Left(`CheckBox(`id(`lpd_enable), `opt(`notify), _("enable LPD clients")))
-			      )
-			     ),
-		        `VBox(
-		         `Left(`RadioButton(`id(`remote), `opt(`notify), "Do All Your Printing Directly via One Remote CUPS Server" )),
-			 `HBox(
-				`ComboBox(`id(`server_name), `opt(`editable), _("Server Name")),
-		    // menubutton
-                    `MenuButton (`id(`lookup_server), _("&Look Up"), [
-			// menu entry
-                        `item (`id (`get_hosts_special), _("Scan for &IPP Servers")),
-			// menu item
-			`item (`id (`get_hosts_listen),_("Listen for IPP &Broadcasts")),
-			// menu entry
-                        `item (`id (`get_hosts), _("Look Up &All Hosts")),
-                    ]),
-//				`PushButton(`id(`lookup_server), _("Lookup")),
-				`PushButton(`id(`test_ipp), _("Test Remote IPP Access"))
-			      ),
-			 `CheckBox(`id(`use_default), `opt(`notify), _("Use Server's Default Queue")),
-			 `HBox(
-				`ComboBox(`id(`queues), `opt(`editable), _("Queues")),
-				`PushButton(`id(`lookup_queue), _("Lookup"))
-			      )
-			)
-		 ))),
-		`VStretch()
-	     )),
+`HBox(
+`HSpacing(5),
+            `MarginBox(1,0,
+              `VBox(
+                `Frame(_("Print via"),
+                 `RadioButtonGroup( `id( `server_type ),
+                  `VBox(
+                        `VBox(
+                         `Left( `RadioButton(`id(`local), `opt(`notify), "Local CUPS Server")),
+                          `VBox(
+                           `Left(
+                            `HBox(
+                                `HSpacing(),
+                                `CheckBox(`id(`ipp_listen), `opt(`notify), _("Listen to IPP Broadcast Packets")),
+                                `PushButton(`id(`select_addr), _("Select Addresses"))
+                               )),
+                           `Left(
+                            `HBox(
+                                `HSpacing(),
+                                `CheckBox(`id(`lpd_enable), `opt(`notify), _("enable LPD clients"))))
+                              )),
+                        `VBox(
+                         `Left(`RadioButton(`id(`remote), `opt(`notify), "Do All Your Printing Directly via One Remote CUPS Server" )),
+                          `Left(
+                           `HBox(
+                                `HSpacing(),
+                                `ComboBox(`id(`server_name), `opt(`editable), _("Server Name")),
+                                // menubutton
+                                `VBox(
+                                 `VSpacing(),
+                                  `HBox(
+                                   `MenuButton (`id(`lookup_server), _("&Look Up"), [
+                                   // menu entry
+                                   `item (`id (`get_hosts_special), _("Scan for &IPP Servers")),
+                                   // menu item
+                                   `item (`id (`get_hosts_listen),_("Listen for IPP &Broadcasts")),
+                                   // menu entry
+                                   `item (`id (`get_hosts), _("Look Up &All Hosts")),
+                                   ]),
+                                   `PushButton(`id(`test_ipp), _("Test Remote IPP Access"))
+                                ))
+                              )),
+                         `Left( `HBox(`HSpacing(), `CheckBox(`id(`use_default), `opt(`notify), _("Use Server's Default Queue")))),
+                         `Left(
+                          `HBox(
+                           `HSpacing(),
+                           `ComboBox(`id(`queues), `opt(`editable), _("Queues")),
+                           `VBox(`VSpacing(),
+                            `PushButton(`id(`lookup_queue), _("Lookup"))
+                                )
+                              )
+                        ))
+                 ))),
+                `VStretch()
+             )),
+`HSpacing(5)
+),
 	    "init"   : initServerType,
 	    "handle" : handleServerType,
 	    "validate_type" : `function,
@@ -2353,6 +2372,7 @@ map<string, map<string,any> > wd = $[
 map tabs_descr = $[
         "global" : $[
           "header" : _("Global Settings"),
+	  "tree_item_label" : _("Global Settings"),
           "contents" : `VBox (
             "SERVER_TYPE"
           ),
@@ -2360,6 +2380,7 @@ map tabs_descr = $[
         ],
         "overview" : $[
           "header" : _("Printers and Queues"),
+          "tree_item_label" : _("Printers and Queues"),
           "contents" : `VBox (
             "OVERVIEW"
           ),
@@ -2367,6 +2388,7 @@ map tabs_descr = $[
         ],
         "server" : $[
           "header" : _("CUPS server settings"),
+          "tree_item_label" : _("CUPS server settings"),
           "contents" : `VBox (
 		"SERVER"
 		),
@@ -2396,6 +2418,18 @@ symbol runMainDialog(){
     Wizard::DisableBackButton();
 
     symbol ret = CWM::Run(w, $[]);
+/*
+   symbol ret = DialogTree::ShowAndRun ($[
+            "ids_order"         : [ "global", "overview", "server" ],
+            "initial_screen"    : initial_tab,
+            "screens"           : tabs_descr,
+            "widget_descr"      : wd,
+            "abort_button"      : Label::AbortButton(),
+            "next_button"       : (Mode::normal() ?
+                Label::NextButton () : Label::OKButton ()
+            )
+        ]);
+*/
     return ret;
 }
 
