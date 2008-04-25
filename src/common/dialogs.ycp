@@ -29,7 +29,7 @@
     import "Wizard";
 //    import "Wizard_hw";
     import "CWMTab";
-//    import "DialogTree";
+    import "DialogTree";
     import "CWM";
     import "IP";
 
@@ -82,22 +82,14 @@
 
 	list model_val = [];
 	term modelsel = nil;
-	term contents = `VBox (`HBox (`HWeight (1, manufsel),
-	    `HWeight (1, `ReplacePoint (`id (`modelsel_rep), `HSpacing ()))),
-	    `HBox (
-		`HStretch (),
-/*
-		`MenuButton (`id (`other_ppd), _("Add &PPD File to Database"), [
-		    `item (`id (`specifyppd), _("&Local PPD File")),
-		    `item (`id (`downloadppd), _("&Download PPD File")),
-		]),
-		`PushButton (`id (`select_ppd), _("Select PPD File")),
-*/
+	term contents = `VBox (`HBox (`HWeight(10, manufsel),
+	    `ReplacePoint (`id (`modelsel_rep), `HSpacing ())),
 		`HBox(
+			`HSpacing(),
 			`PushButton(`id(`cancel), Label::CancelButton()),
-			`HStretch(),
-			`PushButton(`id(`next), Label::OKButton()))
-	    ));
+			`PushButton(`id(`next), Label::OKButton())),
+			`HSpacing()
+	    );
 	// dialog box label
 	Wizard::SetContentsButtons (_("Printer Model"),
 	    contents, getManufModelHelp (), Label::CancelButton (),
@@ -174,11 +166,7 @@
 		y2debug ("modelsel changed to %1", model_db);
 	    }
 	    ret = (symbol)UI::UserInput ();
-	    if (`abort == ret || `cancel == ret)
-            {
-                ret = reallyAbort () ? `abort : `cont;
-                if (ret == `abort) break;
-            }
+	    if (ret == `cancel) break;
 	    if (ret == `next && (model_db == "" || model_db == nil))
 	    {
 		// popup
@@ -2028,7 +2016,6 @@ void refreshOverview(integer selected, boolean rebuild_items){
   UI::ChangeWidget (`id (`_hw_items), `Items, items);
   if (size((items))>0) selected = tointeger( UI::QueryWidget(`id(`_hw_items), `CurrentItem));
  }
-y2internal("selected %1", selected);
  boolean editable = (selected==nil || selected==-1) ? false : true;
   if (size((list<term>)UI::QueryWidget(`id (`_hw_items), `Items))>0)
    {
@@ -2066,7 +2053,6 @@ y2internal("selected %1", selected);
 	integer selected = -1;
 	if (size((list<term>)UI::QueryWidget(`id (`_hw_items), `Items))>0) selected = tointeger( UI::QueryWidget(`id(`_hw_items), `CurrentItem));
 	Printer::selectPrinter(selected);
-y2internal("event %1", event);
 	refreshOverview(selected, (event["EventReason"]:nil=="SelectionChanged"||event["ID"]:nil==`delete||event["ID"]:nil==`edit)?false:true);
 	y2milestone("selected printer %1", selected);
         if (new_spooler == "cups" && CUPS::InstallationType () == `client) new_spooler = "cups-client";
@@ -2363,7 +2349,8 @@ map<string, map<string,any> > wd = $[
 	), `HSpacing (2)),
 	    "init"   : initCupsServer,
 	    "handle" : handleCupsServer,
-	    "store" :  storeCupsServer
+	    "store"  : storeCupsServer,
+	    "help"   : getCupsServerHelp()
 	   ]
         ];
 
@@ -2397,6 +2384,7 @@ map tabs_descr = $[
 
 symbol runMainDialog(){
     string caption = _("Detected Printers");
+/*
     map widget_descr = $[
         "tab": CWMTab::CreateWidget($[
             "tab_order":  [ "global", "overview", "server" ],
@@ -2416,18 +2404,19 @@ symbol runMainDialog(){
     Wizard::DisableBackButton();
 
     symbol ret = CWM::Run(w, $[]);
-/*
+*/
+
    symbol ret = DialogTree::ShowAndRun ($[
             "ids_order"         : [ "global", "overview", "server" ],
             "initial_screen"    : initial_tab,
             "screens"           : tabs_descr,
             "widget_descr"      : wd,
+	    "back_button"	: nil,//Label::BackButton(),
             "abort_button"      : Label::AbortButton(),
             "next_button"       : (Mode::normal() ?
                 Label::NextButton () : Label::OKButton ()
             )
         ]);
-*/
     return ret;
 }
 
@@ -2559,14 +2548,16 @@ void initOptions(string key){
 
 
 symbol handleOptions(string key, map event){
- y2internal("event %1", event);
  if (event["EventReason"]:""=="Activated" && event["ID"]:nil==`more_driver_options){
  y2internal("show popup");
  UI::OpenDialog(`VBox(
                 `ReplacePoint (`id (`contents), `VSpacing (1)),
 		`HBox(
+			`HSpacing(5),
 			`PushButton(`id(`cancel), Label::CancelButton()),
-			`PushButton(`id(`next), Label::OKButton())))
+			`PushButton(`id(`next), Label::OKButton()),
+			`HSpacing(5)
+		     ))
 	);
   runOptionsDialog();
   UI::CloseDialog();
@@ -2578,7 +2569,6 @@ symbol handleOptions(string key, map event){
 }
 
 void storeOptions(string key, map event){
-y2internal("storing");
  string info = (string)UI::QueryWidget(`description, `Value);
  string loc = (string)UI::QueryWidget(`location, `Value);
  Printer::printer["info"] = info;
@@ -2600,7 +2590,6 @@ void initBasic(string key){
 
  Printerdb::InstallDrivers ();
 	Printerdb::loadFoomaticIfNeeded ();
-y2internal("printer %1", Printer::printer);
  string manuf_db = Printer::printer["ppd_info", "manufacturer_db"]:"";
  string model_db = Printer::printer["ppd_info", "model_db"]:"";
 y2internal("manuf_db %1, model_db %2", manuf_db, model_db);
@@ -2628,16 +2617,10 @@ y2internal("manuf_db %1, model_db %2", manuf_db, model_db);
 symbol handleBasic(string key, map event){
  if (event["EventReason"]:""=="Activated" && event["WidgetID"]:nil==`change_conn){
        term contents = `VBox(
-       `ReplacePoint(`id(`contents),
-	`VBox(
-         `Frame(_("New Queue for Existing Printer"),
-           `VBox(
-                `SelectionBox(`id(`connection_type), _("Printer"),
-                 []
-                ))))),
-		`HBox(
-			`PushButton(`id(`cancel), Label::CancelButton()),
-			`PushButton(`id(`next), Label::OKButton()))
+       `ReplacePoint(`id(`contents), `Empty()),
+               `HBox(
+                       `PushButton(`id(`cancel), Label::CancelButton()),
+                       `PushButton(`id(`next), Label::OKButton()))
         );
   UI::OpenDialog(contents);
   runNewQueueDialog(nil);
@@ -2649,11 +2632,7 @@ symbol handleBasic(string key, map event){
  ManufModelPopup();
  UI::CloseDialog();
  initBasic("");
-//  runSelectPpdFile();
  }
-// if (event["EventReason"]:""=="Activated" && event["WidgetID"]:nil==`conn_wizard){
-//runSelectPpdFile();
-// }
  return nil;
 }
 
@@ -2661,13 +2640,6 @@ void storeBasic(string key, map event){
  y2internal("changed ppd %1", UI::QueryWidget(`drivers, `CurrentItem));
   string manuf_db = Printer::printer["ppd_info", "manufacturer_db"]:"";
   string model_db = Printer::printer["ppd_info", "model_db"]:"";
-/*
-        string file = Printerdb::getFileFromNickName (
-            manuf_db, model_db,
-            Printer::printer["ppd_info", "nick"]:"",
-            Printer::printer["ppd_info", "language"]:""
-            );
-*/
  string file = (string)UI::QueryWidget (`drivers, `CurrentItem);
 y2internal("new file %1", file);
      Printer::printer["options"] = $[];
