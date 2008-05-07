@@ -1616,7 +1616,6 @@ the selected spooler does not support it."), name));
 	// #218760 - cups-drivers is not automatically included
 	if (size(printcap)>0) PackageSystem::CheckAndInstallPackagesInteractive([ "cups", "cups-drivers", "gutenprint" ]);
 	// fixed #190173 - lpd printer doesn't get installed (in other MODEs cupsd already is running)
-	Spooler::AdjustServices (size (printcap) > 0);
 	if (Mode::autoinst()) {
 //		y2milestone("autoyast mode - starting CUPS");
 //		CUPS::StartDaemon();
@@ -1634,6 +1633,7 @@ the selected spooler does not support it."), name));
 	if (SCR::Execute(.target.bash, "rm /etc/cups/cupsd.conf.old")!=0) 
 			y2error("Cannot remove backup of /etc/cups/cupsd.conf");
 	}
+	if (Spooler::Get() == "cups") Spooler::AdjustServices (size (printcap) > 0);
 
 	Progress::NextStage (); 
 	// adjst services
