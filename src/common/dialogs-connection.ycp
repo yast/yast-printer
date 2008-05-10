@@ -809,16 +809,13 @@ actually selected.
 "));
             }
         }
-
         symbol ret = nil;
         repeat {
-            ret = (symbol)UI::UserInput ();
-            if (ret == `cancel)
-                ret = `abort;
+	UI::ChangeWidget(`test, `Enabled, size(device)>0);
+         ret = (symbol)UI::UserInput ();
+	 switch(ret){
             device = (string)UI::QueryWidget (`id (`devicesel), `CurrentItem);
-
-	    if (ret == `bt_detect)
-	    {
+	    case `bt_detect :
 		map<string,string> devs = Printerlib::GetBluetoothDevices ();
 		devices = maplist (string k, string v, devs, { return k; });
 		device_val = getDevicesItems (devices, "");
@@ -829,18 +826,18 @@ actually selected.
 			// Unix device /dev/(lp|usb/lp|ttyS)*
 			_("D&evice"),
 			device_val));
-//		Wizard::EnableNextButton ();
-	    }
-            else if (ret == `test)
-            {
+		break;
+
+            case `test :
                 Printerlib::testDevice (cups_devices_mapping[device]:device);
-            }
-            else if (`abort == ret || `cancel == ret)
-            {
+		break;
+
+            case `abort :
+            case `cancel :
                 ret = reallyAbort () ? `abort : (symbol)nil;
-            }
-            else if (`details == ret)
-            {
+		break;
+
+            case `details :
 		if (device == nil) device="";
                 string device_temp = getDeviceName (device);
                 if ("" != device_temp)
@@ -856,16 +853,18 @@ actually selected.
                              _("D&evice"), device_val)
                          );
                 }
-            }
-	    else if (ret == `next)
-	    {
+//		UI::ChangeWidget(`test, `Enabled, size(device)>0);
+		break;
+
+	    case `next :
 		if (device == "" || device == nil)
 		{
 		    // message report (user forgot to select a device)
 		    Report::Message (_("Select a device."));
 		    ret = nil;
 		}
-	    }
+		break;
+	  }
         } until (ret == `abort || ret == `back || ret == `next || `ppdetails == ret || `spdetails == ret);
         if (`spdetails == ret)
         {
