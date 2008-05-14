@@ -1125,8 +1125,6 @@ void storePageSize(string PageSize){
 		});
 		UI::ReplaceWidget (`id (`lower),
 		    getWidgetForOption (option_type, (list)vals));
-y2internal("vals %1", vals);
-y2internal("ppd_default %1", ppd_default);
 		string current = "";
 		if (option_loc == `lpoptions)
 		    current = selected[option]:"";
@@ -1134,8 +1132,6 @@ y2internal("ppd_default %1", ppd_default);
 		    current = ppd_selected[option]:"";
 		if (current == "")
 		    current = ppd_default;
-y2internal("current %1", current);
-y2internal("ppd_selected %1", ppd_selected);
 		if (option_type == "Boolean")
 		{
 		    integer index = -1;
@@ -2063,7 +2059,6 @@ void refreshOverview(integer selected, boolean rebuild_items){
 	  ret = (symbol) event["ID"]:nil;
 	switch((symbol) event["ID"]:nil){
 	 case `delete :
-	y2internal("selected printer %1", selected);
  		if (new_spooler == "cups-client") {CUPS::cups_installation=`server;new_spooler="cups";}
 			else if ( (Printer::conf_unconf_printers[selected, "SPOOL"]:"" != "not configured") && Popup::YesNo (sformat (_("Really delete printer %1?"), Printer::printer["name"]:"")))
 		{
@@ -2123,7 +2118,6 @@ and test the queue after the printer model is selected."));
 	 ret = nil;
 	}
     }
-y2internal("ret %1", ret);
  return ret; // FIXME
 }
 
@@ -2510,13 +2504,10 @@ void initOptions(string key){
  UI::ChangeWidget(`chb_driver, `Value, has_ppd);
 
  if(has_ppd){
-  y2internal("PPD %1", Printer::printer["ppd"]:"");
   map sizes = $[];
   foreach(map option, Printerdb::getPpdFileOptions (Printer::printer["ppd"]:"", true), {
    if (option["name"]:""=="PageSize") sizes=option;
   });
-  y2internal("sizes %1", sizes);
-  //y2internal("selected %1", ((map)SCR::Read (.ppd.file.options,[Printer::printer["ppd"]:"", ""]))["data"]:$[]);
   y2internal("options %1", Printer::printer["options"]:nil);
   list vals = maplist (string k, sizes["valorder"]:[], ``( [k, sizes["values", k]:k]));
   string default_size = Printer::printer["ppd_options", "PageSize"]:"";
@@ -2539,8 +2530,6 @@ void initOptions(string key){
   UI::ChangeWidget(`start_banner, `Items, maplist (string i, banners, ``{ return `item (`id (i), i, i == banner_start); }));
   UI::ChangeWidget(`end_banner, `Items, maplist (string i, banners, ``{ return `item (`id (i), i, i == banner_end); }));
 
-  y2internal("items %1", items);
-  y2internal("printer %1", Printer::printer);
 //        ));
   UI::ChangeWidget(`paper_size, `Items, items);
  } else {}
@@ -2549,7 +2538,6 @@ void initOptions(string key){
 
 symbol handleOptions(string key, map event){
  if (event["EventReason"]:""=="Activated" && event["ID"]:nil==`more_driver_options){
- y2internal("show popup");
  UI::OpenDialog(
    `MinSize(35,20,
 	`VBox(
@@ -2595,7 +2583,6 @@ void initBasic(string key){
 	Printerdb::loadFoomaticIfNeeded ();
  string manuf_db = Printer::printer["ppd_info", "manufacturer_db"]:"";
  string model_db = Printer::printer["ppd_info", "model_db"]:"";
-y2internal("manuf_db %1, model_db %2", manuf_db, model_db);
     list cfgs = [];
   list<string> ppds = Printerdb::sortPpds (manuf_db, model_db);
   foreach (string k, ppds, ``{
@@ -2619,14 +2606,31 @@ y2internal("manuf_db %1, model_db %2", manuf_db, model_db);
 
 symbol handleBasic(string key, map event){
  if (event["EventReason"]:""=="Activated" && event["WidgetID"]:nil==`change_conn){
-       term contents = `VBox(
-       `ReplacePoint(`id(`contents), `Empty()),
+  list<string> printers = [];
+  maplist (map i, Printer::printcap, ``{
+   if ( !contains(printers, i["uri"]:"") ) printers = add(printers, i["uri"]:"unknown");
+  });
+  term contents = `VBox(
+   `ComboBox(`id(`connection_type), `opt(`editable), _("Printer"), printers),
                `HBox(
                        `PushButton(`id(`cancel), Label::CancelButton()),
-                       `PushButton(`id(`next), Label::OKButton()))
-        );
+                       `PushButton(`id(`ok), Label::OKButton()))
+          );
   UI::OpenDialog(contents);
-  runNewQueueDialog(nil);
+  UI::ChangeWidget(`connection_type, `Value, Printer::printer["uri"]:"");
+  any ret = nil;
+  while (ret == nil)
+  {
+      ret = UI::UserInput ();
+      if (ret == `ok)
+      {
+        string uri = (string)UI::QueryWidget (`id (`connection_type), `Value);
+         y2milestone("changed uri %1 to %2", Printer::printer["uri"]:"", uri);
+        Printer::printer["uri"] = uri;
+      }
+  }
+
+//  ChangeConnectionDialog();
   UI::CloseDialog();
   initBasic("");
  }
