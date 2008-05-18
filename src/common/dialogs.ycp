@@ -1927,7 +1927,7 @@ void storeServerType(string key, map event){
      */
 list<map<string,any> > o_items = nil;
 
-list<term> buildItemsList(string t_filter){
+list<term> buildItemsList(any t_filter){
  string new_spooler = Spooler::Get ();
  if (new_spooler == "cups" && CUPS::InstallationType () == `client) new_spooler = "cups-client";
  y2milestone("spooler %1", new_spooler);
@@ -1994,8 +1994,8 @@ list<term> buildItemsList(string t_filter){
  }
    list<term> term_items = maplist (map<string,any> i, o_items, {
    Printer::selectPrinter(tointeger(i["id"]:""));
-    if (t_filter=="Local" && !Printer::isPrinterLocal()) return nil;
-    if (t_filter=="Remote" && Printer::isPrinterLocal()) return nil;
+    if (t_filter==`local && !Printer::isPrinterLocal()) return nil;
+    if (t_filter==`remote && Printer::isPrinterLocal()) return nil;
         term t = `item (`id (i["id"]:""));
         foreach (string l, i["table_descr"]:[], {
             t = add (t, l);
@@ -2008,7 +2008,7 @@ list<term> buildItemsList(string t_filter){
 
 void refreshOverview(integer selected, boolean rebuild_items){
  if (rebuild_items){
-  list<term> items = buildItemsList((string)UI::QueryWidget(`filter, `Value));
+  list<term> items = buildItemsList(UI::QueryWidget(`filter, `Value));
   UI::ChangeWidget (`id (`_hw_items), `Items, items);
   if (size((items))>0) selected = tointeger( UI::QueryWidget(`id(`_hw_items), `CurrentItem));
  }
@@ -2277,7 +2277,7 @@ map<string, map<string,any> > wd = $[
             "custom_widget" :
                 `VBox(
 		  `Right(`ComboBox(`id(`filter), `opt(`notify),
-			"", ["Show all", "Local", "Remote"])),
+			"", [`item(`id(`all), _("Show all")), `item(`id(`local), _("Local")), `item(`id(`remote), _("Remote"))])),
                   `VWeight(2,`Table (`id (`_hw_items), `opt (`notify, `immediate),
 					`header(_("Queue Name"),_("Device"), _("Model"),  _("Default Queue")))),
                   `VWeight(1,`RichText (`id (`_hw_sum), "")),
