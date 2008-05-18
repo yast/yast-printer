@@ -403,7 +403,6 @@ if (retval!=nil) return (symbol)ret;
       * @return symbol wizard sequencer symbol
       */
     define symbol runConnectionTypeDialog (boolean local) ``{
-y2internal("runConnectionTypeDialog");
 	symbol selected = Printer::connection_type_selected;
 	boolean add_queue = false;
 	if (size (getConfiguredPrinters ()) != 0 && Printer::confmode == `adm) add_queue = true;
@@ -940,11 +939,11 @@ y2internal("bt uri %1, type %2, device %3", uri, type, device);
         term uspas = `VSpacing (0.2);
         if (has_user_password)
         {
-            uspas = `VSquash (`VBox (
+            uspas = `VBox (
                 // text entry label
-                `TextEntry (`id (`userent), _("&Username"), user),
+                `InputField (`id (`userent), _("&Username"), user),
                 // text entry label
-                `Password (`id (`passwordent), Label::Password (), password)));
+                `Password (`id (`passwordent), Label::Password (), password));
         }
 
 	term host_entry = `ComboBox (`id (`hostnameent),
@@ -953,10 +952,9 @@ y2internal("bt uri %1, type %2, device %3", uri, type, device);
             // push button label
             _("&Test Remote LPD Access"));
         term queue_button = `HSpacing (0);
-        term queue_entry = `TextEntry (`id (`queueent),
+        term queue_entry = `InputField (`id (`queueent),
             // text entry label
-            _("Remote &Queue Name"),
-            queue);
+            _("Remote &Queue Name"), queue);
 	term workgroup_entry = `VSpacing (0);
         // menu button
         term lookup_hosts = `MenuButton (`id(`lookup), _("&Look Up"), [
@@ -965,21 +963,21 @@ y2internal("bt uri %1, type %2, device %3", uri, type, device);
             // menuentry
             `item (`id (`get_hosts), _("Look Up &All Hosts")),
         ]);
-        if (type == "novell")
-        {
+
+	switch(type){
+         case "novell" :
             // menu button
             lookup_hosts = `PushButton (`id (`get_hosts), _("&Look Up"));
             test_button = `PushButton (`id (`test), `opt (`key_F6),
 		// pushbutton
                 _("&Test Remote Novell Access"));
-        }
-        else if (type == "smb")
-        {
+		break;
+         case "smb" :
             test_button = `PushButton (`id (`test), `opt (`key_F6),
                 // pushbutton
                 _("&Test Remote SMB Access"));
             queue_entry = `ComboBox (`id (`queueent),
-		`opt (`editable, `hstretch),
+		`opt (`editable),
                 // text entry label
                 _("Remote &Queue Name"));
             queue_button = `VBox (`VStretch (), `PushButton (
@@ -994,14 +992,12 @@ y2internal("bt uri %1, type %2, device %3", uri, type, device);
                 // menuentry
                 `item (`id (`get_hosts), _("Look Up &All Hosts")),
             ]);*/
-	    host_entry = `TextEntry (`id (`hostnameent), hent_str);
-	    workgroup_entry = `TextEntry (`id (`workgroup),
+	    host_entry = `InputField (`id (`hostnameent), hent_str);
+	    workgroup_entry = `InputField (`id (`workgroup),
 		// text entry
-		_("&Workgroup"),
-		workgroup);
-        }
-        else if (type == "ipp")
-        {
+		_("&Workgroup"), workgroup);
+		break;
+        case "ipp" :
             test_button = `PushButton (`id (`test), `opt (`key_F6),
 		// pushbutton
 		_("&Test Remote IPP Access"));
@@ -1022,16 +1018,15 @@ y2internal("bt uri %1, type %2, device %3", uri, type, device);
                 // menu item
                 `item (`id (`get_hosts), _("Look Up &All Hosts")),
             ]);
-        }
-        else if (type == "socket")
-        {
+		break;
+        case "socket" :
             port = Printerlib::getUriPort (uri);
             if (port == 0)
                 port = 9100;
             test_button = `PushButton (`id (`test), `opt (`key_F6),
 		// push button
 		_("&Test Remote Socket Access"));
-            queue_entry = `VBox (`VStretch (), `TextEntry (`id (`port),
+            queue_entry = `VBox (`VStretch (), `InputField (`id (`port),
 		// text entry label
 		_("&TCP Port Number"), sformat("%1", port)));
             // menu button
@@ -1041,8 +1036,8 @@ y2internal("bt uri %1, type %2, device %3", uri, type, device);
                 // menu item
                 `item (`id (`get_hosts), _("Look Up &All Hosts")),
             ]);
-        }
-
+		break;
+	}
         term contents = `HBox (`HSpacing (8.0), `VBox (
 	    `VStretch (),
 		// Frame around hostname, queue, (user, passwd)
@@ -1103,9 +1098,9 @@ y2internal("bt uri %1, type %2, device %3", uri, type, device);
         repeat {
             ret = (symbol)UI::UserInput ();
             if (ret == `cancel) ret = `abort;
+
             hostname = /*URL::EscapeString(*/(string)UI::QueryWidget (`id (`hostnameent), `Value)/*, URL::transform_map_passwd)*/;
-            if (type == "smb")
-			workgroup = /*URL::EscapeString(*/(string)UI::QueryWidget (`id (`workgroup), `Value)/*, URL::transform_map_passwd)*/;
+            if (type == "smb") workgroup = /*URL::EscapeString(*/(string)UI::QueryWidget (`id (`workgroup), `Value)/*, URL::transform_map_passwd)*/;
             if (type != "socket") queue = /*URL::EscapeString(*/(string)UI::QueryWidget (`id (`queueent), `Value)/*, URL::transform_map_passwd)*/;
              else
               {
@@ -1128,8 +1123,7 @@ y2internal("bt uri %1, type %2, device %3", uri, type, device);
                 if (`get_hosts_special == ret && type == "socket")
                 {
                     type = (string)UI::QueryWidget (`id (`port), `Value);
-                    if (type == "0" || type == "")
-                        type = "9100";
+                    if (type == "0" || type == "") type = "9100";
                 }
 		if (`get_hosts_listen == ret) hosts = CUPS::ListenCupsServers ();
 			else hosts = getHostnames (`get_hosts_special == ret ? type :"");
@@ -1206,7 +1200,7 @@ y2internal("bt uri %1, type %2, device %3", uri, type, device);
 		   "query"  : "",
 		   "port"   : ""
 		];
-	if (port != nil) token2["port"] = tostring(port);
+	if (port != nil) token2["port"] = type=="smb" ? "" : tostring(port);
 	uri = URL::Build(token2);
         if (ret == `next) Printer::printer["uri"] = uri;
         return ret;
@@ -1244,7 +1238,7 @@ y2internal("bt uri %1, type %2, device %3", uri, type, device);
                              `HBox (
                                  `HSpacing (0.7),
                                  // text entry label
-                                 `TextEntry (`id(`name), _("&Program Name"),
+                                 `InputField (`id(`name), _("&Program Name"),
                                     file),
                                  `HSpacing (0.7)
                                  ),
