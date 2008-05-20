@@ -628,22 +628,23 @@ if (local == false)
 	if (type !="hp") Printerlib::getUriDevice (uri);
 
         list<string> devices = [];
-        path read_devs = "parallel" == type
-	    ? .proc.parport.devices
-	    : ("usb" == type
+        path read_devs = "usb" == type
 		? .proc.usblp.devices
-		: ("irda" == type
-		    ? .proc.irlpt.devices
-		    : .proc.serial.devices
-		  )
-	      );
+		: ("irda" == type ? .proc.irlpt.devices : .proc.serial.devices
+		  ) ;
         integer baudrate = Printerlib::getUriBaudrate (uri);
         string ser_settings = Printerlib::getUriValue (uri, "ty");
         if (0 == baudrate && -1 == Printer::index) baudrate = 9600;
 	integer i = search (device, "?");
         if (nil != i) device = substring (device, 0, i);
-        if ("irda" != type && "bluetooth" != type && type != "hp") devices = (list<string>)SCR::Read (read_devs);
-	        else devices = [];
+        if (!contains([ "irda", "bluetooth", "hp", "parallel"], type)) devices = (list<string>)SCR::Read (read_devs);
+		// for parallel use CUPS backend (bnc#391324)
+	        else if (type=="parallel"){
+		  string cmd_output = ((map<string, any>)SCR::Execute(.target.bash_output, "lpinfo -v|grep direct|cut -d'=' -f2-|grep parallel|cut -d':' -f2-"))["stdout"]:"";
+		  y2milestone("parallel detection command output: %1", cmd_output);
+		  devices = filter(string s, splitstring(cmd_output, "\n"), { return (size(s)>0);});
+		}
+			else devices = [];
 	map<string,string> cups_devices_mapping = $[];
 
         if (type == "usb" && Spooler::Get () == "cups")
