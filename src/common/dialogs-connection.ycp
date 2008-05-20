@@ -402,13 +402,13 @@ if (retval!=nil) return (symbol)ret;
       * @param local boolean printer is local or remote
       * @return symbol wizard sequencer symbol
       */
-    define symbol runConnectionTypeDialog (boolean local) ``{
+ define symbol runConnectionTypeDialog (boolean local) ``{
 	symbol selected = Printer::connection_type_selected;
 	boolean add_queue = false;
 	if (size (getConfiguredPrinters ()) != 0 && Printer::confmode == `adm) add_queue = true;
   term items = `VBox();
-if (local == true)
- {
+  if (local == true)
+   {
 	items = add(items,
 	`VBox (
 	  `Frame( _("Directly Connected Printers"),
@@ -439,11 +439,11 @@ if (local == true)
 		selected == `hp))
 		))
 	));
- }
+   }
 	if (Arch::s390 ())
 	    items = `VBox ();
-if (local == false)
- {
+  if (local == false)
+   {
 	items = add (items,
 	 `Frame(_("Network Printers"),
 	  `VBox(
@@ -461,7 +461,7 @@ if (local == false)
 		`Left (`RadioButton (`id (`other),_("&Other Setup"),selected == `other))
 		)
 	));
- }
+   }
 	// dialog caption
 	any ret = runGenericConnectionTypeDialog (items, "", //_("Printer Type"),
 	    // frame label
@@ -1201,7 +1201,7 @@ y2internal("bt uri %1, type %2, device %3", uri, type, device);
 		   "query"  : "",
 		   "port"   : ""
 		];
-	if (port != nil) token2["port"] = type=="smb" ? "" : tostring(port);
+	if (port != nil) token2["port"] = contains([ "smb", "lpd"], type) ? "" : tostring(port);
 	uri = URL::Build(token2);
         if (ret == `next) Printer::printer["uri"] = uri;
         return ret;
