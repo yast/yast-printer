@@ -1962,14 +1962,14 @@ list<term> buildItemsList(any t_filter){
      {
       boolean finded=false;
       foreach(map<string, any> row, items, {
-       if (row["ID"]:nil == Printerlib::getReplacedString(Printerlib::getUriDevice (i["uri"]:""), false))
+       if (row["ID"]:nil == Printerlib::getReplacedString( i["uri"]:"", false))//Printerlib::getUriDevice (i["uri"]:""), false))
         {
          finded=true;
          y2milestone("Printer %1 without ppd file already configured", row["ID"]:nil);
         }
       });
       if (finded==false) return $[
-	"ID":Printerlib::getReplacedString(Printerlib::getUriDevice (i["uri"]:""), false),
+	"ID" : Printerlib::getReplacedString(Printerlib::getUriDevice (i["uri"]:""), false),
         "MODEL":i["info"]:"unknown",
         "SPOOL":i["name"]:"not configured",
         "DESCR": "<b>" + i["info"]:"none" + "</b><br>"
@@ -1979,6 +1979,7 @@ list<term> buildItemsList(any t_filter){
 
    }));
    items = (list < map<string,any> >) filter (any i, items, ``(i != nil));
+y2internal("items %1", items);
    Printer::conf_unconf_printers = items;
    maplist(map<string,any> s, items, {
 	o_items = add(o_items,  $[

@@ -625,28 +625,26 @@ if (retval!=nil) return (symbol)ret;
         if ("" == uri) uri = Printer::printer["uri"]:"parallel";
         if ("" == type) type = URL::Parse(uri)["scheme"]:"";
         string device = "";
-	if (type !="hp") Printerlib::getUriDevice (uri);
+	if (type !="hp") uri = Printerlib::getUriDevice (uri);
 
         list<string> devices = [];
-        path read_devs = "usb" == type
-		? .proc.usblp.devices
-		: ("irda" == type ? .proc.irlpt.devices : .proc.serial.devices
-		  ) ;
+        path read_devs = "irda" == type ? .proc.irlpt.devices : .proc.serial.devices ;
         integer baudrate = Printerlib::getUriBaudrate (uri);
         string ser_settings = Printerlib::getUriValue (uri, "ty");
         if (0 == baudrate && -1 == Printer::index) baudrate = 9600;
 	integer i = search (device, "?");
         if (nil != i) device = substring (device, 0, i);
-        if (!contains([ "irda", "bluetooth", "hp", "parallel"], type)) devices = (list<string>)SCR::Read (read_devs);
+        if (!contains([ "irda", "bluetooth", "hp", "parallel", "usb"], type)) devices = (list<string>)SCR::Read (read_devs);
 		// for parallel use CUPS backend (bnc#391324)
-	        else if (type=="parallel"){
-		  string cmd_output = ((map<string, any>)SCR::Execute(.target.bash_output, "lpinfo -v|grep direct|cut -d'=' -f2-|grep parallel|cut -d':' -f2-"))["stdout"]:"";
-		  y2milestone("parallel detection command output: %1", cmd_output);
+	        else if (contains([ "parallel", "usb" ], type)){
+		  string cmd_output = ((map<string, any>)SCR::Execute(.target.bash_output, 
+			sformat("lpinfo -v|grep direct|cut -d' ' -f2-|grep \"^%1:\"|cut -d':' -f2-", type)))["stdout"]:"";
+		  y2milestone("%1 detection command output: %2", type, cmd_output);
 		  devices = filter(string s, splitstring(cmd_output, "\n"), { return (size(s)>0);});
 		}
 			else devices = [];
 	map<string,string> cups_devices_mapping = $[];
-
+/*
         if (type == "usb" && Spooler::Get () == "cups")
         {
             CUPS::DetectCupsUsbDevicesInfo ();
@@ -667,7 +665,7 @@ if (retval!=nil) return (symbol)ret;
                 });
             }
         }
-
+*/
         if (size (devices) == 0)
         {
             if (type == "parallel")
@@ -815,6 +813,7 @@ actually selected.
          ret = (symbol)UI::UserInput ();
 	 switch(ret){
             device = (string)UI::QueryWidget (`id (`devicesel), `CurrentItem);
+y2internal("device %1", device);
 	    case `bt_detect :
 		map<string,string> devs = Printerlib::GetBluetoothDevices ();
 		devices = maplist (string k, string v, devs, { return k; });
@@ -879,10 +878,10 @@ actually selected.
         }
         if (`next == ret)
         {
+            device = (string)UI::QueryWidget (`id (`devicesel), `CurrentItem);
             uri = type + ":" + device;
             if ("serial" == type) uri = uri + sformat ("?baudrate=%1+ty=%2", baudrate, ser_settings);
 		else if (type == "bluetooth") uri = type + "://" + filterchars (device, "0123456789aAbBcCdDeEfF");
-y2internal("bt uri %1, type %2, device %3", uri, type, device);
             Printer::printer["uri"] = uri;
         }
         return ret;

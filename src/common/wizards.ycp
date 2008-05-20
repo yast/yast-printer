@@ -30,7 +30,7 @@
 
     define symbol MainSequence();
     define symbol AddPrinterSubSequence ();
-    define symbol EditPrinterSequence (boolean configured);
+//    define symbol EditPrinterSequence (boolean configured);
     define symbol AddPrinterSequence ();
 
     /**
@@ -46,8 +46,8 @@
 	    // sequences
 	    "main_wz" :		``(MainSequence ()),
 	    "add_printer_wz" :	``(AddPrinterSequence ()),
-	    "edit_printer_wz" :	``(EditPrinterSequence (true)),
-	    "edit_printer_unconf" : ``(EditPrinterSequence (false)),
+//	    "edit_printer_wz" :	``(EditPrinterSequence (true)),
+//	    "edit_printer_unconf" : ``(EditPrinterSequence (false)),
 	    "add_printer_sub_wz":``(AddPrinterSubSequence ()),
 
 	    // real dialogs
@@ -156,9 +156,9 @@
       * @param configured boolean printer already configured
       * @return sequence result
       */
+/*
     define symbol EditPrinterSequence (boolean configured) ``{
 	map<string,any> aliases = getAliases ();
-/*
 	map sequence = $[
 	    "ws_start"   : "edit",
 	    "edit" : $[
@@ -255,7 +255,6 @@
 	    "members" : $[ `abort : `abort, `next : "edit", ],
 	    "storeprinter" : $[`next : `next, ],
 	];
-*/
 	map sequence = $[
 		"ws_start"   : "edit2",
 		"edit2" : $[
@@ -267,7 +266,7 @@
 	aliases = (map<string,any>)filter (string k, any v, aliases, ``(haskey (sequence, k)));
 	return Sequencer::Run (aliases, sequence);
     }
-
+*/
     /**
      * Get the sub-sequence of adding new queue
      * @return a map the sub sequence for WS
@@ -293,7 +292,7 @@
 		`abort : `abort,
 		`back  : "printer_type",
 		`next  : `next,
-		`edit_button : "edit_printer_wz"
+		`edit_button : "edit2"
 	    ],
 	    "add_local_printer" : $[
 		`abort : `abort,
@@ -314,7 +313,7 @@
 		`queue : "inst_printer",
 		`other : "connection_other",
 	    ],
-            "edit_printer_wz": $[
+            "edit2": $[
                 `next: `next,
                 `abort : `abort,
             ],
@@ -439,15 +438,14 @@
     define symbol AddPrinterSequence () ``{
 	map<string,any> aliases = getAliases ();
 	map sequence = $[
-	    "edit_printer_wz" : $[ `abort : `abort, `next : `next ],
+	    "edit2" : $[ `abort : `abort, `next : `next ],
 	];
 	map<string,any> add_seq = getAddPrinterSubSequence ();
 	add_seq = mapmap (string k, any v, add_seq, ``{
 	    if (is (v, map))
 	    {
 		v = mapmap (symbol event, any vv, (map<symbol,any>)v, ``{
-		    if (vv == `edit)
-			vv = "edit_printer_wz";
+		    if (vv == `edit) vv = "edit2";
 		    return $[ event : vv ];
 		});
 	    }
@@ -480,7 +478,7 @@
 //                `restart_button : "redetect",
 		`add_button : "add_printer_wz",
                 `edit_button : "edit2",
-                `edit_unconf : "edit_printer_unconf",
+                `edit_unconf : "edit2",
 //                `change_ipp_listen : "listen_ipp_bcast",
 //		`cups_expert	: "cups_expert",
 		`change_remote_access	: "remote_access",
@@ -570,10 +568,12 @@
 		`next: "main",
 		`abort : `abort,
 	    ],
+/*
 	    "edit_printer_unconf": $[
 		`next: "main",
 		`abort : `abort,
 	    ],
+*/
 /*
 	    "cups_client_main" : $[
 		`next : `next,
