@@ -610,7 +610,15 @@ if (retval!=nil) return (symbol)ret;
 
 // single connection types dialogs
 
+boolean last_op_canceled = false;
 
+/*
+boolean Installed(string package) {
+    return 0 == (integer) SCR::Execute(.target.bash, "rpm -q --whatprovides " + package);
+}
+*/
+
+include "packages/common.ycp";
     /**
      * Asks user about settings of selected device (port number, other settings
      * for serial ports). Lets user do test of device. Uses global variable
@@ -697,6 +705,25 @@ that your serial ports are not properly configured."));
                 devices = ["/dev/irlpt0", "/dev/irlpt1", "/dev/irlpt2",
 		    "/dev/irlpt3"];
             } else if (type == "hp"){
+if (!PackageSystem::Installed("hplip") && Package::Available("hplip")){
+textdomain "base";
+    /* Popup Text */
+    string text = _("These packages need to be installed:") + "<p>";
+    /* Popup Text */
+text = text + sformat("%1<br>", "hplip");
+
+    boolean doit = (Mode::commandline()) ? (CommandLine::Interactive() ? AskPackages(["hplip"], true) : true ) : Popup::AnyQuestionRichText(
+        "", text, 40, 10,
+        Label::InstallButton (), Label::CancelButton (), `focus_yes
+    );
+
+y2internal("do it %1", doit);
+textdomain "printer";
+		if (doit){
+		 if(PackageSystem::Installed("hpijs-standalone")) Package::DoRemove(["hpijs-standalone"]);
+		Package::DoInstall(["hplip"]);
+		}
+}
 		devices = maplist (list d, Printerlib::getHplipDevices (), ``{ return d[0]:""; });
 		}
         }
@@ -813,7 +840,6 @@ actually selected.
          ret = (symbol)UI::UserInput ();
 	 switch(ret){
             device = (string)UI::QueryWidget (`id (`devicesel), `CurrentItem);
-y2internal("device %1", device);
 	    case `bt_detect :
 		map<string,string> devs = Printerlib::GetBluetoothDevices ();
 		devices = maplist (string k, string v, devs, { return k; });

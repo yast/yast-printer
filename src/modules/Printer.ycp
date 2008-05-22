@@ -414,8 +414,7 @@ $["bus":"USB", "bus_hwcfg":"usb", "class_id":265, "dev_name":"/dev/usb/lp0", "de
 
 		if (Spooler::Get () == "cups")
 		{
-		    dev_name
-			= Printerlib::GetCupsUsbDeviceInfo (class_dev)[0]:"";
+		    dev_name = Printerlib::GetCupsUsbDeviceInfo (class_dev)[0]:"";
 		    if (dev_name == nil || dev_name == "")
 		    {
 			dev_name = class_dev;
@@ -438,12 +437,8 @@ $["bus":"USB", "bus_hwcfg":"usb", "class_id":265, "dev_name":"/dev/usb/lp0", "de
 	    if (Spooler::Get () == "cups")
 	    {
 		boolean ptal_failed = false;
-		if (contains (i["requires"]:[], "hp-officeJet")
-		    || contains (i["requires"]:[], "hplip")
-		    ||(p["vendor_db"]:"" == "HP"
-			&& contains (
-			    Printerlib::GetHPAllInOneModels (),
-			    p["device_db"]:"")))
+		if (contains (i["requires"]:[], "hp-officeJet") || contains (i["requires"]:[], "hplip") ||(p["vendor_db"]:"" == "HP"
+			&& contains ( Printerlib::GetHPAllInOneModels (), p["device_db"]:"")))
 		{
 		    y2milestone ("PTAL/HPLIP device found: %1", p);
 		    if (substring (p["uri"]:"", 0, 9) == "parallel:")
@@ -455,11 +450,9 @@ $["bus":"USB", "bus_hwcfg":"usb", "class_id":265, "dev_name":"/dev/usb/lp0", "de
 		    if (! Package::InstalledAny (["hp-officeJet", "hplip"]))
 		    {
 			// FIXME if default should be PTAL
-			if (hp_driver == nil)
-			    hp_driver = "hp";
+			if (hp_driver == nil) hp_driver = "hp";
 			string package = hp_driver == "ptal"
-			    ? "hp-officejet"
-			    : "hplip";
+			    ? "hp-officejet" : "hplip";
 			req_ret = Package::InstallMsg (package,
 			    // question, %1 is package name
 			    _("An HP all-in-one device has been detected. To
@@ -1273,7 +1266,7 @@ Detect your printers?"));
 	Progress::NextStep (); // step 1 - check installed spooler
 	if (testAbort ()) return false;
 
-	Printerlib::readHplip();
+//	Printerlib::readHplip();
 	CUPS::enable_netcat = PackageSystem::Installed("netcat");
 
 	if (! checkSpooler ()) return false;
@@ -1429,7 +1422,7 @@ Detect your printers?"));
            if ( regexpmatch (uri, "^hp:\/\/.*") && CUPS::InstallationType() != `client && Service::Status("hplip")!=0 )
 	       {
                 Service::Start("hplip");
-                Printerlib::setHplip(true);
+//                Printerlib::setHplip(true);
                }
 	    string name = entry["name"]:"";
 	    entry["default"] = (name == default_queue);
@@ -1687,7 +1680,7 @@ the selected spooler does not support it."), name));
 	    }
 	}
 	// enable/disable hplip service and restart spooler if (enable and wasn't enabled before)
-	if (Printerlib::setHplipStatus()) Spooler::restartServices (size (printcap)>0);
+//	if (Printerlib::setHplipStatus()) Spooler::restartServices (size (printcap)>0);
 	Progress::Finish (); // finished
 	if (testAbort ()) return false;
 	// progress step
