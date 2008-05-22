@@ -74,34 +74,6 @@ map<string,string> probed_bt_devices = $[];
 
 // global functions
 
-boolean hplip_before = false;
-boolean hplip_status = false;
-
-global void readHplip(){
- hplip_before = false;
-//TODO: check if hplip package installed
- if (Service::Status("hplip")==0) hplip_before = true;
-}
-
-global void setHplip(boolean status){
- hplip_status = status;
-}
-
-global boolean setHplipStatus(){
- map<string, any> hptest = (map<string, any>)SCR::Execute(.target.bash_output, "/usr/bin/lpstat -v | /bin/grep -q ': hp:/'");
- if (hptest["exit"]:255 == 0) {
-// if (hplip_status == true){
-   // bug #115888 /1 - user information that hplip will be enabled
-   if (hplip_before == false && !Mode::autoinst()) Popup::Warning(_("Service hplip will be enabled because hp:// backend is used."));
-	Service::Enable("hplip");
-	Service::Start("hplip");
-	return true;
-  } else {
-	Service::Disable("hplip");
-	Service::Stop("hplip");
-	}
- return false;
-}
 
 /**
  * Set the USB devices info got through the CUPS backend
@@ -220,15 +192,11 @@ ECHO_PID=$!
       * @return a list of HPLIP devices
       */
     global define list<list<string> > getHplipDevices () ``{
-      if (FileUtils::IsFile("/etc/init.d/hplip")){
-	boolean hplip_before = false;
-	if (Service::Status("hplip")==0) hplip_before = true;
-		else Service::Start("hplip");
         if (SCR::Read (.target.size, Arch::i386() ? "/usr/lib/cups/backend/hp" : "/usr/lib64/cups/backend/hp" ) <= 0)
             return [];
         map out = (map)SCR::Execute (.target.bash_output,
             Arch::i386() ? "/usr/lib/cups/backend/hp" : "/usr/lib64/cups/backend/hp" );
-	if (hplip_before == false) Service::Stop("hplip");
+//	if (hplip_before == false) Service::Stop("hplip");
         list<string> lines = splitstring (out["stdout"]:"", "\n");
         lines = filter (string l, lines, ``(l != "" && l != nil));
 	list<list<string> > hp_devs = (list<list<string> >) maplist (string l, lines, ``{
@@ -246,7 +214,6 @@ ECHO_PID=$!
 	});
 	y2milestone ("hp devices: %1", hp_devs);
 	return hp_devs;
-     } else return [];
     }
 
     /**
