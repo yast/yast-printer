@@ -1267,6 +1267,7 @@ Detect your printers?"));
 	if (testAbort ()) return false;
 
 //	Printerlib::readHplip();
+	if (Package::Installed("hpijs-standalone") || (!Package::Installed("hplip") && PackageSystem::Available("hplip"))) Printerlib::installHplip();
 	CUPS::enable_netcat = PackageSystem::Installed("netcat");
 
 	if (! checkSpooler ()) return false;
@@ -1311,13 +1312,11 @@ Detect your printers?"));
 	if (Spooler::Get () == "cups" && CUPS::InstallationType () == `client)
 	{
 	    default_queue = CUPS::ClientRead ();
-	    if (default_queue == nil)
-		return false;
+	    if (default_queue == nil) return false;
 	}
 	else
 	{
-	    if (! queuesRead ())
-		return false;
+	    if (! queuesRead ()) return false;
 	}
 
 	printcap = maplist (map<string,any> e, printcap,``{return assignState (e, false);});
