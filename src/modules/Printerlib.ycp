@@ -30,6 +30,10 @@ import "Arch";
 import "FileUtils";
 import "Service";
 import "URL";
+import "CommandLine";
+import "Label";
+import "PackageSystem";
+import "Package";
 include "printer/texts.ycp";
 
 
@@ -186,6 +190,31 @@ ECHO_PID=$!
 	y2milestone ("ptal devices: %1", ptal_devs);
 	return ptal_devs;
     }
+
+boolean last_op_canceled=false;
+include "packages/common.ycp";
+global define boolean installHplip(){
+ boolean installed = false;
+textdomain "base";
+    /* Popup Text */
+    string text = _("These packages need to be installed:") + "<p>";
+    /* Popup Text */
+ text = text + sformat("%1<br>", "hplip");
+
+    boolean doit = (Mode::commandline()) ? (CommandLine::Interactive() ? AskPackages(["hplip"], true) : true ) : Popup::AnyQuestionRichText(
+        "", text, 40, 10,
+        Label::InstallButton (), Label::CancelButton (), `focus_yes
+    );
+textdomain "printer";
+
+   y2internal("do it %1", doit);
+    if (doit){
+     if(PackageSystem::Installed("hpijs-standalone")) Package::DoRemove(["hpijs-standalone"]);
+      Package::DoInstall(["hplip"]);
+      installed = true;
+    }
+ return installed;
+}
 
     /**
       * Get list of all HPLIP devices
