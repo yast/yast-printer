@@ -1267,7 +1267,9 @@ Detect your printers?"));
 	if (testAbort ()) return false;
 
 //	Printerlib::readHplip();
-	if (Package::Installed("hpijs-standalone") || (!Package::Installed("hplip") && PackageSystem::Available("hplip"))) Printerlib::installHplip();
+	if (!Package::Installed("hplip") && PackageSystem::Available("hplip")){
+	 if (SCR::Execute(.target.bash, "lpstat -v|cut -d' ' -f4|grep -q '^hp:/'")==0) Printerlib::installHplip();
+	}
 	CUPS::enable_netcat = PackageSystem::Installed("netcat");
 
 	if (! checkSpooler ()) return false;
