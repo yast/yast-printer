@@ -32,6 +32,7 @@
     import "DialogTree";
     import "CWM";
     import "IP";
+    import "String";
 
     include "printer/helps.ycp";
     include "printer/misc.ycp";
@@ -1873,6 +1874,7 @@ symbol handleServerType (string key, map event) ``{
     case `test_ipp:
 		string n = (string)UI::QueryWidget (`id(`server_name), `Value);
                 if (nil == n || "" == n)
+                if (!(size(String::CutBlanks(n))>0))
 		    // popup
 		    Popup::Message (_("Enter a valid server name."));
 		else
@@ -1889,7 +1891,7 @@ symbol handleServerType (string key, map event) ``{
 
 boolean validateServerType(string key, map event){
  if (! (UI::QueryWidget(`id(`server_type), `CurrentButton) == `local)){
-  if (size((string)UI::QueryWidget (`id (`server_name), `Value))==0){
+  if (size(String::CutBlanks( (string)UI::QueryWidget (`id (`server_name), `Value) ))==0){
    Popup::Warning (_("Enter a valid server name."));
    return false;
   }
