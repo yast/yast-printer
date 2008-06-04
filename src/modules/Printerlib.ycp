@@ -153,12 +153,11 @@ preparation for autoinstallation."));
     define void wakeUpEpson (string device) ``{
 	string sequence =
 	    "\"\\000\\000\\000\\033\\001\\100\\105\\112\\114\\040\\061\\062\\070\\064\\056\\064\\012\\100\\105\\112\\114\\040\\040\\040\\040\\040\\012\"";
-	if (haskey ((map)SCR::Read (.proc.modules), "usblp"))
-	    SCR::Execute (.target.bash, sformat ("
-MAIN_PID=$$
-{ /bin/echo -en %1 > %2 ; kill $MAIN_PID; } &
-ECHO_PID=$!
-{ sleep 2s; kill $ECHO_PID &>/dev/null; } &", sequence, device));
+	if (haskey ((map)SCR::Read (.proc.modules), "usblp")){
+		 integer id = (integer)SCR::Execute(.process.start_shell, sformat ("echo -en %1 > %2 ", sequence, device ));
+		 sleep(2*1000);
+		 if ((boolean)SCR::Read(.process.running, id)) SCR::Execute(.process.kill, id);
+		}
     }
 
     /**
