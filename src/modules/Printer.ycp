@@ -2099,30 +2099,16 @@ the selected spooler does not support it."), name));
      * @param det map of detected printer
      */
     global define void editDetected (map det) ``{
-    // (FaTE#120083) Avoid the Automated Setup For "Non-Recommended" Printers
-    boolean problematic = false;
-    string model = String::CutBlanks(det["device"]: det["ppd_info", "model"]:"");
-    if (size(model)==0) y2warning("Couldn't detect model from %1", det);
-	else {
-		string command = sformat("grep '%1' %2|tr -d '\n'", model, "/usr/share/YaST2/data/printer/printers_support");
-		y2internal("executing command %1", command);
-		map<string, any> cmd = (map<string, any>)SCR::Execute(.target.bash_output, command);
-	y2internal("%1", cmd);
-	 if (cmd["exit"]:-1==0) {
-	  string status = splitstring(cmd["stdout"]:"", "|")[2]:"";
+	  string status = Printerlib::getSupportStatus(det);
 	  if (status!="full" && size(status)>0){
-		problematic=true;
-		Popup::Warning(sformat("%1 %2 %3 '%4'", _("Selected printer"),  splitstring(cmd["stdout"]:"", "|")[1]:"",  _("will not be autoconfigured\n because it's not fully supported. Supported status is"), status));
+		Popup::Warning(sformat("%1 %2 %3 '%4'", _("Selected printer"),  det["info"]:"",  _("is not fully supported. Supported status is"), status));
 	  }
-	 }
-	}
 	Printerdb::InstallDrivers ();
 	index = -1;
 	y2debug ("Editing printer %1", det);
-y2internal ("Editing printer %1", det);
-string vendor = det["vendor_db"]: det["ppd_info", "manufacturer_db"]:"";
-string device = det["device_db"]: det["ppd_info", "model_db"]:"";
-	string filename = (problematic) ? "" : Printerdb::getAutoPpdFile ( vendor, device );
+	string vendor = det["vendor_db"]: det["ppd_info", "manufacturer_db"]:"";
+	string device = det["device_db"]: det["ppd_info", "model_db"]:"";
+	string filename = Printerdb::getAutoPpdFile ( vendor, device );
 	y2debug ("Filename: %1", filename);
 	printer = $[
 	    "detected" : det,
@@ -2172,17 +2158,20 @@ string device = det["device_db"]: det["ppd_info", "model_db"]:"";
 	foreach (map i, autodetected, ``{
 	    if (!alreadyConfigured (i["unique_key"]:""))
 	    {
-		editDetected (i);
-		string vdb = printer["detected", "vendor_db"]:"";
-		string mdb = printer["detected", "device_db"]:"";
-		string ppd_file = Printerdb::getAutoPpdFile (vdb, mdb);
-		string support = Printerdb::foomatic[vdb, mdb, `support]:"";
-		boolean configure = (support == "full" || support == "partially"
+		// (FaTE#120083) Avoid the Automated Setup For "Non-Recommended" Printers
+		string support_status = Printerlib::getSupportStatus(i);
+		if (support_status=="full" || support_status==""){
+		 editDetected (i);
+		 string vdb = printer["detected", "vendor_db"]:"";
+		 string mdb = printer["detected", "device_db"]:"";
+		 string ppd_file = Printerdb::getAutoPpdFile (vdb, mdb);
+		 string support = Printerdb::foomatic[vdb, mdb, `support]:"";
+		 boolean configure = (support == "full" || support == "partially"
 		    || support == "");
-		if (i["detected", "ptal_manual"]:false)
+		 if (i["detected", "ptal_manual"]:false)
 		    configure = false;
-		if (ppd_file != nil && configure)
-		{
+		 if (ppd_file != nil && configure)
+		 {
 		    boolean ok = true;
 		    if (printer["name"]:"" == "")
 		    {
@@ -2208,7 +2197,8 @@ string device = det["device_db"]: det["ppd_info", "model_db"]:"";
 			storePrinter ();
 		    }
 		}
-	    }
+	    } else y2warning (sformat("%1 %2", _("Printer will not be proposed because support status is : "), support_status));
+	  }
 	});
 	assignDefault ();
     }

@@ -190,6 +190,23 @@ preparation for autoinstallation."));
 	return ptal_devs;
     }
 
+global string getSupportStatus(map printer){
+string support="";
+    string model = String::CutBlanks(printer["device"]: printer["ppd_info", "model"]:"");
+    if (size(model)==0) y2warning("Couldn't detect model from %1", printer);
+	else {
+		string command = sformat("grep '%1' %2|tr -d '\n'", model, "/usr/share/YaST2/data/printer/printers_support");
+		y2internal("executing command %1", command);
+		map<string, any> cmd = (map<string, any>)SCR::Execute(.target.bash_output, command);
+	y2internal("%1", cmd);
+	 if (cmd["exit"]:-1==0) {
+	  support = splitstring(cmd["stdout"]:"", "|")[2]:"";
+	 }
+	}
+ return support;
+}
+
+
 boolean last_op_canceled=false;
 include "packages/common.ycp";
 global define boolean installHplip(){
