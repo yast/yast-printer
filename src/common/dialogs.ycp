@@ -2628,8 +2628,17 @@ symbol handleBasic(string key, map event){
       if (ret == `ok)
       {
         string uri = (string)UI::QueryWidget (`id (`connection_type), `Value);
-         y2milestone("changed uri %1 to %2", Printer::printer["uri"]:"", uri);
-        Printer::printer["uri"] = uri;
+	// backend validation (bnc#388575)
+	string cmd = "lpinfo -h localhost -v | cut -s -d ' ' -f2 | cut -d ':' -f1 | sort -u";
+        map <string, any> exec = (map<string, any>)SCR::Execute(.target.bash_output, cmd);
+	if (exec["exit"]:-1==0){
+	 list<string> backends = filter(string key, splitstring(exec["stdout"]:"", "\n"), {return (size(key)>0);});
+	 if (!contains(backends, splitstring(uri, ":")[0]:"")) {
+	  Popup::Warning(_("Selected backend is not valid!"));
+	 } else Printer::printer["uri"] = uri;
+	} else y2warning("validation script failed : %1", exec["exit"]:-1);
+	y2milestone("new backend %1", splitstring(uri, ":")[0]:"");
+        y2milestone("changed uri %1 to %2", Printer::printer["uri"]:"", uri);
       }
   }
 
