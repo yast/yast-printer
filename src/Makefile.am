@@ -25,7 +25,9 @@ desktop_DATA =			\
 module_DATA =			\
 	Printerlib.ycp		\
 	Printer.ycp
-#	Printer2.pm
+
+rncdir =  $(schemadir)/autoyast/rnc
+rnc_DATA = printer.rnc
 
 # create a symlink for local build, #145327
 printer:
