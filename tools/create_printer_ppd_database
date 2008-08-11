@@ -1,0 +1,107 @@
+#! /bin/bash
+#
+# Johannes Meixner <jsmeix@suse.de>, 2007
+
+#set -x
+
+export PATH="/sbin:/usr/sbin:/usr/bin:/bin"
+export LC_ALL="POSIX"
+export LANG="POSIX"
+umask 022
+
+MY_NAME=${0##*/}
+
+# Create temporary file names:
+TMP_DATA=$(mktemp -u /tmp/$MY_NAME.XXXXXX)
+TMP_DATA_RAW=$(mktemp -u /tmp/$MY_NAME.XXXXXX)
+
+# Test if lpstat and lpinfo are executable:
+LPSTAT="$( type -P lpstat )"
+if ! test -x "$LPSTAT"
+then echo "Cannot execute lpstat" 1>&2
+     exit 1
+fi
+LPINFO="$( type -P lpinfo )"
+if ! test -x "$LPINFO"
+then echo "Cannot execute lpinfo" 1>&2
+     exit 1
+fi
+
+# Test if cupsd is accessible:
+if ! $LPSTAT -h localhost -r &>/dev/null
+then echo "Cannot access cupsd on localhost" 1>&2
+     exit 2
+fi
+
+# Input:
+
+# Get the raw data:
+# Exit after timeout because then no empty YCP map is output
+# so that either an existing YCP map could be used or YaST could also exit
+# because without a PPD database printer setup makes not much sense.
+MAXIMUM_WAIT="30"
+$LPINFO -h localhost -l -m >$TMP_DATA_RAW &
+lpinfoPID=$!
+for i in $( seq $MAXIMUM_WAIT )
+do ps $lpinfoPID &>/dev/null || break
+   sleep 1
+done
+if ps $lpinfoPID &>/dev/null
+then kill -9 $lpinfoPID &>/dev/null
+     echo "Aborted lpinfo after $MAXIMUM_WAIT seconds timeout." 1>&2
+     exit 3
+fi
+
+# Process the data:
+
+# Extract what is needed, quotation marks " are replaced by ' :
+tr '"' "'" <$TMP_DATA_RAW | egrep '^Model:|name =|make-and-model =|device-id =|natural_language =' >$TMP_DATA
+
+# Have "^Model:" on a seperated "Model" line and convert " = " to a single space:
+sed -i -e 's/^Model:/Model\n/' \
+       -e 's/ = / /' $TMP_DATA
+
+# Condense multiple spaces, convert tabs to blanks, and remove leading and trailing spaces:
+sed -i -e 's/[[:space:]][[:space:]]*/ /g' \
+       -e 's/^[[:space:]]*//' \
+       -e 's/[[:space:]]*$//' $TMP_DATA
+
+# Output:
+
+# Output header:
+echo "[" 
+
+# Function to output one entry:
+Output()
+{ if [ -n "$PPD" -a -n "$NICKNAME" ]
+  then echo -e "  \$[ \"ppd\":\"$PPD\",\n     \"nickname\":\"$NICKNAME\",\n     \"deviceID\":\"$ID\",\n     \"language\":\"$LANGUAGE\",\n     \"manufacturer\":\"$MANUFACTURER\",\n     \"modelname\":\"$MODELNAME\"\n  ],"
+  fi
+}
+
+# Make complete and seperated entries:
+# The values are collected until a new "Model" line appears, then the values are output.
+# The very first "Model" line doesn't result an output because "$PPD" and "$NICKNAME" are empty strings.
+exec <$TMP_DATA
+while read KEY VALUE
+do case "$KEY" in
+        Model) Output
+               PPD=""
+               NICKNAME=""
+               ID=""
+               LANGUAGE="" ;;
+        name) PPD="$VALUE" ;;
+        make-and-model) NICKNAME="$VALUE" ;;
+        device-id) ID="$VALUE" ;;
+        natural_language) LANGUAGE="$VALUE" ;;
+        *) echo "Ignoring key $KEY" 1>&2 ;;
+   esac
+done
+
+# Output the last entry and a footer for YCP
+Output
+echo -e "  \$[]\n]"
+
+# Remove the temporary files 
+rm $TMP_DATA_RAW $TMP_DATA
+exit 0
+

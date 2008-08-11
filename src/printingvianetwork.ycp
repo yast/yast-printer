@@ -1,0 +1,525 @@
+/* ------------------------------------------------------------------------------
+ * Copyright (c) 2006 Novell, Inc. All Rights Reserved.
+ *
+ *
+ * This program is free software; you can redistribute it and/or modify it under
+ * the terms of version 2 of the GNU General Public License as published by the
+ * Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+ * FOR A PARTICULAR PURPOSE.  See the GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License along with
+ * this program; if not, contact Novell, Inc.
+ *
+ * To contact Novell about this file by physical or electronic mail, you may find
+ * current contact information at www.novell.com.
+ * ------------------------------------------------------------------------------
+ */
+
+/**
+ * File:        include/printer/printingvianetwork.ycp
+ * Package:     Configuration of printer
+ * Summary:     Printing via network dialog definition
+ * Authors:     Johannes Meixner <jsmeix@suse.de>
+ *
+ * $Id: printingvianetwork.ycp 27914 2006-02-13 14:32:08Z locilka $
+ */
+
+{
+
+textdomain "printer";
+
+import "Label";
+import "Wizard";
+import "Printer";
+import "Printerlib";
+import "Popup";
+import "Report";
+import "Service";
+
+include "printer/helps.ycp";
+
+
+
+
+symbol handleNetworkPrinting(string key, map event){
+  if( Printerlib::browsing_on )
+  { UI::ChangeWidget( `id(`cupsd_conf_browse_deny_input), `Enabled, true );
+    UI::ChangeWidget( `id(`client_conf_server_name_input), `Enabled, false );
+    UI::ChangeWidget( `id(`test_client_conf_server), `Enabled, false );
+    UI::ChangeWidget( `id(`connection_wizard), `Enabled, true );
+  }
+  else
+  { UI::ChangeWidget( `id(`cupsd_conf_browse_deny_input), `Enabled, false );
+    UI::ChangeWidget( `id(`client_conf_server_name_input), `Enabled, false );
+    UI::ChangeWidget( `id(`test_client_conf_server), `Enabled, false );
+    UI::ChangeWidget( `id(`connection_wizard), `Enabled, true );
+  }
+  if( Printerlib::client_only )
+  { UI::ChangeWidget( `id(`cupsd_conf_browse_deny_input), `Enabled, false );
+    UI::ChangeWidget( `id(`client_conf_server_name_input), `Enabled, true );
+    UI::ChangeWidget( `id(`test_client_conf_server), `Enabled, true );
+    UI::ChangeWidget( `id(`connection_wizard), `Enabled, false );
+  }
+
+ if ( event["EventReason"]:"" == "ValueChanged" ){
+    if( event["ID"]:nil == `cupsd_conf_browsing_on_radio_button )
+    { UI::ChangeWidget( `id(`cupsd_conf_browse_deny_input), `Enabled, true );
+      UI::ChangeWidget( `id(`client_conf_server_name_input), `Enabled, false );
+      UI::ChangeWidget( `id(`test_client_conf_server), `Enabled, false );
+      UI::ChangeWidget( `id(`connection_wizard), `Enabled, true );
+    }
+    if( event["ID"]:nil == `cupsd_conf_browsing_off_radio_button )
+    { UI::ChangeWidget( `id(`cupsd_conf_browse_deny_input), `Enabled, false );
+      UI::ChangeWidget( `id(`client_conf_server_name_input), `Enabled, false );
+      UI::ChangeWidget( `id(`test_client_conf_server), `Enabled, false );
+      UI::ChangeWidget( `id(`connection_wizard), `Enabled, true );
+    }
+    if( event["ID"]:nil == `client_only_check_box)
+    { UI::ChangeWidget( `id(`cupsd_conf_browse_deny_input), `Enabled, false );
+      UI::ChangeWidget( `id(`client_conf_server_name_input), `Enabled, true );
+      UI::ChangeWidget( `id(`test_client_conf_server), `Enabled, true );
+      UI::ChangeWidget( `id(`connection_wizard), `Enabled, false );
+    }
+  }
+
+ if (event["EventReason"]:""=="Activated" && event["ID"]:nil==`connection_wizard) return `connection_wizard;
+
+ y2internal("event %1", event);
+ return nil;
+}
+
+
+
+
+
+
+/**
+ * Printing via network dialog
+ * @return dialog result
+ */
+any PrintingViaNetworkDialog()
+{ string caption = _("Printing Via Network");
+  string commandline = "";
+  // By default there is "Browsing On" in /etc/cups/cupsd.conf
+  // which is even the fallback if there is no "Browsing" entry at all
+  // or when the "Browsing" entry is deactivated by a leading '#' character.
+  // Therefore browsing_on is only false if "Browsing Off" or "Browsing No"
+  // is explicitely set in /etc/cups/cupsd.conf.
+  boolean browsing_on = true;
+  commandline = "egrep -i '^Browsing[[:space:]]+Off|^Browsing[[:space:]]+No' /etc/cups/cupsd.conf";
+  if( Printerlib::ExecuteBashCommand( commandline ) )
+  { browsing_on = false;
+  }
+  // By default there is no "BrowseDeny" entry in /etc/cups/cupsd.conf
+  // but there can be such entries of the form "BrowseDeny .*" or "BrowseDeny from .*":
+  string cupsd_conf_browse_deny = "";
+  commandline = "egrep -i '^BrowseDeny[[:space:]]+|^BrowseDeny[[:space:]]+from[[:space:]]+' /etc/cups/cupsd.conf | sed -e 's/[Ff][Rr][Oo][Mm]//' | tr -s '[:space:]' | cut -d ' ' -f 2 | tr '[:space:]' ' '";
+  if( Printerlib::ExecuteBashCommand( commandline ) )
+  { cupsd_conf_browse_deny = Printerlib::result["stdout"]:"";
+  }
+  // By default there is no /etc/cups/client.conf file at all
+  // and usually there is no ServerName entry in a /etc/cups/client.conf file.
+  // Therefore client_only is only true if there is a /etc/cups/client.conf file
+  // with an active ServerName entry:
+  boolean client_only = false;
+  string client_conf_server_name = "";
+  commandline = "egrep -i '^ServerName[[:space:]]+[[:alnum:]]' /etc/cups/client.conf";
+  if( Printerlib::ExecuteBashCommand( commandline ) )
+  { client_only = true;
+    // YCP string quoting: A double backslash '\\' results a single backslash '\' in the string.
+    // At least the trailing newline character must be removed.
+    commandline = "sed -n -e 's/^[Se][Ee][Rr][Vv][Ee][Rr][Nn][Aa][Mm][Ee][[:space:]][[:space:]]*\\(.*\\)$/\\1/p' /etc/cups/client.conf | tr -d '[:space:]'";
+    if( Printerlib::ExecuteBashCommand( commandline ) )
+    { client_conf_server_name = Printerlib::result["stdout"]:"";
+    }
+  }
+  term contents = `VBox( `VStretch(),
+                         `Frame( _("Use the Common Unix Printing System (CUPS) to print via network"),
+                                 `RadioButtonGroup( `id(`browsing_or_client_only_check_boxs),
+                                                    `VBox( `Left( `RadioButton( `id(`cupsd_conf_browsing_on_radio_button),
+                                                                                `opt(`notify),
+                                                                                _("&Receive printer information which is published by remote CUPS servers"),
+                                                                                ! client_only && browsing_on
+                                                                              )
+                                                                ),
+                                                           `HBox( `HSpacing( 3 ),
+                                                                  `TextEntry( `id(`cupsd_conf_browse_deny_input),
+                                                                              _("&Suppress the information which is published by the following CUPS servers (separated by spaces)"),
+                                                                              cupsd_conf_browse_deny
+                                                                            )
+                                                                ),
+                                                           `Left( `RadioButton( `id(`cupsd_conf_browsing_off_radio_button),
+                                                                                `opt(`notify),
+                                                                                _("&Do not listen to any information which is published by remote CUPS servers"),
+                                                                                ! client_only && ! browsing_on
+                                                                              )
+                                                                ),
+                                                           `VSpacing( 1 ),
+                                                           `Left( `RadioButton( `id(`client_only_check_box),
+                                                                                `opt(`notify),
+                                                                                _("Do all your printing directly via one single remote &CUPS server"),
+                                                                                client_only
+                                                                              )
+                                                                ),
+                                                           `HBox( `HSpacing( 3 ),
+                                                                  `HWeight( 2,
+                                                                            `TextEntry( `id(`client_conf_server_name_input),
+                                                                                        _("&Hostname / IP address"),
+                                                                                        client_conf_server_name
+                                                                                      )
+                                                                          ),
+                                                                  `HWeight( 1,
+                                                                            `PushButton( `id(`test_client_conf_server),
+                                                                                         _("&Test server access")
+                                                                                       )
+                                                                          ),
+                                                                  `HStretch()
+                                                                )
+                                                         )
+                                                  )
+                               ),
+                         `VStretch(),
+                         `Frame( _("Use a network printer directly or print via another kind of print server"),
+                                 `Left( `HBox( `Label( _("Use the") + " " ),
+                                               `PushButton( `id(`connection_wizard),
+                                                            _("&Connection Wizard")
+                                                          ),
+                                               `Label( " " + _("to specify how the network printer is accessible") )
+                                             )
+                                      )
+                               ),
+                         `VStretch()
+                       );
+  Wizard::SetContentsButtons( caption,
+                              contents,
+                              HELPS["printing_via_network_dialog"]:"",
+                              Label::BackButton(),
+                              // Set a different label for the "next" button
+                              // (i.e. the lower right button which results `next as UI::UserInput):
+                              Label::OKButton()
+                            );
+  // Enable or disable certain widgets according to what is actually set:
+  if( browsing_on )
+  { UI::ChangeWidget( `id(`cupsd_conf_browse_deny_input), `Enabled, true );
+    UI::ChangeWidget( `id(`client_conf_server_name_input), `Enabled, false );
+    UI::ChangeWidget( `id(`test_client_conf_server), `Enabled, false );
+    UI::ChangeWidget( `id(`connection_wizard), `Enabled, true );
+  }
+  else
+  { UI::ChangeWidget( `id(`cupsd_conf_browse_deny_input), `Enabled, false );
+    UI::ChangeWidget( `id(`client_conf_server_name_input), `Enabled, false );
+    UI::ChangeWidget( `id(`test_client_conf_server), `Enabled, false );
+    UI::ChangeWidget( `id(`connection_wizard), `Enabled, true );
+  }
+  if( client_only )
+  { UI::ChangeWidget( `id(`cupsd_conf_browse_deny_input), `Enabled, false );
+    UI::ChangeWidget( `id(`client_conf_server_name_input), `Enabled, true );
+    UI::ChangeWidget( `id(`test_client_conf_server), `Enabled, true );
+    UI::ChangeWidget( `id(`connection_wizard), `Enabled, false );
+  }
+  any ret = nil;
+  while(true)
+  { ret = UI::UserInput();
+    if( `abort == ret || `cancel == ret || `back == ret ) break;
+    if( `cupsd_conf_browsing_on_radio_button == ret )
+    { UI::ChangeWidget( `id(`cupsd_conf_browse_deny_input), `Enabled, true );
+      UI::ChangeWidget( `id(`client_conf_server_name_input), `Enabled, false );
+      UI::ChangeWidget( `id(`test_client_conf_server), `Enabled, false );
+      UI::ChangeWidget( `id(`connection_wizard), `Enabled, true );
+    }
+    if( `cupsd_conf_browsing_off_radio_button == ret )
+    { UI::ChangeWidget( `id(`cupsd_conf_browse_deny_input), `Enabled, false );
+      UI::ChangeWidget( `id(`client_conf_server_name_input), `Enabled, false );
+      UI::ChangeWidget( `id(`test_client_conf_server), `Enabled, false );
+      UI::ChangeWidget( `id(`connection_wizard), `Enabled, true );
+    }
+    if( `client_only_check_box == ret )
+    { UI::ChangeWidget( `id(`cupsd_conf_browse_deny_input), `Enabled, false );
+      UI::ChangeWidget( `id(`client_conf_server_name_input), `Enabled, true );
+      UI::ChangeWidget( `id(`test_client_conf_server), `Enabled, true );
+      UI::ChangeWidget( `id(`connection_wizard), `Enabled, false );
+    }
+    if( `next == ret )
+    { boolean cupsd_restart_required = false;
+      boolean cupsd_start_required = false;
+      boolean cupsd_stop_required = false;
+      any current_radio_button = UI::QueryWidget( `id(`browsing_or_client_only_check_boxs), `CurrentButton );
+      if( `cupsd_conf_browsing_on_radio_button == current_radio_button )
+      { if( client_only )
+        { cupsd_start_required = true;
+          commandline = "sed -i.yast2.save -e 's/^[Se][Ee][Rr][Vv][Ee][Rr][Nn][Aa][Mm][Ee]/#ServerName/' /etc/cups/client.conf";
+          if( ! Printerlib::ExecuteBashCommand( commandline ) )
+          { Report::Error( // Message of a Report::Error.
+                           // Only a simple message because this error does not happen on a normal system
+                           // (i.e. a system which is not totally broken or totally messed up).
+                           _("Failed to disable the 'ServerName' entry in /etc/cups/client.conf")
+                         );
+            continue;
+          }
+        }
+        if( ! browsing_on )
+        { cupsd_restart_required = true;
+        }
+        // Set "Browsing On" explicitely in cupsd.conf in any case because
+        // the "BrowseDeny" lines are appended below the "Browsing On" line
+        // to get a nice to read cupsd.conf file:
+        Printerlib::ExecuteBashCommand( "sed -i.yast2.save -e 's/^.*[Bb][Rr][Oo][Ww][Ss][Ii][Nn][Gg].*/Browsing On/' /etc/cups/cupsd.conf" );
+        if( ! Printerlib::ExecuteBashCommand( "grep '^Browsing On$' /etc/cups/cupsd.conf" ) )
+        { string first_browse_line = "";
+          Printerlib::ExecuteBashCommand( "sed -n -e '/[Bb][Rr][Oo][Ww][Ss]/=' /etc/cups/cupsd.conf | head -n 1" );
+          first_browse_line = filterchars( Printerlib::result["stdout"]:"", Printer::number_chars );
+          if( "" == first_browse_line ) first_browse_line = "$";
+          Printerlib::ExecuteBashCommand( "sed -i.yast2.save -e '" + first_browse_line + "aBrowsing On' /etc/cups/cupsd.conf" );
+          if( ! Printerlib::ExecuteBashCommand( "grep '^Browsing On$' /etc/cups/cupsd.conf" ) )
+          { Report::Error( // Message of a Report::Error.
+                           // Only a simple message because this error does not happen on a normal system
+                           // (i.e. a system which is not totally broken or totally messed up).
+                           _("Failed to set 'Browsing On' in /etc/cups/cupsd.conf")
+                         );
+            continue;
+          }
+        }
+        string browse_deny_input = (string)UI::QueryWidget( `id(`cupsd_conf_browse_deny_input), `Value );
+        if( cupsd_conf_browse_deny != browse_deny_input )
+        { cupsd_restart_required = true;
+          commandline = "sed -i.yast2.save -e '/^[Bb][Rr][Oo][Ww][Ss][Ee][Dd][Ee][Nn][Yy].*/d' /etc/cups/cupsd.conf && for h in " + browse_deny_input + " ; do sed -i -e \"/Browsing On/aBrowseDeny $h\" /etc/cups/cupsd.conf ; done";
+          if( ! Printerlib::ExecuteBashCommand( commandline ) )
+          { Report::Error( // Message of a Report::Error.
+                           // Only a simple message because this error does not happen on a normal system
+                           // (i.e. a system which is not totally broken or totally messed up).
+                           _("Failed to write 'BrowseDeny' entries to /etc/cups/cupsd.conf")
+                         );
+            continue;
+          }
+        }
+      }
+      if( `cupsd_conf_browsing_off_radio_button == current_radio_button )
+      { if( client_only )
+        { cupsd_start_required = true;
+          commandline = "sed -i.yast2.save -e 's/^[Se][Ee][Rr][Vv][Ee][Rr][Nn][Aa][Mm][Ee]/#ServerName/' /etc/cups/client.conf";
+          if( ! Printerlib::ExecuteBashCommand( commandline ) )
+          { Report::Error( // Message of a Report::Error.
+                           // Only a simple message because this error does not happen on a normal system
+                           // (i.e. a system which is not totally broken or totally messed up).
+                           _("Failed to disable the 'ServerName' entry in /etc/cups/client.conf")
+                         );
+            continue;
+          }
+        }
+        if( browsing_on )
+        { cupsd_restart_required = true;
+          commandline = "sed -i.yast2.save -e 's/^.*[Bb][Rr][Oo][Ww][Ss][Ii][Nn][Gg].*/Browsing Off/' /etc/cups/cupsd.conf";
+          if( ! Printerlib::ExecuteBashCommand( commandline ) )
+          { Report::Error( // Message of a Report::Error.
+                           // Only a simple message because this error does not happen on a normal system
+                           // (i.e. a system which is not totally broken or totally messed up).
+                           _("Failed to set 'Browsing Off' in /etc/cups/cupsd.conf")
+                         );
+            continue;
+          }
+        }
+      }
+      if( `client_only_check_box == current_radio_button )
+      { string server_name_input = (string)UI::QueryWidget( `id(`client_conf_server_name_input), `Value );
+        if( "" == server_name_input )
+        { Popup::AnyMessage( // Header of a Popup::AnyMessage when no server name was entered:
+                             _("No Server Name"),
+                             // Body of a Popup::AnyMessage when no server name was entered:
+                             _("Enter a server name.")
+                           );
+          continue;
+        }
+        if( client_conf_server_name != server_name_input )
+        { if( "localhost" == server_name_input )
+          { cupsd_start_required = true;
+          }
+          else
+          { cupsd_stop_required = true;
+          }
+          if( ! client_only )
+          { commandline = "echo 'ServerName " + server_name_input + "' >/etc/cups/client.conf";
+          }
+          else
+          { commandline = "sed -i.yast2.save -e 's/^.*[Se][Ee][Rr][Vv][Ee][Rr][Nn][Aa][Mm][Ee].*/ServerName "
+                          + server_name_input
+                          + "/' /etc/cups/client.conf";
+          }
+          if( ! Printerlib::ExecuteBashCommand( commandline ) )
+          { Report::Error( // Message of a Report::Error.
+                           // Only a simple message because this error does not happen on a normal system
+                           // (i.e. a system which is not totally broken or totally messed up).
+                           _("Failed to set the 'ServerName' entry in /etc/cups/client.conf")
+                         );
+            continue;
+          }
+        }
+      }
+      if( cupsd_stop_required )
+      { if( ! Popup::YesNoHeadline( _("Stop local running CUPS daemon"),
+                                    _("No local CUPS daemon is needed when you do all your printing via a remote CUPS server.")
+                                  )
+          )
+        { continue;
+        }
+        if( ! Service::Stop("cups") )
+        { Report::Error( // Message of a Report::Error.
+                         // Only a simple message because this error does not happen on a normal system
+                         // (i.e. a system which is not totally broken or totally messed up).
+                         _("Failed to stop the CUPS daemon.")
+                       );
+          continue;
+        }
+      }
+      if( cupsd_restart_required )
+      { if( ! Popup::YesNoHeadline( _("Restart local running CUPS daemon"),
+                                    _("A restart is needed because the configuration of the CUPS daemon changed.")
+                                  )
+          )
+        { continue;
+        }
+        if( ! Service::Restart("cups") )
+        { Report::Error( // Message of a Report::Error.
+                         // Only a simple message because this error does not happen on a normal system
+                         // (i.e. a system which is not totally broken or totally messed up).
+                         _("Failed to restart the CUPS daemon.")
+                       );
+          continue;
+        }
+        else
+        { Popup::TimedMessage( _("Waiting for the CUPS daemon to become ready to operate..."),
+                               60
+                             );
+        }
+      }
+      else
+      { if( cupsd_start_required )
+        { if( ! Printerlib::ExecuteBashCommand( "/usr/bin/lpstat -h localhost -r" ) )
+          { if( ! Popup::YesNoHeadline( _("Start local running CUPS daemon"),
+                                        _("A local running CUPS daemon is needed for your setup.")
+                                      )
+              )
+            { continue;
+            }
+            if( ! Service::Start("cups") )
+            { Report::Error( // Message of a Report::Error.
+                             // Only a simple message because this error does not happen on a normal system
+                             // (i.e. a system which is not totally broken or totally messed up).
+                             _("Failed to start the CUPS daemon.")
+                           );
+              continue;
+            }
+            Popup::TimedMessage( _("Waiting for the CUPS daemon to become ready to operate..."),
+                                 60
+                               );
+          }
+        }
+      }
+      if( cupsd_restart_required || cupsd_start_required )
+      { if( ! Printerlib::ExecuteBashCommand( "/usr/bin/lpstat -h localhost -r" ) )
+        { Report::Error( // Message of a Report::Error.
+                         // Only a simple message because this error does not happen on a normal system
+                         // (i.e. a system which is not totally broken or totally messed up).
+                         _("No local running CUPS daemon is accessible.")
+                       );
+          continue;
+        }
+      }
+      // After changes regarding printing via network, enforce to show also remote queues.
+      // For example when CUPS Browsing was disabled before and becomes now enabled,
+      // there are probably new remote queues which should be shown to the user
+      // in particular when his queue_filter_string was "local" before.
+      // On the other hand if queue_filter_string was "remote" before
+      // but now client-only is no longer used (or it is a "localhost" client-only setup)
+      // there are probably new local queues which should be shown to the user.
+      // Therefore set the queue_filter_string to "all" in any case to be on the safe side:
+      Printer::queue_filter_show_local = true;
+      Printer::queue_filter_show_remote = true;
+      // Exit this dialog in any case:
+      break;
+    }
+    if( `test_client_conf_server == ret )
+    { string server_name_input = (string)UI::QueryWidget( `id(`client_conf_server_name_input), `Value );
+      if( "" == server_name_input )
+      { Popup::AnyMessage( // Header of a Popup::AnyMessage when no server name was entered:
+                           _("No Server Name"),
+                           // Body of a Popup::AnyMessage when no server name was entered:
+                           _("Enter a server name.")
+                         );
+        continue;
+      }
+      if( "localhost" == server_name_input )
+      { if( ! Printerlib::ExecuteBashCommand( "/usr/bin/lpstat -h localhost -r" ) )
+        { if( ! Popup::YesNoHeadline( _("Start local running CUPS daemon"),
+                                      _("A local running CUPS daemon is needed for your setup.")
+                                    )
+            )
+          { continue;
+          }
+          if( ! Service::Start("cups") )
+          { Report::Error( // Message of a Report::Error.
+                           // Only a simple message because this error does not happen on a normal system
+                           // (i.e. a system which is not totally broken or totally messed up).
+                           _("Failed to start the CUPS daemon.")
+                         );
+            continue;
+          }
+          else
+          { Popup::TimedMessage( _("Waiting for the CUPS daemon to become ready to operate..."),
+                                 60
+                               );
+          }
+        }
+        if( ! Printerlib::ExecuteBashCommand( "/usr/bin/lpstat -h localhost -r" ) )
+        { Report::Error( // Message of a Report::Error.
+                         // Only a simple message because this error does not happen on a normal system
+                         // (i.e. a system which is not totally broken or totally messed up).
+                         _("No local running CUPS daemon is accessible.")
+                       );
+          continue;
+        }
+      }
+      if( ! Printerlib::ExecuteBashCommand( "netcat -w 1 -z " + server_name_input + " 631" ) )
+      { Popup::Error( // Message of a Popup::Error when a remote CUPS server is not accessible:
+                      _("This server is not accessible.")
+                    );
+        continue;
+      }
+      if( ! Printerlib::ExecuteBashCommand( "echo -en 'GET / HTTP/1.1\n\n' | netcat -w 10 "
+                                         + server_name_input
+                                         + " 631 | grep '^Server: CUPS'" )
+        )
+      { Popup::Warning( // Message of a Popup::Warning when a remote CUPS server name seems to be wrong:
+                        _("This host does not respond like a CUPS server should do.")
+                      );
+        continue;
+      }
+      Popup::AnyMessage( // Header of a Popup::AnyMessage when a remote CUPS server looks o.k.:
+                         _("CUPS Server OK"),
+                         // Body of a Popup::AnyMessage when a remote CUPS server looks o.k.:
+                         _("The CUPS server responds as expected.")
+                       );
+      continue;
+    }
+    if( `connection_wizard == ret )
+    { // After the ConnectionWizardDialog and BasicAddDialog a new local queue exists.
+      // Therefore enforce to show also local queues in the OverviewDialog
+      // in particular when the queue_filter_string was "remote" before:
+/*
+      if( "remote" == Printer::queue_filter_string )
+      { Printer::queue_filter_string = "all";
+      }
+*/
+      // Exit this dialog and go to the ConnectionWizardDialog and BasicAddDialog via the sequencer in wizards.ycp:
+      break;
+    }
+    y2milestone( "Ignoring unexpected returncode in DriverOptionsDialog: %1", ret );
+    continue;
+  }
+  return ret;
+}
+
+/* EOF */
+}

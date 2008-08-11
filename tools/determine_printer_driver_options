@@ -1,0 +1,106 @@
+#! /bin/bash
+#
+# Johannes Meixner <jsmeix@suse.de>, 2007
+
+#set -x
+
+export PATH="/sbin:/usr/sbin:/usr/bin:/bin"
+export LC_ALL="POSIX"
+export LANG="POSIX"
+umask 022
+
+MY_NAME=${0##*/}
+QUEUE="$1"
+[ -z "$QUEUE" ] && { echo -en "\nUsage:\n$MY_NAME queue-name\n" 1>&2 ; exit 1 ; }
+
+# Create temporary file name:
+TMP_DATA=$(mktemp -u /tmp/$MY_NAME.XXXXXX)
+
+# Test if lpstat is executable:
+LPSTAT="$( type -P lpstat )"
+if ! test -x "$LPSTAT"
+then echo "Cannot execute lpstat" 1>&2
+     exit 1
+fi
+
+# Test if lpoptions is executable:
+LPOPTIONS="$( type -P lpoptions )"
+if ! test -x "$LPOPTIONS"
+then echo "Cannot execute lpoptions" 1>&2
+     exit 1
+fi
+
+# Test if cupsd is accessible:
+if ! $LPSTAT -h localhost -r &>/dev/null
+then echo "Cannot access cupsd on localhost" 1>&2
+     exit 2
+fi
+
+# Test if QUEUE exists:
+if ! $LPSTAT -h localhost -p $QUEUE &>/dev/null
+then echo "Queue $QUEUE not found on localhost" 1>&2
+     exit 3
+fi
+
+# Input:
+
+# Get the raw data:
+# Continue even after timeout because then an empty YCP map is output
+# which indicates that there are no driver options.
+# Simply delete unusual (in particular all non-ASCII) characters
+# but keep the delimiters / * and newline:
+MAXIMUM_WAIT="10"
+$LPOPTIONS -h localhost -p $QUEUE -l | tr -c -d '[:alnum:] <>/:\*\n' >$TMP_DATA &
+lpoptionsPID=$!
+# Timeout stuff:
+for i in $( seq $MAXIMUM_WAIT )
+do ps $lpoptionsPID &>/dev/null || break
+   sleep 1
+done
+if ps $lpoptionsPID &>/dev/null
+then kill -9 $lpoptionsPID &>/dev/null
+     echo "Aborted 'lpoptions' after $MAXIMUM_WAIT seconds timeout." 1>&2
+fi
+
+# Process the data:
+
+# Simply remove hexadecimal substrings like '<A1B2C3>':
+
+sed -i -e 's/<[^>]*>//g' $TMP_DATA
+
+# Condense multiple spaces, convert tabs to blanks, and remove leading and trailing spaces:
+sed -i -e 's/[[:space:]][[:space:]]*/ /g' \
+       -e 's/^[[:space:]]*//' \
+       -e 's/[[:space:]]*$//' $TMP_DATA
+
+# Output header:
+echo "[" 
+
+# Make complete and seperated entries.
+# The values are collected until a new "queue" line appears, then the values are output.
+# The very first "queue" line doesn't result an output because "$URI" is an empty string.
+exec <$TMP_DATA
+IFS=':'
+while read KEY VALUES
+do KEYWORD=""
+   TRANSLATION=""
+   KEYWORD="$( echo $KEY | cut -s -d '/' -f 1 )"
+   if [ -n "$KEYWORD" -a -n "$VALUES" ]
+   then TRANSLATION="$( echo $KEY | cut -s -d '/' -f 2 )"
+        echo -e "  \$[ \"keyword\":\"$KEYWORD\",\n     \"translation\":\"$TRANSLATION\",\n     \"values\": [ "
+        IFS=' '
+        for VALUE in $( echo $VALUES )
+        do echo -e "                 \"$VALUE\","
+        done
+        IFS=':'
+        echo -e "                 \"\"\n               ]\n  ],"
+   fi
+done
+
+# Output the last entry and a footer for YCP
+echo -e "  \$[]\n]"
+
+# Remove the temporary files 
+rm $TMP_DATA
+exit 0
+

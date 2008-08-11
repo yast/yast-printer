@@ -1,0 +1,118 @@
+/* ------------------------------------------------------------------------------
+ * Copyright (c) 2006 Novell, Inc. All Rights Reserved.
+ *
+ *
+ * This program is free software; you can redistribute it and/or modify it under
+ * the terms of version 2 of the GNU General Public License as published by the
+ * Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+ * FOR A PARTICULAR PURPOSE.  See the GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License along with
+ * this program; if not, contact Novell, Inc.
+ *
+ * To contact Novell about this file by physical or electronic mail, you may find
+ * current contact information at www.novell.com.
+ * ------------------------------------------------------------------------------
+ */
+
+/**
+ * File:	clients/printer_auto.ycp
+ * Package:	Configuration of printer
+ * Summary:	Client for autoinstallation
+ * Authors:	Johannes Meixner <jsmeix@suse.de>
+ *
+ * $Id: printer_auto.ycp 27914 2006-02-13 14:32:08Z locilka $
+ *
+ * This is a client for autoinstallation. It takes its arguments,
+ * goes through the configuration and return the setting.
+ * Does not do any changes to the configuration.
+ */
+
+/**
+ * @param function to execute
+ * @param map/list of printer settings
+ * @return map edited settings, Summary or boolean on success depending on called function
+ * @example map mm = $[ "FAIL_DELAY" : "77" ];
+ * @example map ret = WFM::CallFunction ("printer_auto", [ "Summary", mm ]);
+ */
+
+{
+
+textdomain "printer";
+
+y2milestone("----------------------------------------");
+y2milestone("Printer auto started");
+
+import "Printer";
+include "printer/wizards.ycp";
+
+any ret = nil;
+string func = "";
+map param = $[];
+
+/* Check arguments */
+if(size(WFM::Args()) > 0 && is(WFM::Args(0), string)) {
+    func = (string)WFM::Args(0);
+    if(size(WFM::Args()) > 1 && is(WFM::Args(1), map))
+	param = (map) WFM::Args(1);
+}
+y2debug("func=%1", func);
+y2debug("param=%1", param);
+
+/* Create a summary*/
+if(func == "Summary") {
+    ret = Printer::QueueItems( true, true )[0]:[];
+}
+/* Reset configuration */
+else if (func == "Reset") {
+    Printer::Import($[]);
+    ret = $[];
+}
+/* Change configuration (run AutoSequence) */
+else if (func == "Change") {
+    ret = PrinterAutoSequence();
+}
+/* Import configuration */
+else if (func == "Import") {
+    ret = Printer::Import(param);
+}
+/* Return actual state */
+else if (func == "Export") {
+    ret = Printer::Export();
+}
+/* Return needed packages */
+else if (func == "Packages") {
+    ret = Printer::AutoPackages();
+}
+/* Read current state */
+else if (func == "Read") {
+    import "Progress";
+    boolean progress_orig = Progress::set (false);
+    ret = Printer::Read();
+    Progress::set (progress_orig);
+}
+/* Write givven settings */
+else if (func == "Write") {
+    import "Progress";
+    boolean progress_orig = Progress::set (false);
+    Printer::write_only = true;
+    ret = Printer::Write();
+    Progress::set (progress_orig);
+}
+/* Unknown function */
+else {
+    y2error("Unknown function: %1", func);
+    ret = false;
+}
+
+y2debug("ret=%1", ret);
+y2milestone("Printer auto finished");
+y2milestone("----------------------------------------");
+
+return ret;
+
+/* EOF */
+}

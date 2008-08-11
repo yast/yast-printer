@@ -1,0 +1,309 @@
+/* ------------------------------------------------------------------------------
+ * Copyright (c) 2006 Novell, Inc. All Rights Reserved.
+ *
+ *
+ * This program is free software; you can redistribute it and/or modify it under
+ * the terms of version 2 of the GNU General Public License as published by the
+ * Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+ * FOR A PARTICULAR PURPOSE.  See the GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License along with
+ * this program; if not, contact Novell, Inc.
+ *
+ * To contact Novell about this file by physical or electronic mail, you may find
+ * current contact information at www.novell.com.
+ * ------------------------------------------------------------------------------
+ */
+
+/**
+ * File:        include/printer/dialogs.ycp
+ * Package:     Configuration of printer
+ * Summary:     Other (minor/smaller) dialogs definitions
+ * Authors:     Johannes Meixner <jsmeix@suse.de>
+ *
+ * $Id: dialogs.ycp 27914 2006-02-13 14:32:08Z locilka $
+ */
+
+{
+
+textdomain "printer";
+
+import "Label";
+import "Wizard";
+import "Printer";
+import "Popup";
+import "DialogTree";
+import "Mode";
+
+include "printer/helps.ycp";
+include "printer/overview.ycp";
+include "printer/printingvianetwork.ycp";
+
+/**
+ * DriverOptionsDialog dialog
+ * @return dialog result
+ */
+any DriverOptionsDialog()
+{ string name = Printer::queues[Printer::selected_queues_index,"name"]:"";
+  string caption = _("Driver Options for Queue") + " " + name;
+  term contents = `Tree( `id(`driver_options_tree),
+                         // The `notify option makes UI::UserInput() return immediately
+                         // as soon as the user selects a tree item rather than the default behaviour
+                         // which waits for the user to activate a button:
+                         `opt(`notify),
+                         // Header of a Tree which shows driver options:
+                         // _("Driver Options"),
+                         // No duplicate header because the dialog header is already "Driver Options":
+                         "",
+                         // Initially the parameter selected_keyword is the empty string
+                         // to have all values lists closed by default in the tree
+                         // and the parameter selected_value is also the empty string
+                         // because no value is initially selected:
+                         Printer::DriverOptionItems( "", "" )
+                       );
+  Wizard::SetContentsButtons( caption,
+                              contents,
+                              HELPS["driver_options_dialog"]:"",
+                              Label::BackButton(),
+                              // Set a different label for the "next" button
+                              // (i.e. the lower right button which results `next as UI::UserInput):
+                              Label::OKButton()
+                            );
+  any ret = nil;
+  while(true)
+  { ret = UI::UserInput();
+    if( ret == `abort || ret == `cancel || ret == `back ) break;
+    if( ret == `next )
+    { y2milestone( "Driver options: %1", Printer::driver_options );
+      string commandline = "/usr/sbin/lpadmin -h localhost -p '" + name + "'";
+      boolean something_has_changed = false;
+      foreach( map< string, any > driver_option,
+               Printer::driver_options,
+               { string keyword = driver_option["keyword"]:"";
+                 string selected_value = driver_option["selected"]:"";
+                 if( "" != keyword
+                     && "" != selected_value
+                   )
+                 { boolean really_changed = true;
+                   foreach( string value,
+                            driver_option["values"]:[],
+                            { if( value == "*" + selected_value )
+                              { really_changed = false;
+                              }
+                            }
+                          );
+                   if( really_changed )
+                   { commandline = commandline + " -o '" + keyword + "=" + selected_value + "'";
+                     something_has_changed = true;
+                   }
+                 }
+               }
+             );
+      if( something_has_changed )
+      { Wizard::DisableBackButton();
+        Wizard::DisableAbortButton();
+        Wizard::DisableNextButton();
+        if( ! Printerlib::ExecuteBashCommand( commandline ) )
+        { Popup::Error( // Message of a Popup::Error
+                        // where %1 will be replaced by the queue name.
+                        // Only a simple message because this error does not happen on a normal system
+                        // (i.e. a system which is not totally broken or totally messed up).
+                        sformat( _("Failed to set driver options for queue %1."), name )
+                      );
+        }
+        Wizard::EnableBackButton();
+        Wizard::EnableAbortButton();
+        Wizard::EnableNextButton();
+      }
+      // Exit this dialog in any case:
+      break;
+    }
+    if( ret == `driver_options_tree )
+    { list selected_branch = (list)UI::QueryWidget( `driver_options_tree, `CurrentBranch );
+      y2milestone( "Selected driver options tree branch: %1", selected_branch );
+      // The selected branch list has
+      // either one elemet which is the main keyword when an option is selected e.g. ["PageSize"]
+      // or it has two elements: main keyword and option value keyword e.g. ["PageSize", "A4"]
+      if( 2 == size( selected_branch ) )
+      { if( "" != selected_branch[0]:""
+            && "" != selected_branch[1]:""
+          )
+        { // Sleep a tenth of a second to let the user notice when he selected a value
+          // before the tree is re-built via the UI::ChangeWidget below:
+          sleep( 100 );
+          // The Printer::DriverOptionItems call stores the current setting
+          // in Printer::driver_options so that it is known later
+          // (in particular when the changes are committed when the dialog finishes):
+          UI::ChangeWidget( `driver_options_tree,
+                            `Items,
+                            Printer::DriverOptionItems( selected_branch[0]:"", selected_branch[1]:"" )
+                          );
+        }
+      }
+      else
+      { // Sleep a tenth of a second to let the user notice when he selected an option
+        // before the tree is re-built via the UI::ChangeWidget below:
+        sleep( 100 );
+        // Open the matching values list in the tree when the option is selected:
+        UI::ChangeWidget( `driver_options_tree,
+                          `Items,
+                          Printer::DriverOptionItems( selected_branch[0]:"", "" )
+                        );
+      }
+      continue;
+    }
+    y2milestone( "Ignoring unexpected returncode in DriverOptionsDialog: %1", ret );
+    continue;
+  }
+  return ret;
+}
+
+map<string, map<string,any> > wd = $[
+	"OVERVIEW" : $[
+		"widget" : `custom,
+		"custom_widget" :
+                `VBox(
+		  `Left(`HBox( `Label( _("Show") ), `HSpacing(),
+			`CheckBox( `id(`local_content_checkbox),`opt(`notify), _("local queues")),
+			`CheckBox( `id(`remote_content_checkbox),`opt(`notify), _("remote queues")))),
+                  `VWeight(2,`Table (`id (`overview_table), `opt (`notify, `immediate),
+				`header( // Header of a Table column with a list of print queues.
+                                     // Where the queue configuration exists (local or remote):
+                                     _("Configuration"),
+                                     // Header of a Table column with a list of print queues.
+                                     // Print queue name:
+                                     _("Name"),
+                                     // Header of a Table column with a list of print queues.
+                                     // Print queue description (e.g. model or driver):
+                                     _("Description"),
+                                     // Header of a Table column with a list of print queues.
+                                     // Location of the printer (e.g. second floor, room 2.3):
+                                     _("Location"),
+                                     // Header of a Table column with a list of print queues.
+                                     // Whether or not is is the default queue:
+                                     _("Default"),
+                                     // Header of a Table column with a list of print queues.
+                                     // Queue status (accepting/rejecting and enabled/disabled):
+                                     _("Status")
+                                   )
+
+				)),
+                  `HBox (
+                        `PushButton (`id (`add), Label::AddButton ()),
+                        `PushButton (`id (`edit), _("Configure")),
+                        `PushButton (`id (`delete), Label::DeleteButton ()),
+                        `HStretch (),
+                        `PushButton (`id (`test), _("Print test page"))
+                        )
+                ),
+		"init"	 : initOverview,
+		"handle" : handleOverview
+
+	],
+	"NETWORKPRINTING" : $[
+		"widget" : `custom,
+		"custom_widget" :
+		`VBox( `VStretch(),
+                         `Frame( _("Use the Common Unix Printing System (CUPS) to print via network"),
+                                 `RadioButtonGroup( `id(`browsing_or_client_only_check_boxs),
+                                                    `VBox( `Left( `RadioButton( `id(`cupsd_conf_browsing_on_radio_button),
+                                                                                `opt(`notify),
+                                                                                _("&Receive printer information which is published by remote CUPS servers"),
+                                                                                ! Printerlib::client_only && Printerlib::browsing_on
+                                                                              )
+                                                                ),
+                                                           `HBox( `HSpacing( 3 ),
+                                                                  `TextEntry( `id(`cupsd_conf_browse_deny_input),
+                                                                              _("&Suppress the information which is published by the following CUPS servers (separated by spaces)"),
+                                                                              Printerlib::cupsd_conf_browse_deny
+                                                                            )
+                                                                ),
+                                                           `Left( `RadioButton( `id(`cupsd_conf_browsing_off_radio_button),
+                                                                                `opt(`notify),
+                                                                                _("&Do not listen to any information which is published by remote CUPS servers"),
+                                                                                ! Printerlib::client_only && ! Printerlib::browsing_on
+                                                                              )
+                                                                ),
+                                                           `VSpacing( 1 ),
+                                                           `Left( `RadioButton( `id(`client_only_check_box),
+                                                                                `opt(`notify),
+                                                                                _("Do all your printing directly via one single remote &CUPS server"),
+                                                                                Printerlib::client_only
+                                                                              )
+                                                                ),
+                                                           `HBox( `HSpacing( 3 ),
+                                                                  `HWeight( 2,
+                                                                            `TextEntry( `id(`client_conf_server_name_input),
+                                                                                        _("&Hostname / IP address"),
+                                                                                        Printerlib::client_conf_server_name
+                                                                                      )
+                                                                          ),
+                                                                  `HWeight( 1,
+                                                                            `PushButton( `id(`test_client_conf_server),
+                                                                                         _("&Test server access")
+                                                                                       )
+                                                                          ),
+                                                                  `HStretch()
+                                                                )
+                                                         )
+                                                  )
+                               ),
+                         `VStretch(),
+                         `Frame( _("Use a network printer directly or print via another kind of print server"),
+                                 `Left( `HBox( `Label( _("Use the") + " " ),
+                                               `PushButton( `id(`connection_wizard),
+                                                            _("&Connection Wizard")
+                                                          ),
+                                               `Label( " " + _("to specify how the network printer is accessible") )
+                                             )
+                                      )
+                               ),
+                         `VStretch()
+                       ),
+		"handle" : handleNetworkPrinting
+	]
+];
+
+map tabs_descr = $[
+        "overview" : $[
+          "header" : _("Printers and Queues"),
+          "tree_item_label" : _("Printers and Queues"),
+          "contents" : `VBox (
+            "OVERVIEW"
+          ),
+         "widget_names" : ["OVERVIEW"]
+        ],
+        "network" : $[
+          "header" : _("Printing via Network"),
+          "tree_item_label" : _("Printing via Network"),
+          "contents" : `VBox (
+            "NETWORKPRINTING"
+          ),
+         "widget_names" : ["NETWORKPRINTING"]
+        ],
+];
+
+
+symbol runMainDialog(){
+  string caption = _("Detected Printers");
+
+   symbol ret = DialogTree::ShowAndRun ($[
+            "ids_order"         : [ "overview", "network" ],
+            "initial_screen"    : "overview",
+            "screens"           : tabs_descr,
+            "widget_descr"      : wd,
+            "back_button"       : nil,//Label::BackButton(),
+            "abort_button"      : Label::AbortButton(),
+            "next_button"       : (Mode::normal() ?
+                Label::NextButton () : Label::OKButton ()
+            )
+        ]);
+    return ret;
+}
+
+
+/* EOF */
+}

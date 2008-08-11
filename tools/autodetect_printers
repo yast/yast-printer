@@ -1,0 +1,119 @@
+#! /bin/bash
+#
+# Johannes Meixner <jsmeix@suse.de>, 2007
+
+#set -x
+
+export PATH="/sbin:/usr/sbin:/usr/bin:/bin"
+export LC_ALL="POSIX"
+export LANG="POSIX"
+umask 022
+
+# This file name for a progress indicator is also used in Printer.ycp:
+test -z "$PROGRESS" && PROGRESS="/var/lib/YaST2/autodetect_printers.progress"
+
+MY_NAME=${0##*/}
+
+# Create temporary file names:
+TMP_DATA=$(mktemp -u /tmp/$MY_NAME.XXXXXX)
+TMP_DATA_RAW=$(mktemp -u /tmp/$MY_NAME.XXXXXX)
+
+# Test if lpstat and lpinfo are executable:
+echo 'Testing if lpstat and lpinfo are executable...' >$PROGRESS
+LPSTAT="$( type -P lpstat )"
+if ! test -x "$LPSTAT"
+then echo "Cannot execute lpstat" 1>&2
+     exit 1
+fi
+LPINFO="$( type -P lpinfo )"
+if ! test -x "$LPINFO"
+then echo "Cannot execute lpinfo" 1>&2
+     exit 1
+fi
+
+# Test if cupsd is accessible:
+echo 'Testing if cupsd is accessible...' >>$PROGRESS
+if ! $LPSTAT -h localhost -r &>/dev/null
+then echo "Cannot access cupsd on localhost" 1>&2
+     exit 2
+fi
+
+# Input:
+
+# Get the raw data:
+echo 'Retrieving the raw data...' >>$PROGRESS
+# Continue even after timeout because then an empty YCP map is output
+# which indicates that no printers were autodetected.
+# Usually "lpinfo -l -v" needs a few seconds.
+# To be on the safe side, a one minute timeout is used.
+# Therefore the PROGRESS file can grow up to about 3600 bytes.
+MAXIMUM_WAIT="60"
+$LPINFO -h localhost -l -v >$TMP_DATA_RAW &
+lpinfoPID=$!
+for i in $( seq $MAXIMUM_WAIT )
+do ps $lpinfoPID &>/dev/null || break
+   echo "Waiting for response from $LPINFO (PID $lpinfoPID)..." >>$PROGRESS
+   sleep 1
+done
+if ps $lpinfoPID &>/dev/null
+then kill -9 $lpinfoPID &>/dev/null
+     echo "Aborted lpinfo after $MAXIMUM_WAIT seconds timeout." 1>&2
+     echo "Aborted lpinfo after $MAXIMUM_WAIT seconds timeout." >>$PROGRESS
+fi
+
+# Process the data:
+echo 'Got the raw data.' >>$PROGRESS
+# Extract what is needed, quotation marks " are replaced by ' :
+tr '"' "'" <$TMP_DATA_RAW | egrep '^Device:|uri =|make-and-model =|device-id =|info =|class =' >$TMP_DATA
+
+# Have "^Device:" on a seperated "Device" line and convert " = " to a single space:
+sed -i -e 's/^Device:/Device\n/' \
+       -e 's/ = / /' $TMP_DATA
+
+# Condense multiple spaces, convert tabs to blanks, and remove leading and trailing spaces:
+sed -i -e 's/[[:space:]][[:space:]]*/ /g' \
+       -e 's/^[[:space:]]*//' \
+       -e 's/[[:space:]]*$//' $TMP_DATA
+
+# Output:
+echo 'Creating the YCP map...' >>$PROGRESS
+# Output header:
+echo "[" 
+
+# Function to output one entry:
+Output()
+{ if [ -n "$URI" ]
+  then echo -e "  \$[ \"uri\":\"$URI\",\n     \"model\":\"$MODEL\",\n     \"deviceID\":\"$ID\",\n     \"info\":\"$INFO\",\n     \"class\":\"$CLASS\"\n  ],"
+  fi
+}
+
+# Make complete and seperated entries:
+# The values are collected until a new "Device" line appears, then the values are output.
+# The very first "Device" line doesn't result an output because "$URI" is an empty string.
+exec <$TMP_DATA
+while read KEY VALUE
+do case "$KEY" in
+        Device) Output
+                URI=""
+                MODEL=""
+                ID=""
+                INFO=""
+                CLASS="" ;;
+        uri) URI="$VALUE" ;;
+        make-and-model) MODEL="$VALUE" ;;
+        device-id) ID="$VALUE" ;;
+        info) INFO="$VALUE" ;;
+        class) CLASS="$VALUE" ;;
+        *) echo "Ignoring key $KEY" 1>&2 ;;
+   esac
+done
+
+# Output the last entry and a footer for YCP
+Output
+echo -e "  \$[]\n]"
+
+# Remove the temporary files 
+rm $TMP_DATA_RAW $TMP_DATA
+echo 'Finished.' >>$PROGRESS
+exit 0
+

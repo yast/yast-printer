@@ -1,0 +1,107 @@
+/* ------------------------------------------------------------------------------
+ * Copyright (c) 2006 Novell, Inc. All Rights Reserved.
+ *
+ *
+ * This program is free software; you can redistribute it and/or modify it under
+ * the terms of version 2 of the GNU General Public License as published by the
+ * Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+ * FOR A PARTICULAR PURPOSE.  See the GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License along with
+ * this program; if not, contact Novell, Inc.
+ *
+ * To contact Novell about this file by physical or electronic mail, you may find
+ * current contact information at www.novell.com.
+ * ------------------------------------------------------------------------------
+ */
+
+/**
+ * File:	clients/printer_proposal.ycp
+ * Package:	Configuration of printer
+ * Summary:	Proposal function dispatcher.
+ * Authors:	Johannes Meixner <jsmeix@suse.de>
+ *
+ * $Id: printer_proposal.ycp 27914 2006-02-13 14:32:08Z locilka $
+ *
+ * Proposal function dispatcher for printer configuration.
+ * See source/installation/proposal/proposal-API.txt
+ */
+
+{
+
+textdomain "printer";
+
+import "Printer";
+import "Progress";
+
+/* The main () */
+y2milestone("----------------------------------------");
+y2milestone("Printer proposal started");
+
+string func = (string) WFM::Args(0);
+map param = (map) WFM::Args(1);
+map ret = $[];
+
+/* create a textual proposal */
+if(func == "MakeProposal") {
+    string proposal = "";
+    string warning = nil;
+    symbol warning_level = nil;
+    boolean force_reset = param["force_reset"]:false;
+
+    if(force_reset || !Printer::proposal_valid) {
+        Printer::proposal_valid = true;
+	boolean progress_orig = Progress::set (false);
+	Printer::Read();
+	Progress::set (progress_orig);
+    }
+    list sum = Printer::QueueItems( true, true );
+    proposal = sum[0]:"";
+
+    ret = $[
+	"preformatted_proposal" : proposal,
+	"warning_level" : warning_level,
+	"warning" : warning,
+    ];
+}
+/* run the module */
+else if(func == "AskUser") {
+    map stored = Printer::Export();
+    symbol seq = (symbol) WFM::CallFunction("printer", [.propose]);
+    if(seq != `next) Printer::Import(stored);
+    y2debug("stored=%1",stored);
+    y2debug("seq=%1",seq);
+    ret = $[
+	"workflow_sequence" : seq
+    ];
+}
+/* create titles */
+else if(func == "Description") {
+    ret = $[
+	/* Rich text title for Printer in proposals */
+	"rich_text_title" : _("Printer"),
+	/* Menu title for Printer in proposals */
+	"menu_title" : _("&Printer"),
+	"id" : "printer",
+    ];
+}
+/* write the proposal */
+else if(func == "Write") {
+    Printer::Write();
+}
+/* unknown function */
+else {
+    y2error("unknown function: %1", func);
+}
+
+/* Finish */
+y2debug("ret=%1",ret);
+y2milestone("Printer proposal finished");
+y2milestone("----------------------------------------");
+return ret;
+
+/* EOF */
+}

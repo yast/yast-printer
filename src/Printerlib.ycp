@@ -1,0 +1,62 @@
+{
+module "Printerlib";
+textdomain "printer";
+
+global boolean client_only = false;
+global string client_conf_server_name = "";
+
+// By default there is "Browsing On" in /etc/cups/cupsd.conf
+// which is even the fallback if there is no "Browsing" entry at all
+// or when the "Browsing" entry is deactivated by a leading '#' character.
+// Therefore browsing_on is only false if "Browsing Off" or "Browsing No"
+// is explicitely set in /etc/cups/cupsd.conf.
+global boolean browsing_on = true;
+
+// By default there is no "BrowseDeny" entry in /etc/cups/cupsd.conf
+// but there can be such entries of the form "BrowseDeny .*" or "BrowseDeny from .*":
+global string cupsd_conf_browse_deny = "";
+
+// The result map is used as a simple common local store for whatever additional results
+// (in particular commandline exit code, stdout, stderr, and whatever messages)
+// so that the local functions in this module can be of easy-to-use boolean type.
+// The following keys are used:
+// result["exit"]:<integer> for exit codes
+// result["stdout"]:<string> for stdout and whatever non-error-messages
+// result["stderr"]:<string> for stderr and whatever error-messages
+global map result = $[ "exit":0,
+                       "stdout":"",
+                       "stderr":""
+                     ];
+
+/**
+ * Wrapper for SCR::Execute to execute a bash command to increase verbosity via y2milestone.
+ * It reports the command via y2milestone in any case and it reports exit code, stdout
+ * and stderr via y2milestone in case of non-zero exit code.
+ * @param bash_commandline string of the bash command to be executed
+ * @return true on success
+ */
+global boolean ExecuteBashCommand( string bash_commandline )
+{ y2milestone( "Executing bash commandline: %1", bash_commandline );
+  result = (map)SCR::Execute( .target.bash_output, bash_commandline );
+  if( result["exit"]:9999 != 0 )
+  { y2warning( "'%1' exit code is: %2", bash_commandline, result["exit"]:9999 );
+    y2warning( "'%1' stdout is: %2", bash_commandline, result["stdout"]:"" );
+    y2warning( "'%1' stderr is: %2", bash_commandline, result["stderr"]:"" );
+    return false;
+  }
+  return true;
+}
+
+global void Read(){
+  client_only = ExecuteBashCommand( "egrep -i '^ServerName[[:space:]]+[[:alnum:]]' /etc/cups/client.conf"  );
+  if( ExecuteBashCommand( "sed -n -e 's/^[Se][Ee][Rr][Vv][Ee][Rr][Nn][Aa][Mm][Ee][[:space:]][[:space:]]*\\(.*\\)$/\\1/p' /etc/cups/client.conf | tr -d '[:space:]'" ) )
+        client_conf_server_name = result["stdout"]:"";
+
+  if( Printerlib::ExecuteBashCommand( "egrep -i '^Browsing[[:space:]]+Off|^Browsing[[:space:]]+No' /etc/cups/cupsd.conf" ) )
+	   browsing_on = false;
+  string commandline = "egrep -i '^BrowseDeny[[:space:]]+|^BrowseDeny[[:space:]]+from[[:space:]]+' /etc/cups/cupsd.conf | sed -e 's/[Ff][Rr][Oo][Mm]//' | tr -s '[:space:]' | cut -d ' ' -f 2 | tr '[:space:]' ' '";
+  if( Printerlib::ExecuteBashCommand( commandline ) ) cupsd_conf_browse_deny = Printerlib::result["stdout"]:"";
+}
+
+
+}
