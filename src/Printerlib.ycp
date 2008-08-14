@@ -47,6 +47,8 @@ global boolean ExecuteBashCommand( string bash_commandline )
   return true;
 }
 
+global map<string, any> cups_autoconfig = $[];
+
 global void Read(){
   client_only = ExecuteBashCommand( "egrep -i '^ServerName[[:space:]]+[[:alnum:]]' /etc/cups/client.conf"  );
   if( ExecuteBashCommand( "sed -n -e 's/^[Se][Ee][Rr][Vv][Ee][Rr][Nn][Aa][Mm][Ee][[:space:]][[:space:]]*\\(.*\\)$/\\1/p' /etc/cups/client.conf | tr -d '[:space:]'" ) )
@@ -56,7 +58,13 @@ global void Read(){
 	   browsing_on = false;
   string commandline = "egrep -i '^BrowseDeny[[:space:]]+|^BrowseDeny[[:space:]]+from[[:space:]]+' /etc/cups/cupsd.conf | sed -e 's/[Ff][Rr][Oo][Mm]//' | tr -s '[:space:]' | cut -d ' ' -f 2 | tr '[:space:]' ' '";
   if( Printerlib::ExecuteBashCommand( commandline ) ) cupsd_conf_browse_deny = Printerlib::result["stdout"]:"";
+ // read cups-autoconfiguration settings 
+ cups_autoconfig = (map<string, any>)SCR::Read(.etc.cups-auto.all);
+y2internal("read cups-auto %1", cups_autoconfig);
 }
 
-
+global void Write(){
+ y2milestone("Writing cups-autoconfig.conf\n%1", cups_autoconfig);
+ SCR::Write(.etc.cups-auto.all, cups_autoconfig);
+}
 }

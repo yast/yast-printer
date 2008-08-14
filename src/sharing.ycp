@@ -38,26 +38,20 @@ import "Popup";
 
 include "printer/helps.ycp";
 
-/**
- * SharingDialog dialog
- * @return dialog result
- */
-any SharingDialog()
-{ string caption = _("Sharing and Publishing");
-  boolean cupsd_conf_deny_remote_access = true;
-  term contents = `VBox( `VSpacing( 1 ),
+term widgetSharing =
+		`VBox( `VSpacing( 1 ),
                          `RadioButtonGroup( `id(`deny_or_allow_remote_access),
                                            `VBox( `Left( `RadioButton( `id(`deny_remote_access_radio_button),
                                                                        `opt(`notify),
                                                                        _("&Deny remote access"),
-                                                                       cupsd_conf_deny_remote_access
+                                                                       true
                                                                      )
                                                        ),
                                                   `VSpacing( 2 ),
                                                   `Left( `RadioButton( `id(`allow_remote_access_radio_button),
                                                                        `opt(`notify),
                                                                        _("&Allow remote access"),
-                                                                       ! cupsd_conf_deny_remote_access
+                                                                       false
                                                                      )
                                                        )
                                                 )
@@ -101,36 +95,17 @@ any SharingDialog()
                                                  `item( `id(3), "192.168.300.0/255.255.255.0", "yes" )
                                                ]
                                              ),
-                                       `Left( `HBox( `PushButton( `id(`add_interface), _("A&dd") ),
-                                                     `PushButton( `id(`edit_interface), _("Ed&it") ),
-                                                     `PushButton( `id(`delete_interface), _("De&lete") )
+                                       `Left( `HBox( `PushButton( `id(`add_ip), _("A&dd") ),
+                                                     `PushButton( `id(`edit_ip), _("Ed&it") ),
+                                                     `PushButton( `id(`delete_ip), _("De&lete") )
                                                    )
                                             )
                                      )
                               ),
                          `VSpacing( 1 )
                        );
-  Wizard::SetContentsButtons( caption,
-                              contents,
-                              HELPS["sharing_dialog"]:"",
-                              Label::BackButton(),
-                              // Set a different label for the "next" button
-                              // (i.e. the lower right button which results `next as UI::UserInput):
-                              Label::OKButton()
-                            );
-  any ret = nil;
-  while(true)
-  { ret = UI::UserInput();
-    if( ret == `abort || ret == `cancel || ret == `back ) break;
-    if( ret == `next )
-    { // Exit this dialog in any case:
-      break;
-    }
-    y2milestone( "Ignoring unexpected returncode in DriverOptionsDialog: %1", ret );
-    continue;
-  }
-  return ret;
-}
+
+
 
 /* EOF */
 }

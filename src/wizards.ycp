@@ -35,12 +35,11 @@ import "Sequencer";
 import "Wizard";
 
 include "printer/readwrite.ycp";
-include "printer/overview.ycp";
+//include "printer/overview.ycp";
 include "printer/basicadd.ycp";
 include "printer/basicmodify.ycp";
 include "printer/connectionwizard.ycp";
 include "printer/printingvianetwork.ycp";
-include "printer/sharing.ycp";
 include "printer/dialogs.ycp";
 
 /**
@@ -55,8 +54,7 @@ any MainSequence()
                    "modify_connection_wizard" : ``( ConnectionWizardDialog() ),
                    "modify_driver_options" : ``( DriverOptionsDialog() ),
                    "printing_via_network" : ``( PrintingViaNetworkDialog() ),
-                   "printing_via_network_connection_wizard" : ``( ConnectionWizardDialog() ),
-                   "sharing" : ``( SharingDialog() )
+                   "printing_via_network_connection_wizard" : ``( ConnectionWizardDialog() )
                  ];
   map sequence = $[ "ws_start" : "overview",
                     "overview": $[ `abort : `abort,
@@ -65,7 +63,6 @@ any MainSequence()
                                    `modify : "modify",
                                    `delete : "overview",
 //                                   `printing_via_network : "printing_via_network",
-                                   `sharing : "sharing",
                                    `connection_wizard : "printing_via_network_connection_wizard"
                                  ],
                     "add" : $[ `abort : `abort,
@@ -95,9 +92,6 @@ any MainSequence()
                     "printing_via_network_connection_wizard" : $[ `abort : `abort,
                                                                   `next : "add"
                                                                 ],
-                    "sharing": $[ `abort : `abort,
-                                  `next : "overview"
-                                ]
                   ];
   return Sequencer::Run( aliases, sequence );
 }

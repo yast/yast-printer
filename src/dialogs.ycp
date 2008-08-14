@@ -41,6 +41,7 @@ import "Mode";
 include "printer/helps.ycp";
 include "printer/overview.ycp";
 include "printer/printingvianetwork.ycp";
+include "printer/sharing.ycp";
 
 /**
  * DriverOptionsDialog dialog
@@ -161,109 +162,78 @@ any DriverOptionsDialog()
   return ret;
 }
 
+term widgetAutoconfig = `VBox(
+	`Left( `Label(_("Specify in which way USB printers are configured automatically")) ),
+	`Left( `CheckBox(`id("configurenewprinters"), _("Enable Automatic Configuration of New Printers")) ),
+	`Left( `CheckBox(`id("disableprintersonremoval"), _("Disable Printout when Disconnecting USB Printer")) ),
+	`Left( `ComboBox(`id("defaultcupspolicy"), _("The name of the CUPS policy to assign to newly configured printers"), [""]) ),
+	`HSpacing()
+);
+
+void initAutoconfig(string key){
+ if( Printerlib::ExecuteBashCommand("grep '^<Policy ' /etc/cups/cupsd.conf|cut -d' ' -f2|cut -d'>' -f1") ){
+  UI::ChangeWidget(`id("defaultcupspolicy"), `Items, splitstring(Printerlib::result["stdout"]:"", "\n"));
+ }
+ foreach(map conf, Printerlib::cups_autoconfig["value", 0, "value"]:[], {
+  if (conf["name"]:""=="defaultcupspolicy")
+   UI::ChangeWidget(`id(conf["name"]:""), `Value, conf["value"]:"");
+  else UI::ChangeWidget(`id(conf["name"]:""), `Value, conf["value"]:""=="yes" ? true : false);
+ });
+}
+
+
+void storeAutoconfig(string key, map event){
+ y2internal("Store: here I am ;-)");
+ foreach(string key, ["configurenewprinters", "disableprintersonremoval", "defaultcupspolicy"], {
+  map value = $[
+	      "comment" : "",
+	      "kind"	: "value",
+	      "name"	: key
+		];
+  if (key=="defaultcupspolicy") value["value"] = (string) UI::QueryWidget(`id(key), `Value);
+	else value["value"] = ((boolean)UI::QueryWidget(`id(key), `Value)) ? "yes" : "no";
+
+  y2internal("values for %1 : %2", key, value);
+  list<map> config=[];
+  boolean found=false;
+  foreach(map row, Printerlib::cups_autoconfig["value", 0, "value"]:[], {
+   if (row["name"]:""==key){
+    row["value"]=value["value"]:"";
+    found=true;
+   }
+  config=add(config, row);
+  });
+  if (!found) config=add(config, value);
+  Printerlib::cups_autoconfig["value", 0, "value"]=config;
+ });
+}
+
 map<string, map<string,any> > wd = $[
 	"OVERVIEW" : $[
 		"widget" : `custom,
-		"custom_widget" :
-                `VBox(
-		  `Left(`HBox( `Label( _("Show") ), `HSpacing(),
-			`CheckBox( `id(`local_content_checkbox),`opt(`notify), _("local queues")),
-			`CheckBox( `id(`remote_content_checkbox),`opt(`notify), _("remote queues")))),
-                  `VWeight(2,`Table (`id (`overview_table), `opt (`notify, `immediate),
-				`header( // Header of a Table column with a list of print queues.
-                                     // Where the queue configuration exists (local or remote):
-                                     _("Configuration"),
-                                     // Header of a Table column with a list of print queues.
-                                     // Print queue name:
-                                     _("Name"),
-                                     // Header of a Table column with a list of print queues.
-                                     // Print queue description (e.g. model or driver):
-                                     _("Description"),
-                                     // Header of a Table column with a list of print queues.
-                                     // Location of the printer (e.g. second floor, room 2.3):
-                                     _("Location"),
-                                     // Header of a Table column with a list of print queues.
-                                     // Whether or not is is the default queue:
-                                     _("Default"),
-                                     // Header of a Table column with a list of print queues.
-                                     // Queue status (accepting/rejecting and enabled/disabled):
-                                     _("Status")
-                                   )
-
-				)),
-                  `HBox (
-                        `PushButton (`id (`add), Label::AddButton ()),
-                        `PushButton (`id (`edit), _("Configure")),
-                        `PushButton (`id (`delete), Label::DeleteButton ()),
-                        `HStretch (),
-                        `PushButton (`id (`test), _("Print test page"))
-                        )
-                ),
+		"custom_widget" : widgetOverview,
 		"init"	 : initOverview,
-		"handle" : handleOverview
+		"handle" : handleOverview,
+		"help"	 : HELPS["overview"]:""
 
 	],
 	"NETWORKPRINTING" : $[
 		"widget" : `custom,
-		"custom_widget" :
-		`VBox( `VStretch(),
-                         `Frame( _("Use the Common Unix Printing System (CUPS) to print via network"),
-                                 `RadioButtonGroup( `id(`browsing_or_client_only_check_boxs),
-                                                    `VBox( `Left( `RadioButton( `id(`cupsd_conf_browsing_on_radio_button),
-                                                                                `opt(`notify),
-                                                                                _("&Receive printer information which is published by remote CUPS servers"),
-                                                                                ! Printerlib::client_only && Printerlib::browsing_on
-                                                                              )
-                                                                ),
-                                                           `HBox( `HSpacing( 3 ),
-                                                                  `TextEntry( `id(`cupsd_conf_browse_deny_input),
-                                                                              _("&Suppress the information which is published by the following CUPS servers (separated by spaces)"),
-                                                                              Printerlib::cupsd_conf_browse_deny
-                                                                            )
-                                                                ),
-                                                           `Left( `RadioButton( `id(`cupsd_conf_browsing_off_radio_button),
-                                                                                `opt(`notify),
-                                                                                _("&Do not listen to any information which is published by remote CUPS servers"),
-                                                                                ! Printerlib::client_only && ! Printerlib::browsing_on
-                                                                              )
-                                                                ),
-                                                           `VSpacing( 1 ),
-                                                           `Left( `RadioButton( `id(`client_only_check_box),
-                                                                                `opt(`notify),
-                                                                                _("Do all your printing directly via one single remote &CUPS server"),
-                                                                                Printerlib::client_only
-                                                                              )
-                                                                ),
-                                                           `HBox( `HSpacing( 3 ),
-                                                                  `HWeight( 2,
-                                                                            `TextEntry( `id(`client_conf_server_name_input),
-                                                                                        _("&Hostname / IP address"),
-                                                                                        Printerlib::client_conf_server_name
-                                                                                      )
-                                                                          ),
-                                                                  `HWeight( 1,
-                                                                            `PushButton( `id(`test_client_conf_server),
-                                                                                         _("&Test server access")
-                                                                                       )
-                                                                          ),
-                                                                  `HStretch()
-                                                                )
-                                                         )
-                                                  )
-                               ),
-                         `VStretch(),
-                         `Frame( _("Use a network printer directly or print via another kind of print server"),
-                                 `Left( `HBox( `Label( _("Use the") + " " ),
-                                               `PushButton( `id(`connection_wizard),
-                                                            _("&Connection Wizard")
-                                                          ),
-                                               `Label( " " + _("to specify how the network printer is accessible") )
-                                             )
-                                      )
-                               ),
-                         `VStretch()
-                       ),
-		"handle" : handleNetworkPrinting
+		"custom_widget" : widgetNetworkPrinting,
+		"handle" : handleNetworkPrinting,
+		"help"	 : HELPS["printing_via_network_dialog"]:""
+	],
+	"SHARING" : $[
+		"widget" : `custom,
+		"custom_widget" : widgetSharing,
+		"help"	: HELPS["sharing_dialog"]:""
+	],
+	"AUTOCONFIG" : $[
+		"widget" : `custom,
+		"custom_widget" : widgetAutoconfig,
+		"init"	: initAutoconfig,
+		"store"	: storeAutoconfig,
+		"help"	: HELPS["autoconfig"]:""
 	]
 ];
 
@@ -284,6 +254,22 @@ map tabs_descr = $[
           ),
          "widget_names" : ["NETWORKPRINTING"]
         ],
+        "sharing" : $[
+          "header" : _("Sharing and Publishing"),
+          "tree_item_label" : _("Sharing and Publishing"),
+          "contents" : `VBox (
+            "SHARING"
+          ),
+         "widget_names" : ["SHARING"]
+        ],
+        "autoconfig" : $[
+          "header" : _("Autoconfig Settings"),
+          "tree_item_label" : _("Autoconfig Settings"),
+          "contents" : `VBox (
+            "AUTOCONFIG"
+          ),
+         "widget_names" : ["AUTOCONFIG"]
+        ],
 ];
 
 
@@ -291,7 +277,7 @@ symbol runMainDialog(){
   string caption = _("Detected Printers");
 
    symbol ret = DialogTree::ShowAndRun ($[
-            "ids_order"         : [ "overview", "network" ],
+            "ids_order"         : [ "overview", "network", "sharing", "autoconfig" ],
             "initial_screen"    : "overview",
             "screens"           : tabs_descr,
             "widget_descr"      : wd,

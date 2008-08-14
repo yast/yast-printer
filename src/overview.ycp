@@ -43,6 +43,41 @@ import "Service";
 
 include "printer/helps.ycp";
 
+term widgetOverview=
+                `VBox(
+		  `Left(`HBox( `Label( _("Show") ), `HSpacing(),
+			`CheckBox( `id(`local_content_checkbox),`opt(`notify), _("local queues")),
+			`CheckBox( `id(`remote_content_checkbox),`opt(`notify), _("remote queues")))),
+                  `VWeight(2,`Table (`id (`overview_table), `opt (`notify, `immediate),
+				`header( // Header of a Table column with a list of print queues.
+                                     // Where the queue configuration exists (local or remote):
+                                     _("Configuration"),
+                                     // Header of a Table column with a list of print queues.
+                                     // Print queue name:
+                                     _("Name"),
+                                     // Header of a Table column with a list of print queues.
+                                     // Print queue description (e.g. model or driver):
+                                     _("Description"),
+                                     // Header of a Table column with a list of print queues.
+                                     // Location of the printer (e.g. second floor, room 2.3):
+                                     _("Location"),
+                                     // Header of a Table column with a list of print queues.
+                                     // Whether or not is is the default queue:
+                                     _("Default"),
+                                     // Header of a Table column with a list of print queues.
+                                     // Queue status (accepting/rejecting and enabled/disabled):
+                                     _("Status")
+                                   )
+
+				)),
+                  `HBox (
+                        `PushButton (`id (`add), Label::AddButton ()),
+                        `PushButton (`id (`edit), _("Configure")),
+                        `PushButton (`id (`delete), Label::DeleteButton ()),
+                        `HStretch (),
+                        `PushButton (`id (`test), _("Print test page"))
+                        )
+                );
 
 void initOverview(string key){
   boolean local_content_selected = Printer::queue_filter_show_local;
