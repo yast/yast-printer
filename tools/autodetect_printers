@@ -1,6 +1,6 @@
 #! /bin/bash
 #
-# Johannes Meixner <jsmeix@suse.de>, 2007
+# Johannes Meixner <jsmeix@suse.de>, 2007, 2008
 
 #set -x
 
@@ -31,8 +31,11 @@ then echo "Cannot execute lpinfo" 1>&2
      exit 1
 fi
 
-# Test if cupsd is accessible:
-echo 'Testing if cupsd is accessible...' >>$PROGRESS
+# Test if cupsd on localhost is accessible.
+# Only on localhost print queues should be set up.
+# CUPS supports even remote queue setup but this is not supported by YaST.
+# Therefore explicitely the cupsd on localhost is asked for autodetected printer information.
+echo 'Testing if cupsd on localhost is accessible...' >>$PROGRESS
 if ! $LPSTAT -h localhost -r &>/dev/null
 then echo "Cannot access cupsd on localhost" 1>&2
      exit 2
