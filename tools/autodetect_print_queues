@@ -1,6 +1,6 @@
 #! /bin/bash
 #
-# Johannes Meixner <jsmeix@suse.de>, 2007
+# Johannes Meixner <jsmeix@suse.de>, 2007, 2008
 
 #set -x
 
@@ -24,11 +24,24 @@ then echo "Cannot execute lpstat" 1>&2
      exit 1
 fi
 
-# Test if cupsd is accessible:
-#if ! $LPSTAT -h localhost -r &>/dev/null
-#then echo "Cannot access cupsd on localhost" 1>&2
-#     exit 2
-#fi
+# Test if cupsd is accessible.
+# This is not limited to localhost.
+# Even for a system-wide 'client-only' config via /etc/cups/client.conf
+# it must work to get the queue information.
+# But on the other hand, any other kind of setting for a remote CUPS server
+# (e.g. an inherited CUPS_SERVER environment variable setting or a
+# ServerName entry in ~/.cups/client.conf of the user who runs this script)
+# is ignored to avoid that by accident an unintended CUPS server is asked.
+# The 'tr ... [:space:]' makes sure that the first active ServerName entry
+# is used if there is more than one which is a broken config.
+SERVERNAME="$( grep -i '^ServerName ' /etc/cups/client.conf | tr -s '[:space:]' ' ' | cut -s -d' ' -f2 )"
+if test -z "$SERVERNAME"
+then SERVERNAME="localhost"
+fi
+if ! $LPSTAT -h $SERVERNAME -r &>/dev/null
+then echo "Cannot access cupsd on '$SERVERNAME'" 1>&2
+     exit 2
+fi
 
 # Input:
 
@@ -39,16 +52,13 @@ fi
 # and then there is also correctly no output because a DeviceURI is mandatory.
 MAXIMUM_WAIT="30"
 # Get queue names and DeviceURI:
-#$LPSTAT -h localhost -v >$TMP_DATA_RAW_V &
-$LPSTAT -v >$TMP_DATA_RAW_V &
+$LPSTAT -h $SERVERNAME -v >$TMP_DATA_RAW_V &
 lpstatPID_V=$!
 # Get additional info about the queues:
-#$LPSTAT -h localhost -l -p >$TMP_DATA_RAW_L &
-$LPSTAT -l -p >$TMP_DATA_RAW_L &
+$LPSTAT -h $SERVERNAME -l -p >$TMP_DATA_RAW_L &
 lpstatPID_L=$!
 # Get info whether or not the queues accept or reject jobs:
-#$LPSTAT -h localhost -a >$TMP_DATA_RAW_A &
-$LPSTAT -a >$TMP_DATA_RAW_A &
+$LPSTAT -h $SERVERNAME -a >$TMP_DATA_RAW_A &
 lpstatPID_A=$!
 # Timeout stuff:
 for i in $( seq $MAXIMUM_WAIT )
@@ -102,7 +112,8 @@ Output()
 # The very first "queue" line doesn't result an output because "$URI" is an empty string.
 # Since CUPS 1.3 it does no longer work in any case (e.g for a local raw IPP queue)
 # to use the "Connection:..." value in the "lpstat -l" output to distinguish between
-# a local queue (in /etc/cups/printers.conf) and a remote queue (on another host).
+# a local queue (in /etc/cups/printers.conf) and a remote queue (on another host) and
+# therefore /etc/cups/printers.conf is directly inspected to distinguish local and remote queues.
 # Reason:
 # In the CUPS sources systemv/lpstat.c uses CUPS_PRINTER_REMOTE to distinguish between
 # its output "Connection: remote" and "Connection: direct".

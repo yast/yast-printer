@@ -181,7 +181,6 @@ void initAutoconfig(string key){
  });
 }
 
-
 void storeAutoconfig(string key, map event){
  y2internal("Store: here I am ;-)");
  foreach(string key, ["configurenewprinters", "disableprintersonremoval", "defaultcupspolicy"], {
@@ -208,6 +207,50 @@ void storeAutoconfig(string key, map event){
  });
 }
 
+term widgetOperationPolicy = `VBox(
+        `Left( `Label(_("Specify the operation policy")) ),
+        `Left( `ComboBox(`id("operationpolicy"), _("The operation policy"), [""]) ),
+        `HSpacing()
+);
+
+void initOperationPolicy(string key){
+# if( Printerlib::ExecuteBashCommand("{ grep -i '^DefaultPolicy ' /etc/cups/cupsd.conf.orig || echo "DefaultPolicy default" ; } | cut -d' ' -f2") ){
+ if( Printerlib::ExecuteBashCommand("grep '^<Policy ' /etc/cups/cupsd.conf|cut -d' ' -f2|cut -d'>' -f1") ){
+  UI::ChangeWidget(`id("operationpolicy"), `Items, splitstring(Printerlib::result["stdout"]:"", "\n"));
+ }
+ foreach(map conf, Printerlib::operation_policy["value", 0, "value"]:[], {
+  if (conf["name"]:""=="operationpolicy")
+   UI::ChangeWidget(`id(conf["name"]:""), `Value, conf["value"]:"");
+  else UI::ChangeWidget(`id(conf["name"]:""), `Value, conf["value"]:""=="yes" ? true : false);
+ });
+}
+
+void storeOperationPolicy(string key, map event){
+ y2internal("storeOperationPolicy: here I am ;-)");
+ foreach(string key, ["operationpolicy"], {
+  map value = $[
+              "comment" : "",
+              "kind"    : "value",
+              "name"    : key
+                ];
+  if (key=="operationpolicy") value["value"] = (string) UI::QueryWidget(`id(key), `Value);
+        else value["value"] = ((boolean)UI::QueryWidget(`id(key), `Value)) ? "yes" : "no";
+
+  y2internal("values for %1 : %2", key, value);
+  list<map> config=[];
+  boolean found=false;
+  foreach(map row, Printerlib::operation_policy["value", 0, "value"]:[], {
+   if (row["name"]:""==key){
+    row["value"]=value["value"]:"";
+    found=true;
+   }
+  config=add(config, row);
+  });
+  if (!found) config=add(config, value);
+  Printerlib::operation_policy["value", 0, "value"]=config;
+ });
+}
+
 map<string, map<string,any> > wd = $[
 	"OVERVIEW" : $[
 		"widget" : `custom,
@@ -215,7 +258,6 @@ map<string, map<string,any> > wd = $[
 		"init"	 : initOverview,
 		"handle" : handleOverview,
 		"help"	 : HELPS["overview"]:""
-
 	],
 	"NETWORKPRINTING" : $[
 		"widget" : `custom,
@@ -228,6 +270,13 @@ map<string, map<string,any> > wd = $[
 		"custom_widget" : widgetSharing,
 		"help"	: HELPS["sharing_dialog"]:""
 	],
+        "OPERATIONPOLICY" : $[
+                "widget" : `custom,
+                "custom_widget" : widgetOperationPolicy,
+                "init"  : initOperationPolicy,
+                "store" : storeOperationPolicy,
+                "help"  : HELPS["operation_policy"]:""
+        ],
 	"AUTOCONFIG" : $[
 		"widget" : `custom,
 		"custom_widget" : widgetAutoconfig,
@@ -239,28 +288,36 @@ map<string, map<string,any> > wd = $[
 
 map tabs_descr = $[
         "overview" : $[
-          "header" : _("Printers and Queues"),
-          "tree_item_label" : _("Printers and Queues"),
+          "header" : _("Printer Configurations"),
+          "tree_item_label" : _("Printer Configurations"),
           "contents" : `VBox (
             "OVERVIEW"
           ),
          "widget_names" : ["OVERVIEW"]
         ],
         "network" : $[
-          "header" : _("Printing via Network"),
-          "tree_item_label" : _("Printing via Network"),
+          "header" : _("Print via Network"),
+          "tree_item_label" : _("Print via Network"),
           "contents" : `VBox (
             "NETWORKPRINTING"
           ),
          "widget_names" : ["NETWORKPRINTING"]
         ],
         "sharing" : $[
-          "header" : _("Sharing and Publishing"),
-          "tree_item_label" : _("Sharing and Publishing"),
+          "header" : _("Share Printers"),
+          "tree_item_label" : _("Share Printers"),
           "contents" : `VBox (
             "SHARING"
           ),
          "widget_names" : ["SHARING"]
+        ],
+        "operation_policy" : $[
+          "header" : _("Operation Policy"),
+          "tree_item_label" : _("Operation Policy"),
+          "contents" : `VBox (
+            "OPERATIONPOLICY"
+          ),
+         "widget_names" : ["OPERATIONPOLICY"]
         ],
         "autoconfig" : $[
           "header" : _("Autoconfig Settings"),
@@ -277,7 +334,7 @@ symbol runMainDialog(){
   string caption = _("Detected Printers");
 
    symbol ret = DialogTree::ShowAndRun ($[
-            "ids_order"         : [ "overview", "network", "sharing", "autoconfig" ],
+            "ids_order"         : [ "overview", "network", "sharing", "operation_policy", "autoconfig" ],
             "initial_screen"    : "overview",
             "screens"           : tabs_descr,
             "widget_descr"      : wd,
