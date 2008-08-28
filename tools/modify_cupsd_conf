@@ -17,7 +17,12 @@ then echo -en "\nUsage:\n$MY_NAME keyword [ new value ]\n" 1>&2
      echo "Without a new value, the current value is reported." 1>&2
      echo "Supported keywords and possible new values are:" 1>&2
      echo "Browsing [ On | Off ]" 1>&2
-     echo "BrowseAllow [ all | none | @LOCAL | IP-address ]" 1>&2
+     echo "BrowseAllow [ all | none | @LOCAL | IP-address[/netmask] ]" 1>&2
+     echo "E.g.: BrowseAllow '@LOCAL 192.168.100.1 192.168.200.0/255.255.255.0'" 1>&2
+     echo "There is a strict syntax for keywords and values:" 1>&2
+     echo "Case matters." 1>&2
+     echo "Neither leading nor trailing nor in-between spaces are allowed." 1>&2
+     echo "Multiple values for a keyword must be separated by exactly one space." 1>&2
      exit 1
 fi
 
@@ -34,7 +39,7 @@ Browsing()
 { if test -n "$VALUE"
   then # If a value was specified, only 'On' or 'Off' (case sensitive) are allowed:
        if ! test "On" = "$VALUE" -o "Off" = "$VALUE"
-       then echo "Only '$KEY [ On | Off ]' is allowed." 1>&2
+       then echo "Only '$KEY [ On | Off ]' is supported." 1>&2
             exit 4
        fi
        # Try to substitute an existing Browsing line (ignore case):
@@ -54,7 +59,8 @@ Browsing()
   # Report the resulting setting in any case:
   # The 'tr ... [:blank:]' makes sure that all active Browsing entries
   # are found if there is more than one which is a broken config.
-  RESULT="$( grep -i "^$KEY " $CUPSDCONF | tr -s '[:blank:]' ' ' | cut -s -d' ' -f2 )"
+  # Remove trailing spaces (needed for the test below).
+  RESULT="$( grep -i "^$KEY " $CUPSDCONF | tr -s '[:blank:]' ' ' | cut -s -d' ' -f2 | tr -s '\n' ' ' | sed -e 's/ *$//' )"
   echo -n "$RESULT"
   # For a nicer output on a terminal where stdout and stderr is mixed up,
   # output a '\n' on stderr to get subsequent stuff (e.g. the shell prompt
@@ -67,20 +73,23 @@ Browsing()
   fi
 }
 
-# Function to deal with 'BrowseAllow [ all | none | @LOCAL | IP-address ]'
+# Function to deal with 'BrowseAllow [ all | none | @LOCAL | IP-address[/netmask] ]'
 BrowseAllow()
 { if test -n "$VALUE"
   then # If a value was specified, only 'all' or 'none' or '@LOCAL' (case sensitive)
-       # or a single IP-address is allowed:
-       if ! test "all" = "$VALUE" -o "none" = "$VALUE" -o "@LOCAL" = "$VALUE"
-       then # Test if value matches to IP-address syntax:
-            if ! echo $VALUE | egrep -q '^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$'
-            then echo "Only '$KEY [ all | none | @LOCAL | IP-address ]' is allowed." 1>&2
-                 exit 4
-            fi
-       fi
+       # or one or more IP-addresses are allowed:
+       for V in $VALUE
+       do if ! test "all" = "$V" -o "none" = "$V" -o "@LOCAL" = "$V"
+          then # Test if value matches to IP-address syntax:
+               if ! echo "$V" | egrep -q '^([0-9]{1,3}\.){3}[0-9]{1,3}(/([0-9]{1,2})|/(([0-9]{1,3}\.){3}[0-9]{1,3}))?$'
+               then echo "Only '$KEY [ all | none | @LOCAL | IP-address[/netmask] ]' is supported." 1>&2
+                    exit 4
+               fi
+          fi
+       done
        # Set 'BrowseOrder allow,deny' to deny browse packets by default
-       # and then allow them from certain sources via a BrowseAllow entry.
+       # and then allow them from certain sources via BrowseAllow entries
+       # and finally deny from certain sources via BrowseDeny entries.
        # All existing BrowseOrder lines are removed (ignore case).
        sed -i.yast2save -e '/^BrowseOrder.*/Id' $CUPSDCONF
        # Append the new BrowseOrder line below the last 'Brows' line (ignore case)
@@ -91,16 +100,22 @@ BrowseAllow()
        then sed -i -e "${LAST_BROWSE_LINE}aBrowseOrder allow,deny" $CUPSDCONF
        else echo -en "\nBrowseOrder allow,deny\n\n" >>$CUPSDCONF
        fi
-       # All existing BrowseAllow lines are removed (ignore case):
+       # All existing active BrowseAllow lines are removed (ignore case):
        sed -i -e '/^BrowseAllow.*/Id' $CUPSDCONF
-       # Append a BrowseAllow line below the BrowseOrder line
-       # to have the new BrowseAllow line at the matching place:
-       sed -i -e "/^BrowseOrder /a$KEY from $VALUE" $CUPSDCONF
+       # All existing active BrowseDeny lines are deactivated (ignore case):
+       sed -i -e 's/^\(BrowseDeny.*\)$/#\1/i' $CUPSDCONF
+       # Insert BrowseAllow lines before the BrowseOrder line
+       # to have the new BrowseAllow lines at the matching place
+       # and in the ordering of the values (needed for the test below):
+       for V in $VALUE
+       do sed -i -e "/^BrowseOrder /i$KEY from $V" $CUPSDCONF
+       done
   fi
   # Report the resulting setting in any case:
   # The 'tr ... [:blank:]' makes sure that all active BrowseAllow entries
   # are found if there is more than one which is allowed.
-  RESULT="$( grep -i "^$KEY " $CUPSDCONF | tr -s '[:blank:]' ' ' | cut -s -d' ' -f3 )"
+  # Remove trailing spaces (needed for the test below).
+  RESULT="$( grep -i "^$KEY " $CUPSDCONF | sed -e 's/from//I' | tr -s '[:blank:]' ' ' | cut -s -d' ' -f2 | tr -s '\n' ' ' | sed -e 's/ *$//' )"
   echo -n "$RESULT"
   # For a nicer output on a terminal where stdout and stderr is mixed up,
   # output a '\n' on stderr to get subsequent stuff (e.g. the shell prompt

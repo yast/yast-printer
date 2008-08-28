@@ -1,7 +1,16 @@
+
 {
+
 module "Printerlib";
 textdomain "printer";
 
+// Fortunately the tools are for all architectures always
+// installed in /usr/lib/YaST2/bin/ (i.e. no "lib64").
+// I tested this on Thu Aug 28 2008 using the command
+// rpm -qlp /work/CDs/all/full-sle10-sp2*/suse/*/yast2-printer.rpm | grep '/YaST2/bin/' | grep -v '/usr/lib/YaST2/bin/'
+global string yast_bin_dir = "/usr/lib/YaST2/bin/";
+
+// By default there is no active "ServerName" entry in /etc/cups/client.conf:
 global boolean client_only = false;
 global string client_conf_server_name = "";
 
@@ -12,9 +21,10 @@ global string client_conf_server_name = "";
 // is explicitely set in /etc/cups/cupsd.conf.
 global boolean browsing_on = true;
 
-// By default there is no "BrowseDeny" entry in /etc/cups/cupsd.conf
-// but there can be such entries of the form "BrowseDeny .*" or "BrowseDeny from .*":
-global string cupsd_conf_browse_deny = "";
+// By default there is "BrowseAllow all" in /etc/cups/cupsd.conf
+// which is even the fallback if there is no "BrowseAllow" entry at all
+// or when the "BrowseAllow" entries are deactivated by a leading '#' character.
+global string cupsd_conf_browse_allow = "all";
 
 // The result map is used as a simple common local store for whatever additional results
 // (in particular commandline exit code, stdout, stderr, and whatever messages)
@@ -51,22 +61,47 @@ global map<string, any> operation_policy = $[];
 
 global map<string, any> cups_autoconfig = $[];
 
-global void Read(){
-  client_only = ExecuteBashCommand( "egrep -i '^ServerName[[:space:]]+[[:alnum:]]' /etc/cups/client.conf"  );
-  if( ExecuteBashCommand( "sed -n -e 's/^[Se][Ee][Rr][Vv][Ee][Rr][Nn][Aa][Mm][Ee][[:space:]][[:space:]]*\\(.*\\)$/\\1/p' /etc/cups/client.conf | tr -d '[:space:]'" ) )
-        client_conf_server_name = result["stdout"]:"";
-
-  if( Printerlib::ExecuteBashCommand( "egrep -i '^Browsing[[:space:]]+Off|^Browsing[[:space:]]+No' /etc/cups/cupsd.conf" ) )
-	   browsing_on = false;
-  string commandline = "egrep -i '^BrowseDeny[[:space:]]+|^BrowseDeny[[:space:]]+from[[:space:]]+' /etc/cups/cupsd.conf | sed -e 's/[Ff][Rr][Oo][Mm]//' | tr -s '[:space:]' | cut -d ' ' -f 2 | tr '[:space:]' ' '";
-  if( Printerlib::ExecuteBashCommand( commandline ) ) cupsd_conf_browse_deny = Printerlib::result["stdout"]:"";
- // read cups-autoconfiguration settings 
- cups_autoconfig = (map<string, any>)SCR::Read(.etc.cups-auto.all);
-y2internal("read cups-auto %1", cups_autoconfig);
+global void Read()
+{ // Determine the 'Browsing [ On | Off ]' value in /etc/cups/cupsd.conf:
+  if( Printerlib::ExecuteBashCommand( Printerlib::yast_bin_dir + "modify_cupsd_conf Browsing" ) )
+  { // Ignore when this command fails and use the fallback "Printerlib::browsing_on = true"
+    string browsing = tolower( Printerlib::result["stdout"]:"On" );
+    if( "off" == browsing || "no" == browsing )
+    { Printerlib::browsing_on = false;
+    }
+  }
+  // Determine the 'BrowseAllow [ all | none | @LOCAL | IP-address[/netmask] ]' values in /etc/cups/cupsd.conf:
+  if( Printerlib::ExecuteBashCommand( Printerlib::yast_bin_dir + "modify_cupsd_conf BrowseAllow" ) )
+  { // Ignore when this command fails and use the fallback "Printerlib::cupsd_conf_browse_allow = "all"
+    Printerlib::cupsd_conf_browse_allow = Printerlib::result["stdout"]:"all";
+  }
+  // Determine the 'ServerName' value in /etc/cups/client.conf:
+  if( Printerlib::ExecuteBashCommand( Printerlib::yast_bin_dir + "cups_client_only" ) )
+  { // Ignore when this command fails and use the fallback "Printerlib::client_only = false"
+    // and the fallback "Printerlib::client_conf_server_name = ""
+    Printerlib::client_conf_server_name = Printerlib::result["stdout"]:"";
+    if( "" != Printerlib::client_conf_server_name
+        && "localhost" != Printerlib::client_conf_server_name )
+    { // Note that even 'localhost' is a valid ServerName value
+      // which is used to force client tools (e.g. lpadmin, lpinfo, lpstat)
+      // to ask the local cupsd via the IPP port on localhost (localhost:631)
+      // and not via the domain socket (/var/run/cups/cups.sock) because
+      // the latter failed in the past for certain third-party clients (e.g. Java).
+      // If the ServerName value in /etc/cups/client.conf is 'localhost'
+      // it is actually no client-only config because the local cupsd is used.
+      Printerlib::client_only = true;
+    }
+  }
+  // Read cups-autoconfiguration settings:
+  cups_autoconfig = (map<string, any>)SCR::Read(.etc.cups-auto.all);
+  y2internal("read cups-auto %1", cups_autoconfig);
 }
 
-global void Write(){
- y2milestone("Writing cups-autoconfig.conf\n%1", cups_autoconfig);
- SCR::Write(.etc.cups-auto.all, cups_autoconfig);
+global void Write()
+{ // Write cups-autoconfiguration settings:
+  y2milestone("Writing cups-autoconfig.conf\n%1", cups_autoconfig);
+  SCR::Write(.etc.cups-auto.all, cups_autoconfig);
 }
+
 }
+
