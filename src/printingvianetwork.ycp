@@ -41,101 +41,170 @@ import "Service";
 
 include "printer/helps.ycp";
 
-term widgetNetworkPrinting =
-                  `VBox( `VStretch(),
-                         `Frame( _("Use CUPS to Print Via Network"),
-                                 `RadioButtonGroup( `id(`browsing_or_client_only_check_boxs),
-                                                    `VBox( `Left( `RadioButton( `id(`cupsd_conf_browsing_off_radio_button),
-                                                                                `opt(`notify),
-                                                                                _("&Do not Receive Printer Information from Remote CUPS servers")
-                                                                              )
-                                                                ),
-                                                           `Left( `RadioButton( `id(`cupsd_conf_browsing_on_radio_button),
-                                                                                `opt(`notify),
-                                                                                _("Receive Printer &Information from Remote CUPS servers")
-                                                                              )
-                                                                ),
-                                                           `HBox( `HSpacing( 3 ),
-                                                                  `TextEntry( `id(`cupsd_conf_browse_allow_input),
-                                                                              _("Accept Information from those &Servers (separated by a space)")
-                                                                            )
-                                                                ),
-                                                           `VSpacing( 1 ),
-                                                           `Left( `RadioButton( `id(`client_only_radio_button),
-                                                                                `opt(`notify),
-                                                                                _("Do All Your Printing Directly via &One Remote CUPS Server")
-                                                                              )
-                                                                ),
-                                                           `HBox( `HSpacing( 3 ),
-                                                                  `HWeight( 2,
-                                                                            `TextEntry( `id(`client_conf_server_name_input),
-                                                                                        _("&Hostname / IP Address")
-                                                                                      )
-                                                                          ),
-                                                                  `HWeight( 1,
-                                                                            `PushButton( `id(`test_client_conf_server),
-                                                                                         _("&Test Server")
-                                                                                       )
-                                                                          ),
-                                                                  `HStretch()
-                                                                )
-                                                         )
-                                                  )
-                               ),
-                         `VStretch(),
-                         `Frame( _("Use Another Print Server or Use a Network Printer Directly"),
-                                 `Left( `PushButton( `id(`connection_wizard),
-                                                     _("&Connection Wizard")
-                                                    )
-                                      )
-                               ),
-                         `VStretch()
-                       );
+boolean something_has_changed = false;
+boolean cupsd_restart_required = false;
+boolean cupsd_start_required = false;
+boolean cupsd_stop_required = false;
 
-void initNetworkPrinting(string key)
+boolean ApplyNetworkPrintingSettings()
+{ if( ! something_has_changed )
+  { y2milestone( "Nothing changed in 'Printing via Network' dialog." );
+    Popup::ShowFeedback( // No title for such a simple feedback message:
+                         "",
+                         // Message of a Popup::ShowFeedback when nothing was changed:
+                         _("Nothing changed.")
+                       );
+    sleep( 1000 );
+    Popup::ClearFeedback();
+    return true;
+  }
+  y2milestone( "Writing 'NetworkPrinting' settings to the system." );
+  // Nothing implemented yet:
+  Popup::AnyMessage( // Header of a Popup::AnyMessage when "ApplyNetworkPrintingSettings" is called:
+                     _("Not yet implemented"),
+                     // Body of a Popup::AnyMessage when the "ApplyNetworkPrintingSettings" is called:
+                     _("Writing the settings to the system is not yet implemented.")
+                   );
+  return false;
+}
+
+term widgetNetworkPrinting = `VBox
+                             ( `VStretch(),
+                               `Frame
+                               ( _("Use CUPS to Print Via Network"),
+                                 `RadioButtonGroup
+                                 ( `id(`browsing_or_client_only_check_boxs),
+                                   `VBox
+                                   ( `Left
+                                     ( `RadioButton
+                                       ( `id(`cupsd_conf_browsing_off_radio_button),
+                                         `opt(`notify),
+                                         _("&Do not Receive Printer Information from Remote CUPS servers")
+                                       )
+                                     ),
+                                     `Left
+                                     ( `RadioButton
+                                       ( `id(`cupsd_conf_browsing_on_radio_button),
+                                         `opt(`notify),
+                                         _("Receive Printer &Information from Remote CUPS servers")
+                                       )
+                                     ),
+                                     `HBox
+                                     ( `HSpacing( 3 ),
+                                       `VBox
+                                       ( `Left
+                                         ( `Label
+                                           ( `id(`cupsd_conf_browse_allow_label),
+                                             _("Accept Information from the Following Servers")
+                                           )
+                                         ),
+                                         `Left
+                                         ( `ComboBox
+                                           ( `id(`cupsd_conf_browse_allow_combo_box),
+                                             _("Usual &General Setting"),
+				             [ `item( `id(`browse_allow_local), "hosts in the local network" ),
+                                               `item( `id(`browse_allow_all), "all hosts" )
+                                             ]
+                                           )
+                                         ),
+                                         `Left
+                                         ( `TextEntry
+                                           ( `id(`cupsd_conf_browse_allow_input),
+                                             _("Specific IP Addresses or &Network/Netmask (separated by space)")
+                                           )
+                                         )
+                                       )
+                                     ),
+                                     `VSpacing( 1 ),
+                                     `Left
+                                     ( `RadioButton
+                                       ( `id(`client_only_radio_button),
+                                         `opt(`notify),
+                                         _("Do All Your Printing Directly via &One Remote CUPS Server")
+                                       )
+                                     ),
+                                     `HBox
+                                     ( `HSpacing( 3 ),
+                                       `HWeight
+                                       ( 2,
+                                         `TextEntry
+                                         ( `id(`client_conf_server_name_input),
+                                           _("&Hostname / IP Address")
+                                         )
+                                       ),
+                                       `HWeight
+                                       ( 1,
+                                         `PushButton
+                                         ( `id(`test_client_conf_server),
+                                           _("&Test Server")
+                                         )
+                                       ),
+                                       `HStretch()
+                                     )
+                                   )
+                                 )
+                               ),
+                               `VStretch(),
+                               `Frame
+                               ( _("Use Another Print Server or Use a Network Printer Directly"),
+                                 `Left
+                                 ( `PushButton
+                                   ( `id(`connection_wizard),
+                                     _("&Connection Wizard")
+                                   )
+                                 )
+                               ),
+                               `VStretch(),
+                               `Right
+                               ( `PushButton
+                                 ( `id(`apply),
+                                   _("Apply")
+                                 )
+                               )
+                             );
+
+void initNetworkPrinting( string key )
 { y2milestone( "entering initNetworkPrinting with key '%1'", key );
-  // Determine the 'Browsing [ On | Off ]' value in /etc/cups/cupsd.conf:
-  if( Printerlib::ExecuteBashCommand( Printerlib::yast_bin_dir + "modify_cupsd_conf Browsing" ) )
-  { // Ignore when this command fails and use initially the fallback "Printerlib::browsing_on = true"
-    string browsing = tolower( Printerlib::result["stdout"]:"On" );
-    if( "off" == browsing || "no" == browsing )
-    { Printerlib::browsing_on = false;
-    }
-    else
-    { Printerlib::browsing_on = true;
-    }
-  }
-  // Determine the 'BrowseAllow [ all | none | @LOCAL | IP-address[/netmask] ]' values in /etc/cups/cupsd.conf:
-  if( Printerlib::ExecuteBashCommand( Printerlib::yast_bin_dir + "modify_cupsd_conf BrowseAllow" ) )
-  { // Ignore when this command fails and use initially the fallback "Printerlib::cupsd_conf_browse_allow = "all"
-    Printerlib::cupsd_conf_browse_allow = Printerlib::result["stdout"]:"all";
-  }
-  // Determine the 'ServerName' value in /etc/cups/client.conf:
-  if( Printerlib::ExecuteBashCommand( Printerlib::yast_bin_dir + "cups_client_only" ) )
-  { // Ignore when this command fails and use initially the fallback "Printerlib::client_only = false"
-    // and the initiall fallback "Printerlib::client_conf_server_name = ""
-    Printerlib::client_conf_server_name = Printerlib::result["stdout"]:"";
-    if( "" != Printerlib::client_conf_server_name
-        && "localhost" != Printerlib::client_conf_server_name )
-    { // Note that even 'localhost' is a valid ServerName value
-      // which is used to force client tools (e.g. lpadmin, lpinfo, lpstat)
-      // to ask the local cupsd via the IPP port on localhost (localhost:631)
-      // and not via the domain socket (/var/run/cups/cups.sock) because
-      // the latter failed in the past for certain third-party clients (e.g. Java).
-      // If the ServerName value in /etc/cups/client.conf is 'localhost'
-      // it is actually no client-only config because the local cupsd is used.
-      Printerlib::client_only = true;
-    }
-    else
-    { Printerlib::client_only = false;
-    }
-  }
+  // Determine the 'Browsing [ On | Off ]' value in /etc/cups/cupsd.conf and ignore when it fails:
+  Printerlib::DetermineBrowsing();
+  // Determine the 'BrowseAllow [ all | none | @LOCAL | IP-address[/netmask] ]'
+  // values in /etc/cups/cupsd.conf and ignore when it fails:
+  Printerlib::DetermineBrowseAllow();
+  // Determine the 'ServerName' value in /etc/cups/client.conf and ignore when it fails:
+  Printerlib::DetermineClientOnly();
   // Have all widgets disabled initially
   // but nevertheless fill in the values of the current settings in the system:
   UI::ChangeWidget( `id(`cupsd_conf_browsing_off_radio_button), `Value, false );
   UI::ChangeWidget( `id(`cupsd_conf_browsing_on_radio_button), `Value, false );
+  UI::ChangeWidget( `id(`cupsd_conf_browse_allow_label), `Enabled, false );
+  UI::ChangeWidget( `id(`cupsd_conf_browse_allow_combo_box), `Enabled, false );
+  // When by accident "all" and "@LOCAL" were set as BrowseAllow values,
+  // the "@LOCAL" entry is preselected in cupsd_conf_browse_allow_combo_box
+  // because this is the more secure setting:
+  if( contains( Printerlib::cupsd_conf_browse_allow, "all" ) )
+  { UI::ChangeWidget( `id(`cupsd_conf_browse_allow_combo_box), `Value, `id(`browse_allow_all) );
+  }
+  if( contains( Printerlib::cupsd_conf_browse_allow, "@LOCAL" ) )
+  { UI::ChangeWidget( `id(`cupsd_conf_browse_allow_combo_box), `Value, `id(`browse_allow_local) );
+  }
   UI::ChangeWidget( `id(`cupsd_conf_browse_allow_input), `Enabled, false );
-  UI::ChangeWidget( `id(`cupsd_conf_browse_allow_input), `Value, Printerlib::cupsd_conf_browse_allow );
+  // The preset entry in cupsd_conf_browse_allow_input field
+  // should not contain "all" or "@LOCAL" because those are
+  // already selectable via cupsd_conf_browse_allow_combo_box
+  // and it should also not contain "none" because this setting
+  // is implicitely done via cupsd_conf_browsing_off_radio_button:
+  string cupsd_conf_browse_allow_input_value =  mergestring( filter( string value,
+                                                                     Printerlib::cupsd_conf_browse_allow,
+                                                                     { value = tolower( value ) ;
+                                                                       return( "all" != value
+                                                                               && "@local" != value
+                                                                               && "none" != value
+                                                                             );
+                                                                     }
+                                                                   ),
+                                                             " "
+                                                           );
+  UI::ChangeWidget( `id(`cupsd_conf_browse_allow_input), `Value, cupsd_conf_browse_allow_input_value );
   UI::ChangeWidget( `id(`client_only_radio_button), `Value, false );
   UI::ChangeWidget( `id(`client_conf_server_name_input), `Enabled, false );
   UI::ChangeWidget( `id(`client_conf_server_name_input), `Value, Printerlib::client_conf_server_name );
@@ -152,8 +221,13 @@ void initNetworkPrinting(string key)
   }
   else
   { UI::ChangeWidget( `id(`connection_wizard), `Enabled, true );
-    if( Printerlib::browsing_on )
+    // If "none" is present as a BrowseAllow value, no 'Browsing On' widget is enabled:
+    if( Printerlib::browsing_on
+        && ! contains( Printerlib::cupsd_conf_browse_allow, "none" )
+      )
     { UI::ChangeWidget( `id(`cupsd_conf_browsing_on_radio_button), `Value, true );
+      UI::ChangeWidget( `id(`cupsd_conf_browse_allow_label), `Enabled, true );
+      UI::ChangeWidget( `id(`cupsd_conf_browse_allow_combo_box), `Enabled, true );
       UI::ChangeWidget( `id(`cupsd_conf_browse_allow_input), `Enabled, true );
     }
     else
@@ -163,30 +237,45 @@ void initNetworkPrinting(string key)
   y2milestone( "leaving initNetworkPrinting" );
 }
 
-symbol handleNetworkPrinting(string key, map event)
+symbol handleNetworkPrinting( string key, map event )
 { y2milestone( "entering handleNetworkPrinting with key '%1'\nand event '%2'", key, event );
   if( "ValueChanged" == event["EventReason"]:"" )
   { if( `cupsd_conf_browsing_on_radio_button == event["ID"]:nil )
-    { UI::ChangeWidget( `id(`cupsd_conf_browse_allow_input), `Enabled, true );
+    { UI::ChangeWidget( `id(`cupsd_conf_browse_allow_label), `Enabled, true );
+      UI::ChangeWidget( `id(`cupsd_conf_browse_allow_combo_box), `Enabled, true );
+      UI::ChangeWidget( `id(`cupsd_conf_browse_allow_input), `Enabled, true );
       UI::ChangeWidget( `id(`client_conf_server_name_input), `Enabled, false );
       UI::ChangeWidget( `id(`test_client_conf_server), `Enabled, false );
       UI::ChangeWidget( `id(`connection_wizard), `Enabled, true );
     }
     if( `cupsd_conf_browsing_off_radio_button == event["ID"]:nil )
-    { UI::ChangeWidget( `id(`cupsd_conf_browse_allow_input), `Enabled, false );
+    { UI::ChangeWidget( `id(`cupsd_conf_browse_allow_label), `Enabled, false );
+      UI::ChangeWidget( `id(`cupsd_conf_browse_allow_combo_box), `Enabled, false );
+      UI::ChangeWidget( `id(`cupsd_conf_browse_allow_input), `Enabled, false );
       UI::ChangeWidget( `id(`client_conf_server_name_input), `Enabled, false );
       UI::ChangeWidget( `id(`test_client_conf_server), `Enabled, false );
       UI::ChangeWidget( `id(`connection_wizard), `Enabled, true );
     }
     if( `client_only_radio_button == event["ID"]:nil )
-    { UI::ChangeWidget( `id(`cupsd_conf_browse_allow_input), `Enabled, false );
+    { UI::ChangeWidget( `id(`cupsd_conf_browse_allow_label), `Enabled, false );
+      UI::ChangeWidget( `id(`cupsd_conf_browse_allow_combo_box), `Enabled, false );
+      UI::ChangeWidget( `id(`cupsd_conf_browse_allow_input), `Enabled, false );
       UI::ChangeWidget( `id(`client_conf_server_name_input), `Enabled, true );
       UI::ChangeWidget( `id(`test_client_conf_server), `Enabled, true );
       UI::ChangeWidget( `id(`connection_wizard), `Enabled, false );
     }
   }
   if( "Activated" == event["EventReason"]:"" )
-  { if( `connection_wizard == event["ID"]:nil )
+  { if( `apply == event["ID"]:nil )
+    { if( ! ApplyNetworkPrintingSettings() )
+      { Report::Error( // Message of a Report::Error.
+                       // Only a simple message because this error does not happen on a normal system
+                       // (i.e. a system which is not totally broken or totally messed up).
+                       _("Failed to apply the settings to the system.")
+                     );
+      }
+    }
+    if( `connection_wizard == event["ID"]:nil )
     { return `connection_wizard;
     }
   }
@@ -195,10 +284,19 @@ symbol handleNetworkPrinting(string key, map event)
   return nil;
 }
 
-void storeNetworkPrinting(string key, map event)
+void storeNetworkPrinting( string key, map event )
 { y2milestone( "entering storeNetworkPrinting with key '%1'\nand event '%2'", key, event );
+  if( ! ApplyNetworkPrintingSettings() )
+  { Report::Error( // Message of a Report::Error.
+                   // Only a simple message because this error does not happen on a normal system
+                   // (i.e. a system which is not totally broken or totally messed up).
+                   _("Failed to apply the settings to the system.")
+                 );
+  }
   y2milestone( "leaving storeNetworkPrinting" );
 }
+
+
 
 
 /**

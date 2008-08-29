@@ -9,15 +9,18 @@ export LC_ALL="POSIX"
 export LANG="POSIX"
 umask 022
 
-SERVERNAME="$1"
+# When 'localhost' or its IP-address is to be set,
+# it is unified so that only 'localhost' or '127.0.0.1' are set
+# (but not stuff like 'LocalHost' or '127.000.000.001').
+SERVERNAME="$( echo $1 | sed -e 's/localhost/localhost/i' -e 's/127\.0*0\.0*0\.0*1/127.0.0.1/' )"
 
 if test -n "$SERVERNAME"
 then # When a SERVERNAME is specified, set it in /etc/cups/client.conf
      # if SERVERNAME is not the magic word 'none' which
      # is used to only remove all active ServerName entries.
-     # Note that even 'localhost' is a valid entry there
+     # Note that even 'localhost' or '127.0.0.1' is a valid entry there
      # which is used to force client tools (e.g. lpadmin, lpinfo, lpstat)
-     # to ask the local cupsd via the IPP port on localhost (localhost:631)
+     # to ask the local cupsd via the IPP port on localhost (127.0.0.1:631)
      # and not via the domain socket (/var/run/cups/cups.sock) because
      # the latter failed in the past for certain third-party clients (e.g. Java).
      # Note that (according to Michael Sweet) it is not a supported configuration
@@ -45,7 +48,10 @@ fi
 # the output is the empty string (i.e. nothing at all - not even a '\n' character).
 # The 'tr ... [:blank:]' makes sure that all active ServerName entries
 # are found if there is more than one which is a broken config.
-SERVERNAME="$( grep -i '^ServerName ' /etc/cups/client.conf | tr -s '[:blank:]' ' ' | cut -s -d' ' -f2 | tr -s '\n' ' ' | sed -e 's/ *$//' )"
+# Trailing spaces are removed and when 'localhost' or its IP-address is set,
+# it is unified so that YaST only needs to test for 'localhost' and '127.0.0.1'
+# (but not for stuff like 'LocalHost' or '127.000.000.001').
+SERVERNAME="$( grep -i '^ServerName ' /etc/cups/client.conf | tr -s '[:blank:]' ' ' | cut -s -d' ' -f2 | tr -s '\n' ' ' | sed -e 's/ *$//' -e 's/localhost/localhost/i' -e 's/127\.0*0\.0*0\.0*1/127.0.0.1/' )"
 echo -n "$SERVERNAME"
 # For a nicer output on a terminal where stdout and stderr is mixed up,
 # output a '\n' on stderr to get subsequent stuff (e.g. the shell prompt
