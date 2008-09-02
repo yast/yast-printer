@@ -21,12 +21,12 @@ then echo -en "\nUsage:\n$MY_NAME keyword [ new value ]\n" 1>&2
      echo "E.g.: BrowseAllow '@LOCAL 192.168.100.1 192.168.200.0/255.255.255.0'" 1>&2
      echo "There is a strict syntax for keywords and values:" 1>&2
      echo "Case matters." 1>&2
-     echo "Neither leading nor trailing nor in-between spaces are allowed." 1>&2
-     echo "Multiple values for a keyword must be separated by exactly one space." 1>&2
+     echo "Multiple values for a keyword must be separated by space." 1>&2
      exit 1
 fi
 
-VALUE="$2"
+# Remove duplicates (ignore case) and remove duplicate, leading and trailing spaces:
+VALUE="$( for V in $2 ; do echo $V ; done | sort -b -f -u | tr -s '[:space:]' ' ' | sed -e 's/ *$//' )"
 
 CUPSDCONF="/etc/cups/cupsd.conf"
 if ! test -r $CUPSDCONF -a -w $CUPSDCONF
