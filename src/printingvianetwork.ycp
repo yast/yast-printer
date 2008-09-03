@@ -151,27 +151,22 @@ term widgetNetworkPrinting = `VBox
 */
 
 boolean something_has_changed = false;
-boolean cupsd_restart_required = false;
-boolean cupsd_start_required = false;
-boolean cupsd_stop_required = false;
 boolean initial_cupsd_conf_browsing_off_radio_button = false;
 boolean initial_cupsd_conf_browsing_on_radio_button = false;
 any initial_cupsd_conf_browse_allow_combo_box_value = nil;
-boolean initial_cupsd_conf_browse_allow_all = false;
-boolean initial_cupsd_conf_browse_allow_local = false;
-boolean initial_cupsd_conf_browse_allow_specific = false;
 string initial_cupsd_conf_browse_allow_input_value = "";
 boolean initial_client_only_radio_button = false;
 string initial_client_conf_server_name_input_value = "";
 
 boolean ApplyNetworkPrintingSettings()
-{ // Get the actual settings and values from the dialog:
+{ something_has_changed = false;
+  // Get the actual settings and values from the dialog:
   any current_radio_button = UI::QueryWidget( `id(`browsing_or_client_only_check_boxes), `CurrentButton );
   any current_browse_allow = UI::QueryWidget( `id(`cupsd_conf_browse_allow_combo_box),  `Value );
   string current_browse_allow_input_value = (string)UI::QueryWidget( `id(`cupsd_conf_browse_allow_input), `Value );
   string current_server_name_input_value = (string)UI::QueryWidget( `id(`client_conf_server_name_input), `Value );
   y2milestone( "ApplyNetworkPrintingSettings with\ncurrent_radio_button = '%1'\ncurrent_browse_allow = '%2'\ncurrent_browse_allow_input_value = '%3'\ncurrent_server_name_input_value = '%4'", current_radio_button, current_browse_allow, current_browse_allow_input_value, current_server_name_input_value );
-  // Browsing Off:
+  // Do not accept Browsing information:
   if( `cupsd_conf_browsing_off_radio_button == current_radio_button )
   { if( initial_cupsd_conf_browsing_off_radio_button )
     { // Nothing has changed:
@@ -192,6 +187,17 @@ boolean ApplyNetworkPrintingSettings()
                        _("Failed to set 'BrowseAllow none' in /etc/cups/cupsd.conf")
                      );
         return false;
+      }
+      // If a local cupsd is accessible, restart it, otherwise start it:
+      if( Printerlib::GetAndSetCupsdStatus( "" ) )
+      { if( ! Printerlib::GetAndSetCupsdStatus( "restart" ) )
+        { return false;
+        }
+      }
+      else
+      { if( ! Printerlib::GetAndSetCupsdStatus( "start" ) )
+        { return false;
+        }
       }
       return true;
     }
@@ -243,7 +249,7 @@ boolean ApplyNetworkPrintingSettings()
     // The latter case should also leave the current client-only setup as is:
     return true;
   }
-  // Browsing On:
+  // Accept Browsing information:
   if( `cupsd_conf_browsing_on_radio_button == current_radio_button )
   { if( initial_cupsd_conf_browsing_off_radio_button )
     { // It was initially a "No browsing info" config,
@@ -258,54 +264,94 @@ boolean ApplyNetworkPrintingSettings()
         )
       { something_has_changed = true;
       }
-      else
-      { // Nothing has changed:
-        return true;
-      }
     }
     if( initial_client_only_radio_button )
     { // It was initially a client-only config,
       // but now the user has activated the "Get browsing info" radio button:
       something_has_changed = true;
     }
-    if( something_has_changed )
-    { string browse_allow_value = current_browse_allow_input_value;
-      if( `browse_allow_all == current_browse_allow )
-      { // If browsing info is accepted from all hosts, it is actually useless
-        // to additionally accept it from specific IPs or networks
-        // but nevertheless the specific addresses are also set in cupsd.conf
-        // because I do not want to ignore what the user has entered.
-        // E.g. the user may like to accept browsing info from some specific addresses
-        // while he plays around with the predefined settings from the combo box:
-        browse_allow_value = browse_allow_value + " all";
+    if( ! something_has_changed )
+    { // Nothing has changed:
+      return true;
+    }
+    string browse_allow_value = current_browse_allow_input_value;
+    if( `browse_allow_all == current_browse_allow )
+    { // If browsing info is accepted from all hosts, it is actually useless
+      // to additionally accept it from specific IPs or networks
+      // but nevertheless the specific addresses are also set in cupsd.conf
+      // because I do not want to ignore what the user has entered.
+      // E.g. the user may like to accept browsing info from some specific addresses
+      // while he plays around with the predefined settings from the combo box:
+      browse_allow_value = browse_allow_value + " all";
+    }
+    if( `browse_allow_local == current_browse_allow )
+    { browse_allow_value = browse_allow_value + " @LOCAL";
+    }
+    if( "" == filterchars( browse_allow_value, " " )
+        || issubstring( browse_allow_value, "none" )
+      )
+    { // The browse_allow_value string is empty or it contains "none".
+      // (The issubstring match is o.k. because only IP-addresses are supported
+      // so that even for a hostname "none.nowhere" the IP-address would not match.)
+      // This case happens when browse_allow_specific is selected in the combo box
+      // but no address or only "none" was entered for cupsd_conf_browse_allow_input.
+      // This case has the same meaning as a "No browsing info" config.
+      if( initial_cupsd_conf_browsing_off_radio_button )
+      { // It was initially a "No browsing info" config,
+        // and now the user has activated the "Get browsing info" radio button
+        // but with effectively an empty or "none" browse_allow_value string
+        // so that it is still a "No browsing info" config:
+        something_has_changed = false;
+        return true;
       }
-      if( `browse_allow_local == current_browse_allow )
-      { browse_allow_value = browse_allow_value + " @LOCAL";
+      // Set the browse_allow_value explicitely to "none".
+      // This removes intentionally any additional stuff in this value
+      // if "none" was only persent as a real substring.
+      // The reasoning is that "none" should have the highest priority
+      // because this is the most secure setting.
+      browse_allow_value = "none";
+    }
+    if( "none" != browse_allow_value )
+    { // Only a not-"none" browse_allow_value requires "Browsing On" in cupsd.conf.
+      // Otherwise leave the "Browsing" entry in cupsd.conf unchanged.
+      if( ! Printerlib::ExecuteBashCommand( Printerlib::yast_bin_dir + "modify_cupsd_conf Browsing On" ) )
+      { Report::Error( // Message of a Report::Error.
+                       // Only a simple message because this error does not happen on a normal system
+                       // (i.e. a system which is not totally broken or totally messed up).
+                       _("Failed to set 'Browsing On' in /etc/cups/cupsd.conf")
+                     );
+        return false;
       }
-      if( "" != filterchars( browse_allow_value, " " ) )
-      { if( ! Printerlib::ExecuteBashCommand( Printerlib::yast_bin_dir + "modify_cupsd_conf Browsing On" ) )
-        { Report::Error( // Message of a Report::Error.
-                         // Only a simple message because this error does not happen on a normal system
-                         // (i.e. a system which is not totally broken or totally messed up).
-                         _("Failed to set 'Browsing On' in /etc/cups/cupsd.conf")
-                       );
-          return false;
-        }
-        if( ! Printerlib::ExecuteBashCommand( Printerlib::yast_bin_dir
-                                              + "modify_cupsd_conf BrowseAllow '"
-                                              + browse_allow_value
-                                              + "'"
-                                            )
-          )
-        { Report::Error( // Message of a Report::Error
-                         // where %1 will be replaced by the values for BrowseAllow.
-                         // Only a simple message because this error does not happen on a normal system
-                         // (i.e. a system which is not totally broken or totally messed up).
-                         sformat( _("Failed to set BrowseAllow value(s) '%1' in /etc/cups/cupsd.conf"),
-                                  browse_allow_value
-                                )
-                       );
-          return false;
+    }
+    if( ! Printerlib::ExecuteBashCommand( Printerlib::yast_bin_dir
+                                          + "modify_cupsd_conf BrowseAllow '"
+                                          + browse_allow_value
+                                          + "'"
+                                        )
+      )
+    { Report::Error( // Message of a Report::Error
+                     // where %1 will be replaced by the values for BrowseAllow.
+                     // Only a simple message because this error does not happen on a normal system
+                     // (i.e. a system which is not totally broken or totally messed up).
+                     sformat( _("Failed to set BrowseAllow value(s) '%1' in /etc/cups/cupsd.conf"),
+                              browse_allow_value
+                            )
+                   );
+      return false;
+    }
+    // If a local cupsd is accessible, restart it, otherwise start it if needed:
+    if( Printerlib::GetAndSetCupsdStatus( "" ) )
+    { if( ! Printerlib::GetAndSetCupsdStatus( "restart" ) )
+      { return false;
+      }
+    }
+    else
+    { if( "none" != browse_allow_value )
+      { // Only a not-"none" browse_allow_value requires the local cupsd
+        // to be started when it is not yet running.
+        // Otherwise leave the cupsd as is.
+        if( ! Printerlib::GetAndSetCupsdStatus( "start" ) )
+        { return false;
         }
       }
     }
@@ -341,17 +387,14 @@ void initNetworkPrinting( string key )
   // When by accident "all" and "@LOCAL" were set as BrowseAllow values,
   // the "@LOCAL" entry is preselected in cupsd_conf_browse_allow_combo_box
   // because this is the more secure setting:
-  initial_cupsd_conf_browse_allow_specific = true;
   initial_cupsd_conf_browse_allow_combo_box_value = `browse_allow_specific;
   UI::ChangeWidget( `id(`cupsd_conf_browse_allow_combo_box), `Value, `id(`browse_allow_specific) );
   if( contains( Printerlib::cupsd_conf_browse_allow, "all" ) )
-  { initial_cupsd_conf_browse_allow_all = true;
-    initial_cupsd_conf_browse_allow_combo_box_value = `browse_allow_all;
+  { initial_cupsd_conf_browse_allow_combo_box_value = `browse_allow_all;
     UI::ChangeWidget( `id(`cupsd_conf_browse_allow_combo_box), `Value, `id(`browse_allow_all) );
   }
   if( contains( Printerlib::cupsd_conf_browse_allow, "@LOCAL" ) )
-  { initial_cupsd_conf_browse_allow_local = true;
-    initial_cupsd_conf_browse_allow_combo_box_value = `browse_allow_local;
+  { initial_cupsd_conf_browse_allow_combo_box_value = `browse_allow_local;
     UI::ChangeWidget( `id(`cupsd_conf_browse_allow_combo_box), `Value, `id(`browse_allow_local) );
   }
   UI::ChangeWidget( `id(`cupsd_conf_browse_allow_input), `Enabled, false );
@@ -391,8 +434,10 @@ void initNetworkPrinting( string key )
     UI::ChangeWidget( `id(`test_client_conf_server), `Enabled, true );
   }
   else
-  { UI::ChangeWidget( `id(`connection_wizard), `Enabled, true );
-    // If "none" is present as a BrowseAllow value, no 'Browsing On' widget is enabled:
+  { // The "Connection Wizard" button is only disabled in casae of "client_only":
+    UI::ChangeWidget( `id(`connection_wizard), `Enabled, true );
+    // If "none" is present as a BrowseAllow value, no 'Browsing On' widget is enabled
+    // but the 'Browsing Off' widget is enabled instead:
     if( Printerlib::browsing_on
         && ! contains( Printerlib::cupsd_conf_browse_allow, "none" )
       )
@@ -400,8 +445,12 @@ void initNetworkPrinting( string key )
       UI::ChangeWidget( `id(`cupsd_conf_browsing_on_radio_button), `Value, true );
       UI::ChangeWidget( `id(`cupsd_conf_browse_allow_label), `Enabled, true );
       UI::ChangeWidget( `id(`cupsd_conf_browse_allow_combo_box), `Enabled, true );
-      UI::ChangeWidget( `id(`cupsd_conf_browse_allow_input), `Enabled, true );
-      UI::ChangeWidget( `id(`cupsd_conf_browse_allow_input_label), `Enabled, true );
+      // If browsing info is accepted from all hosts,
+      // it is useless to additionally accept it from specific IPs or networks:
+      if( ! contains( Printerlib::cupsd_conf_browse_allow, "all" ) )
+      { UI::ChangeWidget( `id(`cupsd_conf_browse_allow_input), `Enabled, true );
+        UI::ChangeWidget( `id(`cupsd_conf_browse_allow_input_label), `Enabled, true );
+      }
     }
     else
     { initial_cupsd_conf_browsing_off_radio_button = true;

@@ -4,6 +4,10 @@
 module "Printerlib";
 textdomain "printer";
 
+import "Popup";
+import "Report";
+import "Service";
+
 // Fortunately the tools are for all architectures always
 // installed in /usr/lib/YaST2/bin/ (i.e. no "lib64").
 // I tested this on Thu Aug 28 2008 using the command
@@ -41,6 +45,96 @@ global boolean ExecuteBashCommand( string bash_commandline )
     return false;
   }
   return true;
+}
+
+// By default there is a local running cupsd.
+// But to be on the safe side, assume it is not:
+global boolean local_cupsd_accessible = false;
+
+global boolean GetAndSetCupsdStatus( string new_status )
+{ // Determine whether or not a local cupsd is accessible.
+  // The value 'false' is also the right one when the command itself fails
+  // (e.g. when there is no /usr/bin/lpstat binary or whatever broken stuff):
+  string local_cupsd_accessible_commandline = "/usr/bin/lpstat -h localhost -r";
+  local_cupsd_accessible = ExecuteBashCommand( local_cupsd_accessible_commandline );
+  // Start cupsd:
+  if( "start" == new_status )
+  { if( local_cupsd_accessible )
+    { // Do not start an already running (i.e. accessible) cupsd:
+      return true;
+    }
+    if( ! Service::Start( "cups" ) )
+    { Report::Error( // Message of a Report::Error.
+                     // Only a simple message because this error does not happen on a normal system
+                     // (i.e. a system which is not totally broken or totally messed up).
+                     _("Failed to start the CUPS daemon.")
+                   );
+      return false;
+    }
+    else
+    { Popup::TimedMessage( _("Started the CUPS daemon.\nWaiting one minute so that it is ready to operate..."),
+                           60
+                         );
+    }
+    local_cupsd_accessible = ExecuteBashCommand( local_cupsd_accessible_commandline );
+    if( ! local_cupsd_accessible )
+    { Report::Error( // Message of a Report::Error.
+                     // Only a simple message because this error does not happen on a normal system
+                     // (i.e. a system which is not totally broken or totally messed up).
+                     _("No local running CUPS daemon is accessible.")
+                   );
+      return false;
+    }
+    return true;
+  }
+  // Restart cupsd:
+  if( "restart" == new_status )
+  { if( ! Service::Restart( "cups" ) )
+    { Report::Error( // Message of a Report::Error.
+                     // Only a simple message because this error does not happen on a normal system
+                     // (i.e. a system which is not totally broken or totally messed up).
+                     _("Failed to restart the CUPS daemon.")
+                   );
+      return false;
+    }
+    else
+    { Popup::TimedMessage( _("Restarted the CUPS daemon.\nWaiting one minute so that it is ready to operate..."),
+                           60
+                         );
+    }
+    local_cupsd_accessible = ExecuteBashCommand( local_cupsd_accessible_commandline );
+    if( ! local_cupsd_accessible )
+    { Report::Error( // Message of a Report::Error.
+                     // Only a simple message because this error does not happen on a normal system
+                     // (i.e. a system which is not totally broken or totally messed up).
+                     _("No local running CUPS daemon is accessible.")
+                   );
+      return false;
+    }
+    return true;
+  }
+  // Stop cupsd:
+  if( "stop" == new_status )
+  { // To be on the safe side try to stop the cupsd regardless if it is accessible or not
+    // and ignore possible errors from Service::Stop when it is already stopped
+    // (the local_cupsd_accessible test below should be sufficient):
+    Service::Stop( "cups" );
+    // Wait one second to make sure that cupsd has really finished (it may do some cleanup):
+    sleep( 1000 );
+    local_cupsd_accessible = ExecuteBashCommand( local_cupsd_accessible_commandline );
+    if( local_cupsd_accessible )
+    { Report::Error( // Message of a Report::Error.
+                     // Only a simple message because this error does not happen on a normal system
+                     // (i.e. a system which is not totally broken or totally messed up).
+                     _("A local running CUPS daemon is still accessible.")
+                   );
+      return false;
+    }
+    return true;
+  }
+  // If new_status is neither "start" nor "restart" nor "stop",
+  // return whether or not the local cupsd is accessible:
+  return local_cupsd_accessible;
 }
 
 // By default there is no active "ServerName" entry in /etc/cups/client.conf:
