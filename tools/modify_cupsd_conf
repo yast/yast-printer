@@ -100,9 +100,14 @@ BrowseAllow()
        then sed -i -e "${LAST_BROWSE_LINE}aBrowseOrder allow,deny" $CUPSDCONF
        else echo -en "\nBrowseOrder allow,deny\n\n" >>$CUPSDCONF
        fi
-       # All existing active BrowseAllow lines are removed (ignore case):
+       # All existing active BrowseAllow lines are removed (ignore case).
+       # Those lines can be removed because YaST supports BrowseAllow lines
+       # (YaST shows the BrowseAllow entries in the "printing via network" dialog)
+       # so that no BrowseAllow information is silently deleted:
        sed -i -e '/^BrowseAllow.*/Id' $CUPSDCONF
-       # All existing active BrowseDeny lines are deactivated (ignore case):
+       # All existing active BrowseDeny lines are deactivated (ignore case).
+       # Those lines are not removed because YaST does not support BrowseDeny lines
+       # so that a remove would silently delete BrowseDeny information:
        sed -i -e 's/^\(BrowseDeny.*\)$/#\1/i' $CUPSDCONF
        # Insert BrowseAllow lines before the BrowseOrder line
        # to have the new BrowseAllow lines at the matching place
