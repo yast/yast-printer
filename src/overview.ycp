@@ -75,6 +75,7 @@ term widgetOverview=
                         `PushButton (`id (`edit), _("Configure")),
                         `PushButton (`id (`delete), Label::DeleteButton ()),
                         `HStretch (),
+                        `PushButton (`id (`refresh), _("Refresh list")),
                         `PushButton (`id (`test), _("Print test page"))
                         )
                 );
@@ -94,11 +95,7 @@ void initOverview(string key){
   }
   // Determine whether or not a local cupsd is accessible:
   if( local_cupsd_required && ! Printerlib::GetAndSetCupsdStatus( "" ) )
-  { Popup::ErrorDetails( // Popup::ErrorDetails header:
-                         _("Start local running CUPS daemon"),
-                         // Popup::ErrorDetails body:
-                         _("A local running CUPS daemon is needed for your setup.")
-                       );
+  { // Printerlib::GetAndSetCupsdStatus already shows a confirmation popup:
     Printerlib::GetAndSetCupsdStatus( "start" );
   }
   UI::ChangeWidget(`local_content_checkbox, `Value, local_content_selected);
@@ -123,6 +120,23 @@ symbol handleOverview(string key, map event){
  }
 
  integer selected_queue_index = (integer)UI::QueryWidget( `id(`overview_table), `CurrentItem );
+
+ if( `refresh == event["ID"]:nil && "Activated" == event["EventReason"]:"" )
+ { // The refresh functionality is useful after switching the Browsing mode.
+   // For example when a client-only config is switched to a "get Browsing info" config
+   // the BrowseInterval in cupsd.conf on remote CUPS servers is by default 30 seconds
+   // so that it takes by default up to 31 seconds before the Overview dialog can show
+   // all remote queues or any time longer depending on the BrowseInterval setting
+   // on the remote CUPS servers which necessitates an explicite [Refresh] button.
+   // Or the other way round when a "Get browsing info" config with a local cupsd
+   // was switched to a "No browsing info" config with a local running cupsd.
+   // The default BrowseTimeout value for the local cupsd is 5 minutes.
+   // Therefore it takes by default 5 minutes until printer information
+   // that was previously received by Browsing is removed (via timeout)
+   // from the local cupsd's list so that such kind of outdated remote queues
+   // are no longer shown in the Overview dialog.
+   UI::ChangeWidget(`overview_table, `Items, Printer::QueueItems( Printer::queue_filter_show_local, Printer::queue_filter_show_remote ));
+ }
 
  if (event["EventReason"]:"" == "Activated" && event["ID"]:nil == `delete){
       string queue_name = Printer::queues[selected_queue_index,"name"]:"";
@@ -247,15 +261,9 @@ symbol handleOverview(string key, map event){
         }
       }
       if( ! Printerlib::GetAndSetCupsdStatus( "" ) )
-      { // No local running cupsd is accessible:
-        if( ! Popup::YesNoHeadline( // PopupYesNoHeadline headline:
-                                    _("Start local running CUPS daemon"),
-                                    // PopupYesNoHeadline body:
-                                    _("A local running CUPS daemon is needed to add a print queue.")
-                                  )
-          )
-	  return nil;
-        // Do a restart to be safe:
+      { // No local running cupsd is accessible.
+        // Do a restart to be safe.
+        // Printerlib::GetAndSetCupsdStatus already shows a confirmation popup:
         if( ! Printerlib::GetAndSetCupsdStatus( "restart" ) )
         { return nil;
         }

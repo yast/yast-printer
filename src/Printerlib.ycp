@@ -5,7 +5,6 @@ module "Printerlib";
 textdomain "printer";
 
 import "Popup";
-import "Report";
 import "Service";
 
 // Fortunately the tools are for all architectures always
@@ -63,71 +62,131 @@ global boolean GetAndSetCupsdStatus( string new_status )
     { // Do not start an already running (i.e. accessible) cupsd:
       return true;
     }
+    // Enforce user confirmation before a new service is started
+    // to be on the safe side that the user knows about it:
+    if( ! Popup::YesNoHeadline( // PopupYesNoHeadline headline:
+                                _("Start local running CUPS daemon"),
+                                // PopupYesNoHeadline body:
+                                _("A local running CUPS daemon is needed.")
+                               )
+      )
+    { return false;
+    }
     if( ! Service::Start( "cups" ) )
-    { Report::Error( // Message of a Report::Error.
-                     // Only a simple message because this error does not happen on a normal system
-                     // (i.e. a system which is not totally broken or totally messed up).
-                     _("Failed to start the CUPS daemon.")
-                   );
+    { Popup::ErrorDetails( // Popup::ErrorDetails header:
+                           _("Failed to start the CUPS daemon"),
+                           Service::Error()
+                         );
       return false;
     }
-    else
-    { Popup::TimedMessage( _("Started the CUPS daemon.\nWaiting one minute so that it is ready to operate..."),
-                           60
-                         );
-    }
+    // Wait one minute for a new started cupsd is necessary because
+    // when a client-only config is switched to a "get Browsing info" config
+    // the BrowseInterval in cupsd.conf on remote CUPS servers is by default 30 seconds
+    // so that the local cupsd should listen at least 31 seconds to get Browsing info
+    // before e.g. the Overview dialog can be shown with the right current queues.
+    // Additionally during first start after system installation the cupsd parses
+    // all the (usually thousands) of installed PPDs to generate
+    // the list of available drivers (what "lpinfo -l -m" shows).
+    Popup::TimedMessage( _("Started the CUPS daemon.\nWaiting one minute so that it is ready to operate..."),
+                         60
+                       );
     local_cupsd_accessible = ExecuteBashCommand( local_cupsd_accessible_commandline );
     if( ! local_cupsd_accessible )
-    { Report::Error( // Message of a Report::Error.
-                     // Only a simple message because this error does not happen on a normal system
-                     // (i.e. a system which is not totally broken or totally messed up).
-                     _("No local running CUPS daemon is accessible.")
-                   );
+    { Popup::Error( // Popup::Error message:
+                    _("No local running CUPS daemon is accessible.")
+                  );
       return false;
+    }
+    if( ! Service::Enable( "cups" ) )
+    { Popup::ErrorDetails( // Popup::ErrorDetails header:
+                           _("Failed to enable starting of the CUPS daemon during system boot"),
+                           Service::Error()
+                         );
+      // This is not a fatal error, therefore return "successfully" nevertheless.
     }
     return true;
   }
   // Restart cupsd:
   if( "restart" == new_status )
-  { if( ! Service::Restart( "cups" ) )
-    { Report::Error( // Message of a Report::Error.
-                     // Only a simple message because this error does not happen on a normal system
-                     // (i.e. a system which is not totally broken or totally messed up).
-                     _("Failed to restart the CUPS daemon.")
-                   );
+  { // Enforce user confirmation before the cupsd is restarted
+    // to be on the safe side regarding complaints in an enterprise environment
+    // because a restart disrupts all currently actively printing jobs:
+    if( ! Popup::YesNoHeadline( // PopupYesNoHeadline headline:
+                                _("Restart local running CUPS daemon"),
+                                // PopupYesNoHeadline body:
+                                _("A restart disrupts all currently actively printing jobs.")
+                              )
+      )
+    { return false;
+    }
+    if( ! Service::Restart( "cups" ) )
+    { Popup::ErrorDetails( // Popup::ErrorDetails header:
+                           _("Failed to restart the CUPS daemon"),
+                           Service::Error()
+                         );
       return false;
     }
-    else
-    { Popup::TimedMessage( _("Restarted the CUPS daemon.\nWaiting one minute so that it is ready to operate..."),
-                           60
-                         );
-    }
+    // Wait 40 seconds for a restarted cupsd is necessary because
+    // when a "no Browsing info" config is switched to a "get Browsing info" config
+    // the BrowseInterval in cupsd.conf on remote CUPS servers is by default 30 seconds
+    // so that the local cupsd should listen at least 31 seconds to get Browsing info
+    // before e.g. the Overview dialog can be shown with the right current queues.
+    Popup::TimedMessage( _("Restarted the CUPS daemon.\nWaiting 40 seconds so that it is ready to operate..."),
+                         40
+                       );
     local_cupsd_accessible = ExecuteBashCommand( local_cupsd_accessible_commandline );
     if( ! local_cupsd_accessible )
-    { Report::Error( // Message of a Report::Error.
-                     // Only a simple message because this error does not happen on a normal system
-                     // (i.e. a system which is not totally broken or totally messed up).
-                     _("No local running CUPS daemon is accessible.")
-                   );
+    { Popup::Error( // Popup::Error message:
+                    _("No local running CUPS daemon is accessible.")
+                  );
       return false;
+    }
+    // To be on the safe side, ask the user to enable the cupsd
+    // to be started during boot if it is not yet enabled:
+    if( ! Service::Enabled( "cups" ) )
+    { if( Popup::YesNoHeadline( // PopupYesNoHeadline headline:
+                                _("Enable starting of the CUPS daemon during system boot"),
+                                // PopupYesNoHeadline body:
+                                _("Currently the CUPS daemon is not started during system boot.")
+                              )
+        )
+      { if( ! Service::Enable( "cups" ) )
+        { Popup::ErrorDetails( // Popup::ErrorDetails header:
+                               _("Failed to enable starting of the CUPS daemon during system boot"),
+                               Service::Error()
+                             );
+          // This is not a fatal error, therefore return "successfully" nevertheless.
+        }
+      }
     }
     return true;
   }
   // Stop cupsd:
   if( "stop" == new_status )
-  { // To be on the safe side try to stop the cupsd regardless if it is accessible or not
-    // and ignore possible errors from Service::Stop when it is already stopped
+  { // Enforce user confirmation before the cupsd is stopped
+    // to be on the safe side regarding complaints in an enterprise environment
+    // because a stop disrupts all currently actively printing jobs:
+    if( ! Popup::YesNoHeadline( // PopupYesNoHeadline headline:
+                                _("Stop local running CUPS daemon"),
+                                // PopupYesNoHeadline body:
+                                _("A stop disrupts all currently actively printing jobs.")
+                              )
+      )
+    { return false;
+    }
+    // To be on the safe side try to stop and disable the cupsd
+    // regardless if it is accessible or not and/or disabled or not
+    // and ignore possible errors from Service::Stop and Service::Disable
     // (the local_cupsd_accessible test below should be sufficient):
     Service::Stop( "cups" );
+    Service::Disable( "cups" );
     // Wait one second to make sure that cupsd has really finished (it may do some cleanup):
     sleep( 1000 );
     local_cupsd_accessible = ExecuteBashCommand( local_cupsd_accessible_commandline );
     if( local_cupsd_accessible )
-    { Report::Error( // Message of a Report::Error.
-                     // Only a simple message because this error does not happen on a normal system
-                     // (i.e. a system which is not totally broken or totally messed up).
-                     _("A local running CUPS daemon is still accessible.")
-                   );
+    { Popup::Error( // Popup::Error message:
+                    _("A local running CUPS daemon is still accessible.")
+                  );
       return false;
     }
     return true;
@@ -175,22 +234,22 @@ global boolean DetermineClientOnly()
 // or when the "Browsing" entry is deactivated by a leading '#' character.
 // Therefore browsing_on is only false if "Browsing Off" or "Browsing No"
 // is explicitely set in /etc/cups/cupsd.conf.
-global boolean browsing_on = true;
+global boolean cupsd_conf_browsing_on = true;
 
 global boolean DetermineBrowsing()
 { // Determine the 'Browsing [ On | Off ]' value in /etc/cups/cupsd.conf:
   if( ExecuteBashCommand( yast_bin_dir + "modify_cupsd_conf Browsing" ) )
   { string browsing = tolower( result["stdout"]:"On" );
     if( "off" == browsing || "no" == browsing )
-    { browsing_on = false;
+    { cupsd_conf_browsing_on = false;
     }
     else
-    { browsing_on = true;
+    { cupsd_conf_browsing_on = true;
     }
   }
   else
   { // Use fallback value when the command above failed:
-    browsing_on = true;
+    cupsd_conf_browsing_on = true;
     return false;
   }
   return true;
