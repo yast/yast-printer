@@ -64,28 +64,51 @@ echo 1>&2
 if test -z "$SERVERNAME"
 then exit 0
 fi
-
-PING="$( type -P ping )"
-if ! test -x "$PING"
-then echo "Cannot execute ping" 1>&2
-else # Test if the server responds to ping:
-     if ! $PING -w 1 -c 1 $SERVERNAME &>/dev/null
-     then echo "The server '$SERVERNAME' does not respond to a 'ping' in the network." 1>&2
-          exit 2
-     fi
-fi
-
+EXITCODE=0
+# First do the most meaningful test and exit successfully if this works:
 NETCAT="$( type -P netcat )"
-if ! test -x "$NETCAT"
-then echo "Cannot execute netcat" 1>&2
-else # Test if the server is accessible via the default IPP port.
+if test -x "$NETCAT"
+then # Test if the server is accessible via the default IPP port.
      # It is possible to run the cupsd on another port and specify this
      # via 'ServerName host:port' but currently this special case is ignored.
-     if ! $NETCAT -w 1 -z $SERVERNAME 631 &>/dev/null
-     then echo "The server '$SERVERNAME' is not accessible via port 631 (IPP/CUPS)." 1>&2
-          exit 3
+     if $NETCAT -w 1 -z $SERVERNAME 631 &>/dev/null
+     then echo "The server '$SERVERNAME' is accessible via port 631 (IPP/CUPS)." 1>&2
+          exit 0
+     else echo "The server '$SERVERNAME' is not accessible via port 631 (IPP/CUPS)." 1>&2
+          EXITCODE=2
      fi
+else echo "Cannot execute netcat" 1>&2
+fi
+# Only if the most meaningful test had failed (or cannot be executed), do a less meaningful test:
+PING="$( type -P ping )"
+if test -x "$PING"
+then # Test if the server responds to ping:
+     if $PING -w 1 -c 1 $SERVERNAME &>/dev/null
+     then echo "The server '$SERVERNAME' responds to a 'ping' in the network." 1>&2
+          # Exit unsuccessfully when the most meaningful test had failed
+          # but exit successfully when the most meaningful test could no be executed:
+          exit $EXITCODE
+     else echo "The server '$SERVERNAME' does not respond to a 'ping' in the network." 1>&2
+          EXITCODE=3
+     fi
+else echo "Cannot execute ping" 1>&2
+fi
+# Only if both tests above have failed (or cannot be executed), do a last test:
+HOST="$( type -P host )"
+if test -x "$HOST"
+then # Test if the server name is known by DNS:
+     if $HOST -W 1 $SERVERNAME &>/dev/null
+     then echo "The server '$SERVERNAME' is known by the DNS." 1>&2
+          # Exit unsuccessfully when the less meaningful test had failed
+          # or when the most meaningful test had failed and the less meaningful test could no be executed
+          # but exit successfully when both the above tests could no be executed:
+          exit $EXITCODE
+     else echo "The server '$SERVERNAME' is not known by the DNS." 1>&2
+          exit 4
+     fi
+else echo "Cannot execute host" 1>&2
 fi
 
+# Exit successfully as fallback (e.g. when netcat or ping or host cannot be executed):
 exit 0
 
