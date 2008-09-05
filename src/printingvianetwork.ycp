@@ -143,6 +143,153 @@ any initial_browse_allow = nil;
 string initial_browse_allow_input_value = "";
 string initial_server_name_input_value = "";
 
+boolean TestClientOnlyServer( string server_name )
+{ string netcat_test_good_message = sformat( // Popup message
+                                             // where %1 will be replaced by the server name.
+                                             _("The server '%1' is accessible via port 631 (IPP/CUPS)."),
+                                             server_name
+                                           );
+  string netcat_test_fail_message = sformat( // Popup message
+                                             // where %1 will be replaced by the server name.
+                                             _("The server '%1' is not accessible via port 631 (IPP/CUPS)."),
+                                             server_name
+                                           );
+  string ping_test_good_message = sformat( // Popup message
+                                           // where %1 will be replaced by the server name.
+                                           _("The server '%1' responds to a 'ping' in the network."),
+                                           server_name
+                                         );
+  string ping_test_fail_message = sformat( // Popup message
+                                           // where %1 will be replaced by the server name.
+                                           _("The server '%1' does not respond to a 'ping' in the network."),
+                                           server_name
+                                         );
+  string host_test_good_message = sformat( // Popup message
+                                           // where %1 will be replaced by the server name.
+                                           _("The server name '%1' is known in the network."),
+                                           server_name
+                                         );
+  string host_test_fail_message = sformat( // Popup message
+                                           // where %1 will be replaced by the server name.
+                                           _("The server name '%1' is not known in the network."),
+                                           server_name
+                                         );
+  string separator = "\n===========================================================\n";
+  string error_messages = "";
+  string result_details = "";
+  // The tests here are the same (except verbosity) as in the cups_client_only tool.
+  // First do the most meaningful test and only if this works return true.
+  // The subsequent tests are only there to provide more info for the user
+  // what might be the reason why the server is not accessible via port 631.
+  // Make netcat verbose, otherwise there would be no output at all
+  // but some output is needed for the Popup::MessageDetails below:
+  if( ! Printerlib::ExecuteBashCommand( "type -P netcat" ) )
+  { // netcat is required for a meaningful test.
+    // Show negative feedback:
+    Popup::ErrorDetails( // Popup::ErrorDetails header:
+                         _("Cannot execute the program 'netcat'"),
+                         // Popup::ErrorDetails details:
+                         _("The RPM package 'netcat' is required for a meaningful test.") + "\n"
+                         + Printerlib::result["stderr"]:"" + "\n" + Printerlib::result["stdout"]:""
+                       );
+    return false;
+  }
+  if( Printerlib::ExecuteBashCommand( "netcat -v -w 1 -z " + server_name + " 631" ) )
+  { // Show positive feedback.
+    // Show it as TimedMessage so that is disappears automatically
+    // when TestClientOnlyServer() is called from ApplyNetworkPrintingSettings():
+    Popup::TimedMessage( netcat_test_good_message, 3 );
+    return true;
+  }
+  // The netcat-test failed:
+  error_messages = netcat_test_fail_message;
+  result_details = Printerlib::result["stderr"]:"" + "\n" + Printerlib::result["stdout"]:"";
+  // When the netcat-test failed, do a less meaningful test:
+  if( ! Printerlib::ExecuteBashCommand( "type -P ping" ) )
+  { // ping is required for the less meaningful test.
+    // Show negative feedback:
+    Popup::ErrorDetails( // Popup::ErrorDetails header
+                         _("Cannot execute the program 'ping'"),
+                         // Popup::ErrorDetails details:
+                         _("The RPM package 'iputils' is required for a meaningful test.") + "\n"
+                         + Printerlib::result["stderr"]:"" + "\n" + Printerlib::result["stdout"]:""
+                         + separator
+                         + error_messages + "\n"
+                         + result_details
+                       );
+    return false;
+  }
+  if( Printerlib::ExecuteBashCommand( "ping -w 1 -c 1 " + server_name ) )
+  { // The netcat-test failed but the ping-test was successful.
+    // Show negative feedback:
+    Popup::ErrorDetails( sformat( // Popup::ErrorDetails header
+                                  // where %1 will be replaced by the server name.
+                                  _("The server '%1' is not accessible"),
+                                  server_name
+                                ),
+                         // Popup::ErrorDetails details:
+                         error_messages + "\n"
+                         + ping_test_good_message
+                         + separator
+                         + result_details + "\n"
+                         + Printerlib::result["stderr"]:"" + "\n"
+                         + Printerlib::result["stdout"]:""
+                       );
+    return false;
+  }
+  // The ping-test failed:
+  error_messages = error_messages + "\n" + ping_test_fail_message;
+  result_details = result_details + "\n" + Printerlib::result["stderr"]:"" + "\n" + Printerlib::result["stdout"]:"";
+  // When the netcat-test and the ping-test failed
+  // do a last test:
+  if( ! Printerlib::ExecuteBashCommand( "type -P host" ) )
+  { // host is required for the last test.
+    // Show negative feedback:
+    Popup::ErrorDetails( // Popup::ErrorDetails header
+                         _("Cannot execute the program 'host'"),
+                         // Popup::ErrorDetails details:
+                         _("The RPM package 'bind-utils' is required for a meaningful test.") + "\n"
+                         + Printerlib::result["stderr"]:"" + "\n" + Printerlib::result["stdout"]:""
+                         + separator
+                         + error_messages + "\n"
+                         + result_details
+                       );
+    return false;
+  }
+  if( Printerlib::ExecuteBashCommand( "host -W 1 " + server_name ) )
+  { // The netcat-test and the ping-test failed but the host-test was successful.
+    // Show negative feedback:
+    Popup::ErrorDetails( sformat( // Popup::ErrorDetails header
+                                  // where %1 will be replaced by the server name.
+                                  _("The server '%1' does not respond in the network"),
+                                  server_name
+                                ),
+                         // Popup::ErrorDetails details:
+                         error_messages + "\n"
+                         + host_test_good_message
+                         + separator
+                         + result_details + "\n"
+                         + Printerlib::result["stderr"]:"" + "\n" + Printerlib::result["stdout"]:""
+                         );
+    return false;
+  }
+  // The netcat-test and the ping-test and the host-test failed:
+  // Show negative feedback:
+  Popup::ErrorDetails( sformat( // Popup::ErrorDetails header
+                                // where %1 will be replaced by the server name.
+                                  _("The server '%1' is unknown"),
+                                  server_name
+                                ),
+                       // Popup::ErrorDetails details:
+                       error_messages + "\n"
+                       + host_test_fail_message
+                       + separator
+                       + result_details + "\n"
+                       + Printerlib::result["stderr"]:"" + "\n" + Printerlib::result["stdout"]:""
+                     );
+  return false;
+}
+
 boolean ApplyNetworkPrintingSettings()
 { something_has_changed = false;
   // Get the actual settings and values from the dialog:
@@ -188,7 +335,8 @@ boolean ApplyNetworkPrintingSettings()
         // I assume most users do not like to wait 5 minutes which is no problem
         // because they can just click the [OK] button to continue but then
         // they are at least informend why there may be still remote queues:
-        Popup::TimedMessage( _("When switching from 'receive information' to 'do not receive information'\nit takes usually 5 minutes until already received information faded away..."),
+        Popup::TimedMessage( // Popup message:
+                             _("When switching from 'receive information' to 'do not receive information'\nit takes usually 5 minutes until already received information faded away..."),
                              300
                            );
       }
@@ -376,6 +524,31 @@ boolean ApplyNetworkPrintingSettings()
   // Client-only:
   if( `client_only_radio_button == current_radio_button )
   { string server_name = deletechars( tolower( current_server_name_input_value ), " " );
+    if( "" == server_name
+        || "none" == server_name
+      )
+    { something_has_changed = true;
+      // The client-only server name is the empty string or to 'none'.
+      // This should disable the client-only setup in any case
+      // but no local cupsd is started here because the selected config
+      // is still a "client-only" config (but an already running local cupsd
+      // is also not stopped):
+      if( ! Printerlib::ExecuteBashCommand( Printerlib::yast_bin_dir + "cups_client_only none" ) )
+      { Popup::ErrorDetails( // Popup::ErrorDetails header:
+                             _("Failed to remove the 'ServerName' entry in /etc/cups/client.conf"),
+                             Printerlib::result["stderr"]:""
+                           );
+        return false;
+      }
+      return true;
+    }
+    // A non-accessible client-only server leads to an endless sequence
+    // of weird further behaviour of the module so that such a server name
+    // is simply not accepted. Do not show additional error messages here
+    // because TestClientOnlyServer() shows sufficient popups to the user:
+    if( ! TestClientOnlyServer( server_name ) )
+    { return false;
+    }
     if( `browsing_off_radio_button == initial_radio_button
         || `browsing_on_radio_button == initial_radio_button
       )
@@ -411,44 +584,28 @@ boolean ApplyNetworkPrintingSettings()
     { // Nothing has changed:
       return true;
     }
-    if( "" != server_name
-        && "none" != server_name
+    // Test for "localhost/"127.0.0.1" first and make a local cupsd accessible
+    // because the "cups_client_only" tool which sets the ServerName in client.conf
+    // tests in any case if the cupsd on ServerName is accessible:
+    if( "localhost" == server_name
+        || "127.0" == substring( server_name, 0, 5 )
       )
-    { // Test for "localhost/"127.0.0.1" first and make a local cupsd accessible
-      // because the "cups_client_only" tool which sets the ServerName in client.conf
-      // tests in any case if the cupsd on ServerName is accessible:
-      if( "localhost" == server_name
-          || "127.0" == substring( server_name, 0, 5 )
-        )
-      { // The user has entered "localhost" or "127.0.0.1" as server name
-        // which makes it effectively a config with a local running cupsd.
-        // If a local cupsd is already accessible, do nothing, otherwise start it:
-        if( ! Printerlib::GetAndSetCupsdStatus( "" ) )
-        { if( ! Printerlib::GetAndSetCupsdStatus( "start" ) )
-          { return false;
-          }
+    { // The user has entered "localhost" or "127.0.0.1" as server name
+      // which makes it effectively a config with a local running cupsd.
+      // If a local cupsd is already accessible, do nothing, otherwise start it:
+      if( ! Printerlib::GetAndSetCupsdStatus( "" ) )
+      { if( ! Printerlib::GetAndSetCupsdStatus( "start" ) )
+        { return false;
         }
       }
-      if( ! Printerlib::ExecuteBashCommand( Printerlib::yast_bin_dir + "cups_client_only " + server_name ) )
-      { Popup::ErrorDetails( // Popup::ErrorDetails header
-                             // where %1 will be replaced by the server name.
-                             sformat( _("Failed to set 'ServerName %1' in /etc/cups/client.conf"), server_name ),
-                             Printerlib::result["stderr"]:""
-                           );
-        return false;
-      }
     }
-    else
-    { // The client-only server name was changed to the empty string or to 'none'.
-      // This should disable the client-only setup but not start the local cupsd
-      // because the selected config is still a "client-only" config:
-      if( ! Printerlib::ExecuteBashCommand( Printerlib::yast_bin_dir + "cups_client_only none" ) )
-      { Popup::ErrorDetails( // Popup::ErrorDetails header:
-                             _("Failed to remove the 'ServerName' entry in /etc/cups/client.conf"),
-                             Printerlib::result["stderr"]:""
-                           );
-        return false;
-      }
+    if( ! Printerlib::ExecuteBashCommand( Printerlib::yast_bin_dir + "cups_client_only " + server_name ) )
+    { Popup::ErrorDetails( // Popup::ErrorDetails header
+                           // where %1 will be replaced by the server name.
+                           sformat( _("Failed to set 'ServerName %1' in /etc/cups/client.conf"), server_name ),
+                           Printerlib::result["stderr"]:""
+                         );
+      return false;
     }
   }
   // Exit successfully by default and as fallback:
@@ -592,49 +749,15 @@ symbol handleNetworkPrinting( string key, map event )
     }
   }
   if( "Activated" == event["EventReason"]:"" )
-  { if( `test_client_conf_server == event["ID"]:nil )
-    { string current_server_name_input_value = (string)UI::QueryWidget( `id(`client_conf_server_name_input), `Value );
-      string server_name = deletechars( tolower( current_server_name_input_value ), " " );
-      // The tests here are the same (except verbosity) as in the cups_client_only tool.
-      // Make ping less verbose to avoid too much technical data in its output:
-      if( ! Printerlib::ExecuteBashCommand( "ping -q -w 1 -c 1 " + server_name ) )
-      { Popup::ErrorDetails( // Popup::ErrorDetails header
-                             // where %1 will be replaced by the server name.
-                             sformat( _("The server '%1' does not respond to a 'ping' in the network"), server_name ),
-                             Printerlib::result["stderr"]:"" + "\n"
-                             + Printerlib::result["stdout"]:""
-                           );
-      }
-      else
-      { string first_test_result = Printerlib::result["stderr"]:"" + "\n" + Printerlib::result["stdout"]:"";
-        // Make netcat verbose, otherwise there would be no output at all
-        // but some output is needed for the Popup::MessageDetails below:
-        if( ! Printerlib::ExecuteBashCommand( "netcat -v -w 1 -z " + server_name + " 631" ) )
-        { Popup::ErrorDetails( // Popup::ErrorDetails header
-                               // where %1 will be replaced by the server name.
-                               sformat( _("The server '%1' is not accessible via port 631 (IPP/CUPS)"), server_name ),
-                               Printerlib::result["stderr"]:"" + "\n"
-                               + Printerlib::result["stdout"]:""
-                             );
-        }
-        else
-        { // When both tests passed, show positive feedback:
-          Popup::MessageDetails( // Popup::MessageDetails header
-                                 // where %1 will be replaced by the server name.
-                                 sformat( _("The server '%1' is accessible"), server_name ),
-                                 first_test_result + "\n===========================================================\n\n"
-                                 + Printerlib::result["stderr"]:"" + "\n"
-                                 + Printerlib::result["stdout"]:""
-                               );
-        }
-      }
-    }
-    if( `connection_wizard == event["ID"]:nil )
+  { if( `connection_wizard == event["ID"]:nil )
     { return `connection_wizard;
     }
+    if( `test_client_conf_server == event["ID"]:nil )
+    { string current_server_name_input_value = (string)UI::QueryWidget( `id(`client_conf_server_name_input), `Value );
+      // Ignore what TestClientOnlyServer() returns, it shows sufficient popups to the user:
+      TestClientOnlyServer( deletechars( tolower( current_server_name_input_value ), " " ) );
+    }
   }
-  y2internal("event %1", event);
-  y2milestone( "leaving handleNetworkPrinting" );
   return nil;
 }
 
