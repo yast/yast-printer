@@ -666,11 +666,11 @@ global string NewQueueName( string proposal )
   // what is actually allowed in CUPS but such queue names are
   // safe to work in whatever mixed printing system environment:
   proposal = filterchars( proposal, alnum_chars + "_" );
-  // Use a fallback queue name "queue_1" if the proposal is empty
+  // Use a fallback queue name "printer_1" if the proposal is empty
   // (or has become empty because of the above filterchars)
   // or if the proposal consists only of '_':
   if( "" == proposal || "" == deletechars( proposal, "_" ) )
-  { proposal = "queue_1";
+  { proposal = "printer_1";
   }
   // Remove leading '_' characters from the proposal.
   // For example if the proposal was initially something like "_foo"
@@ -680,9 +680,9 @@ global string NewQueueName( string proposal )
     proposal = substring( proposal, findfirstnotof( proposal, "_") );
   }
   // Make sure that the queue name starts with a letter,
-  // otherwise add a "queue_" prefix:
+  // otherwise add a "printer_" prefix:
   if( "" != deletechars( substring( proposal, 0, 1), letter_chars ) )
-  { proposal = "queue_" + proposal;
+  { proposal = "printer_" + proposal;
   }
   // Make sure that no queue with the name of the proposal already exists.
   // Otherwise add a sufficient high number at the end:
@@ -698,7 +698,7 @@ global string NewQueueName( string proposal )
                    if( issubstring( proposal, "_") )
                    { // Remove a trailing number or a plain trailing '_' from the proposal
                      // to avoid that multiple trailing numbers or multiple '_' are added
-                     // like "funprinter_1_1" or "queue__1":
+                     // like "funprinter_1_1" or "printer__1":
                      integer position = findlastof( proposal, "_" );
                      if( "" == deletechars( substring( proposal, position ), number_chars + "_" ) )
                      { // The value of position is the lenght of the substring
