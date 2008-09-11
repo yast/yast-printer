@@ -72,7 +72,7 @@ term widgetSharing =
                                             ),
                                        `VSpacing( 1 ),
                                        `Left( `Label( _("Via network interfaces specified below") )),
-                                       `Table( `header( _("Interface"),
+                                       `Table( `id(`interface_table), `header( _("Interface"),
                                                         _("Publish printers by default via this interface")
                                                       ),
                                                [ `item( `id(0), "eth0", "no" ),
@@ -86,7 +86,7 @@ term widgetSharing =
                                             ),
                                        `VSpacing( 1 ),
                                        `Left( `Label( _("For hosts / networks specified below") ) ),
-                                       `Table( `header( _("IP address"),
+                                       `Table( `id(`ip_table), `header( _("IP address"),
                                                         _("Publish printers by default for this address")
                                                       ),
                                                [ `item( `id(0), "192.168.100.1", "yes" ),
@@ -105,7 +105,21 @@ term widgetSharing =
                          `VSpacing( 1 )
                        );
 
-
+symbol handleSharing(string key, map event){
+ boolean share = (UI::QueryWidget(`deny_or_allow_remote_access, `CurrentButton)==`allow_remote_access_radio_button);
+ UI::ChangeWidget(`allow_local_network_access_check_box, `Enabled, share);
+ UI::ChangeWidget(`publish_to_local_network_check_box, `Enabled, share);
+ UI::ChangeWidget(`interface_table, `Enabled, share);
+ UI::ChangeWidget(`add_interface, `Enabled, share);
+ UI::ChangeWidget(`edit_interface, `Enabled, share);
+ UI::ChangeWidget(`delete_interface, `Enabled, share);
+ UI::ChangeWidget(`ip_table, `Enabled, share);
+ UI::ChangeWidget(`add_ip, `Enabled, share);
+ UI::ChangeWidget(`edit_ip, `Enabled, share);
+ UI::ChangeWidget(`delete_ip, `Enabled, share);
+y2internal("event %1", event);
+ return nil;
+}
 
 /* EOF */
 }
