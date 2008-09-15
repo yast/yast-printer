@@ -35,6 +35,7 @@ import "Label";
 import "Wizard";
 import "Printer";
 import "Popup";
+import "NetworkInterfaces";
 
 include "printer/helps.ycp";
 
@@ -105,7 +106,160 @@ term widgetSharing =
                          `VSpacing( 1 )
                        );
 
+map showInterfacePopup(string device, boolean publish){
+ map result = $[];
+ list<string> devices = NetworkInterfaces::List("");
+         UI::OpenDialog( `VBox(
+	    `CheckBox(`id(`publish), _("Publish printers by default via "), publish),
+            // translators: combo box label for list of configured IPs
+            `ComboBox( `id(`device), `opt( `editable ), _("Network &Devices:"), devices ),
+            `VSpacing(),
+            `HBox(
+                `PushButton( `id(`ok), Label::OKButton() ),
+                `PushButton( `id(`cancel), Label::CancelButton() )
+             )
+        ));
+ if(device!="") UI::ChangeWidget(`device, `Value, device);
+ while(true){
+  any ret = UI::UserInput();
+  if (ret==`cancel){
+   result=nil;
+   break;
+  }
+  if (ret==`ok){
+   publish = (boolean)UI::QueryWidget(`publish, `Value);
+   device = (string)UI::QueryWidget(`device, `Value);
+   result["device"]=device;
+   result["publish"]=publish ? "yes" : "no";
+   break;
+  }
+ }
+	UI::CloseDialog();
+ return result;
+}
+
+map showIPPopup(string device, boolean publish){
+ map result = $[];
+         UI::OpenDialog( `VBox(
+	    `CheckBox(`id(`publish), _("Publish printers by default via "), publish),
+            // translators: input field label for list of configured IPs
+            `InputField( `id(`device), _("Network &Address:"), device ),
+            `VSpacing(),
+            `HBox(
+                `PushButton( `id(`ok), Label::OKButton() ),
+                `PushButton( `id(`cancel), Label::CancelButton() )
+             )
+        ));
+ if(device!="") UI::ChangeWidget(`device, `Value, device);
+ while(true){
+  any ret = UI::UserInput();
+  if (ret==`cancel){
+   result=nil;
+   break;
+  }
+  if (ret==`ok){
+   publish = (boolean)UI::QueryWidget(`publish, `Value);
+   device = (string)UI::QueryWidget(`device, `Value);
+   result["device"]=device;
+   result["publish"]=publish ? "yes" : "no";
+   break;
+  }
+ }
+	UI::CloseDialog();
+ return result;
+}
+
 symbol handleSharing(string key, map event){
+
+ if (event["EventReason"]:""=="Activated"){
+  y2milestone("button pressed %1", event);
+  switch(event["WidgetID"]:`nil){
+   integer current=-1;
+   map ret = nil;
+   case `add_interface	  :
+			ret = showInterfacePopup("", false);
+			if (ret!=nil){
+			 list items = (list)UI::QueryWidget(`interface_table, `Items);
+			 items=add(items, `item(`id(size(items)), ret["device"]:"", ret["publish"]:""));
+			 UI::ChangeWidget(`interface_table, `Items, items);
+			 UI::ChangeWidget(`interface_table, `CurrentItem, current);
+			}
+			break;
+   case `edit_interface	  :
+			current = (integer)UI::QueryWidget(`interface_table, `CurrentItem);
+			term this = (term)UI::QueryWidget(`interface_table, `Item(current));
+                        ret = showInterfacePopup((string)this[1]:"", (this[2]:"no"=="yes"));
+			if (ret!=nil){
+			 list items = [];
+			 foreach(term oneItem, (list<term>)UI::QueryWidget(`interface_table, `Items), {
+			  if (current != oneItem[0, 0]:-1){
+			   items = add(items, `item(`id(size(items)), oneItem[1]:"", oneItem[2]:""));
+			  } else {
+				y2milestone("Changing item %1", oneItem);
+				items = add(items, `item(`id(size(items)), ret["device"]:"", ret["publish"]:""));
+			  }
+			 });
+			UI::ChangeWidget(`interface_table, `Items, items);
+			UI::ChangeWidget(`interface_table, `CurrentItem, current);
+			}
+			break;
+   case `delete_interface :
+			current = (integer)UI::QueryWidget(`interface_table, `CurrentItem);
+			if (current!=nil && current>-1){
+			 list items = [];
+			 foreach(term oneItem, (list<term>)UI::QueryWidget(`interface_table, `Items), {
+			  if (current != oneItem[0, 0]:-1){
+			   items = add(items, `item(`id(size(items)), oneItem[1]:"", oneItem[2]:""));
+			  } else y2milestone("Deleting item %1", oneItem);
+
+			 });
+			UI::ChangeWidget(`interface_table, `Items, items);
+			} else y2error("Unproper index for current item: %1", current);
+			break;
+   case `add_ip	  :
+			ret = showIPPopup("", false);
+			if (ret!=nil){
+			 list items = (list)UI::QueryWidget(`ip_table, `Items);
+			 items=add(items, `item(`id(size(items)), ret["device"]:"", ret["publish"]:""));
+			 UI::ChangeWidget(`ip_table, `Items, items);
+			 UI::ChangeWidget(`ip_table, `CurrentItem, current);
+			}
+			break;
+
+   case `edit_ip	  :
+			current = (integer)UI::QueryWidget(`ip_table, `CurrentItem);
+			term this2 = (term)UI::QueryWidget(`ip_table, `Item(current));
+                        ret = showIPPopup((string)this2[1]:"", (this2[2]:"no"=="yes"));
+			if (ret!=nil){
+			 list items = [];
+			 foreach(term oneItem, (list<term>)UI::QueryWidget(`ip_table, `Items), {
+			  if (current != oneItem[0, 0]:-1){
+			   items = add(items, `item(`id(size(items)), oneItem[1]:"", oneItem[2]:""));
+			  } else {
+				y2milestone("Changing item %1", oneItem);
+				items = add(items, `item(`id(size(items)), ret["device"]:"", ret["publish"]:""));
+			  }
+			 });
+			UI::ChangeWidget(`ip_table, `Items, items);
+			UI::ChangeWidget(`ip_table, `CurrentItem, current);
+			}
+			break;
+   case `delete_ip :
+			current = (integer)UI::QueryWidget(`ip_table, `CurrentItem);
+			if (current!=nil && current>-1){
+			 list items = [];
+			 foreach(term oneItem, (list<term>)UI::QueryWidget(`ip_table, `Items), {
+			  if (current != oneItem[0, 0]:-1){
+			   items = add(items, `item(`id(size(items)), oneItem[1]:"", oneItem[2]:""));
+			  } else y2milestone("Deleting item %1", oneItem);
+
+			 });
+			UI::ChangeWidget(`ip_table, `Items, items);
+			} else y2error("Unproper index for current item: %1", current);
+			break;
+  }
+ }
+
  boolean share = (UI::QueryWidget(`deny_or_allow_remote_access, `CurrentButton)==`allow_remote_access_radio_button);
  UI::ChangeWidget(`allow_local_network_access_check_box, `Enabled, share);
  UI::ChangeWidget(`publish_to_local_network_check_box, `Enabled, share);
@@ -117,7 +271,16 @@ symbol handleSharing(string key, map event){
  UI::ChangeWidget(`add_ip, `Enabled, share);
  UI::ChangeWidget(`edit_ip, `Enabled, share);
  UI::ChangeWidget(`delete_ip, `Enabled, share);
-y2internal("event %1", event);
+ if (share){
+  boolean interface_buttons=true;
+  boolean ip_buttons=true;
+  if (size((list)UI::QueryWidget(`interface_table, `Items))==0) interface_buttons=false;
+  UI::ChangeWidget(`edit_interface, `Enabled, interface_buttons);
+  UI::ChangeWidget(`delete_interface, `Enabled, interface_buttons);
+  if (size((list)UI::QueryWidget(`ip_table, `Items))==0) ip_buttons=false;
+  UI::ChangeWidget(`edit_ip, `Enabled, ip_buttons);
+  UI::ChangeWidget(`delete_ip, `Enabled, ip_buttons);
+ }
  return nil;
 }
 
