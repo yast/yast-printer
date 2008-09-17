@@ -10,31 +10,58 @@ export LANG="POSIX"
 umask 022
 
 MY_NAME=${0##*/}
+CUPSDCONF="/etc/cups/cupsd.conf"
 
 KEY="$1"
 if test -z "$KEY"
-then echo -en "\nUsage:\n$MY_NAME keyword [ new value ]\n" 1>&2
+then echo "Read and write $CUPSDCONF (but does not restart cupsd)." 1>&2
+     echo "Usage:" 1>&2
+     echo "$MY_NAME keyword [ new value ]" 1>&2
      echo "Without a new value, the current value is reported." 1>&2
      echo "Supported keywords and possible new values are:" 1>&2
      echo "Browsing [ On | Off ]" 1>&2
-     echo "BrowseAllow [ all | none | @LOCAL | host-address | network-address/netmask ]" 1>&2
-     echo "E.g.: BrowseAllow '@LOCAL 192.168.100.1 192.168.200.0/255.255.255.0'" 1>&2
-     echo "Listen [ all | localhost | network-address ]" 1>&2
-     echo "E.g.: Listen '192.168.100.0 192.168.200.0' (localhost is added automatically)" 1>&2
-     echo "      Listen 'localhost' (to have only 'Listen 127.0.0.1:631')" 1>&2
+     echo "      (Browsing On should be set when BrowseAllow or BrowseAddress is not 'none')" 1>&2
+     echo "BrowseAllow [ all | @LOCAL | host-address | network-address/netmask ] | BrowseAllow none" 1>&2
+     echo "e.g.: BrowseAllow '@LOCAL 192.168.100.1 192.168.200.0/255.255.255.0'" 1>&2
+     echo "      BrowseAllow none (to deny all incomming browse packets)" 1>&2
+     echo "Listen [ all | network-address ] | Listen localhost" 1>&2
+     echo "e.g.: Listen '192.168.100.0 192.168.200.0' (localhost is added automatically)" 1>&2
+     echo "      Listen localhost (to have only 'Listen 127.0.0.1:631')" 1>&2
+     echo "Allow [ all | @LOCAL | @IF(name) | host-address | network-address/netmask ] | Allow none" 1>&2
+     echo "e.g.: Allow '@LOCAL @IF(eth1) 192.168.100.1 192.168.200.0/255.255.255.0'" 1>&2
+     echo "      (to allow access via the root location '<Location />')" 1>&2
+     echo "      Allow none (to have only 'Allow 127.0.0.2', localhost is allowed in any case)" 1>&2
+     echo "BrowseAddress [ @LOCAL | @IF(name) | host-address | broadcast-address ] | BrowseAddress none" 1>&2
+     echo "e.g.: BrowseAddress '@LOCAL @IF(eth1) 192.168.100.1 192.168.200.255'" 1>&2
+     echo "      BrowseAddress none (to send no browse packets, i.e. no BrowseAddress line)" 1>&2
      echo "There is a strict syntax for keywords and values:" 1>&2
      echo "Case matters." 1>&2
      echo "Multiple values for a keyword must be separated by space." 1>&2
      exit 1
 fi
 
-# Remove duplicates (ignore case) and remove duplicate, leading and trailing spaces:
-VALUE="$( for V in $2 ; do echo $V ; done | sort -b -f -u | tr -s '[:space:]' ' ' | sed -e 's/ *$//' )"
-
-CUPSDCONF="/etc/cups/cupsd.conf"
 if ! test -r $CUPSDCONF -a -w $CUPSDCONF
 then echo "Cannot read or write $CUPSDCONF." 1>&2
      exit 2
+fi
+
+# Remove duplicates (ignore case) and remove duplicate, leading and trailing spaces:
+VALUE="$( for V in $2 ; do echo $V ; done | sort -b -f -u | tr -s '[:space:]' ' ' | sed -e 's/ *$//' )"
+
+# Make a backup of /etc/cups/cupsd.conf if it would be changed:
+if test -n "$VALUE"
+then if rpm -V -f $CUPSDCONF | grep -q "^..5.*$CUPSDCONF\$"
+     then # The /etc/cups/cupsd.conf was already changed (RPM tells that the MD5 sum differs):
+          if ! cp -p $CUPSDCONF $CUPSDCONF.yast2save
+          then echo "Failed to backup $CUPSDCONF as $CUPSDCONF.yast2save" 1>&2
+          exit 3
+          fi
+     else # The /etc/cups/cupsd.conf content is the original from the RPM package:
+          if ! cp -p $CUPSDCONF $CUPSDCONF.yast2orig
+          then echo "Failed to backup $CUPSDCONF as $CUPSDCONF.yast2orig" 1>&2
+          exit 3
+          fi
+     fi
 fi
 
 # Function to deal with 'Browsing [On|Off]'
@@ -43,18 +70,19 @@ Browsing()
   then # If a value was specified, only 'On' or 'Off' (case sensitive) are allowed:
        if ! test "On" = "$VALUE" -o "Off" = "$VALUE"
        then echo "Only '$KEY [ On | Off ]' is supported." 1>&2
-            exit 4
+            exit 5
        fi
-       # Try to substitute an existing Browsing line (ignore case):
-       sed -i.yast2save -e "s/^.*$KEY.*/$KEY $VALUE/i" $CUPSDCONF
+       # Try to substitute an existing active Browsing line (ignore case).
+       # (If there is more than one active Browsing line it is a broken config file):
+       sed -i -e "s/^[[:space:]]*$KEY.*/$KEY $VALUE/i" $CUPSDCONF
        # There may exist no Browsing line:
        if ! grep -q "^$KEY $VALUE$" $CUPSDCONF
        then # Append a Browsing line below the last 'Brows' line (ignore case)
             # to have the new Browsing line at the matching place
             # but if no 'Brows' line exists, append at the end of the file:
-            LAST_BROWSE_LINE="$( sed -n -e '/Brows/I=' $CUPSDCONF | tail -n 1 )"
-            if test -n "$LAST_BROWSE_LINE"
-            then sed -i -e "${LAST_BROWSE_LINE}a$KEY $VALUE" $CUPSDCONF
+            LAST_BROWSE_LINE_NUMBER="$( sed -n -e '/Brows/I=' $CUPSDCONF | tail -n 1 )"
+            if test -n "$LAST_BROWSE_LINE_NUMBER"
+            then sed -i -e "${LAST_BROWSE_LINE_NUMBER}a$KEY $VALUE" $CUPSDCONF
             else echo -en "\n$KEY $VALUE\n\n" >>$CUPSDCONF
             fi
        fi
@@ -62,8 +90,9 @@ Browsing()
   # Report the resulting setting in any case:
   # The 'tr ... [:blank:]' makes sure that all active Browsing entries
   # are found if there is more than one which is a broken config.
+  # Remove leading spaces (to cut the right part).
   # Remove trailing spaces (needed for the test below).
-  RESULT="$( grep -i "^$KEY " $CUPSDCONF | tr -s '[:blank:]' ' ' | cut -s -d' ' -f2 | tr -s '\n' ' ' | sed -e 's/ *$//' )"
+  RESULT="$( grep -i "^[[:space:]]*$KEY[[:space:]]" $CUPSDCONF | tr -s '[:blank:]' ' ' | sed -e 's/^ *//' | cut -s -d ' ' -f2 | tr -s '\n' ' ' | sed -e 's/ *$//' )"
   echo -n "$RESULT"
   # For a nicer output on a terminal where stdout and stderr is mixed up,
   # output a '\n' on stderr to get subsequent stuff (e.g. the shell prompt
@@ -76,54 +105,64 @@ Browsing()
   fi
 }
 
-# Function to deal with 'BrowseAllow [ all | none | @LOCAL | host-address | network-address/netmask ]'
+# Function to deal with 'BrowseAllow [ all | @LOCAL | host-address | network-address/netmask ] | BrowseAllow none'
 BrowseAllow()
 { if test -n "$VALUE"
   then # If a value was specified, only 'all' or 'none' or '@LOCAL' (case sensitive)
        # or one or more IP-addresses are allowed:
-       for V in $VALUE
-       do if ! test "all" = "$V" -o "none" = "$V" -o "@LOCAL" = "$V"
-          then # Test if value matches to IP-address syntax:
-               if ! echo "$V" | egrep -q '^([0-9]{1,3}\.){3}[0-9]{1,3}(/([0-9]{1,2})|/(([0-9]{1,3}\.){3}[0-9]{1,3}))?$'
-               then echo "Only '$KEY [ all | none | @LOCAL | host-address | network-address/netmask ]' is supported." 1>&2
-                    exit 4
+       if ! test "none" = "$VALUE"
+       then for V in $VALUE
+            do if ! test "all" = "$V" -o "@LOCAL" = "$V"
+               then # Test if value matches to IP-address syntax:
+                    if ! echo "$V" | egrep -q '^([0-9]{1,3}\.){3}[0-9]{1,3}(/([0-9]{1,2})|/(([0-9]{1,3}\.){3}[0-9]{1,3}))?$'
+                    then echo "Only '$KEY [ all | @LOCAL | host-address | network-address/netmask ]' or '$KEY none' is supported." 1>&2
+                         exit 5
+                    fi
                fi
-          fi
-       done
+            done
+       fi
        # Set 'BrowseOrder allow,deny' to deny browse packets by default
        # and then allow them from certain sources via BrowseAllow entries
        # and finally deny from certain sources via BrowseDeny entries.
-       # All existing BrowseOrder lines are removed (ignore case).
-       sed -i.yast2save -e '/^BrowseOrder.*/Id' $CUPSDCONF
+       # All existing active BrowseOrder lines are removed (ignore case).
+       sed -i -e '/^[[:space:]]*BrowseOrder.*/Id' $CUPSDCONF
        # Append the new BrowseOrder line below the last 'Brows' line (ignore case)
        # to have the new BrowseOrder line at the matching place
        # but if no 'Brows' line exists, append at the end of the file:
-       LAST_BROWSE_LINE="$( sed -n -e '/Brows/I=' $CUPSDCONF | tail -n 1 )"
-       if test -n "$LAST_BROWSE_LINE" 
-       then sed -i -e "${LAST_BROWSE_LINE}aBrowseOrder allow,deny" $CUPSDCONF
+       LAST_BROWSE_LINE_NUMBER="$( sed -n -e '/Brows/I=' $CUPSDCONF | tail -n 1 )"
+       if test -n "$LAST_BROWSE_LINE_NUMBER" 
+       then sed -i -e "${LAST_BROWSE_LINE_NUMBER}aBrowseOrder allow,deny" $CUPSDCONF
        else echo -en "\nBrowseOrder allow,deny\n\n" >>$CUPSDCONF
        fi
        # All existing active BrowseAllow lines are removed (ignore case).
        # Those lines can be removed because YaST supports BrowseAllow lines
-       # (YaST shows the BrowseAllow entries in the "printing via network" dialog)
-       # so that no BrowseAllow information is silently deleted:
-       sed -i -e '/^BrowseAllow.*/Id' $CUPSDCONF
-       # All existing active BrowseDeny lines are deactivated (ignore case).
+       # (YaST shows the BrowseAllow entries in the "printing via network" dialog):
+       sed -i -e '/^[[:space:]]*BrowseAllow.*/Id' $CUPSDCONF
+       # All active 'BrowseDeny all' lines are removed (ignore case).
+       # Such a line was added when the VALUE was "none", see below:
+       sed -i -e '/^[[:space:]]*BrowseDeny[[:space:]]*all/Id' $CUPSDCONF
+       # All remaining active BrowseDeny lines are deactivated (ignore case).
        # Those lines are not removed because YaST does not support BrowseDeny lines
        # so that a remove would silently delete BrowseDeny information:
-       sed -i -e 's/^\(BrowseDeny.*\)$/#\1/i' $CUPSDCONF
+       sed -i -e 's/^[[:space:]]*\(BrowseDeny.*\)$/#\1/i' $CUPSDCONF
        # Insert BrowseAllow lines before the BrowseOrder line
        # to have the new BrowseAllow lines at the matching place
        # and in the ordering of the values (needed for the test below):
-       for V in $VALUE
-       do sed -i -e "/^BrowseOrder /i$KEY from $V" $CUPSDCONF
-       done
+       if ! test "none" = "$VALUE"
+       then for V in $VALUE
+            do sed -i -e "/^BrowseOrder /i$KEY $V" $CUPSDCONF
+            done
+       else # The 'BrowseOrder allow,deny' line denies browse packets by default
+            # to be 100% on the safe side have explicite 'BrowseAllow none' and 'BrowseDeny all' lines too:
+            sed -i -e "/^BrowseOrder /aBrowseAllow none\nBrowseDeny all" $CUPSDCONF
+       fi
   fi
   # Report the resulting setting in any case:
   # The 'tr ... [:blank:]' makes sure that all active BrowseAllow entries
   # are found if there is more than one which is allowed.
+  # Remove leading spaces (to cut the right part).
   # Remove trailing spaces (needed for the test below).
-  RESULT="$( grep -i "^$KEY " $CUPSDCONF | sed -e 's/from//I' | tr -s '[:blank:]' ' ' | cut -s -d' ' -f2 | tr -s '\n' ' ' | sed -e 's/ *$//' )"
+  RESULT="$( grep -i "^[[:space:]]*$KEY[[:space:]]" $CUPSDCONF | sed -e 's/from//I' | tr -s '[:blank:]' ' ' | sed -e 's/^ *//' | cut -s -d ' ' -f2 | tr -s '\n' ' ' | sed -e 's/ *$//' )"
   echo -n "$RESULT"
   # For a nicer output on a terminal where stdout and stderr is mixed up,
   # output a '\n' on stderr to get subsequent stuff (e.g. the shell prompt
@@ -131,12 +170,12 @@ BrowseAllow()
   echo 1>&2
   # Test if the result is the expected one if a value was specified:
   if test -n "$VALUE" -a "$RESULT" != "$VALUE"
-  then echo "Failed to set '$KEY from $VALUE' in $CUPSDCONF." 1>&2
+  then echo "Failed to set '$KEY $VALUE' in $CUPSDCONF." 1>&2
        exit 5
   fi
 }
 
-# Function to deal with 'Listen [ all | localhost | network-address ]'
+# Function to deal with 'Listen [ all | network-address ] | Listen localhost'
 Listen()
 { if test -n "$VALUE"
   then # If a value was specified, only 'all' or 'localhost' or one or more network-addresses are allowed:
@@ -146,36 +185,35 @@ Listen()
                then # Test if value matches to IP-address syntax:
                     if ! echo "$V" | egrep -q '^([0-9]{1,3}\.){3}[0-9]{1,3}$'
                     then echo "Only '$KEY [ all | network-address ]' or '$KEY localhost' is supported." 1>&2
-                         exit 4
+                         exit 5
                    fi
               fi
            done
        fi
        # Determine if it listens on the domain socket:
-       LISTEN_DOMAIN_SOCKET_LINE="$( grep -i '^Listen.*/cups.sock' $CUPSDCONF | head -n 1 )"
+       LISTEN_DOMAIN_SOCKET_LINE_CONTENT="$( grep -i '^[[:space:]]*Listen.*/cups.sock' $CUPSDCONF | head -n 1 )"
        # All existing active Port lines are deactivated (ignore case).
        # Those lines are not removed because YaST does not support Port lines
        # so that a remove would silently delete Port information:
-       sed -i.yast2save -e 's/^\(Port.*\)$/#\1/i' $CUPSDCONF
+       sed -i -e 's/^[[:space:]]*\(Port.*\)$/#\1/i' $CUPSDCONF
        # Determine the first 'Listen' line (ignore case):
-       FIRST_LISTEN_LINE="$( sed -n -e '/Listen/I=' $CUPSDCONF | head -n 1 )"
+       FIRST_LISTEN_LINE_NUMBER="$( sed -n -e '/Listen/I=' $CUPSDCONF | head -n 1 )"
        # All existing active Listen lines are removed (ignore case).
        # Those lines can be removed because YaST supports Listen lines
-       # (YaST shows the Listen entries in the "share printers" dialog)
-       # so that no Listen information is silently deleted:
-       sed -i -e '/^Listen.*/Id' $CUPSDCONF
+       # (YaST shows the Listen entries in the "share printers" dialog):
+       sed -i -e '/^[[:space:]]*Listen.*/Id' $CUPSDCONF
        # Append the mandatory 'Listen localhost' line (see http://www.cups.org/str.php?L2834
        # "What is *not* supported is a configuration where only a domain socket is enabled")
        # below the first 'Listen' line (ignore case)
        # to have the new Listen line at the matching place
        # but if no 'Listen' line exists, append at the end of the file:
-       if test -n "$FIRST_LISTEN_LINE"
-       then sed -i -e "${FIRST_LISTEN_LINE}aListen localhost:631" $CUPSDCONF
+       if test -n "$FIRST_LISTEN_LINE_NUMBER"
+       then sed -i -e "${FIRST_LISTEN_LINE_NUMBER}aListen localhost:631" $CUPSDCONF
        else echo -en "\nListen localhost:631\n\n" >>$CUPSDCONF
        fi
        # Append a Listen line for the domain socket (if such a line was there):
-       if test -n "$LISTEN_DOMAIN_SOCKET_LINE"
-       then sed -i -e "/^Listen localhost/a$LISTEN_DOMAIN_SOCKET_LINE" $CUPSDCONF
+       if test -n "$LISTEN_DOMAIN_SOCKET_LINE_CONTENT"
+       then sed -i -e "/^Listen localhost/a$LISTEN_DOMAIN_SOCKET_LINE_CONTENT" $CUPSDCONF
        fi
        # Insert Listen lines before the 'Listen localhost' line
        # to have the new Listen lines at the matching place
@@ -192,8 +230,9 @@ Listen()
   # Report the resulting setting in any case:
   # The 'tr ... [:blank:]' makes sure that all active Listen entries
   # are found if there is more than one which is allowed.
+  # Remove leading spaces (to cut the right part).
   # Remove trailing spaces (needed for the test below).
-  RESULT="$( grep -i "^$KEY " $CUPSDCONF | sed -e 's/:631//' -e 's/\*/all/' | tr -s '[:blank:]' ' ' | cut -s -d' ' -f2 | tr -s '\n' ' ' | sed -e 's/ *$//' )"
+  RESULT="$( grep -i "^[[:space:]]*$KEY[[:space:]]" $CUPSDCONF | sed -e 's/:631//' -e 's/\*/all/' | tr -s '[:blank:]' ' ' | sed -e 's/^ *//' | cut -s -d ' ' -f2 | tr -s '\n' ' ' | sed -e 's/ *$//' )"
   echo -n "$RESULT"
   # For a nicer output on a terminal where stdout and stderr is mixed up,
   # output a '\n' on stderr to get subsequent stuff (e.g. the shell prompt
@@ -212,12 +251,143 @@ Listen()
   fi
 }
 
+# Function to deal with 'Allow [ all | @LOCAL | @IF(name) | host-address | network-address/netmask ] | Allow none'
+Allow()
+{ if test -n "$VALUE"
+  then # If a value was specified, only 'all' or 'none' or '@LOCAL' (case sensitive)
+       # or '@IF(name)' or one or more IP-addresses are allowed:
+       if ! test "none" = "$VALUE"
+       then for V in $VALUE
+            do if ! test "all" = "$V" -o "@LOCAL" = "$V"
+               then # Test if value matches to @IF(name) syntax:
+                    if ! echo "$V" | egrep -q '^@IF\([^)]*\)$'
+                    then # Test if value matches to IP-address syntax:
+                         if ! echo "$V" | egrep -q '^([0-9]{1,3}\.){3}[0-9]{1,3}(/([0-9]{1,2})|/(([0-9]{1,3}\.){3}[0-9]{1,3}))?$'
+                         then echo "Only '$KEY [ all | @LOCAL | @IF(name) | host-address | network-address/netmask ]' or '$KEY none' is supported." 1>&2
+                              exit 5
+                         fi
+                    fi
+               fi
+            done
+       fi
+       # Determine where the (first) root location starts (ignore case and ignore spaces):
+       ROOT_LOCATION_LINE_NUMBER="$( sed -n -e '/[[:space:]]*<[[:space:]]*Location[[:space:]]*\/[[:space:]]*>/I=' $CUPSDCONF | head -n 1 )"
+       # Remove all root locations (ignore case and ignore spaces).
+       # (If there is more than one root location it is a broken config file).
+       # This deletion would remove Deny information and whatever Limit sub-sections
+       # but on the other hand it makes sure to have a clean root location:
+       sed -i -e '/[[:space:]]*<[[:space:]]*Location[[:space:]]*\/[[:space:]]*>/I,/[[:space:]]*<[[:space:]]*\/[[:space:]]*Location[[:space:]]*>/Id' $CUPSDCONF
+       # Insert a new default root location (what we have in our cups RPM by default).
+       # Set 'Order allow,deny' in the root location to deny packets by default
+       # and then allow them from certain sources via Allow entries
+       # and finally deny from certain sources via Deny entries.
+       # but if no root location was there, append at the end of the file:
+       if test -n "$ROOT_LOCATION_LINE_NUMBER"
+       then sed -i -e "${ROOT_LOCATION_LINE_NUMBER}i<Location />\nOrder allow,deny\nAllow 127.0.0.2\n</Location>" $CUPSDCONF
+       else echo -en "\n<Location />\nOrder allow,deny\nAllow 127.0.0.2\n</Location>\n\n" >>$CUPSDCONF
+       fi
+       # Determine (again) where the new root location starts (exact match):
+       ROOT_LOCATION_LINE_NUMBER="$( sed -n -e '/<Location \/>/=' $CUPSDCONF | head -n 1 )"
+       # Append Allow lines after the '<Location />' line
+       # to have the new Allow lines at the matching place
+       # but invert the ordering of the values to get the lines
+       # in the original ordering of the values (needed for the test below):
+       if ! test "none" = "$VALUE"
+       then for V in $( echo "$VALUE" | tac -s ' ' )
+            do sed -i -e "${ROOT_LOCATION_LINE_NUMBER}a$KEY $V" $CUPSDCONF
+            done
+       else # The 'Order allow,deny' line denies packets by default
+            # to be 100% on the safe side have explicite 'Allow none' and 'Deny all' lines too:
+            sed -i -e "${ROOT_LOCATION_LINE_NUMBER}aDeny all\nAllow none" $CUPSDCONF
+       fi
+  fi
+  # Report the resulting setting in any case:
+  # The 'tr ... [:blank:]' makes sure that all active Allow entries
+  # are found if there is more than one which is allowed.
+  # Remove leading spaces (to cut the right part).
+  # Remove trailing spaces (needed for the test below).
+  RESULT="$( grep -i "^[[:space:]]*$KEY[[:space:]]" $CUPSDCONF | egrep -v '127.0.0.2' | sed -e 's/from//I' | tr -s '[:blank:]' ' ' | sed -e 's/^ *//' | cut -s -d ' ' -f2 | tr -s '\n' ' ' | sed -e 's/ *$//' )"
+  echo -n "$RESULT"
+  # For a nicer output on a terminal where stdout and stderr is mixed up,
+  # output a '\n' on stderr to get subsequent stuff (e.g. the shell prompt
+  # or an error message because of a failed test below) on a new line:
+  echo 1>&2
+  # Test if the result is the expected one if a value was specified:
+  if test -n "$VALUE" -a "$RESULT" != "$VALUE"
+  then echo "Failed to set '$KEY $VALUE' in $CUPSDCONF." 1>&2
+       exit 5
+  fi
+}
+
+# Function to deal with 'BrowseAddress [ @LOCAL | @IF(name) | host-address | broadcast-address ] | BrowseAddress none'
+BrowseAddress()
+{ if test -n "$VALUE"
+  then # If a value was specified, only 'none' (case sensitive)
+       # or '@IF(name)' or one or more IP-addresses are allowed:
+       if ! test "none" = "$VALUE"
+       then for V in $VALUE
+            do if ! test "@LOCAL" = "$V"
+               then # Test if value matches to @IF(name) syntax:
+                    if ! echo "$V" | egrep -q '^@IF\([^)]*\)$'
+                    then # Test if value matches to IP-address syntax:
+                         if ! echo "$V" | egrep -q '^([0-9]{1,3}\.){3}[0-9]{1,3}$'
+                         then echo "Only '$KEY [ @LOCAL | @IF(name) | host-address | broadcast-address ]' or '$KEY none' is supported." 1>&2
+                              exit 5
+                         fi
+                    fi
+               fi
+            done
+       fi
+       # All existing active BrowseAddress lines are removed (ignore case).
+       # Those lines can be removed because YaST supports BrowseAddress lines
+       # (YaST shows BrowseAddress entries in the "share printers" dialog):
+       sed -i -e '/^[[:space:]]*BrowseAddress.*/Id' $CUPSDCONF
+       if ! test "none" = "$VALUE"
+       then # Append the new BrowseAddress lines below the last 'Brows' line (ignore case)
+            # to have the new BrowseAddress lines at the matching place
+            # but if no 'Brows' line exists, append at the end of the file.
+            # Invert the ordering of the values to get the lines
+            # in the original ordering of the values (needed for the test below):
+            LAST_BROWSE_LINE_NUMBER="$( sed -n -e '/Brows/I=' $CUPSDCONF | tail -n 1 )"
+            for V in $( echo "$VALUE" | tac -s ' ' )
+            do if test -n "$LAST_BROWSE_LINE_NUMBER"
+               then sed -i -e "${LAST_BROWSE_LINE_NUMBER}a$KEY $V" $CUPSDCONF
+               else echo -en "\n$KEY $V\n" >>$CUPSDCONF
+               fi
+            done
+       fi
+  fi
+  # Report the resulting setting in any case:
+  # The 'tr ... [:blank:]' makes sure that all active BrowseAddress entries
+  # are found if there is more than one which is allowed.
+  # Remove leading spaces (to cut the right part).
+  # Remove trailing spaces (needed for the test below).
+  RESULT="$( grep -i "^[[:space:]]*$KEY[[:space:]]" $CUPSDCONF | tr -s '[:blank:]' ' ' | sed -e 's/^ *//' | cut -s -d ' ' -f2 | tr -s '\n' ' ' | sed -e 's/ *$//' )"
+  echo -n "$RESULT"
+  # For a nicer output on a terminal where stdout and stderr is mixed up,
+  # output a '\n' on stderr to get subsequent stuff (e.g. the shell prompt
+  # or an error message because of a failed test below) on a new line:
+  echo 1>&2
+  # Test if the result is the expected one if a value was specified:
+  if test -n "$VALUE"
+  then if test "none" = "$VALUE"
+       then RESULT="$( grep -q -i '^[[:space:]]BrowseAddress' $CUPSDCONF || echo -n 'none' )"
+       fi
+       if test "$RESULT" != "$VALUE"
+       then echo "Failed to set '$KEY $VALUE' in $CUPSDCONF." 1>&2
+            exit 5
+       fi
+  fi
+}
+
 case "$KEY" in
      Browsing) Browsing;;
      BrowseAllow) BrowseAllow;;
      Listen) Listen;;
+     Allow) Allow;;
+     BrowseAddress) BrowseAddress;;
      *) echo "Ignoring keyword '$KEY'" 1>&2
-        exit 3 ;;
+        exit 4 ;;
 esac
 
 exit 0
