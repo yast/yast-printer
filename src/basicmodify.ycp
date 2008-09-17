@@ -54,6 +54,14 @@ any BasicModifyDialog()
   if( "yes" == Printer::queues[Printer::selected_queues_index,"default"]:"" )
   { is_default = true;
   }
+  boolean accepting_jobs = true;
+  if( "yes" == Printer::queues[Printer::selected_queues_index,"rejecting"]:"" )
+  { accepting_jobs = false;
+  }
+  boolean printing_enabled = true;
+  if( "yes" == Printer::queues[Printer::selected_queues_index,"disabled"]:"" )
+  { printing_enabled = false;
+  }
   // After the "Modify" text the actual queue name is appended
   // so that the result is e.g. "Modify funprinter1".
   // The actual queue name is a system value which cannot be translated.
@@ -354,7 +362,7 @@ any BasicModifyDialog()
                         _("Descri&ption"),
                         description
                       ),
-                      `HSpacing( 2 ),
+                      `HSpacing( 1 ),
                       `TextEntry
                       ( `id(`location_input),
                         `opt(`hstretch),
@@ -362,12 +370,24 @@ any BasicModifyDialog()
                         _("&Location"),
                         location
                       ),
-                      `HSpacing( 2 ),
+                      `HSpacing( 1 ),
                       `CheckBox
                       ( `id(`set_as_default_checkbox),
                         // CheckBox to set a local print queues to be the default queue:
-                        _("Set as &Default"),
+                        _("Is &Default"),
                         is_default
+                      ),
+                      `CheckBox
+                      ( `id(`set_accept_jobs_checkbox),
+                        // CheckBox to set a local print queues to be the default queue:
+                        _("Accept &Jobs"),
+                        accepting_jobs
+                      ),
+                      `CheckBox
+                      ( `id(`set_enable_printing_checkbox),
+                        // CheckBox to set a local print queues to be the default queue:
+                        _("Enable &Printing"),
+                        printing_enabled
                       )
                     )
                   );
@@ -445,10 +465,10 @@ any BasicModifyDialog()
         { // Currently it is not possible to unset from a queue to be the default queue,
           // see http://www.cups.org/newsgroups.php?gcups.general+v:31874
           // All one can do is set up a dummy queue, make it the default, and remove it.
-          // Here I assume blindly that no queue "qqqqqqqqqqqqqqqqqqqq" exists.
-          commandline = commandline + " ; /usr/sbin/lpadmin -h localhost -p qqqqqqqqqqqqqqqqqqqq -v file:/dev/null"
-                                    + " ; /usr/sbin/lpadmin -h localhost -d qqqqqqqqqqqqqqqqqqqq"
-                                    + " ; /usr/sbin/lpadmin -h localhost -x qqqqqqqqqqqqqqqqqqqq";
+          // Here I assume blindly that no queue "yast2unsetdefaultqueue" exists.
+          commandline = commandline + " ; /usr/sbin/lpadmin -h localhost -p yast2unsetdefaultqueue -v file:/dev/null -o printer-is-shared=false"
+                                    + " ; /usr/sbin/lpadmin -h localhost -d yast2unsetdefaultqueue"
+                                    + " ; /usr/sbin/lpadmin -h localhost -x yast2unsetdefaultqueue";
         }
       }
       if( something_has_changed )
