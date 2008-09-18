@@ -1,80 +1,285 @@
-/* ------------------------------------------------------------------------------
- * Copyright (c) 2006 Novell, Inc. All Rights Reserved.
- *
- *
- * This program is free software; you can redistribute it and/or modify it under
- * the terms of version 2 of the GNU General Public License as published by the
- * Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful, but WITHOUT
- * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
- * FOR A PARTICULAR PURPOSE.  See the GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License along with
- * this program; if not, contact Novell, Inc.
- *
- * To contact Novell about this file by physical or electronic mail, you may find
- * current contact information at www.novell.com.
- * ------------------------------------------------------------------------------
- */
-
-/**
- * File:        include/printer/connectionwizard.ycp
- * Package:     Configuration of printer
- * Summary:     Connection wizard dialog definition
- * Authors:     Johannes Meixner <jsmeix@suse.de>
- *
- * $Id: connectionwizard.ycp 27914 2006-02-13 14:32:08Z locilka $
- */
-
 {
 
-textdomain "printer";
-
+textdomain "test";
 import "Label";
-import "Wizard";
 import "Printer";
-import "Popup";
 
-include "printer/helps.ycp";
+term getContentFromBackend(string backend){
+ list items=[];
+ backend=sformat("%1:/", backend);
+ foreach(term row, (list<term>)Printer::ConnectionItems( "" ), {
+  if(backend==substring(row[2]:"", 0, size(backend))){
+   items=add(items, row);
+  }
+ });
 
-/**
- * ConnectionWizardDialog dialog
- * @return dialog result
- */
-any ConnectionWizardDialog()
-{ string caption = _("Connection Wizard");
-  string uri = "";
-  string model = "";
-  y2milestone( "Printer::connections: %1", Printer::connections );
-  // If the user has selected a connection which was created by the connection wizard,
-  // then show its values in the TextEntry fields to the user,
-  // otherwise fall back to the first one in Printer::connections because
-  // the first one in Printer::connections is what the user had entered last
-  // in the connection wizard (if he had entered something in the connection wizard)
-  // because a new connection is prepended to the Printer::connections list.
-  // In any case test if the connection was created by the connection wizard and
-  // if yes, show its values in the TextEntry fields to the user:
-  integer connection_index = Printer::selected_connections_index;
-  if( connection_index < 0 )
-  { connection_index = 0;
-  }
-  if( "ConnectionWizardDialog" == Printer::connections[connection_index,"class"]:"" )
-  { uri = Printer::connections[connection_index,"uri"]:"";
-    model = Printer::connections[connection_index,"model"]:"";
-  }
-  term contents = `VBox( `TextEntry( `id(`device_uri_input),
-                                     // Header of a TextEntry to enter the Connection/DeviceURI:
-                                     _("Provide a valid &connection (printer device URI)"),
-                                     uri
-                                   ),
-                         `TextEntry( `id(`model_name_input),
-                                     // Header of a TextEntry to enter a printer model name:
-                                     _("Manufacturer and/or &model name (optionally to find a matching driver)"),
-                                     model
-                                   )
-                       );
-  Wizard::SetContentsButtons( caption,
+ term content = `VBox(
+        `Table
+        ( `id(`connection_selection),
+          // By default there is no UserInput()
+          // if only something was selected in the Table
+          // (without clicking additionally a button)
+          // but the notify and immediate options
+          // forces UserInput() in this case:
+          `opt(`notify, `immediate),
+          // Headers of a Table with a list of printer connections:
+          `header
+          ( // Header of a Table column with a list of printer connections.
+            // Printer model name:
+            _("Model"),
+            // Header of a Table column with a list of printer connections.
+            // Connection of the printer (e.g. via USB or via parallel port):
+            _("Connection"),
+            // Header of a Table column with a list of printer connections.
+            // Additional description of the printer or its particular connection:
+            _("Description")
+          ),
+	  items
+         ),
+	 `HBox(
+				//TRANSLATORS: Button to test remote printer machine
+		`PushButton(`id(`test), _("&Test Connection")),
+				//TRANSLATORS: Button to add not detected printer queue
+		`PushButton(`id(`other), _("Other"))
+		)
+	);
+ return content;
+}
+
+term getNetworkContent(list<string>text){
+ if (size(text)!=3){
+  y2error("To create content for Network dialog it needs 3 strings : %1", text);
+  return nil;
+ }
+ term content=`VBox(
+        `HBox(
+		//TRANSLATORS: Text entry to fill IP or hostname of remote server
+	      `InputField(`id(`hostname), _("IP Address or Host Name")),
+		//TRANSLATORS: Label for menu to search for remote servers
+	      `MenuButton(_("Look Up"),
+	       [
+		`item(`id(`scan), text[0]:""),
+			//TRANSLATORS: Buttonto search for remote servers
+		`item(`id(`scan_all), _("Look Up for All Hosts"))
+	       ]
+	       )
+	),
+    `InputField(`id(`port), text[1]:"", text[2]:""),
+	//TRANSLATORS: Button to test remote printer machine
+        `PushButton(`id(`test), _("&Test Connection"))
+  );
+ return content;
+}
+
+void changeSettingsDialog(symbol selected){
+ term content=nil;
+ switch(selected){
+ // directly connected
+  case(`parallel):
+	content = getContentFromBackend("parallel");
+	break;
+  case(`usb):
+	content = getContentFromBackend("usb");
+	break;
+  case(`serial):
+	content = getContentFromBackend("serial");
+	break;
+  case(`infra):
+	content = getContentFromBackend("infra");
+	break;
+  case(`bluetooth):
+	content = getContentFromBackend("bluetooth");
+	break;
+  case(`scsi):
+	content = getContentFromBackend("scsi");
+	break;
+  case(`hplip):
+	content = getContentFromBackend("hp");
+	break;
+ // network printer
+  case(`tcp):
+			//TRANSLATORS: List of input field labels, first for network scan button
+	content = getNetworkContent([_("Scan for Direct Socket Servers"), _("TCP Port Number"), "9100"]);
+	break;
+  case(`lpd):
+	//TRANSLATORS: List of input field labels, first for network scan button, second for name of printer queue
+	content = getNetworkContent([_("Scan for LPD Servers"), _("Queue Name (see the printer's manual)"), "LPT1"]);
+	break;
+  case(`lpr):
+	//TRANSLATORS: List of input field labels, first for network scan button, second for name of printer queue
+	content = getNetworkContent([_("Scan for LPD Servers"), _("Queue Name (see the printer's manual)"), ""]);
+	break;
+  case(`ipp):
+	content=`VBox(
+			//TRANSLATORS: Input field label
+		`InputField(`id(`uri), _("URI (see the printer's manual)"), "ipp://ip-address:port-number/resource")
+	);
+	break;
+ // print via
+  case(`smb):
+       content=`VBox(
+		//TRANSLATORS: Text entry for remote server name
+        `InputField(`id(`hostname), _("Server (NetBIOS Host Name)")),
+		//TRANSLATORS: Text entry for printer name
+        `InputField(`id(`printer), _("Printer (Share Name)")),
+		//TRANSLATORS: Text entry for samba domain
+        `InputField(`id(`domain), _("Workgroup (Domain Name)")),
+	//TRANSLATORS: Frame label for authentication
+        `Frame(_("Authenticate As"), `VBox(
+	//TRANSLATORS: Text entry for username (authentication)
+        `InputField(`id(`user), _("User")),
+	//TRANSLATORS: Text entry for password (authentication)
+        `Password(`id(`pass), _("&Password"))
+        )),
+	//TRANSLATORS: Button to test remote printer machine
+        `PushButton(`id(`test), _("&Test Connection"))
+       );
+	break;
+  case(`cups):
+	content=`VBox(
+        `HBox(
+		//TRANSLATORS: Text entry for IP or hostname of remote server
+	      `InputField(`id(`hostname), _("IP Address or Host Name")),
+		//TRANSLATORS: Label for menu to search for remote servers
+	      `MenuButton(_("Look Up"),
+	       [
+		`item(`id(`scan_ipp), _("Scan for IPP Servers")),
+		`item(`id(`scan_broadcast), _("Scan for IPP Broadcasts")),
+		`item(`id(`scan_all), _("Look Up for All Hosts"))
+	       ]
+	       )
+	     ),
+        `InputField(`id(`queue), _("Queue Name (see the printer's manual)")),
+	//TRANSLATORS: Button to test remote printer machine
+        `PushButton(`id(`test), _("&Test Connection"))
+	);
+	break;
+  case(`ipx):
+       content=`VBox(
+	//TRANSLATORS: Text entry for IP or hostname of remote server
+        `InputField(`id(`hostname), _("IP Address or Host Name")),
+	//TRANSLATORS: Text entry for name of remote printer queue
+        `InputField(`id(`queue), _("Queue Name (see the printer's manual)")),
+	//TRANSLATORS: Frame label for authentication
+        `Frame(_("Authenticate As"), `VBox(
+	//TRANSLATORS: Text entry for username (authentication)
+         `InputField(`id(`user), _("User")),
+	//TRANSLATORS: Text entry for password (authentication)
+         `Password(`id(`pass), _("&Password"))
+        )),
+	//TRANSLATORS: Button to test remote printer machine
+        `PushButton(`id(`test), _("&Test Connection"))
+       );
+	break;
+ // special
+  case(`uri):
+	content=`VBox(
+	//TRANSLATORS: Text entry for URI (Uniform Resource Identifier)
+	`InputField(`id(`uri), _("URI (Uniform Resource Identifier)"))
+	);
+	break;
+  case(`pipe):
+	content=`VBox(
+	//TRANSLATORS: Text entry for program name that will be called via pipe
+	`InputField(`id(`program), _("Program Name"))
+	);
+	break;
+  case(`beh):
+	content=`VBox(
+				//TRANSLATORS: Text entry for name of printer queue
+       `InputField(`id(`queue), _("Queue Name (for which 'beh' should be applied)")),
+				//TRANSLATORS: Check box
+       `CheckBox(`id(`beh_do_not_disable), _("Never Disable the Queue"), true),
+					//TRANSLATORS: Text entry
+         `InputField(`id(`beh_attempts), _("Number of Retries ('0' means infinite retries)"), "0"),
+					//TRANSLATORS: Text entry
+         `InputField(`id(`beh_delay), _("Delay in Seconds Between Two Retries"), "30")
+	);
+	break;
+  case(`directly):
+  case(`network):
+  case(`server):
+  case(`special):
+	content=`VBox();
+	break;
+  default:
+	y2error("Unknown selected item %1", selected);
+ }
+ UI::ReplaceWidget(`rp, content);
+}
+
+
+any ConnectionWizardDialog(){
+term contents =
+`VBox(
+ `HBox(
+  `VBox(
+			//TRANSLATORS: Label for tree widget description
+   `Tree(`id(`tree_selection), `opt(`notify), _("&Connection Type"),
+    [
+			//TRANSLATORS: Tree widget item
+     `item(`id(`directly), _("Directly Connected Device"), true,
+     [
+		//TRANSLATORS: Tree widget item
+      `item(`id(`parallel), _("Parallel Port")),
+		//TRANSLATORS: Tree widget item
+      `item(`id(`usb), _("USB Port")),
+		//TRANSLATORS: Tree widget item
+      `item(`id(`serial), _("Serial Port")),
+//      `item(`id(`infra), _("Infrared Port (IrDA)")),
+		//TRANSLATORS: Tree widget item
+      `item(`id(`bluetooth), _("Bluetooth")),
+		//TRANSLATORS: Tree widget item
+      `item(`id(`scsi), _("SCSI")),
+		//TRANSLATORS: Tree widget item
+      `item(`id(`hplip), _("HP Devices (HPLIP)"))
+     ]),
+		//TRANSLATORS: Tree widget item
+     `item(`id(`network), _("Access Network Printer or Printserver Box via"), true,
+     [
+		//TRANSLATORS: Tree widget item
+      `item(`id(`tcp), _("TCP Port (AppSocket/JetDirect)")),
+		//TRANSLATORS: Tree widget item
+      `item(`id(`lpd), _("Line Printer Daemon (LPD) Protocol")),
+		//TRANSLATORS: Tree widget item
+      `item(`id(`ipp), _("Internet Printing Protocol (IPP)"))
+     ]),
+		//TRANSLATORS: Tree widget item
+     `item(`id(`server), _("Print Via Print Server Machine"), true,
+     [
+		//TRANSLATORS: Tree widget item
+      `item(`id(`smb), _("Microsoft Windows/SAMBA (SMB/CIFS)")),
+		//TRANSLATORS: Tree widget item
+      `item(`id(`lpr), _("Traditional UNIX Server (LPR)")),
+//      `item(`id(`iprint), _("iPrint (Novell OES)")),
+		//TRANSLATORS: Tree widget item
+      `item(`id(`cups), _("CUPS Server")),
+		//TRANSLATORS: Tree widget item
+      `item(`id(`ipx), _("Novell Netware Print Server (IPX)"))
+     ]),
+		//TRANSLATORS: Tree widget item
+     `item(`id(`special), _("Special"), true,
+     [
+		//TRANSLATORS: Tree widget item
+      `item(`id(`uri), _("Specify Arbitrary Device URI")),
+		//TRANSLATORS: Tree widget item
+      `item(`id(`pipe), _("Send Print Data to Other Program (pipe)")),
+		//TRANSLATORS: Tree widget item
+      `item(`id(`beh), _("Daisy-chain Backend Error Handler (beh)"))
+     ])
+    ]
+   )
+  ),
+  `VBox(
+	//TRANSLATORS: Connection details widget
+   `Frame(_("Connection Settings"),
+     `ReplacePoint(`id(`rp), `VBox())
+    )
+  )
+ )
+);
+			//TRANSLATORS: Connection wizard header
+  Wizard::SetContentsButtons( _("Connection Wizard"),
                               contents,
                               HELPS["connection_wizard_dialog"]:"",
                               Label::BackButton(),
@@ -82,95 +287,18 @@ any ConnectionWizardDialog()
                               // (i.e. the lower right button which results `next as UI::UserInput):
                               Label::OKButton()
                             );
-  // Show a user information because the current implementation provides
-  // only very primitive functionality compared to what is should provide
-  // according to http://en.opensuse.org/YaST/Development/Printer_Enhancement
-  Popup::AnyMessage( // Header of a Popup::AnyMessage because of a work-in-progress dialog:
-                     _("Under Connstruction"),
-                     // Body of a Popup::AnyMessage because of a work-in-progress dialog:
-                     _("Currently this is is only a very basic 'placeholder'\nto have some dialog at all for the workflow.\nSee https://bugzilla.novell.com/show_bug.cgi?id=421192")
-                   );
-  any ret = nil;
-  while(true)
-  { ret = UI::UserInput();
-    if( ret == `abort || ret == `cancel || ret == `back ) break;
-    if( ret == `next )
-    { string device_uri = (string)UI::QueryWidget( `id(`device_uri_input), `Value);
-      if( "" == device_uri )
-      { Popup::AnyMessage( // Header of a Popup::AnyMessage when no Connection/DeviceURI was entered:
-                           _("No Connection"),
-                           // Body of a Popup::AnyMessage when no Connection/DeviceURI was entered:
-                           _("Enter a valid connection (printer device URI).")
-                         );
-        continue;
-      }
-      string model_name = (string)UI::QueryWidget( `id(`model_name_input), `Value);
-      if( device_uri != uri
-          || model_name != model
-        )
-      { if( uri == device_uri )
-        { // Because an empty device_uri string is not accepted, uri must be also non-empty which means
-          // that it is an already existing connection which was created by the connection wizard
-          // and then it is the first entry in the Printer::connections list because
-          // a non-empty uri is from the first entry in the Printer::connections list
-          // so that only the model name was changed:
-          Printer::connections[0,"model"] = model_name;
-        }
-        else
-        { // When the URI has changed, the new device_uri could already exist in Printer::connections
-          // but then it is not the first entry in the Printer::connections because
-          // the uri string is from the first entry in the Printer::connections list.
-          // To replace the existing entry, it is removed from Printer::connections
-          // and the new one is prepended to Printer::connections.
-          // This way this new entry is shown when the user runs the connection wizard again.
-          // Note that this remove-and-prepend procedure makes sure that there can be
-          // at most one entry with same uri which is created by the connection wizard but
-          // there can be entries with same uri which are not created by the connection wizard:
-          connection_index = -1;
-          foreach( map< string, string > connection_entry,
-                   Printer::connections,
-                   { // Set the connection_index to the index number of the current connection_entry:
-                     connection_index = connection_index + 1;
-                     // Make sure not to remove entries in Printer::connections with same uri
-                     // but which are not created by the connection wizard:
-                     if( device_uri == connection_entry["uri"]:""
-                         && "ConnectionWizardDialog" == connection_entry["class"]:""
-                       )
-                     { Printer::connections = remove( Printer::connections, connection_index );
-                       // Now the Printer::connections list was changed so that
-                       // it is safer not to do any further processing of this list.
-                       // Additionally invalidate Printer::selected_connections_index to be safe:
-                       Printer::selected_connections_index = -1;
-                       break;
-                     }
-                   }
-                 );
-          // The exact class string "ConnectionWizardDialog" is used in Printer::ConnectionItems
-          // to show also the connections which are created by the connection wizard to the user
-          // even if the connection_filter_string is "BasicAddDialog" or "MoreConnections".
-          // The exact info string "created by the connection wizard" is used in Printer::ConnectionItems
-          // to have the entries which are "created by the connection wizard" topmost
-          // in the list of connections which is shown to the user:
-          Printer::connections = prepend( Printer::connections,
-                                          $[ "uri":device_uri,
-                                             "model":model_name,
-                                             "deviceID":"",
-                                             "info":"created by the connection wizard",
-                                             "class":"ConnectionWizardDialog"
-                                           ]
-                                        );
-          // Invalidate Printer::selected_connections_index because Printer::connections has changed:
-          Printer::selected_connections_index = -1;
-        }
-      }
-      // Exit this dialog in any case:
-      break;
-    }
-    y2milestone( "Ignoring unexpected returncode in DriverOptionsDialog: %1", ret );
-    continue;
-  }
-  return ret;
-}
 
-/* EOF */
+
+//UI::OpenDialog(content);
+any ret = nil;
+while(ret!=`abort && ret!=`back && ret!=`next){
+ ret = UI::UserInput();
+ if (ret == `tree_selection) changeSettingsDialog( (symbol)UI::QueryWidget(`tree_selection, `Value) );
+ if (ret == `next){
+  y2milestone("Writing settings");
+ }
+}
+ return ret;
+//UI::CloseDialog();
+}
 }
