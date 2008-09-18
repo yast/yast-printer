@@ -295,17 +295,13 @@ any BasicModifyDialog()
                     ),
                     `VStretch(),
                     `VBox
-                    ( `Left
-                      ( `Label( // Caption for a printer driver selection:
-                                _("Driver")
-                              )
-                      ),
-                      `HBox
+                    ( `HBox
                       ( `ReplacePoint
                         ( `id(`driver_filter_input_replace_point),
                           `TextEntry
                           ( `id(`driver_filter_input),
-                            "",
+                            // Caption for a printer driver selection:
+                            _("Driver"),
                             driver_filter_input_text
                           )
                         ),
@@ -321,8 +317,7 @@ any BasicModifyDialog()
                           // Label of a PushButton to search a list for a search string
                           // and then show the search result:
                           _("&Show Matching Drivers")
-                        ),
-                        `HStretch()
+                        )
                       ),
                       `ReplacePoint
                       ( `id(`paper_choice_and_driver_options_replace_point),
@@ -354,40 +349,47 @@ any BasicModifyDialog()
                       )
                     ),
                     `VStretch(),
-                    `HBox
-                    ( `TextEntry
-                      ( `id(`description_input),
-                        `opt(`hstretch),
-                        // Label of a TextEntry for a short printer driver description (only one line):
-                        _("Descri&ption"),
-                        description
+                    `VBox
+                    ( `HBox
+                      ( `TextEntry
+                        ( `id(`description_input),
+                          `opt(`hstretch),
+                          // Label of a TextEntry for a short printer driver description (only one line):
+                          _("Descri&ption"),
+                          description
+                        ),
+                        `HSpacing( 2 ),
+                        `TextEntry
+                        ( `id(`location_input),
+                          `opt(`hstretch),
+                          // Label of a TextEntry for printer location string:
+                          _("&Location"),
+                          location
+                        )
                       ),
-                      `HSpacing( 1 ),
-                      `TextEntry
-                      ( `id(`location_input),
-                        `opt(`hstretch),
-                        // Label of a TextEntry for printer location string:
-                        _("&Location"),
-                        location
-                      ),
-                      `HSpacing( 1 ),
-                      `CheckBox
-                      ( `id(`set_as_default_checkbox),
-                        // CheckBox to set a local print queues to be the default queue:
-                        _("Is &Default"),
-                        is_default
-                      ),
-                      `CheckBox
-                      ( `id(`set_accept_jobs_checkbox),
-                        // CheckBox to set a local print queues to be the default queue:
-                        _("Accept &Jobs"),
-                        accepting_jobs
-                      ),
-                      `CheckBox
-                      ( `id(`set_enable_printing_checkbox),
-                        // CheckBox to set a local print queues to be the default queue:
-                        _("Enable &Printing"),
-                        printing_enabled
+                      `Left
+                      ( `HBox
+                        ( `CheckBox
+                          ( `id(`default_queue_checkbox),
+                            // CheckBox to set a local print queue to be the default queue:
+                            _("&Default Printer"),
+                            is_default
+                          ),
+                          `HSpacing( 2 ),
+                          `CheckBox
+                          ( `id(`accept_jobs_checkbox),
+                            // CheckBox to set a local print queue to accept print jobs:
+                            _("Accept Print &Jobs"),
+                            accepting_jobs
+                          ),
+                          `HSpacing( 2 ),
+                          `CheckBox
+                          ( `id(`enable_printing_checkbox),
+                            // CheckBox to enable printing for a local print queue:
+                            _("&Enable Printing"),
+                            printing_enabled
+                          )
+                        )
                       )
                     )
                   );
@@ -453,7 +455,7 @@ any BasicModifyDialog()
       { commandline = commandline + " -L '" + location_input + "'";
         something_has_changed = true;
       }
-      boolean is_default_input = (boolean)UI::QueryWidget( `id(`set_as_default_checkbox), `Value);
+      boolean is_default_input = (boolean)UI::QueryWidget( `id(`default_queue_checkbox), `Value);
       if( is_default_input != is_default )
       { something_has_changed = true;
         if( is_default_input )
@@ -465,10 +467,33 @@ any BasicModifyDialog()
         { // Currently it is not possible to unset from a queue to be the default queue,
           // see http://www.cups.org/newsgroups.php?gcups.general+v:31874
           // All one can do is set up a dummy queue, make it the default, and remove it.
+          // To be on the safe side the dummy queue neither accepts jobs
+          // nor is printing enabled (no '-E' as last lpadmin option)
+          // nor is it announced ("shared") to whatever BrowseAddress in cupsd.conf.
           // Here I assume blindly that no queue "yast2unsetdefaultqueue" exists.
           commandline = commandline + " ; /usr/sbin/lpadmin -h localhost -p yast2unsetdefaultqueue -v file:/dev/null -o printer-is-shared=false"
                                     + " ; /usr/sbin/lpadmin -h localhost -d yast2unsetdefaultqueue"
                                     + " ; /usr/sbin/lpadmin -h localhost -x yast2unsetdefaultqueue";
+        }
+      }
+      boolean accepting_jobs_input = (boolean)UI::QueryWidget( `id(`accept_jobs_checkbox), `Value);
+      if( accepting_jobs_input != accepting_jobs )
+      { something_has_changed = true;
+        if( accepting_jobs_input )
+        { commandline = commandline + " ; /usr/sbin/accept -h localhost '" + name + "'";
+        }
+        else
+        { commandline = commandline + " ; /usr/sbin/reject -h localhost '" + name + "'";
+        }
+      }
+      boolean printing_enabled_input = (boolean)UI::QueryWidget( `id(`enable_printing_checkbox), `Value);
+      if( printing_enabled_input != printing_enabled )
+      { something_has_changed = true;
+        if( printing_enabled_input )
+        { commandline = commandline + " ; /usr/sbin/cupsenable -h localhost '" + name + "'";
+        }
+        else
+        { commandline = commandline + " ; /usr/sbin/cupsdisable -h localhost '" + name + "'";
         }
       }
       if( something_has_changed )
@@ -640,7 +665,8 @@ any BasicModifyDialog()
       }
       UI::ReplaceWidget( `id(`driver_filter_input_replace_point),
                          `TextEntry( `id(`driver_filter_input),
-                                     "",
+                                     // Caption for a printer driver selection:
+                                     _("Driver"),
                                      driver_filter_input_text
                                    )
                        );
@@ -757,7 +783,8 @@ any BasicModifyDialog()
       }
       UI::ReplaceWidget( `id(`driver_filter_input_replace_point),
                          `TextEntry( `id(`driver_filter_input),
-                                     "",
+                                     // Caption for a printer driver selection:
+                                     _("Driver"),
                                      driver_filter_input_text
                                    )
                        );
