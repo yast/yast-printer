@@ -180,8 +180,9 @@ symbol handleOverview( string key, map event )
   // After the above changes of the list of queues, determine which queue is currently selected
   // (because this might change via automated preselection when the table was made anew)
   // and enable or disable the "Edit", "Delete", and "Test" buttons accordingly.
-  // "Edit" and "Delete" are only possible for local queues, "Test" is also possible for remote queues
-  // (i.e. "Test" is only disabled when there is no queue selected or no queue in the table):
+  // "Edit" and "Delete" are only possible for local queues, "Test" is also possible for remote queues.
+  // "Test" is disabled when there is no queue selected or no queue in the table
+  // and when the queue state is not "ready" (i.e. when jobs are rejected and/or when printing is disabled).
   integer selected_queue_index = (integer)UI::QueryWidget( `id(`overview_table), `CurrentItem );
   if( selected_queue_index == nil || selected_queue_index < 0 )
   { // To be safe invalidate Printer::selected_queues_index when no queue exists:
@@ -189,7 +190,14 @@ symbol handleOverview( string key, map event )
     UI::ChangeWidget( `test, `Enabled, false );
   }
   else
-  { UI::ChangeWidget( `test, `Enabled, true );
+  { if( "yes" == Printer::queues[selected_queue_index,"rejecting"]:"" 
+        || "yes" == Printer::queues[selected_queue_index,"disabled"]:""
+      )
+    { UI::ChangeWidget( `test, `Enabled, false );
+    }
+    else
+    { UI::ChangeWidget( `test, `Enabled, true );
+    }
     // To be safe enable the modify and delete buttons only when it is explicitely verified
     // that the "config" is "local", otherwise have those buttons disabled by fallback:
     if( Printer::queues[selected_queue_index,"config"]:"remote" == "local" )
