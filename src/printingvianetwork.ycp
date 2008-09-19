@@ -137,7 +137,7 @@ term widgetNetworkPrinting = `VBox
                                `VStretch()
                              );
 
-boolean something_has_changed = false;
+boolean printing_via_network_has_changed = false;
 any initial_radio_button = nil;
 any initial_browse_allow = nil;
 string initial_browse_allow_input_value = "";
@@ -291,7 +291,7 @@ boolean TestClientOnlyServer( string server_name )
 }
 
 boolean ApplyNetworkPrintingSettings()
-{ something_has_changed = false;
+{ printing_via_network_has_changed = false;
   // Get the actual settings and values from the dialog:
   any current_radio_button = UI::QueryWidget( `id(`browsing_or_client_only_check_boxes), `CurrentButton );
   any current_browse_allow = UI::QueryWidget( `id(`browse_allow_combo_box),  `Value );
@@ -307,7 +307,7 @@ boolean ApplyNetworkPrintingSettings()
     if( `browsing_on_radio_button == initial_radio_button )
     { // It was initially a "Get browsing info" config,
       // but now the user has activated the "No browsing info" radio button:
-      something_has_changed = true;
+      printing_via_network_has_changed = true;
       // Do not change the global "Browsing On/Off" entry in cupsd.conf
       // because "Browsing Off" disables also sharing of local printers
       // which might be needed by the "Share Printers" dialog.
@@ -355,7 +355,7 @@ boolean ApplyNetworkPrintingSettings()
       // the user may have only activated the "No browsing info" radio button
       // but left the server name value for client-only unchanged:
       if( current_server_name_input_value != initial_server_name_input_value )
-      { something_has_changed = true;
+      { printing_via_network_has_changed = true;
         // The user has changed the server name value for client-only
         // and afterwards he activated the "No browsing info" radio button.
         // This should result a client-only setup with the new server name
@@ -399,7 +399,7 @@ boolean ApplyNetworkPrintingSettings()
   { if( `browsing_off_radio_button == initial_radio_button )
     { // It was initially a "No browsing info" config,
       // but now the user has activated the "Get browsing info" radio button:
-      something_has_changed = true;
+      printing_via_network_has_changed = true;
     }
     if( `browsing_on_radio_button == initial_radio_button )
     { // It was initially a "Get browsing info" config,
@@ -407,7 +407,7 @@ boolean ApplyNetworkPrintingSettings()
       if( current_browse_allow != initial_browse_allow
           || current_browse_allow_input_value != initial_browse_allow_input_value
         )
-      { something_has_changed = true;
+      { printing_via_network_has_changed = true;
       }
     }
     if( `client_only_radio_button == initial_radio_button )
@@ -433,9 +433,9 @@ boolean ApplyNetworkPrintingSettings()
                            );
         return false;
       }
-      something_has_changed = true;
+      printing_via_network_has_changed = true;
     }
-    if( ! something_has_changed )
+    if( ! printing_via_network_has_changed )
     { // Nothing has changed:
       return true;
     }
@@ -466,7 +466,7 @@ boolean ApplyNetworkPrintingSettings()
         // and now the user has activated the "Get browsing info" radio button
         // but with effectively an empty or "none" browse_allow_value string
         // so that it is still a "No browsing info" config:
-        something_has_changed = false;
+        printing_via_network_has_changed = false;
         return true;
       }
       // Set the browse_allow_value explicitely to "none".
@@ -527,7 +527,7 @@ boolean ApplyNetworkPrintingSettings()
     if( "" == server_name
         || "none" == server_name
       )
-    { something_has_changed = true;
+    { printing_via_network_has_changed = true;
       // The client-only server name is the empty string or to 'none'.
       // This should disable the client-only setup in any case
       // but no local cupsd is started here because the selected config
@@ -557,7 +557,7 @@ boolean ApplyNetworkPrintingSettings()
       // If the server name is not "localhost" and not "127.0.0.1",
       // a real client-only config is to be set up and then
       // a possibly running local cupsd will be stopped.
-      something_has_changed = true;
+      printing_via_network_has_changed = true;
       if( server_name != "localhost"
           && substring( server_name, 0, 5 ) != "127.0"
         )
@@ -577,10 +577,10 @@ boolean ApplyNetworkPrintingSettings()
       // the user may have now entered "localhost" or "127.0.0.1"
       // which makes it effectively a config with a local running cupsd.
       if( current_server_name_input_value != initial_server_name_input_value )
-      { something_has_changed = true;
+      { printing_via_network_has_changed = true;
       }
     }
-    if( ! something_has_changed )
+    if( ! printing_via_network_has_changed )
     { // Nothing has changed:
       return true;
     }
@@ -768,7 +768,7 @@ void storeNetworkPrinting( string key, map event )
                       _("Failed to apply the settings to the system.")
                     );
   }
-  if( ! something_has_changed )
+  if( ! printing_via_network_has_changed )
   { y2milestone( "Nothing changed in 'Printing via Network' dialog." );
     Popup::ShowFeedback( // No title for such a simple feedback message:
                          "",
