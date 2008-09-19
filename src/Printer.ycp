@@ -42,6 +42,10 @@ import "Message";
 import "Popup";
 import "Printerlib";
 import "NetworkInterfaces";
+import "Mode";
+import "Stage";
+import "Service";
+
 /**
  * Prototypes
  */
@@ -609,15 +613,20 @@ global boolean Read()
                );
   // Progress 1. stage (Autodetect already configured printers):
   if( Abort() ) return false;
+  //in second stage of installation be sure that cups is running
+  if (Mode::installation() && Stage::cont()){
+   if (Service::Status("cups")!=0)
+	Service::Start("cups");
+  }
   Printerlib::Read();
-  Progress::NextStage();
   // Progress last stage (progress finished):
   if( Abort() ) return false;
-  Progress::Finish();
+  NetworkInterfaces::Read();
+  Progress::NextStage();
   // Sleep half a second to let the user notice that the progress is finished:
 //  sleep( 500 );
-  NetworkInterfaces::Read();
   if( Abort() ) return false;
+  Progress::Finish();
   return true;
 }
 
