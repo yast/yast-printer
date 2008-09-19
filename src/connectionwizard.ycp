@@ -1,8 +1,11 @@
 {
 
-textdomain "test";
+textdomain "printer";
 import "Label";
 import "Printer";
+
+import "Wizard";
+include "printer/helps.ycp";
 
 term getContentFromBackend(string backend){
  list items=[];
@@ -105,10 +108,6 @@ void changeSettingsDialog(symbol selected){
 	//TRANSLATORS: List of input field labels, first for network scan button, second for name of printer queue
 	content = getNetworkContent([_("Scan for LPD Servers"), _("Queue Name (see the printer's manual)"), "LPT1"]);
 	break;
-  case(`lpr):
-	//TRANSLATORS: List of input field labels, first for network scan button, second for name of printer queue
-	content = getNetworkContent([_("Scan for LPD Servers"), _("Queue Name (see the printer's manual)"), ""]);
-	break;
   case(`ipp):
 	content=`VBox(
 			//TRANSLATORS: Input field label
@@ -135,6 +134,10 @@ void changeSettingsDialog(symbol selected){
         `PushButton(`id(`test), _("&Test Connection"))
        );
 	break;
+  case(`lpr):
+        //TRANSLATORS: List of input field labels, first for network scan button, second for name of printer queue
+        content = getNetworkContent([_("Scan for LPD Servers"), _("Queue Name"), ""]);
+        break;
   case(`cups):
 	content=`VBox(
         `HBox(
@@ -149,7 +152,7 @@ void changeSettingsDialog(symbol selected){
 	       ]
 	       )
 	     ),
-        `InputField(`id(`queue), _("Queue Name (see the printer's manual)")),
+        `InputField(`id(`queue), _("Queue Name")),
 	//TRANSLATORS: Button to test remote printer machine
         `PushButton(`id(`test), _("&Test Connection"))
 	);
@@ -159,7 +162,7 @@ void changeSettingsDialog(symbol selected){
 	//TRANSLATORS: Text entry for IP or hostname of remote server
         `InputField(`id(`hostname), _("IP Address or Host Name")),
 	//TRANSLATORS: Text entry for name of remote printer queue
-        `InputField(`id(`queue), _("Queue Name (see the printer's manual)")),
+        `InputField(`id(`queue), _("Queue Name")),
 	//TRANSLATORS: Frame label for authentication
         `Frame(_("Authenticate As"), `VBox(
 	//TRANSLATORS: Text entry for username (authentication)
@@ -186,8 +189,8 @@ void changeSettingsDialog(symbol selected){
 	break;
   case(`beh):
 	content=`VBox(
-				//TRANSLATORS: Text entry for name of printer queue
-       `InputField(`id(`queue), _("Queue Name (for which 'beh' should be applied)")),
+				//TRANSLATORS: Text entry for device URI (Uniform Resource Identifier)
+       `InputField(`id(`queue), _("Device URI (for which 'beh' should be applied)"), Printer::queues[Printer::selected_queues_index,"uri"]:""),
 				//TRANSLATORS: Check box
        `CheckBox(`id(`beh_do_not_disable), _("Never Disable the Queue"), true),
 					//TRANSLATORS: Text entry
