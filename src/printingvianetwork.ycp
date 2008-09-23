@@ -186,7 +186,7 @@ boolean TestClientOnlyServer( string server_name )
   if( ! Printerlib::ExecuteBashCommand( "type -P netcat" ) )
   { // netcat is required for a meaningful test.
     // Show negative feedback:
-    Popup::ErrorDetails( // Popup::ErrorDetails header:
+    Popup::ErrorDetails( // Popup::ErrorDetails message:
                          _("Cannot execute the program 'netcat'"),
                          // Popup::ErrorDetails details:
                          _("The RPM package 'netcat' is required for a meaningful test.") + "\n"
@@ -208,7 +208,7 @@ boolean TestClientOnlyServer( string server_name )
   if( ! Printerlib::ExecuteBashCommand( "type -P ping" ) )
   { // ping is required for the less meaningful test.
     // Show negative feedback:
-    Popup::ErrorDetails( // Popup::ErrorDetails header
+    Popup::ErrorDetails( // Popup::ErrorDetails message
                          _("Cannot execute the program 'ping'"),
                          // Popup::ErrorDetails details:
                          _("The RPM package 'iputils' is required for a meaningful test.") + "\n"
@@ -222,7 +222,7 @@ boolean TestClientOnlyServer( string server_name )
   if( Printerlib::ExecuteBashCommand( "ping -w 1 -c 1 " + server_name ) )
   { // The netcat-test failed but the ping-test was successful.
     // Show negative feedback:
-    Popup::ErrorDetails( sformat( // Popup::ErrorDetails header
+    Popup::ErrorDetails( sformat( // Popup::ErrorDetails message
                                   // where %1 will be replaced by the server name.
                                   _("The server '%1' is not accessible"),
                                   server_name
@@ -245,7 +245,7 @@ boolean TestClientOnlyServer( string server_name )
   if( ! Printerlib::ExecuteBashCommand( "type -P host" ) )
   { // host is required for the last test.
     // Show negative feedback:
-    Popup::ErrorDetails( // Popup::ErrorDetails header
+    Popup::ErrorDetails( // Popup::ErrorDetails message
                          _("Cannot execute the program 'host'"),
                          // Popup::ErrorDetails details:
                          _("The RPM package 'bind-utils' is required for a meaningful test.") + "\n"
@@ -259,7 +259,7 @@ boolean TestClientOnlyServer( string server_name )
   if( Printerlib::ExecuteBashCommand( "host -W 1 " + server_name ) )
   { // The netcat-test and the ping-test failed but the host-test was successful.
     // Show negative feedback:
-    Popup::ErrorDetails( sformat( // Popup::ErrorDetails header
+    Popup::ErrorDetails( sformat( // Popup::ErrorDetails message
                                   // where %1 will be replaced by the server name.
                                   _("The server '%1' does not respond in the network"),
                                   server_name
@@ -275,7 +275,7 @@ boolean TestClientOnlyServer( string server_name )
   }
   // The netcat-test and the ping-test and the host-test failed:
   // Show negative feedback:
-  Popup::ErrorDetails( sformat( // Popup::ErrorDetails header
+  Popup::ErrorDetails( sformat( // Popup::ErrorDetails message
                                 // where %1 will be replaced by the server name.
                                   _("The server '%1' is unknown"),
                                   server_name
@@ -313,7 +313,7 @@ boolean ApplyNetworkPrintingSettings()
       // which might be needed by the "Share Printers" dialog.
       // Instead set only "BrowseAllow none" in cupsd.conf:
       if( ! Printerlib::ExecuteBashCommand( Printerlib::yast_bin_dir + "modify_cupsd_conf BrowseAllow none" ) )
-      { Popup::ErrorDetails( // Popup::ErrorDetails header:
+      { Popup::ErrorDetails( // Popup::ErrorDetails message:
                              _("Failed to set 'BrowseAllow none' in /etc/cups/cupsd.conf"),
                              Printerlib::result["stderr"]:""
                            );
@@ -365,7 +365,7 @@ boolean ApplyNetworkPrintingSettings()
             && "none" != server_name
           )
         { if( ! Printerlib::ExecuteBashCommand( Printerlib::yast_bin_dir + "cups_client_only " + server_name ) )
-          { Popup::ErrorDetails( // Popup::ErrorDetails header
+          { Popup::ErrorDetails( // Popup::ErrorDetails message
                                  // where %1 will be replaced by the server name.
                                  sformat( _("Failed to set 'ServerName %1' in /etc/cups/client.conf"), server_name ),
                                  Printerlib::result["stderr"]:""
@@ -378,7 +378,7 @@ boolean ApplyNetworkPrintingSettings()
           // and afterwards the "No browsing info" radio button was activated.
           // This should disable the client-only setup but not start the local cupsd:
           if( ! Printerlib::ExecuteBashCommand( Printerlib::yast_bin_dir + "cups_client_only none" ) )
-          { Popup::ErrorDetails( // Popup::ErrorDetails header:
+          { Popup::ErrorDetails( // Popup::ErrorDetails message:
                                  _("Failed to remove the 'ServerName' entry in /etc/cups/client.conf"),
                                  Printerlib::result["stderr"]:""
                                );
@@ -427,7 +427,7 @@ boolean ApplyNetworkPrintingSettings()
       }
       // Remove the 'ServerName' entry in /etc/cups/client.conf:
       if( ! Printerlib::ExecuteBashCommand( Printerlib::yast_bin_dir + "cups_client_only none" ) )
-      { Popup::ErrorDetails( // Popup::ErrorDetails header:
+      { Popup::ErrorDetails( // Popup::ErrorDetails message:
                              _("Failed to remove the 'ServerName' entry in /etc/cups/client.conf"),
                              Printerlib::result["stderr"]:""
                            );
@@ -480,7 +480,7 @@ boolean ApplyNetworkPrintingSettings()
     { // Only a not-"none" browse_allow_value requires "Browsing On" in cupsd.conf.
       // Otherwise leave the "Browsing" entry in cupsd.conf unchanged.
       if( ! Printerlib::ExecuteBashCommand( Printerlib::yast_bin_dir + "modify_cupsd_conf Browsing On" ) )
-      { Popup::ErrorDetails( // Popup::ErrorDetails header:
+      { Popup::ErrorDetails( // Popup::ErrorDetails message:
                              _("Failed to set 'Browsing On' in /etc/cups/cupsd.conf"),
                              Printerlib::result["stderr"]:""
                            );
@@ -493,7 +493,7 @@ boolean ApplyNetworkPrintingSettings()
                                           + "'"
                                         )
       )
-    { Popup::ErrorDetails( // Popup::ErrorDetails header
+    { Popup::ErrorDetails( // Popup::ErrorDetails message
                            // where %1 will be replaced by the values for BrowseAllow.
                            sformat( _("Failed to set BrowseAllow value(s) '%1' in /etc/cups/cupsd.conf"),
                                     browse_allow_value
@@ -534,7 +534,7 @@ boolean ApplyNetworkPrintingSettings()
       // is still a "client-only" config (but an already running local cupsd
       // is also not stopped):
       if( ! Printerlib::ExecuteBashCommand( Printerlib::yast_bin_dir + "cups_client_only none" ) )
-      { Popup::ErrorDetails( // Popup::ErrorDetails header:
+      { Popup::ErrorDetails( // Popup::ErrorDetails message:
                              _("Failed to remove the 'ServerName' entry in /etc/cups/client.conf"),
                              Printerlib::result["stderr"]:""
                            );
@@ -600,7 +600,7 @@ boolean ApplyNetworkPrintingSettings()
       }
     }
     if( ! Printerlib::ExecuteBashCommand( Printerlib::yast_bin_dir + "cups_client_only " + server_name ) )
-    { Popup::ErrorDetails( // Popup::ErrorDetails header
+    { Popup::ErrorDetails( // Popup::ErrorDetails message
                            // where %1 will be replaced by the server name.
                            sformat( _("Failed to set 'ServerName %1' in /etc/cups/client.conf"), server_name ),
                            Printerlib::result["stderr"]:""
