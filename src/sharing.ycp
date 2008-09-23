@@ -34,10 +34,16 @@ textdomain "printer";
 import "Label";
 import "Wizard";
 import "Printer";
+import "Printerlib";
 import "Popup";
 import "NetworkInterfaces";
 
 include "printer/helps.ycp";
+
+boolean share_printers_dialog_is_useless = false;
+list< term > interface_table_items = [];
+list< term > ip_table_items = [];
+boolean sharing_has_changed = false;
 
 term widgetSharing = `VBox
                      ( `VSpacing( 1 ),
@@ -75,7 +81,7 @@ term widgetSharing = `VBox
                                // A CheckBox label to allow remote access to local print queues
                                // for computers within the local network:
                                _("For computers within the &local network"),
-                               true
+                               false
                              )
                            ),
                            `Left
@@ -85,14 +91,15 @@ term widgetSharing = `VBox
                                ( `id(`publish_to_local_network_check_box),
                                  // A CheckBox label to publish local print queues by default within the local network:
                                  _("&Publish printers by default within the local network"),
-                                 true
+                                 false
                                )
                              )
                            ),
                            `VSpacing( 1 ),
                            `Left
                            ( `Label
-                             ( // A caption for a table to allow remote access to local print queues
+                             ( `id(`interface_table_label),
+                               // A caption for a table to allow remote access to local print queues
                                // via network interfaces specified in the table below:
                                _("Via network interfaces specified below")
                              )
@@ -107,9 +114,10 @@ term widgetSharing = `VBox
                                // via the network interface in the other table column:
                                _("Publish printers by default via this interface")
                              ),
-                             [ `item( `id(0), "eth0", "no" ),
-                               `item( `id(1), "eth1", "yes" )
-                             ]
+                             interface_table_items
+                             //[ `item( `id(0), "eth0", "no" ),
+                             //  `item( `id(1), "eth1", "yes" )
+                             //]
                            ),
                            `Left
                            ( `HBox
@@ -136,7 +144,8 @@ term widgetSharing = `VBox
                            `VSpacing( 1 ),
                            `Left
                            ( `Label
-                             ( // A caption for a table to allow remote access to local print queues
+                             ( `id(`ip_table_label),
+                               // A caption for a table to allow remote access to local print queues
                                // for hosts and/or networks specified in the table below:
                                _("For hosts / networks specified below")
                              )
@@ -151,11 +160,12 @@ term widgetSharing = `VBox
                                // via the IP address in the other table column:
                                _("Publish printers by default for this address")
                              ),
-                             [ `item( `id(0), "192.168.100.1", "yes" ),
-                               `item( `id(1), "192.168.100.2", "no" ),
-                               `item( `id(2), "192.168.200.0/24", "no" ),
-                               `item( `id(3), "192.168.300.0/255.255.255.0", "yes" )
-                             ]
+                             ip_table_items
+                             //[ `item( `id(0), "192.168.100.1", "yes" ),
+                             //  `item( `id(1), "192.168.100.2", "no" ),
+                             //  `item( `id(2), "192.168.200.0/24", "no" ),
+                             //  `item( `id(3), "192.168.300.0/255.255.255.0", "yes" )
+                             //]
                            ),
                            `Left
                            ( `HBox
@@ -183,8 +193,6 @@ term widgetSharing = `VBox
                        ),
                        `VSpacing( 1 )
                      );
-
-boolean sharing_has_changed = false;
 
 map showInterfacePopup(string device, boolean publish){
  map result = $[];
@@ -249,6 +257,12 @@ map showIPPopup(string device, boolean publish){
  return result;
 }
 
+boolean ApplySharingSettings()
+{ sharing_has_changed = false;
+  // Exit successfully by default and as fallback:
+  return true;
+}
+
 void initSharing( string key )
 { y2milestone( "entering initSharing with key '%1'", key );
   // Show a user information because the current implementation provides
@@ -258,6 +272,137 @@ void initSharing( string key )
                      // Body of a Popup::AnyMessage because of a work-in-progress dialog:
                      _("Currently only the dialog shows up but it does\nneither read from the system nor write to the system.\n")
                    );
+  // Determine whether or not it is currently a real client-only config
+  // (i.e. a ServerName != "localhost/127.0.0.1" in /etc/cups/client.conf)
+  // and ignore when it fails (i.e. use the fallback value silently):
+  Printerlib::DetermineClientOnly();
+  if( Printerlib::client_only )
+  { if( ! Popup::YesNoHeadline( // PopupYesNoHeadline headline
+                                // where %1 will be replaced by the server name:
+                                sformat( _("Disable remote CUPS server '%1'"), Printerlib::client_conf_server_name ),
+                                // PopupYesNoHeadline body:
+                                _("A remote CUPS server setting conflicts with sharing local printer configurations.")
+                              )
+      )
+    { share_printers_dialog_is_useless = true;
+    }
+    else
+    { // Remove the 'ServerName' entry in /etc/cups/client.conf:
+      if( ! Printerlib::ExecuteBashCommand( Printerlib::yast_bin_dir + "cups_client_only none" ) )
+      { Popup::ErrorDetails( // Popup::ErrorDetails message:
+                             _("Failed to remove the 'ServerName' entry in /etc/cups/client.conf"),
+                             Printerlib::result["stderr"]:"" + "\n" + Printerlib::result["stdout"]:""
+                           );
+        share_printers_dialog_is_useless = true;
+      }
+    }
+  }
+  // Determine whether or not a local cupsd is accessible:
+  if( ! Printerlib::GetAndSetCupsdStatus( "" ) )
+  { // Printerlib::GetAndSetCupsdStatus already shows a confirmation popup:
+    if( ! Printerlib::GetAndSetCupsdStatus( "start" ) )
+    { share_printers_dialog_is_useless = true;
+    }
+  }
+  // Determine whether or not there is at least one local queue.
+  // To be on the safe side, force to autodetect the queues anew
+  // because it might have been a client-only config before
+  // or the local cupsd might have been not accessible
+  // (both result no autodetected local queues).
+  // Ignore when queue autodetection fails becaue
+  // it results an empty list of queues as fallback:
+  Printer::AutodetectQueues();
+  // When there are no local queues, the whole "Share Printers" dialog is useless
+  // because only local queues can be shared:
+  boolean share_printers_dialog_is_useless = true;
+  foreach( map< string, string > queue,
+           Printer::queues,
+           { if( "local" == queue["config"]:"remote" )
+             { share_printers_dialog_is_useless = false;
+               break;
+             }
+           }
+         );
+  if( share_printers_dialog_is_useless )
+  { // The whole "Share Printers" dialog is useless.
+    // Therefore disable all widgets.
+    // Only the basic buttons "Help", "Cancel", "OK" are enabled.
+    UI::ChangeWidget(`deny_or_allow_remote_access, `Enabled, false);
+    UI::ChangeWidget(`deny_remote_access_radio_button, `Enabled, false);
+    UI::ChangeWidget(`allow_remote_access_radio_button, `Enabled, false);
+    UI::ChangeWidget(`allow_local_network_access_check_box, `Enabled, false);
+    UI::ChangeWidget(`publish_to_local_network_check_box, `Enabled, false);
+    UI::ChangeWidget(`interface_table_label, `Enabled, false);
+    UI::ChangeWidget(`interface_table, `Enabled, false);
+    UI::ChangeWidget(`add_interface, `Enabled, false);
+    UI::ChangeWidget(`edit_interface, `Enabled, false);
+    UI::ChangeWidget(`delete_interface, `Enabled, false);
+    UI::ChangeWidget(`ip_table_label, `Enabled, false);
+    UI::ChangeWidget(`ip_table, `Enabled, false);
+    UI::ChangeWidget(`add_ip, `Enabled, false);
+    UI::ChangeWidget(`edit_ip, `Enabled, false);
+    UI::ChangeWidget(`delete_ip, `Enabled, false);
+  }
+  // Regardless whether or not the "Share Printers" dialog is useless,
+  // fill in the values of the current settings in the system:
+  interface_table_items = [];
+  ip_table_items = [];
+  // Determine the 'Allow' values for the root location '<Location />' in /etc/cups/cupsd.conf:
+  // By default there is only 'Allow 127.0.0.2' but this value is suppressed in the output
+  // of 'modify_cupsd_conf Allow' so that the empty sting is the right fallback value here:
+  list< string > allow_values = [ "" ];
+  if( Printerlib::ExecuteBashCommand( Printerlib::yast_bin_dir + "modify_cupsd_conf Allow" ) )
+  { // The command outputs a line where multiple Allow values are separated by space
+    // but possible duplicate Allow values are not removed in the command output:
+    allow_values = toset( splitstring( Printerlib::result["stdout"]:"", " " ) );
+  }
+  else
+  { // Use fallback value when the command above failed:
+    allow_values = [ "" ];
+  }
+  // Determine the 'BrowseAddress' values in /etc/cups/cupsd.conf:
+  // By default there is no BrowseAddress value so that the empty sting is the right fallback:
+  list< string > browse_address_values = [ "" ];
+  if( Printerlib::ExecuteBashCommand( Printerlib::yast_bin_dir + "modify_cupsd_conf BrowseAddress" ) )
+  { // The command outputs a line where multiple BrowseAddress values are separated by space
+    // but possible duplicate BrowseAddress values are not removed in the command output:
+    browse_address_values = toset( splitstring( Printerlib::result["stdout"]:"", " " ) );
+  }
+  else
+  { // Use fallback value when the command above failed:
+    browse_address_values = [ "" ];
+  }
+  // Split the allow_values list together with the browse_address_values list
+  // into the different values for the different widgets in the dialog.
+  // By default no remote access is allowed (see the defaults in widgetSharing)
+  // but if there is at least one none-empty allow_value, remote access should be allowed:
+  foreach( string allow_value,
+           allow_values,
+           { if( "" != allow_value )
+             { UI::ChangeWidget(`deny_remote_access_radio_button, `Value, false);
+               UI::ChangeWidget(`allow_remote_access_radio_button, `Value, true);
+             }
+             if( "@LOCAL" != allow_value )
+             { UI::ChangeWidget(`allow_local_network_access_check_box, `Value, true);
+             }
+             if( issubstring( allow_value, "@IF" ) )
+             { // The allow_value has the form '@IF(interface-name)' e.g. '@IF(eth1)'.
+               // Extract only the interface-name from the allow_value:
+               integer start = findfirstof( allow_value, "(" );
+               integer end = findfirstof( allow_value, ")" );
+               if( ( nil != start ) && ( nil != end ) && ( end - start - 1 > 0 ) )
+               { string interface_name = substring( allow_value, start + 1, end - start - 1 );
+                 interface_table_items = add( interface_table_items, `item( `id( size( interface_table_items ) ),
+                                                                            interface_name,
+                                                                            "no"
+                                                                          )
+                                            );
+               }
+             }
+           }
+         );
+  UI::ChangeWidget(`interface_table, `Items, interface_table_items);
+  UI::ChangeWidget(`interface_table, `CurrentItem, -1);
   y2milestone( "leaving initSharing" );
 }
 
@@ -350,32 +495,39 @@ symbol handleSharing(string key, map event)
                         break;
   }
  }
- boolean share = (UI::QueryWidget(`deny_or_allow_remote_access, `CurrentButton)==`allow_remote_access_radio_button);
- UI::ChangeWidget(`allow_local_network_access_check_box, `Enabled, share);
- UI::ChangeWidget(`publish_to_local_network_check_box, `Enabled, share);
- UI::ChangeWidget(`interface_table, `Enabled, share);
- UI::ChangeWidget(`add_interface, `Enabled, share);
- UI::ChangeWidget(`edit_interface, `Enabled, share);
- UI::ChangeWidget(`delete_interface, `Enabled, share);
- UI::ChangeWidget(`ip_table, `Enabled, share);
- UI::ChangeWidget(`add_ip, `Enabled, share);
- UI::ChangeWidget(`edit_ip, `Enabled, share);
- UI::ChangeWidget(`delete_ip, `Enabled, share);
- if (share){
-  boolean interface_buttons=true;
-  boolean ip_buttons=true;
-  if (size((list)UI::QueryWidget(`interface_table, `Items))==0) interface_buttons=false;
-  UI::ChangeWidget(`edit_interface, `Enabled, interface_buttons);
-  UI::ChangeWidget(`delete_interface, `Enabled, interface_buttons);
-  if (size((list)UI::QueryWidget(`ip_table, `Items))==0) ip_buttons=false;
-  UI::ChangeWidget(`edit_ip, `Enabled, ip_buttons);
-  UI::ChangeWidget(`delete_ip, `Enabled, ip_buttons);
+ if( ! share_printers_dialog_is_useless )
+ { boolean share = (UI::QueryWidget(`deny_or_allow_remote_access, `CurrentButton)==`allow_remote_access_radio_button);
+   UI::ChangeWidget(`allow_local_network_access_check_box, `Enabled, share);
+   UI::ChangeWidget(`publish_to_local_network_check_box, `Enabled, share);
+   UI::ChangeWidget(`interface_table, `Enabled, share);
+   UI::ChangeWidget(`add_interface, `Enabled, share);
+   UI::ChangeWidget(`edit_interface, `Enabled, share);
+   UI::ChangeWidget(`delete_interface, `Enabled, share);
+   UI::ChangeWidget(`ip_table, `Enabled, share);
+   UI::ChangeWidget(`add_ip, `Enabled, share);
+   UI::ChangeWidget(`edit_ip, `Enabled, share);
+   UI::ChangeWidget(`delete_ip, `Enabled, share);
+   if(share)
+   { boolean interface_buttons=true;
+     boolean ip_buttons=true;
+     if (size((list)UI::QueryWidget(`interface_table, `Items))==0) interface_buttons=false;
+     UI::ChangeWidget(`edit_interface, `Enabled, interface_buttons);
+     UI::ChangeWidget(`delete_interface, `Enabled, interface_buttons);
+     if (size((list)UI::QueryWidget(`ip_table, `Items))==0) ip_buttons=false;
+     UI::ChangeWidget(`edit_ip, `Enabled, ip_buttons);
+     UI::ChangeWidget(`delete_ip, `Enabled, ip_buttons);
+   }
  }
  return nil;
 }
 
 void storeSharing( string key, map event )
 { y2milestone( "entering storeSharing with key '%1'\nand event '%2'", key, event );
+  if( ! ApplySharingSettings() )
+  { Popup::Error( // Popup::Error message:
+                      _("Failed to apply the settings to the system.")
+                    );
+  }
   if( ! sharing_has_changed )
   { y2milestone( "Nothing changed in 'Share Printers' dialog." );
     Popup::ShowFeedback( // No title for such a simple feedback message:
