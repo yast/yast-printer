@@ -382,11 +382,20 @@ void initSharing( string key )
              { UI::ChangeWidget(`deny_remote_access_radio_button, `Value, false);
                UI::ChangeWidget(`allow_remote_access_radio_button, `Value, true);
              }
-             if( "@LOCAL" != allow_value )
+             if( "@LOCAL" == allow_value )
              { UI::ChangeWidget(`allow_local_network_access_check_box, `Value, true);
+               // Check if this value appears also in the browse_address_values:
+               if( contains( browse_address_values, allow_value ) )
+               { UI::ChangeWidget(`publish_to_local_network_check_box, `Value, true);
+               }
              }
              if( issubstring( allow_value, "@IF" ) )
              { // The allow_value has the form '@IF(interface-name)' e.g. '@IF(eth1)'.
+               // Check if this value appears also in the browse_address_values:
+               string publish_via_this_interface = "no";
+               if( contains( browse_address_values, allow_value ) )
+               { publish_via_this_interface = "yes";
+               }
                // Extract only the interface-name from the allow_value:
                integer start = findfirstof( allow_value, "(" );
                integer end = findfirstof( allow_value, ")" );
@@ -394,7 +403,7 @@ void initSharing( string key )
                { string interface_name = substring( allow_value, start + 1, end - start - 1 );
                  interface_table_items = add( interface_table_items, `item( `id( size( interface_table_items ) ),
                                                                             interface_name,
-                                                                            "no"
+                                                                            publish_via_this_interface
                                                                           )
                                             );
                }
