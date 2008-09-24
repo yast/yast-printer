@@ -194,6 +194,20 @@ boolean TestClientOnlyServer( string server_name )
                        );
     return false;
   }
+  // Test for "localhost" or "127.0.0.1" and make a local cupsd accessible
+  // because a local cupsd is needed if the server name is "localhost" or "127.0.0.1":
+  if( "localhost" == server_name
+      || "127.0" == substring( server_name, 0, 5 )
+    )
+  { // The user has entered "localhost" or "127.0.0.1" as server name
+    // which makes it effectively a config with a local running cupsd.
+    // If a local cupsd is already accessible, do nothing, otherwise start it:
+    if( ! Printerlib::GetAndSetCupsdStatus( "" ) )
+    { if( ! Printerlib::GetAndSetCupsdStatus( "start" ) )
+      { return false;
+      }
+    }
+  }
   if( Printerlib::ExecuteBashCommand( "netcat -v -w 1 -z " + server_name + " 631" ) )
   { // Show positive feedback.
     // Show it as TimedMessage so that is disappears automatically
@@ -524,6 +538,7 @@ boolean ApplyNetworkPrintingSettings()
   // Client-only:
   if( `client_only_radio_button == current_radio_button )
   { string server_name = deletechars( tolower( current_server_name_input_value ), " " );
+    boolean enforce_client_only_server_setting = false;
     if( "" == server_name
         || "none" == server_name
       )
@@ -542,12 +557,34 @@ boolean ApplyNetworkPrintingSettings()
       }
       return true;
     }
-    // A non-accessible client-only server leads to an endless sequence
-    // of weird further behaviour of the module so that such a server name
-    // is simply not accepted. Do not show additional error messages here
-    // because TestClientOnlyServer() shows sufficient popups to the user:
+    // A non-accessible client-only server leads to an endless sequence of weird further behaviour
+    // of the module so that a non-accessible server is not accepted.
+    // This means that it is not possible to set up a client-only config first
+    // and then make the client-only server accessible (e.g. boot the client-only server,
+    // open ports in firewall, set up the network connection, whatever else).
+    // This would be a problem when a workstation is set up by an admin in the IP department
+    // for a client-only config but the workstation is currently not connected to the network
+    // where the client-only server is (e.g. in the department for which the workstation is set up).
+    // Therefore the admin can force YaST to proceed here.
+    // Do not show additional error messages here because TestClientOnlyServer()
+    // shows sufficient popups to the user:
     if( ! TestClientOnlyServer( server_name ) )
-    { return false;
+    { if( ! Popup::ContinueCancelHeadline( sformat( // Header of a Popup::ContinueCancelHeadline
+                                                    // when a client-only server is not accessible
+                                                    // where %1 will be replaced by the server name:
+                                                    _("Continue regardless that '%1' is not accessible?"),
+                                                    server_name
+                                                  ),
+                                           // Body of a Popup::ContinueCancelHeadline
+                                           // when a client-only server is not accessible:
+                                           _("A non-accessible server leads to an endless sequence of further failures.")
+                                         )
+        )
+      { // The user has decided not to continue:
+        return false;
+      }
+      // The user has decided to continue regardless that the client-only server is not accessible:
+      enforce_client_only_server_setting = true;
     }
     if( `browsing_off_radio_button == initial_radio_button
         || `browsing_on_radio_button == initial_radio_button
@@ -584,23 +621,21 @@ boolean ApplyNetworkPrintingSettings()
     { // Nothing has changed:
       return true;
     }
-    // Test for "localhost/"127.0.0.1" first and make a local cupsd accessible
-    // because the "cups_client_only" tool which sets the ServerName in client.conf
-    // tests in any case if the cupsd on ServerName is accessible:
-    if( "localhost" == server_name
-        || "127.0" == substring( server_name, 0, 5 )
-      )
-    { // The user has entered "localhost" or "127.0.0.1" as server name
-      // which makes it effectively a config with a local running cupsd.
-      // If a local cupsd is already accessible, do nothing, otherwise start it:
-      if( ! Printerlib::GetAndSetCupsdStatus( "" ) )
-      { if( ! Printerlib::GetAndSetCupsdStatus( "start" ) )
-        { return false;
-        }
-      }
-    }
     if( ! Printerlib::ExecuteBashCommand( Printerlib::yast_bin_dir + "cups_client_only " + server_name ) )
-    { Popup::ErrorDetails( // Popup::ErrorDetails message
+    { if( enforce_client_only_server_setting )
+      { // The user has decided to continue regardless that the client-only server is not accessible.
+        // In this case the cups_client_only tool fails in any case because it also tests accessibility.
+        // But cups_client_only might have failed for whatever other reason.
+        // Therefore a Popup::MessageDetails is shown to inform about the actual result:
+        Popup::MessageDetails( // Popup::MessageDetails message
+                               // where %1 will be replaced by the server name.
+                               sformat( _("Tried to set 'ServerName %1' in /etc/cups/client.conf"), server_name ),
+                               Printerlib::result["stderr"]:""
+                             );
+        // Exit successfully in this special case regardless of whatever failures:
+        return true;
+      }
+      Popup::ErrorDetails( // Popup::ErrorDetails message
                            // where %1 will be replaced by the server name.
                            sformat( _("Failed to set 'ServerName %1' in /etc/cups/client.conf"), server_name ),
                            Printerlib::result["stderr"]:""
@@ -649,16 +684,16 @@ void initNetworkPrinting( string key )
   // and it should also not contain "none" because this setting
   // is implicitely done via browsing_off_radio_button:
   string browse_allow_input_value =  mergestring( filter( string value,
-                                                                     Printerlib::cupsd_conf_browse_allow,
-                                                                     { value = tolower( value );
-                                                                       return( "all" != value
-                                                                               && "@local" != value
-                                                                               && "none" != value
-                                                                             );
-                                                                     }
-                                                                   ),
-                                                             " "
-                                                           );
+                                                          Printerlib::cupsd_conf_browse_allow,
+                                                          { value = tolower( value );
+                                                            return( "all" != value
+                                                                    && "@local" != value
+                                                                    && "none" != value
+                                                                  );
+                                                          }
+                                                        ),
+                                                  " "
+                                                );
   initial_browse_allow_input_value = browse_allow_input_value;
   UI::ChangeWidget( `id(`browse_allow_input), `Value, browse_allow_input_value );
   UI::ChangeWidget( `id(`browse_allow_input_label), `Enabled, false );

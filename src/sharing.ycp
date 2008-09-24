@@ -36,13 +36,13 @@ import "Wizard";
 import "Printer";
 import "Printerlib";
 import "Popup";
-import "NetworkInterfaces";
 
 include "printer/helps.ycp";
 
 boolean share_printers_dialog_is_useless = false;
 list< term > interface_table_items = [];
 list< term > ip_table_items = [];
+list< string > available_interfaces = [];
 boolean sharing_has_changed = false;
 
 term widgetSharing = `VBox
@@ -194,36 +194,50 @@ term widgetSharing = `VBox
                        `VSpacing( 1 )
                      );
 
-map showInterfacePopup(string device, boolean publish){
- map result = $[];
- list<string> devices = NetworkInterfaces::List("");
-         UI::OpenDialog( `VBox(
-            `CheckBox(`id(`publish), _("&Publish printers by default via "), publish),
-            // translators: combo box label for list of configured IPs
-            `ComboBox( `id(`device), `opt( `editable ), _("Network &Devices:"), devices ),
-            `VSpacing(),
-            `HBox(
-                `PushButton( `id(`ok), Label::OKButton() ),
-                `PushButton( `id(`cancel), Label::CancelButton() )
-             )
-        ));
- if(device!="") UI::ChangeWidget(`device, `Value, device);
- while(true){
-  any ret = UI::UserInput();
-  if (ret==`cancel){
-   result=nil;
-   break;
+map< string, string > showInterfacePopup( string interface_name, boolean is_published )
+{ map< string, string > interface_map = $[];
+  UI::OpenDialog
+  ( `VBox
+    ( `CheckBox
+      ( `id(`publish_check_box),
+        // A CheckBox label to publish local print queues by default
+        // via a partivular network interface which is shown below.
+        _("&Publish printers by default via the network interface below."),
+        is_published
+      ),
+      `ComboBox
+      ( `id(`interfaces_combo_box),
+        `opt( `editable ),
+        // A header for a ComboBox which lists network interfaces:
+        _("Available Network &Interfaces:"),
+        available_interfaces
+      ),
+      `VSpacing(),
+      `HBox
+      ( `PushButton( `id(`ok), Label::OKButton() ),
+        `PushButton( `id(`cancel), Label::CancelButton() )
+      )
+    )
+  );
+  if( "" != interface_name )
+  { UI::ChangeWidget( `interfaces_combo_box, `Value, interface_name );
   }
-  if (ret==`ok){
-   publish = (boolean)UI::QueryWidget(`publish, `Value);
-   device = (string)UI::QueryWidget(`device, `Value);
-   result["device"]=device;
-   result["publish"]=publish ? "yes" : "no";
-   break;
+  while( true )
+  { any ret = UI::UserInput();
+    if( `cancel == ret )
+    { interface_map = nil;
+      break;
+    }
+    if( `ok == ret )
+    { interface_name = (string)UI::QueryWidget( `interfaces_combo_box, `Value );
+      is_published = (boolean)UI::QueryWidget( `publish_check_box, `Value );
+      interface_map["interface_name"] = interface_name;
+      interface_map["is_published"] = is_published ? "yes" : "no";
+      break;
+    }
   }
- }
-        UI::CloseDialog();
- return result;
+  UI::CloseDialog();
+  return interface_map;
 }
 
 map showIPPopup(string device, boolean publish){
@@ -253,7 +267,7 @@ map showIPPopup(string device, boolean publish){
    break;
   }
  }
-        UI::CloseDialog();
+ UI::CloseDialog();
  return result;
 }
 
@@ -265,6 +279,8 @@ boolean ApplySharingSettings()
 
 void initSharing( string key )
 { y2milestone( "entering initSharing with key '%1'", key );
+  share_printers_dialog_is_useless = false;
+  sharing_has_changed = false;
   // Show a user information because the current implementation provides
   // only the dialog but does not read from the system or write to the system:
   Popup::AnyMessage( // Header of a Popup::AnyMessage because of a work-in-progress dialog:
@@ -285,6 +301,9 @@ void initSharing( string key )
                               )
       )
     { share_printers_dialog_is_useless = true;
+      y2milestone( "share_printers_dialog_is_useless because user decided not to disable client-only CUPS server '%1'",
+                   Printerlib::client_conf_server_name
+                 );
     }
     else
     { // Remove the 'ServerName' entry in /etc/cups/client.conf:
@@ -294,6 +313,9 @@ void initSharing( string key )
                              Printerlib::result["stderr"]:"" + "\n" + Printerlib::result["stdout"]:""
                            );
         share_printers_dialog_is_useless = true;
+        y2milestone( "share_printers_dialog_is_useless because it failed to disable client-only CUPS server '%1'",
+                     Printerlib::client_conf_server_name
+                   );
       }
     }
   }
@@ -302,46 +324,33 @@ void initSharing( string key )
   { // Printerlib::GetAndSetCupsdStatus already shows a confirmation popup:
     if( ! Printerlib::GetAndSetCupsdStatus( "start" ) )
     { share_printers_dialog_is_useless = true;
+      y2milestone( "share_printers_dialog_is_useless because 'rccups start' failed." );
     }
   }
-  // Determine whether or not there is at least one local queue.
-  // To be on the safe side, force to autodetect the queues anew
-  // because it might have been a client-only config before
-  // or the local cupsd might have been not accessible
-  // (both result no autodetected local queues).
-  // Ignore when queue autodetection fails becaue
-  // it results an empty list of queues as fallback:
-  Printer::AutodetectQueues();
-  // When there are no local queues, the whole "Share Printers" dialog is useless
-  // because only local queues can be shared:
-  boolean share_printers_dialog_is_useless = true;
-  foreach( map< string, string > queue,
-           Printer::queues,
-           { if( "local" == queue["config"]:"remote" )
-             { share_printers_dialog_is_useless = false;
-               break;
-             }
-           }
-         );
+  // Note that the "Share Printers" dialog is not useless when there is no local queue.
+  // For example the user may like to configure "Share Printers" (e.g. allow remote access)
+  // before he set up the first local queue or he may like to delete all local queues
+  // and then change the "Share Printers" stuff accordingly (e.g. deny remote access).
   if( share_printers_dialog_is_useless )
-  { // The whole "Share Printers" dialog is useless.
-    // Therefore disable all widgets.
-    // Only the basic buttons "Help", "Cancel", "OK" are enabled.
-    UI::ChangeWidget(`deny_or_allow_remote_access, `Enabled, false);
-    UI::ChangeWidget(`deny_remote_access_radio_button, `Enabled, false);
-    UI::ChangeWidget(`allow_remote_access_radio_button, `Enabled, false);
-    UI::ChangeWidget(`allow_local_network_access_check_box, `Enabled, false);
-    UI::ChangeWidget(`publish_to_local_network_check_box, `Enabled, false);
-    UI::ChangeWidget(`interface_table_label, `Enabled, false);
-    UI::ChangeWidget(`interface_table, `Enabled, false);
-    UI::ChangeWidget(`add_interface, `Enabled, false);
-    UI::ChangeWidget(`edit_interface, `Enabled, false);
-    UI::ChangeWidget(`delete_interface, `Enabled, false);
-    UI::ChangeWidget(`ip_table_label, `Enabled, false);
-    UI::ChangeWidget(`ip_table, `Enabled, false);
-    UI::ChangeWidget(`add_ip, `Enabled, false);
-    UI::ChangeWidget(`edit_ip, `Enabled, false);
-    UI::ChangeWidget(`delete_ip, `Enabled, false);
+  { // The "Share Printers" dialog is (almost) useless.
+    // Therefore disable all widgets except the deny_remote_access_radio_button
+    // because the user may like to set deny remote access in /etc/cups/cupsd.conf
+    // to be on the safe side before he changes a client-only config into a config
+    // with a local running cupsd (e.g. before he set up the first local queue:
+    // Also the basic buttons "Help", "Cancel", "OK" are enabled.
+    UI::ChangeWidget( `allow_remote_access_radio_button, `Enabled, false );
+    UI::ChangeWidget( `allow_local_network_access_check_box, `Enabled, false );
+    UI::ChangeWidget( `publish_to_local_network_check_box, `Enabled, false );
+    UI::ChangeWidget( `interface_table_label, `Enabled, false );
+    UI::ChangeWidget( `interface_table, `Enabled, false );
+    UI::ChangeWidget( `add_interface, `Enabled, false );
+    UI::ChangeWidget( `edit_interface, `Enabled, false );
+    UI::ChangeWidget( `delete_interface, `Enabled, false );
+    UI::ChangeWidget( `ip_table_label, `Enabled, false );
+    UI::ChangeWidget( `ip_table, `Enabled, false );
+    UI::ChangeWidget( `add_ip, `Enabled, false );
+    UI::ChangeWidget( `edit_ip, `Enabled, false );
+    UI::ChangeWidget( `delete_ip, `Enabled, false );
   }
   // Regardless whether or not the "Share Printers" dialog is useless,
   // fill in the values of the current settings in the system:
@@ -360,6 +369,7 @@ void initSharing( string key )
   { // Use fallback value when the command above failed:
     allow_values = [ "" ];
   }
+  y2milestone( "Initial allow_values: %1", allow_values );
   // Determine the 'BrowseAddress' values in /etc/cups/cupsd.conf:
   // By default there is no BrowseAddress value so that the empty sting is the right fallback:
   list< string > browse_address_values = [ "" ];
@@ -372,6 +382,7 @@ void initSharing( string key )
   { // Use fallback value when the command above failed:
     browse_address_values = [ "" ];
   }
+  y2milestone( "Initial browse_address_values: %1", browse_address_values );
   // Split the allow_values list together with the browse_address_values list
   // into the different values for the different widgets in the dialog.
   // By default no remote access is allowed (see the defaults in widgetSharing)
@@ -379,14 +390,14 @@ void initSharing( string key )
   foreach( string allow_value,
            allow_values,
            { if( "" != allow_value )
-             { UI::ChangeWidget(`deny_remote_access_radio_button, `Value, false);
-               UI::ChangeWidget(`allow_remote_access_radio_button, `Value, true);
+             { UI::ChangeWidget( `deny_remote_access_radio_button, `Value, false );
+               UI::ChangeWidget( `allow_remote_access_radio_button, `Value, true );
              }
              if( "@LOCAL" == allow_value )
-             { UI::ChangeWidget(`allow_local_network_access_check_box, `Value, true);
+             { UI::ChangeWidget( `allow_local_network_access_check_box, `Value, true );
                // Check if this value appears also in the browse_address_values:
                if( contains( browse_address_values, allow_value ) )
-               { UI::ChangeWidget(`publish_to_local_network_check_box, `Value, true);
+               { UI::ChangeWidget( `publish_to_local_network_check_box, `Value, true );
                }
              }
              if( issubstring( allow_value, "@IF" ) )
@@ -410,75 +421,126 @@ void initSharing( string key )
              }
            }
          );
-  UI::ChangeWidget(`interface_table, `Items, interface_table_items);
-  UI::ChangeWidget(`interface_table, `CurrentItem, -1);
+  y2milestone( "Initial interface_table_items: %1", interface_table_items );
+  UI::ChangeWidget( `interface_table, `Items, interface_table_items );
+  UI::ChangeWidget( `interface_table, `CurrentItem, -1 );
+  // Determine the currently available network interfaces in the system.
+  // Omit the loopback interface.
+  available_interfaces = [];
+  if( Printerlib::ExecuteBashCommand( "ip -family inet -oneline link show | grep -v -i loopback | cut -s -d ':' -f 2 | tr -s '[:space:]' ' '" ) )
+  { // The command outputs a line where multiple network interfaces are separated by space.
+    // Remove empty or effectively empty entries (otherwise it would be something like ["", "eth0", "eth1"]):
+    available_interfaces = filter( string interface_name,
+                                   toset( splitstring( Printerlib::result["stdout"]:"", " " ) ),
+                                   { return( "" !=  filterchars( interface_name, Printer::alnum_chars ) );
+                                   }
+                                 );
+  }
+  else
+  { // Use fallback value when the command above failed:
+    available_interfaces = [];
+  }
+  y2milestone( "available_interfaces: %1", available_interfaces );
   y2milestone( "leaving initSharing" );
 }
 
-symbol handleSharing(string key, map event)
-{ if (event["EventReason"]:""=="Activated"){
-  y2milestone("button pressed %1", event);
-  switch(event["WidgetID"]:`nil){
-   integer current=-1;
-   map ret = nil;
-   case `add_interface    :
-                        ret = showInterfacePopup("", false);
-                        if (ret!=nil){
-                         list items = (list)UI::QueryWidget(`interface_table, `Items);
-                         items=add(items, `item(`id(size(items)), ret["device"]:"", ret["publish"]:""));
-                         UI::ChangeWidget(`interface_table, `Items, items);
-                         UI::ChangeWidget(`interface_table, `CurrentItem, current);
+symbol handleSharing( string key, map event )
+{ if (event["EventReason"]:""=="Activated")
+  { y2milestone( "button pressed %1", event );
+    switch( event["WidgetID"]:`nil )
+    { integer current_item = -1;
+      map ret = nil;
+      map< string, string > interface_map = nil;
+      case `add_interface :
+           interface_map = showInterfacePopup( "", false );
+           if( interface_map != nil )
+           { interface_table_items = (list<term>)UI::QueryWidget( `interface_table, `Items );
+             interface_table_items = add( interface_table_items,
+                                          `item( `id(size(interface_table_items)),
+                                                 interface_map["interface_name"]:"",
+                                                 interface_map["is_published"]:""
+                                               )
+                                        );
+             UI::ChangeWidget( `interface_table, `Items, interface_table_items );
+             UI::ChangeWidget( `interface_table, `CurrentItem, size(interface_table_items) - 1 );
+           }
+           break;
+      case `edit_interface :
+           current_item = (integer)UI::QueryWidget( `interface_table, `CurrentItem );
+           term interface_item = (term)UI::QueryWidget( `interface_table, `Item( current_item ) );
+           interface_map = showInterfacePopup( (string)interface_item[1]:"",
+                                               (interface_item[2]:"no"=="yes")
+                                             );
+           if( interface_map != nil)
+           { interface_table_items = [];
+             foreach( term interface_table_item,
+                      (list<term>)UI::QueryWidget( `interface_table, `Items),
+                      { if( current_item != interface_table_item[0,0]:-1 )
+                        { interface_table_items = add( interface_table_items,
+                                                       `item( `id(size(interface_table_items)),
+                                                              interface_table_item[1]:"",
+                                                              interface_table_item[2]:""
+                                                            )
+                                                     );
                         }
-                        break;
-   case `edit_interface   :
-                        current = (integer)UI::QueryWidget(`interface_table, `CurrentItem);
-                        term this = (term)UI::QueryWidget(`interface_table, `Item(current));
-                        ret = showInterfacePopup((string)this[1]:"", (this[2]:"no"=="yes"));
-                        if (ret!=nil){
-                         list items = [];
-                         foreach(term oneItem, (list<term>)UI::QueryWidget(`interface_table, `Items), {
-                          if (current != oneItem[0, 0]:-1){
-                           items = add(items, `item(`id(size(items)), oneItem[1]:"", oneItem[2]:""));
-                          } else {
-                                y2milestone("Changing item %1", oneItem);
-                                items = add(items, `item(`id(size(items)), ret["device"]:"", ret["publish"]:""));
-                          }
-                         });
-                        UI::ChangeWidget(`interface_table, `Items, items);
-                        UI::ChangeWidget(`interface_table, `CurrentItem, current);
+                        else
+                        { y2milestone( "Changing interface_table_item %1", interface_table_item );
+                          interface_table_items = add( interface_table_items,
+                                                       `item( `id(size(interface_table_items)),
+                                                              interface_map["interface_name"]:"",
+                                                              interface_map["is_published"]:""
+                                                            )
+                                                     );
                         }
-                        break;
-   case `delete_interface :
-                        current = (integer)UI::QueryWidget(`interface_table, `CurrentItem);
-                        if (current!=nil && current>-1){
-                         list items = [];
-                         foreach(term oneItem, (list<term>)UI::QueryWidget(`interface_table, `Items), {
-                          if (current != oneItem[0, 0]:-1){
-                           items = add(items, `item(`id(size(items)), oneItem[1]:"", oneItem[2]:""));
-                          } else y2milestone("Deleting item %1", oneItem);
-
-                         });
-                        UI::ChangeWidget(`interface_table, `Items, items);
-                        } else y2error("Unproper index for current item: %1", current);
-                        break;
+                      }
+                    );
+             UI::ChangeWidget( `interface_table, `Items, interface_table_items );
+             UI::ChangeWidget( `interface_table, `CurrentItem, current_item );
+           }
+           break;
+      case `delete_interface :
+           current_item = (integer)UI::QueryWidget( `interface_table, `CurrentItem );
+           if( current_item != nil && current_item > -1 )
+           { interface_table_items = [];
+             foreach( term interface_table_item,
+                      (list<term>)UI::QueryWidget(`interface_table, `Items),
+                      { if( current_item != interface_table_item[0,0]:-1 )
+                        { interface_table_items = add( interface_table_items,
+                                                      `item( `id(size(interface_table_items)),
+                                                              interface_table_item[1]:"",
+                                                              interface_table_item[2]:""
+                                                            )
+                                                     );
+                        }
+                        else
+                        { y2milestone("Deleting interface_table_item %1", interface_table_item );
+                        }
+                      }
+                    );
+             UI::ChangeWidget( `interface_table, `Items, interface_table_items);
+           }
+           else
+           { y2error("Unproper index for current interface table item: %1", current_item);
+           }
+           break;
    case `add_ip   :
                         ret = showIPPopup("", false);
                         if (ret!=nil){
                          list items = (list)UI::QueryWidget(`ip_table, `Items);
                          items=add(items, `item(`id(size(items)), ret["device"]:"", ret["publish"]:""));
                          UI::ChangeWidget(`ip_table, `Items, items);
-                         UI::ChangeWidget(`ip_table, `CurrentItem, current);
+                         UI::ChangeWidget(`ip_table, `CurrentItem, current_item);
                         }
                         break;
 
    case `edit_ip          :
-                        current = (integer)UI::QueryWidget(`ip_table, `CurrentItem);
-                        term this2 = (term)UI::QueryWidget(`ip_table, `Item(current));
+                        current_item = (integer)UI::QueryWidget(`ip_table, `CurrentItem);
+                        term this2 = (term)UI::QueryWidget(`ip_table, `Item(current_item));
                         ret = showIPPopup((string)this2[1]:"", (this2[2]:"no"=="yes"));
                         if (ret!=nil){
                          list items = [];
                          foreach(term oneItem, (list<term>)UI::QueryWidget(`ip_table, `Items), {
-                          if (current != oneItem[0, 0]:-1){
+                          if (current_item != oneItem[0, 0]:-1){
                            items = add(items, `item(`id(size(items)), oneItem[1]:"", oneItem[2]:""));
                           } else {
                                 y2milestone("Changing item %1", oneItem);
@@ -486,21 +548,21 @@ symbol handleSharing(string key, map event)
                           }
                          });
                         UI::ChangeWidget(`ip_table, `Items, items);
-                        UI::ChangeWidget(`ip_table, `CurrentItem, current);
+                        UI::ChangeWidget(`ip_table, `CurrentItem, current_item);
                         }
                         break;
    case `delete_ip :
-                        current = (integer)UI::QueryWidget(`ip_table, `CurrentItem);
-                        if (current!=nil && current>-1){
+                        current_item = (integer)UI::QueryWidget(`ip_table, `CurrentItem);
+                        if (current_item!=nil && current_item>-1){
                          list items = [];
                          foreach(term oneItem, (list<term>)UI::QueryWidget(`ip_table, `Items), {
-                          if (current != oneItem[0, 0]:-1){
+                          if (current_item != oneItem[0, 0]:-1){
                            items = add(items, `item(`id(size(items)), oneItem[1]:"", oneItem[2]:""));
                           } else y2milestone("Deleting item %1", oneItem);
 
                          });
                         UI::ChangeWidget(`ip_table, `Items, items);
-                        } else y2error("Unproper index for current item: %1", current);
+                        } else y2error("Unproper index for current item: %1", current_item);
                         break;
   }
  }

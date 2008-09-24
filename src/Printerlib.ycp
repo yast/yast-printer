@@ -235,7 +235,8 @@ global boolean DetermineClientOnly()
   { client_conf_server_name = result["stdout"]:"";
     if( "" != client_conf_server_name
         && "localhost" != client_conf_server_name
-        && "127.0.0.1" != client_conf_server_name )
+        && "127.0.0.1" != client_conf_server_name
+      )
     { // Note that even 'localhost' or '127.0.0.1' is a valid ServerName value
       // which is used to force client tools (e.g. lpadmin, lpinfo, lpstat)
       // to ask the local cupsd via the IPP port on localhost (127.0.0.1:631)
@@ -244,17 +245,42 @@ global boolean DetermineClientOnly()
       // If the ServerName value in /etc/cups/client.conf is 'localhost'
       // it is actually no client-only config because the local cupsd is used.
       client_only = true;
+      return true;
     }
-    else
-    { client_only = false;
-    }
-  }
-  else
-  { // Use fallback values when the command above failed:
-    client_conf_server_name = "";
     client_only = false;
+    return true;
+  }
+  // The cups_client_only tool failed:
+  client_conf_server_name = result["stdout"]:"";
+  if( "" != client_conf_server_name
+      && "localhost" != client_conf_server_name
+      && "127.0.0.1" != client_conf_server_name
+    )
+  { // When there is a non-empty client_conf_server_name,
+    // cups_client_only fails when the client-only server is not accessible:
+    Popup::ErrorDetails( // Popup::ErrorDetails message
+                         // where %1 will be replaced by the server name.
+                         sformat( _("The CUPS server '%1' is not accessible"), client_conf_server_name ),
+                         result["stderr"]:""
+                       );
+    client_only = true;
     return false;
   }
+  if( "localhost" == client_conf_server_name
+      || "127.0.0.1" == client_conf_server_name
+    )
+  { client_only = false;
+    if( ! GetAndSetCupsdStatus( "" ) )
+    { if( ! GetAndSetCupsdStatus( "start" ) )
+      { return false;
+      }
+    }
+    return true;
+  }
+  // The cups_client_only tool failed for whatever reason.
+  // Use fallback values:
+  client_conf_server_name = "";
+  client_only = false;
   return true;
 }
 
