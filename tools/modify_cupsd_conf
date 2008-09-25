@@ -232,7 +232,9 @@ Listen()
   # are found if there is more than one which is allowed.
   # Remove leading spaces (to cut the right part).
   # Remove trailing spaces (needed for the test below).
-  RESULT="$( grep -i "^[[:space:]]*$KEY[[:space:]]" $CUPSDCONF | sed -e 's/:631//' -e 's/\*/all/' | tr -s '[:blank:]' ' ' | sed -e 's/^ *//' | cut -s -d ' ' -f2 | tr -s '\n' ' ' | sed -e 's/ *$//' )"
+  # Remove '/var/run/cups/cups.sock' because it is only
+  # an optional default (i.e. not really of interest).
+  RESULT="$( grep -i "^[[:space:]]*$KEY[[:space:]]" $CUPSDCONF | sed -e 's/[^ ]*\/cups\.sock//' -e 's/:631//' -e 's/\*/all/' | tr -s '[:blank:]' ' ' | sed -e 's/^ *//' | cut -s -d ' ' -f2 | tr -s '\n' ' ' | sed -e 's/ *$//' )"
   echo -n "$RESULT"
   # For a nicer output on a terminal where stdout and stderr is mixed up,
   # output a '\n' on stderr to get subsequent stuff (e.g. the shell prompt
@@ -240,9 +242,9 @@ Listen()
   echo 1>&2
   # Test if the result is the expected one if a value was specified:
   if test -n "$VALUE"
-  then if test "localhost" = "$VALUE"
-       then SPECIFIC_RESULT="$( echo "$RESULT" | sed -e 's/[^ ]*\/cups\.sock//' -e 's/ *$//' )"
-       else SPECIFIC_RESULT="$( echo "$RESULT" | sed -e 's/localhost.*//' -e 's/ *$//' )"
+  then if ! test "localhost" = "$VALUE"
+       then SPECIFIC_RESULT="$( echo "$RESULT" | sed -e 's/localhost.*//' -e 's/ *$//' )"
+       else SPECIFIC_RESULT="$RESULT"
        fi
        if test "$SPECIFIC_RESULT" != "$VALUE"
        then echo "Failed to set '$KEY $VALUE' in $CUPSDCONF." 1>&2

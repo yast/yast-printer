@@ -44,6 +44,11 @@ list< term > interface_table_items = [];
 list< term > ip_table_items = [];
 list< string > available_interfaces = [];
 boolean sharing_has_changed = false;
+boolean initial_deny_remote_access = true;
+boolean initial_allow_remote_access = false;
+boolean initial_allow_local_network_access = false;
+boolean initial_publish_to_local_network = false;
+list< term > initial_interface_table_items = [];
 
 term widgetSharing = `VBox
                      ( `VSpacing( 1 ),
@@ -53,20 +58,20 @@ term widgetSharing = `VBox
                          ( `Left
                            ( `RadioButton
                              ( `id(`deny_remote_access_radio_button),
-                               `opt(`notify),
+                               `opt(`notify, `immediate),
                                // A RadioButton label to deny remote access to local print queues:
                                _("&Deny remote access"),
-                               true
+                               initial_deny_remote_access
                              )
                            ),
                            `VSpacing( 2 ),
                            `Left
                            ( `RadioButton
                              ( `id(`allow_remote_access_radio_button),
-                               `opt(`notify),
+                               `opt(`notify, `immediate),
                                // A RadioButton label to allow remote access to local print queues:
                                _("&Allow remote access"),
-                               false
+                               initial_allow_remote_access
                              )
                            )
                          )
@@ -78,10 +83,11 @@ term widgetSharing = `VBox
                          ( `Left
                            ( `CheckBox
                              ( `id(`allow_local_network_access_check_box),
+                               `opt(`notify),
                                // A CheckBox label to allow remote access to local print queues
                                // for computers within the local network:
                                _("For computers within the &local network"),
-                               false
+                               initial_allow_local_network_access
                              )
                            ),
                            `Left
@@ -89,9 +95,10 @@ term widgetSharing = `VBox
                              ( `HSpacing( 2 ),
                                `CheckBox
                                ( `id(`publish_to_local_network_check_box),
+                                 `opt(`notify),
                                  // A CheckBox label to publish local print queues by default within the local network:
                                  _("&Publish printers by default within the local network"),
-                                 false
+                                 initial_publish_to_local_network
                                )
                              )
                            ),
@@ -114,10 +121,7 @@ term widgetSharing = `VBox
                                // via the network interface in the other table column:
                                _("Publish printers by default via this interface")
                              ),
-                             interface_table_items
-                             //[ `item( `id(0), "eth0", "no" ),
-                             //  `item( `id(1), "eth1", "yes" )
-                             //]
+                             initial_interface_table_items
                            ),
                            `Left
                            ( `HBox
@@ -142,6 +146,13 @@ term widgetSharing = `VBox
                              )
                            ),
                            `VSpacing( 1 ),
+
+                           // Have the IP table disabled until its functionality is implemented:
+                           `Frame
+                           ( "This functionality is not yet implemented:",
+                           `VBox
+                           (
+
                            `Left
                            ( `Label
                              ( `id(`ip_table_label),
@@ -161,11 +172,6 @@ term widgetSharing = `VBox
                                _("Publish printers by default for this address")
                              ),
                              ip_table_items
-                             //[ `item( `id(0), "192.168.100.1", "yes" ),
-                             //  `item( `id(1), "192.168.100.2", "no" ),
-                             //  `item( `id(2), "192.168.200.0/24", "no" ),
-                             //  `item( `id(3), "192.168.300.0/255.255.255.0", "yes" )
-                             //]
                            ),
                            `Left
                            ( `HBox
@@ -189,6 +195,10 @@ term widgetSharing = `VBox
                                )
                              )
                            )
+
+                           )
+                           )
+
                          )
                        ),
                        `VSpacing( 1 )
@@ -273,6 +283,190 @@ map showIPPopup(string device, boolean publish){
 
 boolean ApplySharingSettings()
 { sharing_has_changed = false;
+  // Get the actual settings and values from the dialog.
+  // It does not work well to query the RadioButtonGroup with something like
+  // UI::QueryWidget(`deny_or_allow_remote_access,`CurrentButton))
+  // Reason: At least with openSUSE 11.0 and Qt
+  // it is possible to un-check all buttons in a RadioButtonGroup
+  // by clicking on the currently checked button which un-checks it
+  // so that there might be no CurrentButton which leads to unexpected results.
+  // Therefore the individual buttons are tested directly to be on the safe side:
+  boolean deny_remote_access = (boolean)UI::QueryWidget( `deny_remote_access_radio_button, `Value );
+  y2milestone( "deny_remote_access_radio_button value: '%1'", deny_remote_access );
+  boolean allow_remote_access = (boolean)UI::QueryWidget( `allow_remote_access_radio_button, `Value );
+  y2milestone( "allow_remote_access_radio_button value: '%1'", allow_remote_access );
+  boolean allow_local_network_access = (boolean)UI::QueryWidget( `allow_local_network_access_check_box, `Value );
+  y2milestone( "allow_local_network_access_check_box value: '%1'", allow_local_network_access );
+  boolean publish_to_local_network = (boolean)UI::QueryWidget( `publish_to_local_network_check_box, `Value );
+  y2milestone( "publish_to_local_network_check_box value: '%1'", publish_to_local_network );
+  interface_table_items = (list<term>)UI::QueryWidget( `interface_table, `Items );
+  y2milestone( "interface_table_items: %1", interface_table_items );
+  // Keep deny_remote_access.
+  // Ignore if other settings may have been changed
+  // because whatever Allow and BrowseAddress stuff is meaningless
+  // if remote access is denied at all:
+  if( deny_remote_access && initial_deny_remote_access )
+  { // Nothing has changed:
+    return true;
+  }
+  // Switch to deny_remote_access:
+  // Ignore if other settings may have been changed too
+  // because whatever Allow and BrowseAddress stuff is meaningless
+  // if remote access is denied at all:
+  // When both the deny_remote_access_radio_button and the allow_remote_access_radio_button are un-checked,
+  // assume the user wants deny_remote_access (via '! allow_remote_access') because this is the safe setting:
+  if( deny_remote_access || ! allow_remote_access )
+  { sharing_has_changed = true;
+    // It leads to inconsistencies if only Only set 'Listen localhost' would be set
+    // but Allow and BrowseAddress enties would be kept because when there are
+    // BrowseAddress enties, it must listen on matching remote interfaces
+    // and then also matching Allow enties should be there.
+    if( ! Printerlib::ExecuteBashCommand( Printerlib::yast_bin_dir + "modify_cupsd_conf Listen localhost" ) )
+    { Popup::ErrorDetails( // Popup::ErrorDetails message.
+                           // Do not change or translate "Listen localhost", it is a system settings name.
+                           _("Failed to set only 'Listen localhost' in /etc/cups/cupsd.conf"),
+                           Printerlib::result["stderr"]:""
+                         );
+      return false;
+    }
+    if( ! Printerlib::ExecuteBashCommand( Printerlib::yast_bin_dir + "modify_cupsd_conf Allow none" ) )
+    { Popup::ErrorDetails( // Popup::ErrorDetails message.
+                           // Do not change or translate "Allow", it is a system settings name.
+                           _("Failed to remove 'Allow' entries from /etc/cups/cupsd.conf"),
+                           Printerlib::result["stderr"]:""
+                         );
+      return false;
+    }
+    if( ! Printerlib::ExecuteBashCommand( Printerlib::yast_bin_dir + "modify_cupsd_conf BrowseAddress none" ) )
+    { Popup::ErrorDetails( // Popup::ErrorDetails message.
+                           // Do not change or translate "BrowseAddress", it is a system settings name.
+                           _("Failed to remove 'BrowseAddress' entries from /etc/cups/cupsd.conf"),
+                           Printerlib::result["stderr"]:""
+                         );
+      return false;
+    }
+    // If a local cupsd is accessible, restart it,
+    // otherwise do nothing (i.e. do not start it now):
+    if( Printerlib::GetAndSetCupsdStatus( "" ) )
+    { if( ! Printerlib::GetAndSetCupsdStatus( "restart" ) )
+      { return false;
+      }
+    }
+    return true;
+  }
+  // Any kind of allow_remote_access:
+  // Check if there are real changes:
+  if( allow_local_network_access != initial_allow_local_network_access
+      || publish_to_local_network != initial_publish_to_local_network
+    )
+  { sharing_has_changed = true;
+  }
+  // Check if there are real changes in the table of interfaces.
+  // Ignore ordering and ignore duplicates (toset)
+  // but do not ignore case because network interface names are case sensitive:
+  list< string > initial_interface_table_entries = [];
+  foreach( term initial_interface_table_item,
+           initial_interface_table_items,
+           { initial_interface_table_entries = add( initial_interface_table_entries,
+                                                    initial_interface_table_item[1]:""
+                                                    + initial_interface_table_item[2]:""
+                                                  );
+           }
+         );
+  initial_interface_table_entries = toset( initial_interface_table_entries );
+  list< string > interface_table_entries = [];
+  foreach( term interface_table_item,
+           interface_table_items,
+           { interface_table_entries = add( interface_table_entries,
+                                            interface_table_item[1]:""
+                                            + interface_table_item[2]:""
+                                          );
+           }
+         );
+  interface_table_entries = toset( interface_table_entries );
+  if( mergestring( interface_table_entries, "" ) != mergestring( initial_interface_table_entries, "" ) )
+  { sharing_has_changed = true;
+  }
+  if( ! sharing_has_changed )
+  { // Nothing has changed:
+    return true;
+  }
+  string allow_values = "";
+  string browse_address_values = "";
+  foreach( term interface_table_item,
+           interface_table_items,
+           { string interface_name = interface_table_item[1]:"";
+             string is_published = interface_table_item[2]:"";
+             if( "" != interface_name )
+             { allow_values = "@IF(" + interface_name + ") " + allow_values;
+               // Add the inferface nameto browse_address_values
+               // only if remote access is allowed for this interface:
+               if( "yes" == is_published )
+               { browse_address_values = "@IF(" + interface_name + ") " + browse_address_values ;
+               }
+             }
+           }
+         );
+  if( allow_local_network_access )
+  { allow_values = "@LOCAL " + allow_values;
+    // Add "@LOCAL" to browse_address_values
+    // only if remote access is allowed for "@LOCAL":
+    if( publish_to_local_network )
+    { browse_address_values = "@LOCAL " + browse_address_values;
+    }
+  }
+  if( ! Printerlib::ExecuteBashCommand( Printerlib::yast_bin_dir
+                                        + "modify_cupsd_conf Allow '"
+                                        + allow_values
+                                        + "'"
+                                       )
+    )
+  { Popup::ErrorDetails( sformat( // Popup::ErrorDetails message
+                                  // where %1 will be replaced by one or more system settings values.
+                                  // Do not change or translate "Allow", it is a system settings name.
+                                  _("Failed to set 'Allow' entries '%1' in /etc/cups/cupsd.conf"),
+                                  allow_values
+                                ),
+                         Printerlib::result["stderr"]:""
+                       );
+    return false;
+  }
+  if( ! Printerlib::ExecuteBashCommand( Printerlib::yast_bin_dir
+                                        + "modify_cupsd_conf BrowseAddress '"
+                                        + browse_address_values
+                                        + "'"
+                                      )
+    )
+  { Popup::ErrorDetails( sformat( // Popup::ErrorDetails message
+                                  // where %1 will be replaced by one or more system settings values.
+                                  // // Do not change or translate "BrowseAddress", it is a system settings name.
+                                  _("Failed to set 'BrowseAddress' entries '%1' in /etc/cups/cupsd.conf"),
+                                  browse_address_values
+                                ),
+                         Printerlib::result["stderr"]:""
+                       );
+    return false;
+  }
+  // Currently 'Listen *:631' is simply set for any kind of remote access
+  // because the Listen directive supports only network addresses as value.
+  // Neither 'Listen @LOCAL' nor 'Listen @IF(name)' is supported.
+  // TODO: Determine the matching network address for @LOCAL and @IF(name)
+  //       and use the matching network address for the Listen directive.
+  if( ! Printerlib::ExecuteBashCommand( Printerlib::yast_bin_dir + "modify_cupsd_conf Listen all" ) )
+  { Popup::ErrorDetails( // Popup::ErrorDetails message.
+                         // Do not change or translate "Listen *:631", it is a system settings name.
+                         _("Failed to set 'Listen *:631' in /etc/cups/cupsd.conf"),
+                         Printerlib::result["stderr"]:""
+                       );
+    return false;
+  }
+  // If a local cupsd is accessible, restart it,
+  // otherwise do nothing (i.e. do not start it now):
+  if( Printerlib::GetAndSetCupsdStatus( "" ) )
+  { if( ! Printerlib::GetAndSetCupsdStatus( "restart" ) )
+    { return false;
+    }
+  }
   // Exit successfully by default and as fallback:
   return true;
 }
@@ -281,21 +475,16 @@ void initSharing( string key )
 { y2milestone( "entering initSharing with key '%1'", key );
   share_printers_dialog_is_useless = false;
   sharing_has_changed = false;
-  // Show a user information because the current implementation provides
-  // only the dialog but does not read from the system or write to the system:
-  Popup::AnyMessage( // Header of a Popup::AnyMessage because of a work-in-progress dialog:
-                     _("Under Connstruction"),
-                     // Body of a Popup::AnyMessage because of a work-in-progress dialog:
-                     _("Currently only the dialog shows up but it does\nneither read from the system nor write to the system.\n")
-                   );
   // Determine whether or not it is currently a real client-only config
   // (i.e. a ServerName != "localhost/127.0.0.1" in /etc/cups/client.conf)
   // and ignore when it fails (i.e. use the fallback value silently):
   Printerlib::DetermineClientOnly();
   if( Printerlib::client_only )
-  { if( ! Popup::YesNoHeadline( // PopupYesNoHeadline headline
-                                // where %1 will be replaced by the server name:
-                                sformat( _("Disable remote CUPS server '%1'"), Printerlib::client_conf_server_name ),
+  { if( ! Popup::YesNoHeadline( sformat( // PopupYesNoHeadline headline
+                                         // where %1 will be replaced by the server name:
+                                         _("Disable remote CUPS server '%1'"),
+                                         Printerlib::client_conf_server_name
+                                       ),
                                 // PopupYesNoHeadline body:
                                 _("A remote CUPS server setting conflicts with sharing local printer configurations.")
                               )
@@ -356,6 +545,51 @@ void initSharing( string key )
   // fill in the values of the current settings in the system:
   interface_table_items = [];
   ip_table_items = [];
+  // Determine the 'Listen' values in /etc/cups/cupsd.conf:
+  // By default there is 'Listen localhost:631' and 'Listen /var/run/cups/cups.sock'.
+  // 'Listen localhost' is mandatory (i.e. it is a broken config when it is missing).
+  // '/var/run/cups/cups.sock' is only an optional default (i.e. not really of interest).
+  // Therefore "modify_cupsd_conf Listen" reports 'localhost' but ignores '/var/run/cups/cups.sock'
+  // so that ["localhost"] is the right fallback value here:
+  list< string > listen_values = [ "" ];
+  if( Printerlib::ExecuteBashCommand( Printerlib::yast_bin_dir + "modify_cupsd_conf Listen" ) )
+  { // The command outputs a line where multiple Listen values are separated by space
+    // but possible duplicate Listen values are not removed in the command output:
+    listen_values = toset( splitstring( Printerlib::result["stdout"]:"", " " ) );
+  }
+  else
+  { // Use fallback value when the command above failed:
+    listen_values = [ "localhost" ];
+  }
+  y2milestone( "Initial listen_values: %1", listen_values );
+  // Determine if it listens at least to "localhost" and/or only to "localhost":
+  boolean listen_local = false;
+  boolean listen_remote = false;
+  foreach( string listen_value,
+           listen_values,
+           { if( "" != listen_value )
+             { if( "localhost" == listen_value )
+               { listen_local = true;
+               }
+               else
+               { listen_remote = true;
+               }
+             }
+           }
+         );
+  if( ! listen_local )
+  { // 'Listen localhost' is mandatory (i.e. it is a broken config when it is missing).
+    // Try to do a simple fix for the broken config but ignore possible failures.
+    // Set only 'Listen localhost:631' in /etc/cups/cupsd.conf which means
+    // that all possibly existing non-'localhost' Listen entries are removed.
+    // but this should be no big problem because appropriate Listen values
+    // (depending on the settings in this dialog) would be added when this dialog finishes.
+    // Only while this dialog is open, the non-'localhost' Listen entries are removed
+    // which means that there is no remote access while this dialog is open
+    // which is no big issue for a broken config without any local access ;-)
+    Printerlib::ExecuteBashCommand( Printerlib::yast_bin_dir + "modify_cupsd_conf Listen localhost" );
+    Printerlib::GetAndSetCupsdStatus( "restart" );
+  }
   // Determine the 'Allow' values for the root location '<Location />' in /etc/cups/cupsd.conf:
   // By default there is only 'Allow 127.0.0.2' but this value is suppressed in the output
   // of 'modify_cupsd_conf Allow' so that the empty sting is the right fallback value here:
@@ -383,21 +617,36 @@ void initSharing( string key )
     browse_address_values = [ "" ];
   }
   y2milestone( "Initial browse_address_values: %1", browse_address_values );
+  // Reset the different values for the different widgets in the dialog to defaults:
+  initial_deny_remote_access = true;
+  UI::ChangeWidget( `deny_remote_access_radio_button, `Value, true );
+  initial_allow_remote_access = false;
+  UI::ChangeWidget( `allow_remote_access_radio_button, `Value, false );
+  initial_allow_local_network_access = false;
+  UI::ChangeWidget( `allow_local_network_access_check_box, `Value, false );
+  initial_publish_to_local_network = false;
+  UI::ChangeWidget( `publish_to_local_network_check_box, `Value, false );
+  initial_interface_table_items = [];
   // Split the allow_values list together with the browse_address_values list
   // into the different values for the different widgets in the dialog.
   // By default no remote access is allowed (see the defaults in widgetSharing)
-  // but if there is at least one none-empty allow_value, remote access should be allowed:
+  // but if there is at least one none-empty allow_value, remote access should be allowed
+  // except when there is no remote Listen entry:
   foreach( string allow_value,
            allow_values,
-           { if( "" != allow_value )
+           { if( "" != allow_value && listen_remote )
              { UI::ChangeWidget( `deny_remote_access_radio_button, `Value, false );
+               initial_deny_remote_access = false;
                UI::ChangeWidget( `allow_remote_access_radio_button, `Value, true );
+               initial_allow_remote_access = true;
              }
              if( "@LOCAL" == allow_value )
              { UI::ChangeWidget( `allow_local_network_access_check_box, `Value, true );
+               initial_allow_local_network_access = true;
                // Check if this value appears also in the browse_address_values:
                if( contains( browse_address_values, allow_value ) )
                { UI::ChangeWidget( `publish_to_local_network_check_box, `Value, true );
+                 initial_publish_to_local_network = true;
                }
              }
              if( issubstring( allow_value, "@IF" ) )
@@ -423,9 +672,10 @@ void initSharing( string key )
          );
   y2milestone( "Initial interface_table_items: %1", interface_table_items );
   UI::ChangeWidget( `interface_table, `Items, interface_table_items );
+  initial_interface_table_items = interface_table_items;
   UI::ChangeWidget( `interface_table, `CurrentItem, -1 );
-  // Determine the currently available network interfaces in the system.
-  // Omit the loopback interface.
+  // Determine the currently available IPv4 (-family inet) network interfaces in the system.
+  // Omit loopback interfaces.
   available_interfaces = [];
   if( Printerlib::ExecuteBashCommand( "ip -family inet -oneline link show | grep -v -i loopback | cut -s -d ':' -f 2 | tr -s '[:space:]' ' '" ) )
   { // The command outputs a line where multiple network interfaces are separated by space.
@@ -441,13 +691,43 @@ void initSharing( string key )
     available_interfaces = [];
   }
   y2milestone( "available_interfaces: %1", available_interfaces );
+
+  // Have the IP table disabled until its functionality is implemented:
+  UI::ChangeWidget( `ip_table_label, `Enabled, false );
+  UI::ChangeWidget( `ip_table, `Enabled, false );
+  UI::ChangeWidget( `add_ip, `Enabled, false );
+  UI::ChangeWidget( `edit_ip, `Enabled, false );
+  UI::ChangeWidget( `delete_ip, `Enabled, false );
+
   y2milestone( "leaving initSharing" );
 }
 
 symbol handleSharing( string key, map event )
-{ if (event["EventReason"]:""=="Activated")
-  { y2milestone( "button pressed %1", event );
-    switch( event["WidgetID"]:`nil )
+{ y2milestone( "entering handleSharing with key '%1'\nand event '%2'", key, event );
+  if( "ValueChanged" == event["EventReason"]:"" )
+  { switch( event["WidgetID"]:`nil )
+    { case `allow_local_network_access_check_box :
+           if( ! (boolean)UI::QueryWidget( `allow_local_network_access_check_box, `Value ) )
+           { // Set the publish_to_local_network_check_box to false
+             // if the allow_local_network_access_check_box is set to false
+             // because it makes no sense to publish to the local network
+             // but not to allow access from the local network:
+             UI::ChangeWidget( `publish_to_local_network_check_box, `Value, false );
+           }
+           break;
+      case `publish_to_local_network_check_box :
+           if( (boolean)UI::QueryWidget( `publish_to_local_network_check_box, `Value ) )
+           { // Set the allow_local_network_access_check_box to true
+             // if the publish_to_local_network_check_box is set to true
+             // because it makes no sense to publish to the local network
+             // but not to allow access from the local network:
+             UI::ChangeWidget( `allow_local_network_access_check_box, `Value, true );
+           }
+           break;
+    }
+  }
+  if( "Activated" == event["EventReason"]:"" )
+  { switch( event["WidgetID"]:`nil )
     { integer current_item = -1;
       map ret = nil;
       map< string, string > interface_map = nil;
@@ -564,40 +844,61 @@ symbol handleSharing( string key, map event )
                         UI::ChangeWidget(`ip_table, `Items, items);
                         } else y2error("Unproper index for current item: %1", current_item);
                         break;
+    }
   }
- }
- if( ! share_printers_dialog_is_useless )
- { boolean share = (UI::QueryWidget(`deny_or_allow_remote_access, `CurrentButton)==`allow_remote_access_radio_button);
-   UI::ChangeWidget(`allow_local_network_access_check_box, `Enabled, share);
-   UI::ChangeWidget(`publish_to_local_network_check_box, `Enabled, share);
-   UI::ChangeWidget(`interface_table, `Enabled, share);
-   UI::ChangeWidget(`add_interface, `Enabled, share);
-   UI::ChangeWidget(`edit_interface, `Enabled, share);
-   UI::ChangeWidget(`delete_interface, `Enabled, share);
-   UI::ChangeWidget(`ip_table, `Enabled, share);
-   UI::ChangeWidget(`add_ip, `Enabled, share);
-   UI::ChangeWidget(`edit_ip, `Enabled, share);
-   UI::ChangeWidget(`delete_ip, `Enabled, share);
-   if(share)
-   { boolean interface_buttons=true;
-     boolean ip_buttons=true;
-     if (size((list)UI::QueryWidget(`interface_table, `Items))==0) interface_buttons=false;
-     UI::ChangeWidget(`edit_interface, `Enabled, interface_buttons);
-     UI::ChangeWidget(`delete_interface, `Enabled, interface_buttons);
-     if (size((list)UI::QueryWidget(`ip_table, `Items))==0) ip_buttons=false;
-     UI::ChangeWidget(`edit_ip, `Enabled, ip_buttons);
-     UI::ChangeWidget(`delete_ip, `Enabled, ip_buttons);
-   }
- }
- return nil;
+  if( ! share_printers_dialog_is_useless )
+  { // This does not work in any case:
+    // boolean remote_access=(`allow_remote_access_radio_button==UI::QueryWidget(`deny_or_allow_remote_access,`CurrentButton));
+    // Reason: At least with openSUSE 11.0 and Qt
+    // it is possible to un-check all buttons in a RadioButtonGroup
+    // by clicking on the currently checked button which un-checks it
+    // so that there might be no CurrentButton which leads to unexpected results.
+    // Therefore the actual button is tested directly to be on the safe side.
+    // But even this does not work really well.
+    // The reason is that un-checking the currently checked button
+    // does not trigger any event even not with "`opt(`notify, `immediate)"
+    // so that this special action is unnoticed.
+    boolean remote_access = (boolean)UI::QueryWidget( `allow_remote_access_radio_button, `Value );
+    UI::ChangeWidget(`allow_local_network_access_check_box, `Enabled, remote_access);
+    UI::ChangeWidget(`publish_to_local_network_check_box, `Enabled, remote_access);
+    UI::ChangeWidget(`interface_table_label, `Enabled, remote_access);
+    UI::ChangeWidget(`interface_table, `Enabled, remote_access);
+    UI::ChangeWidget(`add_interface, `Enabled, remote_access);
+    UI::ChangeWidget(`edit_interface, `Enabled, remote_access);
+    UI::ChangeWidget(`delete_interface, `Enabled, remote_access);
+    UI::ChangeWidget(`ip_table_label, `Enabled, remote_access);
+    UI::ChangeWidget(`ip_table, `Enabled, remote_access);
+    UI::ChangeWidget(`add_ip, `Enabled, remote_access);
+    UI::ChangeWidget(`edit_ip, `Enabled, remote_access);
+    UI::ChangeWidget(`delete_ip, `Enabled, remote_access);
+    if( remote_access )
+    { boolean interface_modify_buttons = true;
+      if( 0 == size((list)UI::QueryWidget(`interface_table, `Items)) ) interface_modify_buttons = false;
+      UI::ChangeWidget(`edit_interface, `Enabled, interface_modify_buttons);
+      UI::ChangeWidget(`delete_interface, `Enabled, interface_modify_buttons);
+      boolean ip_modify_buttons = true;
+      if( 0 == size((list)UI::QueryWidget(`ip_table, `Items)) ) ip_modify_buttons = false;
+      UI::ChangeWidget(`edit_ip, `Enabled, ip_modify_buttons);
+      UI::ChangeWidget(`delete_ip, `Enabled, ip_modify_buttons);
+    }
+  }
+
+  // Have the IP table disabled until its functionality is implemented:
+  UI::ChangeWidget( `ip_table_label, `Enabled, false );
+  UI::ChangeWidget( `ip_table, `Enabled, false );
+  UI::ChangeWidget( `add_ip, `Enabled, false );
+  UI::ChangeWidget( `edit_ip, `Enabled, false );
+  UI::ChangeWidget( `delete_ip, `Enabled, false );
+
+  return nil;
 }
 
 void storeSharing( string key, map event )
 { y2milestone( "entering storeSharing with key '%1'\nand event '%2'", key, event );
   if( ! ApplySharingSettings() )
   { Popup::Error( // Popup::Error message:
-                      _("Failed to apply the settings to the system.")
-                    );
+                  _("Failed to apply the settings to the system.")
+                );
   }
   if( ! sharing_has_changed )
   { y2milestone( "Nothing changed in 'Share Printers' dialog." );

@@ -41,7 +41,6 @@ import "Summary";
 import "Message";
 import "Popup";
 import "Printerlib";
-import "NetworkInterfaces";
 import "Mode";
 import "Stage";
 import "Service";
@@ -613,7 +612,12 @@ global boolean Read()
                );
   // Progress 1. stage (Autodetect already configured printers):
   if( Abort() ) return false;
-  //in second stage of installation be sure that cups is running
+  // Only in the second stage of the system installation make sure that a local cupsd is running
+  // because it is needed for automated queue setup during system installation
+  // see https://bugzilla.novell.com/show_bug.cgi?id=418585
+  // Note that otherwise a local cupsd is not required (e.g. when it is a client-only setup).
+  // There are various checks in each individual case whether or not a local cupsd is required.
+  // E.g. it is required to "Add" a local queue or to "Share Printers" (i.e. share local queues).
   if (Mode::installation() && Stage::cont()){
    if (Service::Status("cups")!=0)
 	Service::Start("cups");
@@ -621,10 +625,9 @@ global boolean Read()
   Printerlib::Read();
   // Progress last stage (progress finished):
   if( Abort() ) return false;
-  NetworkInterfaces::Read();
   Progress::NextStage();
   // Sleep half a second to let the user notice that the progress is finished:
-//  sleep( 500 );
+  sleep( 500 );
   if( Abort() ) return false;
   Progress::Finish();
   return true;
