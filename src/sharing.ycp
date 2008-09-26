@@ -301,22 +301,48 @@ boolean ApplySharingSettings()
   y2milestone( "publish_to_local_network_check_box value: '%1'", publish_to_local_network );
   interface_table_items = (list<term>)UI::QueryWidget( `interface_table, `Items );
   y2milestone( "interface_table_items: %1", interface_table_items );
-  // Keep deny_remote_access.
-  // Ignore if other settings may have been changed
-  // because whatever Allow and BrowseAddress stuff is meaningless
-  // if remote access is denied at all:
-  if( deny_remote_access && initial_deny_remote_access )
-  { // Nothing has changed:
-    return true;
+  string allow_values = "";
+  string browse_address_values = "";
+  foreach( term interface_table_item,
+           interface_table_items,
+           { string interface_name = interface_table_item[1]:"";
+             string is_published = interface_table_item[2]:"";
+             if( "" != interface_name )
+             { allow_values = "@IF(" + interface_name + ") " + allow_values;
+               // Add the inferface nameto browse_address_values
+               // only if remote access is allowed for this interface:
+               if( "yes" == is_published )
+               { browse_address_values = "@IF(" + interface_name + ") " + browse_address_values ;
+               }
+             }
+           }
+         );
+  if( allow_local_network_access )
+  { allow_values = "@LOCAL " + allow_values;
+    // Add "@LOCAL" to browse_address_values
+    // only if remote access is allowed for "@LOCAL":
+    if( publish_to_local_network )
+    { browse_address_values = "@LOCAL " + browse_address_values;
+    }
   }
-  // Switch to deny_remote_access:
+  y2milestone( "allow_values: %1", allow_values );
+  y2milestone( "browse_address_values: %1", browse_address_values );
+  // Any kind of deny_remote_access:
   // Ignore if other settings may have been changed too
   // because whatever Allow and BrowseAddress stuff is meaningless
   // if remote access is denied at all:
-  // When both the deny_remote_access_radio_button and the allow_remote_access_radio_button are un-checked,
-  // assume the user wants deny_remote_access (via '! allow_remote_access') because this is the safe setting:
-  if( deny_remote_access || ! allow_remote_access )
-  { sharing_has_changed = true;
+  // When both the deny_remote_access_radio_button and the allow_remote_access_radio_button
+  // are un-checked, assume the user wants deny_remote_access (via '! allow_remote_access')
+  // because this is the safe setting (even when allow_values is not empty):
+  if( deny_remote_access
+      || ! allow_remote_access
+      || "" == allow_values
+    )
+  { if( initial_deny_remote_access )
+    { // Nothing has changed:
+      return true;
+    }
+    sharing_has_changed = true;
     // It leads to inconsistencies if only Only set 'Listen localhost' would be set
     // but Allow and BrowseAddress enties would be kept because when there are
     // BrowseAddress enties, it must listen on matching remote interfaces
@@ -337,6 +363,11 @@ boolean ApplySharingSettings()
                          );
       return false;
     }
+    // Do not change the global "Browsing On/Off" entry in cupsd.conf
+    // because "Browsing Off" disables also receiving
+    // of remote queue information from remote CUPS servers
+    // which might be needed by the "Print Via Network" dialog.
+    // Instead remove only the "BrowseAddress" entries in cupsd.conf:
     if( ! Printerlib::ExecuteBashCommand( Printerlib::yast_bin_dir + "modify_cupsd_conf BrowseAddress none" ) )
     { Popup::ErrorDetails( // Popup::ErrorDetails message.
                            // Do not change or translate "BrowseAddress", it is a system settings name.
@@ -391,30 +422,8 @@ boolean ApplySharingSettings()
   { // Nothing has changed:
     return true;
   }
-  string allow_values = "";
-  string browse_address_values = "";
-  foreach( term interface_table_item,
-           interface_table_items,
-           { string interface_name = interface_table_item[1]:"";
-             string is_published = interface_table_item[2]:"";
-             if( "" != interface_name )
-             { allow_values = "@IF(" + interface_name + ") " + allow_values;
-               // Add the inferface nameto browse_address_values
-               // only if remote access is allowed for this interface:
-               if( "yes" == is_published )
-               { browse_address_values = "@IF(" + interface_name + ") " + browse_address_values ;
-               }
-             }
-           }
-         );
-  if( allow_local_network_access )
-  { allow_values = "@LOCAL " + allow_values;
-    // Add "@LOCAL" to browse_address_values
-    // only if remote access is allowed for "@LOCAL":
-    if( publish_to_local_network )
-    { browse_address_values = "@LOCAL " + browse_address_values;
-    }
-  }
+  // When allow_values is empty, it is a deny_remote_access case, see above.
+  // Therefore allow_values is non-empty here:
   if( ! Printerlib::ExecuteBashCommand( Printerlib::yast_bin_dir
                                         + "modify_cupsd_conf Allow '"
                                         + allow_values
@@ -426,27 +435,39 @@ boolean ApplySharingSettings()
                                   // Do not change or translate "Allow", it is a system settings name.
                                   _("Failed to set 'Allow' entries '%1' in /etc/cups/cupsd.conf"),
                                   allow_values
-                                ),
+                                  ),
                          Printerlib::result["stderr"]:""
                        );
     return false;
   }
-  if( ! Printerlib::ExecuteBashCommand( Printerlib::yast_bin_dir
-                                        + "modify_cupsd_conf BrowseAddress '"
-                                        + browse_address_values
-                                        + "'"
-                                      )
-    )
-  { Popup::ErrorDetails( sformat( // Popup::ErrorDetails message
-                                  // where %1 will be replaced by one or more system settings values.
-                                  // // Do not change or translate "BrowseAddress", it is a system settings name.
-                                  _("Failed to set 'BrowseAddress' entries '%1' in /etc/cups/cupsd.conf"),
-                                  browse_address_values
-                                ),
-                         Printerlib::result["stderr"]:""
-                       );
-    return false;
+  if( "" != browse_address_values )
+  { if( ! Printerlib::ExecuteBashCommand( Printerlib::yast_bin_dir
+                                          + "modify_cupsd_conf BrowseAddress '"
+                                          + browse_address_values
+                                          + "'"
+                                        )
+      )
+    { Popup::ErrorDetails( sformat( // Popup::ErrorDetails message
+                                    // where %1 will be replaced by one or more system settings values.
+                                    // Do not change or translate "BrowseAddress", it is a system settings name.
+                                    _("Failed to set 'BrowseAddress' entries '%1' in /etc/cups/cupsd.conf"),
+                                    browse_address_values
+                                  ),
+                           Printerlib::result["stderr"]:""
+                         );
+      return false;
+    }
+    // Having "BrowseAddress" entries requires "Browsing On",
+    // otherwise browsing information would not be sent at all:
+    if( ! Printerlib::ExecuteBashCommand( Printerlib::yast_bin_dir + "modify_cupsd_conf Browsing On" ) )
+    { Popup::ErrorDetails( // Popup::ErrorDetails message:
+                           _("Failed to set 'Browsing On' in /etc/cups/cupsd.conf"),
+                           Printerlib::result["stderr"]:""
+                         );
+      return false;
+    }
   }
+  // Only if all the above was successfully set, Listen is set too:
   // Currently 'Listen *:631' is simply set for any kind of remote access
   // because the Listen directive supports only network addresses as value.
   // Neither 'Listen @LOCAL' nor 'Listen @IF(name)' is supported.
@@ -732,17 +753,45 @@ symbol handleSharing( string key, map event )
       map ret = nil;
       map< string, string > interface_map = nil;
       case `add_interface :
+           current_item = (integer)UI::QueryWidget( `interface_table, `CurrentItem );
            interface_map = showInterfacePopup( "", false );
-           if( interface_map != nil )
-           { interface_table_items = (list<term>)UI::QueryWidget( `interface_table, `Items );
-             interface_table_items = add( interface_table_items,
-                                          `item( `id(size(interface_table_items)),
-                                                 interface_map["interface_name"]:"",
-                                                 interface_map["is_published"]:""
-                                               )
-                                        );
+           boolean is_in_table = false;
+           if( interface_map != nil)
+           { interface_table_items = [];
+             foreach( term interface_table_item,
+                      (list<term>)UI::QueryWidget( `interface_table, `Items),
+                      { if( interface_map["interface_name"]:"new" != interface_table_item[1]:"old" )
+                        { interface_table_items = add( interface_table_items,
+                                                       `item( `id(size(interface_table_items)),
+                                                              interface_table_item[1]:"",
+                                                              interface_table_item[2]:""
+                                                            )
+                                                     );
+                        }
+                        else
+                        { is_in_table = true;
+                          y2milestone( "Changing interface_table_item %1 with interface_map %2", interface_table_item, interface_map );
+                          interface_table_items = add( interface_table_items,
+                                                       `item( `id(size(interface_table_items)),
+                                                              interface_map["interface_name"]:"",
+                                                              interface_map["is_published"]:""
+                                                            )
+                                                     );
+                        }
+                      }
+                    );
+             if( ! is_in_table )
+             { y2milestone( "Adding interface_map %1", interface_map );
+               interface_table_items = add( interface_table_items,
+                                            `item( `id(size(interface_table_items)),
+                                                   interface_map["interface_name"]:"",
+                                                   interface_map["is_published"]:""
+                                                 )
+                                          );
+               current_item = size(interface_table_items) - 1;
+             }
              UI::ChangeWidget( `interface_table, `Items, interface_table_items );
-             UI::ChangeWidget( `interface_table, `CurrentItem, size(interface_table_items) - 1 );
+             UI::ChangeWidget( `interface_table, `CurrentItem, current_item );
            }
            break;
       case `edit_interface :
@@ -764,7 +813,7 @@ symbol handleSharing( string key, map event )
                                                      );
                         }
                         else
-                        { y2milestone( "Changing interface_table_item %1", interface_table_item );
+                        { y2milestone( "Changing interface_table_item %1 with interface_map %2", interface_table_item, interface_map );
                           interface_table_items = add( interface_table_items,
                                                        `item( `id(size(interface_table_items)),
                                                               interface_map["interface_name"]:"",

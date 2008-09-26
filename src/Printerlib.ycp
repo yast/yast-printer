@@ -108,17 +108,28 @@ global boolean GetAndSetCupsdStatus( string new_status )
                          );
       return false;
     }
-    // Wait one minute for a new started cupsd is necessary because
+    // Sleep one second in any case so that the new started cupsd can become ready to operate:
+    sleep( 1000 );
+    // Wait half a minute for a new started cupsd is necessary because
     // when a client-only config is switched to a "get Browsing info" config
     // the BrowseInterval in cupsd.conf on remote CUPS servers is by default 30 seconds
     // so that the local cupsd should listen at least 31 seconds to get Browsing info
     // before e.g. the Overview dialog can be shown with the right current queues.
-    // Additionally during first start after system installation the cupsd parses
-    // all the (usually thousands) of installed PPDs to generate
-    // the list of available drivers (what "lpinfo -l -m" shows).
-    Popup::TimedMessage( _("Started the CUPS daemon.\nWaiting one minute so that it is ready to operate..."),
-                         60
+    Popup::TimedMessage( _("Started the CUPS daemon.\nWaiting half a minute so that it is ready to operate..."),
+                         30
                        );
+    local_cupsd_accessible = ExecuteBashCommand( local_cupsd_accessible_commandline );
+    if( ! local_cupsd_accessible )
+    { // It can take up to a few minutes when a cupsd is started
+      // for the very first time (e.g. on a new installed system)
+      // until the cupsd is actually ready to operate.
+      // E.g. because parsing of thousands of PPDs may need much time.
+      // Therefore enforce waiting one minute now.
+      // (Plain busy message without title.)
+      Popup::ShowFeedback( "", _("The CUPS daemon in not yet accessible.\nWaiting one minute so that it is ready to operate...") );
+      sleep( 60000 );
+      Popup::ClearFeedback();
+    }
     local_cupsd_accessible = ExecuteBashCommand( local_cupsd_accessible_commandline );
     if( ! local_cupsd_accessible )
     { Popup::Error( // Popup::Error message:
@@ -155,13 +166,17 @@ global boolean GetAndSetCupsdStatus( string new_status )
                          );
       return false;
     }
-    // Wait 40 seconds for a restarted cupsd is necessary because
+    // Sleep two seconds in any case so that the re-started cupsd can become ready to operate.
+    // It may need one second for some cleanup before finishing
+    // and one second to become ready to operate after starting.
+    sleep( 2000 );
+    // Wait half a minute for a restarted cupsd is necessary because
     // when a "no Browsing info" config is switched to a "get Browsing info" config
     // the BrowseInterval in cupsd.conf on remote CUPS servers is by default 30 seconds
     // so that the local cupsd should listen at least 31 seconds to get Browsing info
     // before e.g. the Overview dialog can be shown with the right current queues.
-    Popup::TimedMessage( _("Restarted the CUPS daemon.\nWaiting 40 seconds so that it is ready to operate..."),
-                         40
+    Popup::TimedMessage( _("Restarted the CUPS daemon.\nWaiting half a minute so that it is ready to operate..."),
+                         30
                        );
     local_cupsd_accessible = ExecuteBashCommand( local_cupsd_accessible_commandline );
     if( ! local_cupsd_accessible )
