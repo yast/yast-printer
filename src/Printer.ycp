@@ -36,7 +36,6 @@ module "Printer";
 textdomain "printer";
 
 import "Progress";
-import "Report";
 import "Summary";
 import "Message";
 import "Popup";
@@ -290,11 +289,12 @@ boolean CreateDatabase()
     else
     { Popup::ClearFeedback();
     }
-    Report::Error( // Message of a Report::Error.
-                   // Only a simple message because this error does not happen on a normal system
-                   // (i.e. a system which is not totally broken or totally messed up).
-                   _("Failed to create PPD database.")
-                 );
+    Popup::ErrorDetails( // Popup::ErrorDetails message.
+                         // Only a simple message because this error does not happen on a normal system
+                         // (i.e. a system which is not totally broken or totally messed up).
+                         _("Failed to create PPD database."),
+                         Printerlib::result["stderr"]:""
+                       );
     return false;
   }
   if( -1 == SCR::Read( .target.size, database_filename ) )
@@ -305,12 +305,12 @@ boolean CreateDatabase()
     { Popup::ClearFeedback();
     }
     y2milestone( "Error: %1: file does not exist.", database_filename );
-    Report::Error( sformat( // Message of a Report::Error where %1 will be replaced by the file name.
-                            // Only a simple message because this error does not happen on a normal system
-                            // (i.e. a system which is not totally broken or totally messed up).
-                            _("File %1 does not exist."),
-                            database_filename
-                          )
+    Popup::Error( sformat( // Message of a Popup::Error where %1 will be replaced by the file name.
+                           // Only a simple message because this error does not happen on a normal system
+                           // (i.e. a system which is not totally broken or totally messed up).
+                           _("File %1 does not exist."),
+                           database_filename
+                         )
                  );
     return false;
   }
@@ -323,12 +323,12 @@ boolean CreateDatabase()
     { Popup::ClearFeedback();
     }
     y2milestone( "Error: Failed to read %1", database_filename );
-    Report::Error( sformat( // Message of a Report::Error where %1 will be replaced by the file name.
-                            // Only a simple message because this error does not happen on a normal system
-                            // (i.e. a system which is not totally broken or totally messed up).
-                            _("Failed to read %1."),
-                            database_filename
-                          )
+    Popup::Error( sformat( // Message of a Popup::Error where %1 will be replaced by the file name.
+                           // Only a simple message because this error does not happen on a normal system
+                           // (i.e. a system which is not totally broken or totally messed up).
+                           _("Failed to read %1."),
+                           database_filename
+                         )
                  );
     ppds = [];
     return false;
@@ -410,13 +410,14 @@ boolean AutodetectPrinters()
     else
     { Popup::ClearFeedback();
     }
-    Report::Error( // Message of a Report::Error.
-                   // Only a simple message because this error does not happen on a normal system
-                   // (i.e. a system which is not totally broken or totally messed up).
-                   // Do not confuse this error with the case when no printer was autodetected.
-                   // The latter results no error.
-                   _("Failed to detect printers automatically.")
-                 );
+    Popup::ErrorDetails( // Popup::ErrorDetails message.
+                         // Only a simple message because this error does not happen on a normal system
+                         // (i.e. a system which is not totally broken or totally messed up).
+                         // Do not confuse this error with the case when no printer was autodetected.
+                         // The latter results no error.
+                         _("Failed to detect printers automatically."),
+                         Printerlib::result["stderr"]:""
+                       );
     return false;
   }
   if( -1 == SCR::Read( .target.size, autodetected_printers_filename ) )
@@ -427,12 +428,12 @@ boolean AutodetectPrinters()
     { Popup::ClearFeedback();
     }
     y2milestone( "Error: %1: file does not exist.", autodetected_printers_filename );
-    Report::Error( sformat( // Message of a Report::Error where %1 will be replaced by the file name.
-                            // Only a simple message because this error does not happen on a normal system
-                            // (i.e. a system which is not totally broken or totally messed up).
-                            _("File %1 does not exist."),
-                            autodetected_printers_filename
-                          )
+    Popup::Error( sformat( // Message of a Popup::Error where %1 will be replaced by the file name.
+                           // Only a simple message because this error does not happen on a normal system
+                           // (i.e. a system which is not totally broken or totally messed up).
+                           _("File %1 does not exist."),
+                           autodetected_printers_filename
+                         )
                  );
     return false;
   }
@@ -445,13 +446,13 @@ boolean AutodetectPrinters()
     { Popup::ClearFeedback();
     }
     y2milestone( "Error: Failed to read %1", autodetected_printers_filename );
-    Report::Error( sformat( // Message of a Report::Error where %1 will be replaced by the file name.
-                            // Only a simple message because this error does not happen on a normal system
-                            // (i.e. a system which is not totally broken or totally messed up).
-                            _("Failed to read %1."),
-                            autodetected_printers_filename
-                          )
-                 );
+    Popup::Error( sformat( // Message of a Popup::Error where %1 will be replaced by the file name.
+                           // Only a simple message because this error does not happen on a normal system
+                           // (i.e. a system which is not totally broken or totally messed up).
+                           _("Failed to read %1."),
+                           autodetected_printers_filename
+                         )
+                );
     connections = [];
     return false;
   }
@@ -494,36 +495,37 @@ global boolean AutodetectQueues()
 { // To be safe invalidate selected_queues_index in any case:
   selected_queues_index = -1;
   if( ! Printerlib::ExecuteBashCommand( autodetect_queues_commandline ) )
-  { Report::Error( // Message of a Report::Error.
-                   // Only a simple message because this error does not happen on a normal system
-                   // (i.e. a system which is not totally broken or totally messed up).
-                   // Do not confuse this error with the case when no queue was detected
-                   // (e.g. simply because there is no queue). This results no error.
-                   _("Failed to detect print queues.")
-                 );
+  { Popup::ErrorDetails( // Popup::ErrorDetails message.
+                         // Only a simple message because this error does not happen on a normal system
+                         // (i.e. a system which is not totally broken or totally messed up).
+                         // Do not confuse this error with the case when no queue was detected
+                         // (e.g. simply because there is no queue). This results no error.
+                         _("Failed to detect print queues."),
+                         Printerlib::result["stderr"]:""
+                       );
     return false;
   }
   if( -1 == SCR::Read( .target.size, autodetected_queues_filename ) )
   { y2milestone( "Error: %1: file does not exist.", autodetected_queues_filename );
-    Report::Error( sformat( // Message of a Report::Error where %1 will be replaced by the file name.
-                            // Only a simple message because this error does not happen on a normal system
-                            // (i.e. a system which is not totally broken or totally messed up).
-                            _("File %1 does not exist."),
-                            autodetected_queues_filename
-                          )
-                 );
+    Popup::Error( sformat( // Message of a Popup::Error where %1 will be replaced by the file name.
+                           // Only a simple message because this error does not happen on a normal system
+                           // (i.e. a system which is not totally broken or totally messed up).
+                           _("File %1 does not exist."),
+                           autodetected_queues_filename
+                         )
+                );
     return false;
   }
   queues = (list< map< string, string > >)SCR::Read( .target.ycp, autodetected_queues_filename );
   if( nil == queues )
   { y2milestone( "Error: Failed to read %1", autodetected_queues_filename );
-    Report::Error( sformat( // Message of a Report::Error where %1 will be replaced by the file name.
-                            // Only a simple message because this error does not happen on a normal system
-                            // (i.e. a system which is not totally broken or totally messed up).
-                            _("Failed to read %1."),
-                            autodetected_queues_filename
-                          )
-                 );
+    Popup::Error( sformat( // Message of a Popup::Error where %1 will be replaced by the file name.
+                           // Only a simple message because this error does not happen on a normal system
+                           // (i.e. a system which is not totally broken or totally messed up).
+                           _("Failed to read %1."),
+                           autodetected_queues_filename
+                         )
+                );
     queues = [];
     return false;
   }
@@ -551,38 +553,39 @@ global boolean DetermineDriverOptions( string queue_name )
   }
   string commandline = determine_printer_driver_options_commandline + queue_name;
   if( ! Printerlib::ExecuteBashCommand( commandline ) )
-  { Report::Error( sformat( // Message of a Report::Error where %1 will be replaced by the queue name.
-                            // Only a simple message because this error does not happen on a normal system
-                            // (i.e. a system which is not totally broken or totally messed up).
-                            // Do not confuse this error with the case when no queue was detected
-                            // (e.g. simply because there is no queue). This results no error.
-                            _("Failed to determine driver options for queue %1."),
-                            queue_name
-                          )
-                 );
+  { Popup::ErrorDetails( sformat( // Popup::ErrorDetails message where %1 will be replaced by the queue name.
+                                  // Only a simple message because this error does not happen on a normal system
+                                  // (i.e. a system which is not totally broken or totally messed up).
+                                  // Do not confuse this error with the case when no queue was detected
+                                  // (e.g. simply because there is no queue). This results no error.
+                                  _("Failed to determine driver options for queue %1."),
+                                  queue_name
+                                ),
+                         Printerlib::result["stderr"]:""
+                       );
     return false;
   }
   if( -1 == SCR::Read( .target.size, driver_options_filename ) )
   { y2milestone( "Error: %1: file does not exist.", driver_options_filename );
-    Report::Error( sformat( // Message of a Report::Error where %1 will be replaced by the file name.
-                            // Only a simple message because this error does not happen on a normal system
-                            // (i.e. a system which is not totally broken or totally messed up).
-                            _("File %1 does not exist."),
-                            driver_options_filename
-                          )
-                 );
+    Popup::Error( sformat( // Message of a Popup::Error where %1 will be replaced by the file name.
+                           // Only a simple message because this error does not happen on a normal system
+                           // (i.e. a system which is not totally broken or totally messed up).
+                           _("File %1 does not exist."),
+                           driver_options_filename
+                         )
+                );
     return false;
   }
   driver_options = (list< map< string, any > >)SCR::Read( .target.ycp, driver_options_filename );
   if( nil == driver_options )
   { y2milestone( "Error: Failed to read %1", driver_options_filename );
-    Report::Error( sformat( // Message of a Report::Error where %1 will be replaced by the file name.
-                            // Only a simple message because this error does not happen on a normal system
-                            // (i.e. a system which is not totally broken or totally messed up).
-                            _("Failed to read %1."),
-                            driver_options_filename
-                          )
-                 );
+    Popup::Error( sformat( // Message of a Popup::Error where %1 will be replaced by the file name.
+                           // Only a simple message because this error does not happen on a normal system
+                           // (i.e. a system which is not totally broken or totally messed up).
+                           _("Failed to read %1."),
+                           driver_options_filename
+                         )
+                );
     driver_options = [];
     return false;
   }
@@ -745,13 +748,13 @@ global list QueueItems( boolean local, boolean remote )
 { // Invalidate selected_queues_index to be safe:
   selected_queues_index = -1;
   if( ! AutodetectQueues() )
-  { Report::Error( // Message of a Report::Error.
-                   // Only a simple message because this error does not happen on a normal system
-                   // (i.e. a system which is not totally broken or totally messed up).
-                   // Do not confuse this error with the case when no queue was detected
-                   // (e.g. simply because there is no queue). This results no error.
-                   _("Cannot show print queues (failed to detect print queues).")
-                 );
+  { Popup::Error( // Message of a Popup::Error.
+                  // Only a simple message because this error does not happen on a normal system
+                  // (i.e. a system which is not totally broken or totally messed up).
+                  // Do not confuse this error with the case when no queue was detected
+                  // (e.g. simply because there is no queue). This results no error.
+                  _("Cannot show print queues (failed to detect print queues).")
+                );
     // Return an empty list:
     return [];
   }
@@ -856,11 +859,11 @@ global list ConnectionItems( string connection_filter_string )
            );
     // AutodetectPrinters overwrites the existing connections list:
     if( ! AutodetectPrinters() )
-    { Report::Error( // Message of a Report::Error.
-                     // Only a simple message because before the function AutodetectPrinters
-                     // was called and this function would have shown more specific messages.
-                     _("Failed to autodetect printers.")
-                   );
+    { Popup::Error( // Message of a Popup::Error.
+                    // Only a simple message because before the function AutodetectPrinters
+                    // was called and this function would have shown more specific messages.
+                    _("Failed to autodetect printers.")
+                  );
       // Return only the existing connection wizard connections which is usally an empty list:
       return connection_wizard_connections;
     }
@@ -1091,11 +1094,11 @@ global list DriverItems( string driver_filter_string, boolean preselection )
 { // Create the driver database only if the ppds list is empty:
   if( size( ppds ) < 1 )
   { if( ! CreateDatabase() )
-    { Report::Error( // Message of a Report::Error.
-                     // Only a simple message because before the function CreateDatabase
-                     // was called and this function would have shown more specific messages.
-                     _("Failed to create the printer driver database.")
-                   );
+    { Popup::Error( // Message of a Popup::Error.
+                    // Only a simple message because before the function CreateDatabase
+                    // was called and this function would have shown more specific messages.
+                    _("Failed to create the printer driver database.")
+                  );
       // Return an empty list:
       return [];
     }
@@ -1571,11 +1574,11 @@ global list DriverOptionItems( string selected_keyword, string selected_value )
 { // Run DetermineDriverOptions if the driver_options list is empty:
   if( size( driver_options ) < 1 )
   { if( ! DetermineDriverOptions( "" ) )
-    { Report::Error( // Message of a Report::Error.
-                     // Only a simple message because this is only a fallback case
-                     // which should not happen at all:
-                     _("Failed to determine the driver options.")
-                   );
+    { Popup::Error( // Message of a Popup::Error.
+                    // Only a simple message because this is only a fallback case
+                    // which should not happen at all:
+                    _("Failed to determine the driver options.")
+                  );
       // Return at least a list with only a fallback string so that the user is informed:
       return [ _("No driver options available") ];
     }

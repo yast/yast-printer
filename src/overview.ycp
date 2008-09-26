@@ -33,7 +33,6 @@ textdomain "printer";
 
 import "Label";
 import "Popup";
-import "Report";
 import "Wizard";
 import "Wizard_hw";
 import "Confirm";
@@ -348,10 +347,11 @@ symbol handleOverview( string key, map event )
       }
       // Remove the 'ServerName' entry in /etc/cups/client.conf:
       if( ! Printerlib::ExecuteBashCommand( Printerlib::yast_bin_dir + "cups_client_only none" ) )
-      { Report::Error( // Message of a Report::Error.
-                       // Only a simple message because this error does not happen on a normal system
-                       // (i.e. a system which is not totally broken or totally messed up).
-                       _("Failed to remove the 'ServerName' entry in /etc/cups/client.conf")
+      { Popup::ErrorDetails( // Popup::ErrorDetails message.
+                             // Only a simple message because this error does not happen on a normal system
+                             // (i.e. a system which is not totally broken or totally messed up).
+                             _("Failed to remove the 'ServerName' entry in /etc/cups/client.conf"),
+                             Printerlib::result["stderr"]:""
                      );
         return nil;
       }
