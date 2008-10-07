@@ -1327,9 +1327,15 @@ global list DriverItems( string driver_filter_string, boolean preselection )
   // (in openSUSE 10.2 the 13 entries are for the "Kyocera FS-600").
   // In openSUSE 10.2 there are only 4 models (HP LaserJet 4, 4100, 9000 and the Kyocera FS-600)
   // for which more than 9 entries exist (11 for LaserJet 4100 and 12 for LaserJet 4 and 9000)
-  // but there are 23 models with 9 entries (there is no no model with 10 entries)
-  // so that a maximum of 10 entries for the special sorting should be o.k.:
-  if( size( driver_items ) <= 10 )
+  // but there are 23 models with 9 entries (there is no no model with 10 entries).
+  // Since there is /usr/lib/cups/driver/gutenprint.* the Gutenprint entries are listed twice:
+  // Once for the readymade PPDs in /usr/share/cups/model/gutenprint/
+  // and additionally a second entry from /usr/lib/cups/driver/gutenprint.*
+  // which increases the maximum lenght of the driver_items list for the same model
+  // in openSUSE 11.0 up to 17 for the Kyocera FS-600 and 16 for the HP LaserJet 4
+  // and several other HP LaserJet and Kyocera models with more than 10 entries
+  // so that a maximum of 20 entries for the special sorting should be o.k.:
+  if( size( driver_items ) <= 20 )
   { // Test if all entries in the driver_items list seem to be for the same model.
     list< integer > position = [];
     string manufacturer_and_model = "";
