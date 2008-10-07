@@ -34,8 +34,10 @@ then echo "Read and write $CUPSDCONF (but does not restart cupsd)." 1>&2
      echo "BrowseAddress [ @LOCAL | @IF(name) | host-address | broadcast-address ] | BrowseAddress none" 1>&2
      echo "e.g.: BrowseAddress '@LOCAL @IF(eth1) 192.168.100.1 192.168.200.255'" 1>&2
      echo "      BrowseAddress none (to send no browse packets, i.e. no BrowseAddress line)" 1>&2
-     echo "There is a strict syntax for keywords and values:" 1>&2
-     echo "Case matters." 1>&2
+     echo "For the syntax for keywords and values see 'man cupsd.conf'" 1>&2
+     echo "and http://www.cups.org/documentation.php/ref-cupsd-conf.html" 1>&2
+     echo "In case of ambiguity use the syntax which is described above." 1>&2
+     echo "Usually case matters, in particular for special keywords like On Off @LOCAL @IF none all." 1>&2
      echo "Multiple values for a keyword must be separated by space." 1>&2
      exit 1
 fi
@@ -67,12 +69,7 @@ fi
 # Function to deal with 'Browsing [On|Off]'
 Browsing()
 { if test -n "$VALUE"
-  then # If a value was specified, only 'On' or 'Off' (case sensitive) are allowed:
-       if ! test "On" = "$VALUE" -o "Off" = "$VALUE"
-       then echo "Only '$KEY [ On | Off ]' is supported." 1>&2
-            exit 5
-       fi
-       # Try to substitute an existing active Browsing line (ignore case).
+  then # Try to substitute an existing active Browsing line (ignore case).
        # (If there is more than one active Browsing line it is a broken config file):
        sed -i -e "s/^[[:space:]]*$KEY.*/$KEY $VALUE/i" $CUPSDCONF
        # There may exist no Browsing line:
@@ -108,20 +105,7 @@ Browsing()
 # Function to deal with 'BrowseAllow [ all | @LOCAL | host-address | network-address/netmask ] | BrowseAllow none'
 BrowseAllow()
 { if test -n "$VALUE"
-  then # If a value was specified, only 'all' or 'none' or '@LOCAL' (case sensitive)
-       # or one or more IP-addresses are allowed:
-       if ! test "none" = "$VALUE"
-       then for V in $VALUE
-            do if ! test "all" = "$V" -o "@LOCAL" = "$V"
-               then # Test if value matches to IP-address syntax:
-                    if ! echo "$V" | egrep -q '^([0-9]{1,3}\.){3}[0-9]{1,3}(/([0-9]{1,2})|/(([0-9]{1,3}\.){3}[0-9]{1,3}))?$'
-                    then echo "Only '$KEY [ all | @LOCAL | host-address | network-address/netmask ]' or '$KEY none' is supported." 1>&2
-                         exit 5
-                    fi
-               fi
-            done
-       fi
-       # Set 'BrowseOrder allow,deny' to deny browse packets by default
+  then # Set 'BrowseOrder allow,deny' to deny browse packets by default
        # and then allow them from certain sources via BrowseAllow entries
        # and finally deny from certain sources via BrowseDeny entries.
        # All existing active BrowseOrder lines are removed (ignore case).
@@ -178,19 +162,7 @@ BrowseAllow()
 # Function to deal with 'Listen [ all | network-address ] | Listen localhost'
 Listen()
 { if test -n "$VALUE"
-  then # If a value was specified, only 'all' or 'localhost' or one or more network-addresses are allowed:
-       if ! test "localhost" = "$VALUE"
-       then for V in $VALUE
-            do if ! test "all" = "$V"
-               then # Test if value matches to IP-address syntax:
-                    if ! echo "$V" | egrep -q '^([0-9]{1,3}\.){3}[0-9]{1,3}$'
-                    then echo "Only '$KEY [ all | network-address ]' or '$KEY localhost' is supported." 1>&2
-                         exit 5
-                   fi
-              fi
-           done
-       fi
-       # Determine if it listens on the domain socket:
+  then # Determine if it listens on the domain socket:
        LISTEN_DOMAIN_SOCKET_LINE_CONTENT="$( grep -i '^[[:space:]]*Listen.*/cups.sock' $CUPSDCONF | head -n 1 )"
        # All existing active Port lines are deactivated (ignore case).
        # Those lines are not removed because YaST does not support Port lines
@@ -256,23 +228,7 @@ Listen()
 # Function to deal with 'Allow [ all | @LOCAL | @IF(name) | host-address | network-address/netmask ] | Allow none'
 Allow()
 { if test -n "$VALUE"
-  then # If a value was specified, only 'all' or 'none' or '@LOCAL' (case sensitive)
-       # or '@IF(name)' or one or more IP-addresses are allowed:
-       if ! test "none" = "$VALUE"
-       then for V in $VALUE
-            do if ! test "all" = "$V" -o "@LOCAL" = "$V"
-               then # Test if value matches to @IF(name) syntax:
-                    if ! echo "$V" | egrep -q '^@IF\([^)]*\)$'
-                    then # Test if value matches to IP-address syntax:
-                         if ! echo "$V" | egrep -q '^([0-9]{1,3}\.){3}[0-9]{1,3}(/([0-9]{1,2})|/(([0-9]{1,3}\.){3}[0-9]{1,3}))?$'
-                         then echo "Only '$KEY [ all | @LOCAL | @IF(name) | host-address | network-address/netmask ]' or '$KEY none' is supported." 1>&2
-                              exit 5
-                         fi
-                    fi
-               fi
-            done
-       fi
-       # Determine where the (first) root location starts (ignore case and ignore spaces):
+  then # Determine where the (first) root location starts (ignore case and ignore spaces):
        ROOT_LOCATION_LINE_NUMBER="$( sed -n -e '/[[:space:]]*<[[:space:]]*Location[[:space:]]*\/[[:space:]]*>/I=' $CUPSDCONF | head -n 1 )"
        # Remove all root locations (ignore case and ignore spaces).
        # (If there is more than one root location it is a broken config file).
@@ -324,23 +280,7 @@ Allow()
 # Function to deal with 'BrowseAddress [ @LOCAL | @IF(name) | host-address | broadcast-address ] | BrowseAddress none'
 BrowseAddress()
 { if test -n "$VALUE"
-  then # If a value was specified, only 'none' (case sensitive)
-       # or '@IF(name)' or one or more IP-addresses are allowed:
-       if ! test "none" = "$VALUE"
-       then for V in $VALUE
-            do if ! test "@LOCAL" = "$V"
-               then # Test if value matches to @IF(name) syntax:
-                    if ! echo "$V" | egrep -q '^@IF\([^)]*\)$'
-                    then # Test if value matches to IP-address syntax:
-                         if ! echo "$V" | egrep -q '^([0-9]{1,3}\.){3}[0-9]{1,3}$'
-                         then echo "Only '$KEY [ @LOCAL | @IF(name) | host-address | broadcast-address ]' or '$KEY none' is supported." 1>&2
-                              exit 5
-                         fi
-                    fi
-               fi
-            done
-       fi
-       # All existing active BrowseAddress lines are removed (ignore case).
+  then # All existing active BrowseAddress lines are removed (ignore case).
        # Those lines can be removed because YaST supports BrowseAddress lines
        # (YaST shows BrowseAddress entries in the "share printers" dialog):
        sed -i -e '/^[[:space:]]*BrowseAddress.*/Id' $CUPSDCONF

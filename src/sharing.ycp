@@ -41,7 +41,6 @@ include "printer/helps.ycp";
 
 boolean share_printers_dialog_is_useless = false;
 list< term > interface_table_items = [];
-list< term > ip_table_items = [];
 list< string > available_interfaces = [];
 boolean sharing_has_changed = false;
 boolean initial_deny_remote_access = true;
@@ -49,6 +48,8 @@ boolean initial_allow_remote_access = false;
 boolean initial_allow_local_network_access = false;
 boolean initial_publish_to_local_network = false;
 list< term > initial_interface_table_items = [];
+string initial_allow_input = "";
+string initial_browse_address_input = "";
 
 term widgetSharing = `VBox
                      ( `VSpacing( 1 ),
@@ -147,60 +148,52 @@ term widgetSharing = `VBox
                              )
                            ),
                            `VSpacing( 1 ),
-
-                           // Have the IP table disabled until its functionality is implemented:
                            `Frame
-                           ( "This functionality is not yet implemented:",
-                           `VBox
-                           (
-
-                           `Left
-                           ( `Label
-                             ( `id(`ip_table_label),
-                               // A caption for a table to allow remote access to local print queues
-                               // for hosts and/or networks specified in the table below:
-                               _("For hosts / networks specified below")
-                             )
-                           ),
-                           `Table
-                           ( `id(`ip_table),
-                             `opt(`keepSorting),
-                             `header
-                             ( // A table column header where the column lists IP addresses:
-                               _("IP address"),
-                               // A table column header where the column shows whether or not
-                               // local print queues are published by default
-                               // via the IP address in the other table column:
-                               _("Publish printers by default for this address")
-                             ),
-                             ip_table_items
-                           ),
-                           `Left
-                           ( `HBox
-                             ( `PushButton
-                               ( `id(`add_ip),
-                                 // A PushButton label to add an IP address to the table which shows
-                                 // the IP addresses to allow remote access to local print queues:
-                                 _("A&dd")
+                           ( `id(`specific_addresses_frame),
+                             // A caption to allow remote access to local print queues
+                             // for hosts and/or networks specified in two TextEntries below:
+                             _("Optional Specific IP Addresses or Networks"),
+                             `VBox
+                             ( `Left
+                               ( `TextEntry
+                                 ( `id(`allow_input),
+                                   // TextEntry to allow remote access to local print queues
+                                   // for hosts and/or networks:
+                                   _("Allow remote access for &hosts or networks")
+                                 )
                                ),
-                               `PushButton
-                               ( `id(`edit_ip),
-                                 // A PushButton label to change an IP address in the table which shows
-                                 // the IP addresses to allow remote access to local print queues:
-                                 _("Ed&it")
+                               `Left
+                               ( `Label
+                                 ( `id(`allow_input_label),
+                                   // Label to show the syntax for the TextEntry to allow remote access
+                                   // to local print queues for hosts and/or networks:
+                                   _("(each nnn.nnn.nnn.nnn or nnn.nnn.nnn.nnn/mmm.mmm.mmm.mmm separated by one space)")
+                                 )
                                ),
-                               `PushButton
-                               ( `id(`delete_ip),
-                                 // A PushButton label to delete an IP address from the table which shows
-                                 // the IP addresses to allow remote access to local print queues:
-                                 _("De&lete")
+                               `Left
+                               ( `HBox
+                                 ( `HSpacing( 2 ),
+                                   `TextEntry
+                                   ( `id(`browse_address_input),
+                                     // TextEntry to publish local print queues
+                                     // to hosts and/or networks:
+                                     _("Publish to hosts or network &broadcast addresses")
+                                   )
+                                 )
+                               ),
+                               `Left
+                               ( `HBox
+                                 ( `HSpacing( 2 ),
+                                   `Label
+                                   ( `id(`browse_address_input_label),
+                                     // Label to show the syntax for the TextEntry to to publish
+                                     // local print queues to hosts and/or networks:
+                                     _("(each nnn.nnn.nnn.nnn or nnn.nnn.nnn.255 separated by one space)")
+                                   )
+                                 )
                                )
                              )
                            )
-
-                           )
-                           )
-
                          )
                        ),
                        `VSpacing( 1 )
@@ -250,37 +243,6 @@ map< string, string > showInterfacePopup( string interface_name, boolean is_publ
   }
   UI::CloseDialog();
   return interface_map;
-}
-
-map showIPPopup(string device, boolean publish){
- map result = $[];
-         UI::OpenDialog( `VBox(
-            `CheckBox(`id(`publish), _("&Publish printers by default via "), publish),
-            // translators: input field label for list of configured IPs
-            `InputField( `id(`device), _("Network &Address:"), device ),
-            `VSpacing(),
-            `HBox(
-                `PushButton( `id(`ok), Label::OKButton() ),
-                `PushButton( `id(`cancel), Label::CancelButton() )
-             )
-        ));
- if(device!="") UI::ChangeWidget(`device, `Value, device);
- while(true){
-  any ret = UI::UserInput();
-  if (ret==`cancel){
-   result=nil;
-   break;
-  }
-  if (ret==`ok){
-   publish = (boolean)UI::QueryWidget(`publish, `Value);
-   device = (string)UI::QueryWidget(`device, `Value);
-   result["device"]=device;
-   result["publish"]=publish ? "yes" : "no";
-   break;
-  }
- }
- UI::CloseDialog();
- return result;
 }
 
 boolean ApplySharingSettings()
@@ -558,16 +520,15 @@ void initSharing( string key )
     UI::ChangeWidget( `add_interface, `Enabled, false );
     UI::ChangeWidget( `edit_interface, `Enabled, false );
     UI::ChangeWidget( `delete_interface, `Enabled, false );
-    UI::ChangeWidget( `ip_table_label, `Enabled, false );
-    UI::ChangeWidget( `ip_table, `Enabled, false );
-    UI::ChangeWidget( `add_ip, `Enabled, false );
-    UI::ChangeWidget( `edit_ip, `Enabled, false );
-    UI::ChangeWidget( `delete_ip, `Enabled, false );
+    UI::ChangeWidget( `specific_addresses_frame, `Enabled, false );
+    UI::ChangeWidget( `allow_input, `Enabled, false );
+    UI::ChangeWidget( `allow_input_label, `Enabled, false );
+    UI::ChangeWidget( `browse_address_input, `Enabled, false );
+    UI::ChangeWidget( `browse_address_input_label, `Enabled, false );
   }
   // Regardless whether or not the "Share Printers" dialog is useless,
   // fill in the values of the current settings in the system:
   interface_table_items = [];
-  ip_table_items = [];
   // Determine the 'Listen' values in /etc/cups/cupsd.conf:
   // By default there is 'Listen localhost:631' and 'Listen /var/run/cups/cups.sock'.
   // 'Listen localhost' is mandatory (i.e. it is a broken config when it is missing).
@@ -650,6 +611,8 @@ void initSharing( string key )
   initial_publish_to_local_network = false;
   UI::ChangeWidget( `publish_to_local_network_check_box, `Value, false );
   initial_interface_table_items = [];
+  initial_allow_input = "";
+  initial_browse_address_input = "";
   // Split the allow_values list together with the browse_address_values list
   // into the different values for the different widgets in the dialog.
   // By default no remote access is allowed (see the defaults in widgetSharing)
@@ -657,7 +620,11 @@ void initSharing( string key )
   // except when there is no remote Listen entry:
   foreach( string allow_value,
            allow_values,
-           { if( "" != allow_value && listen_remote )
+           { if( "" == filterchars( allow_value, Printer::alnum_chars ) )
+             { // Ignore an effectively empty allow_value:
+               continue;
+             }
+             if( listen_remote && initial_deny_remote_access )
              { UI::ChangeWidget( `deny_remote_access_radio_button, `Value, false );
                initial_deny_remote_access = false;
                UI::ChangeWidget( `allow_remote_access_radio_button, `Value, true );
@@ -671,6 +638,7 @@ void initSharing( string key )
                { UI::ChangeWidget( `publish_to_local_network_check_box, `Value, true );
                  initial_publish_to_local_network = true;
                }
+               continue;
              }
              if( issubstring( allow_value, "@IF" ) )
              { // The allow_value has the form '@IF(interface-name)' e.g. '@IF(eth1)'.
@@ -690,7 +658,32 @@ void initSharing( string key )
                                                                           )
                                             );
                }
+               continue;
              }
+             // When the allow_value is neither "@LOCAL" nor "@IF(...)"
+             // it is for the allow_input TextEntry:
+             initial_allow_input = initial_allow_input + allow_value;
+           }
+         );
+  foreach( string browse_address_value,
+           browse_address_values,
+           { if( "" == filterchars( browse_address_value, Printer::alnum_chars ) )
+             { // Ignore an effectively empty browse_address_value:
+               continue;
+             }
+             if( "@LOCAL" == browse_address_value )
+             { // Skip when the browse_address_value is "@LOCAL"
+               // because this case is handled in the foreach for allow_values above:
+               continue;
+             }
+             if( issubstring( browse_address_value, "@IF" ) )
+             { // Skip when the browse_address_value has the form '@IF(interface-name)'
+               // because this case is handled in the foreach for allow_values above:
+               continue;
+             }
+             // When the browse_address_value is neither "@LOCAL" nor "@IF(...)"
+             // it is for the browse_address_input TextEntry:
+             initial_browse_address_input = initial_browse_address_input + browse_address_value;
            }
          );
   y2milestone( "Initial interface_table_items: %1", interface_table_items );
@@ -714,14 +707,10 @@ void initSharing( string key )
     available_interfaces = [];
   }
   y2milestone( "available_interfaces: %1", available_interfaces );
-
-  // Have the IP table disabled until its functionality is implemented:
-  UI::ChangeWidget( `ip_table_label, `Enabled, false );
-  UI::ChangeWidget( `ip_table, `Enabled, false );
-  UI::ChangeWidget( `add_ip, `Enabled, false );
-  UI::ChangeWidget( `edit_ip, `Enabled, false );
-  UI::ChangeWidget( `delete_ip, `Enabled, false );
-
+  y2milestone( "Initial initial_allow_input: %1", initial_allow_input );
+  UI::ChangeWidget( `id(`allow_input), `Value, initial_allow_input );
+  y2milestone( "Initial initial_browse_address_input: %1", initial_browse_address_input );
+  UI::ChangeWidget( `id(`browse_address_input), `Value, initial_browse_address_input );
   y2milestone( "leaving initSharing" );
 }
 
@@ -854,47 +843,6 @@ symbol handleSharing( string key, map event )
            { y2error("Unproper index for current interface table item: %1", current_item);
            }
            break;
-   case `add_ip   :
-                        ret = showIPPopup("", false);
-                        if (ret!=nil){
-                         list items = (list)UI::QueryWidget(`ip_table, `Items);
-                         items=add(items, `item(`id(size(items)), ret["device"]:"", ret["publish"]:""));
-                         UI::ChangeWidget(`ip_table, `Items, items);
-                         UI::ChangeWidget(`ip_table, `CurrentItem, current_item);
-                        }
-                        break;
-
-   case `edit_ip          :
-                        current_item = (integer)UI::QueryWidget(`ip_table, `CurrentItem);
-                        term this2 = (term)UI::QueryWidget(`ip_table, `Item(current_item));
-                        ret = showIPPopup((string)this2[1]:"", (this2[2]:"no"=="yes"));
-                        if (ret!=nil){
-                         list items = [];
-                         foreach(term oneItem, (list<term>)UI::QueryWidget(`ip_table, `Items), {
-                          if (current_item != oneItem[0, 0]:-1){
-                           items = add(items, `item(`id(size(items)), oneItem[1]:"", oneItem[2]:""));
-                          } else {
-                                y2milestone("Changing item %1", oneItem);
-                                items = add(items, `item(`id(size(items)), ret["device"]:"", ret["publish"]:""));
-                          }
-                         });
-                        UI::ChangeWidget(`ip_table, `Items, items);
-                        UI::ChangeWidget(`ip_table, `CurrentItem, current_item);
-                        }
-                        break;
-   case `delete_ip :
-                        current_item = (integer)UI::QueryWidget(`ip_table, `CurrentItem);
-                        if (current_item!=nil && current_item>-1){
-                         list items = [];
-                         foreach(term oneItem, (list<term>)UI::QueryWidget(`ip_table, `Items), {
-                          if (current_item != oneItem[0, 0]:-1){
-                           items = add(items, `item(`id(size(items)), oneItem[1]:"", oneItem[2]:""));
-                          } else y2milestone("Deleting item %1", oneItem);
-
-                         });
-                        UI::ChangeWidget(`ip_table, `Items, items);
-                        } else y2error("Unproper index for current item: %1", current_item);
-                        break;
     }
   }
   if( ! share_printers_dialog_is_useless )
@@ -917,30 +865,18 @@ symbol handleSharing( string key, map event )
     UI::ChangeWidget(`add_interface, `Enabled, remote_access);
     UI::ChangeWidget(`edit_interface, `Enabled, remote_access);
     UI::ChangeWidget(`delete_interface, `Enabled, remote_access);
-    UI::ChangeWidget(`ip_table_label, `Enabled, remote_access);
-    UI::ChangeWidget(`ip_table, `Enabled, remote_access);
-    UI::ChangeWidget(`add_ip, `Enabled, remote_access);
-    UI::ChangeWidget(`edit_ip, `Enabled, remote_access);
-    UI::ChangeWidget(`delete_ip, `Enabled, remote_access);
+    UI::ChangeWidget(`specific_addresses_frame, `Enabled, remote_access);
+    UI::ChangeWidget(`allow_input, `Enabled, remote_access);
+    UI::ChangeWidget(`allow_input_label, `Enabled, remote_access);
+    UI::ChangeWidget(`browse_address_input, `Enabled, remote_access);
+    UI::ChangeWidget(`browse_address_input_label, `Enabled, remote_access);
     if( remote_access )
     { boolean interface_modify_buttons = true;
       if( 0 == size((list)UI::QueryWidget(`interface_table, `Items)) ) interface_modify_buttons = false;
       UI::ChangeWidget(`edit_interface, `Enabled, interface_modify_buttons);
       UI::ChangeWidget(`delete_interface, `Enabled, interface_modify_buttons);
-      boolean ip_modify_buttons = true;
-      if( 0 == size((list)UI::QueryWidget(`ip_table, `Items)) ) ip_modify_buttons = false;
-      UI::ChangeWidget(`edit_ip, `Enabled, ip_modify_buttons);
-      UI::ChangeWidget(`delete_ip, `Enabled, ip_modify_buttons);
     }
   }
-
-  // Have the IP table disabled until its functionality is implemented:
-  UI::ChangeWidget( `ip_table_label, `Enabled, false );
-  UI::ChangeWidget( `ip_table, `Enabled, false );
-  UI::ChangeWidget( `add_ip, `Enabled, false );
-  UI::ChangeWidget( `edit_ip, `Enabled, false );
-  UI::ChangeWidget( `delete_ip, `Enabled, false );
-
   return nil;
 }
 
