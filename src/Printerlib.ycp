@@ -33,6 +33,7 @@
 module "Printerlib";
 textdomain "printer";
 
+import "Package";
 import "Popup";
 import "Service";
 
@@ -70,6 +71,54 @@ global boolean ExecuteBashCommand( string bash_commandline )
   { y2warning( "'%1' exit code is: %2", bash_commandline, result["exit"]:9999 );
     y2warning( "'%1' stdout is: %2", bash_commandline, result["stdout"]:"" );
     y2warning( "'%1' stderr is: %2", bash_commandline, result["stderr"]:"" );
+    return false;
+  }
+  return true;
+}
+
+/**
+ * Test whether the package is installed (Package::Installed) and
+ * if not then test whether the package is available to be installed (Package::Available) and
+ * if yes then install it (Package::Install).
+ * @param package_name string of the package name
+ * @return true on success
+ */
+global boolean TestAndInstallPackage( string package_name )
+{ if( Package::Installed( package_name ) )
+  { return true;
+  }
+  // Is the package available to be installed?
+  // Package::Available returns nil if no package source is available.
+  boolean package_available = Package::Available( package_name );
+  if( nil == package_available )
+  { y2milestone( "Required package %1 is not installed and there is no package repository available.", package_name );
+    Popup::Error( sformat( // Message of a Popup::Error where %1 will be replaced by the package name:
+                           _("Required package %1 is not installed and there is no package repository available."),
+                           package_name
+                         )
+                );
+    return false;
+  }
+  if( ! package_available )
+  { y2milestone( "Required package %1 is not installed and not available in the repository.", package_name );
+    Popup::Error( sformat( // Message of a Popup::Error where %1 will be replaced by the package name:
+                           _("Required package %1 is not installed and not available in the repository."),
+                           package_name
+                         )
+                );
+    return false;
+  }
+  if( ! Package::Install( package_name ) )
+  { y2milestone( "Failed to install required package %1.", package_name );
+    Popup::Error( // Message of a Popup::Error where %1 will be replaced by the package name.
+                  // Only a simple message because:
+                  // Either the user has explicitely rejected to install the package,
+                  // or this error does not happen on a normal system
+                  // (i.e. a system which is not totally broken or totally messed up).
+                  sformat( _("Failed to install required package %1."),
+                             package_name
+                         )
+                );
     return false;
   }
   return true;

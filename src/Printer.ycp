@@ -602,19 +602,38 @@ global boolean Read()
   Progress::New( // Header of a Progress::New:
                  _("Initializing Printer Configuration"),
                  " ",
-                 1,
+                 2,
                  [ // 1. progress stage name of a Progress::New:
-                   _("Autodetect already configured printers"),
+                   _("Check installed packages"),
+                   // 2. progress stage name of a Progress::New:
+                   _("Determine basic print system settings")
                  ],
                  [ // 1. progress step progress bar title of a Progress::New:
-                   _("Autodetecting already configured printers..."),
+                   _("Checking installed packages..."),
+                   // 2. progress step progress bar title of a Progress::New:
+                   _("Determining basic print system settings..."),
                    // Last progress step progress bar title of a Progress::New:
                    _("Finished")
                  ],
                  ""
                );
-  // Progress 1. stage (Autodetect already configured printers):
+  // Progress 1. stage (Check installed packages):
   if( Abort() ) return false;
+  // The cups-client RPM is the minimum requirement
+  // for accessing remote CUPS servers via a "client-only" config.
+  // Therefore abort (return false) if cups-client is not installed:
+  if( ! Printerlib::TestAndInstallPackage( "cups-client" ) )
+  { return false;
+  }
+  // The cups RPM ist the default requirement
+  // for accessing remote CUPS servers via CUPS Browsing
+  // and it is the minimum requirement for local print queues.
+  // Therefore try to install cups but because for a "client-only" config
+  // only cups-client is required, proceed even if cups is not installed:
+  Printerlib::TestAndInstallPackage( "cups" );
+  // Progress 2. stage (Determine basic print system settings):
+  if( Abort() ) return false;
+  Progress::NextStage();
   // Only in the second stage of the system installation make sure that a local cupsd is running
   // because it is needed for automated queue setup during system installation
   // see https://bugzilla.novell.com/show_bug.cgi?id=418585
@@ -875,6 +894,16 @@ global list ConnectionItems( string connection_filter_string )
     // which is needed here to preserve any entry to be on the safe side:
     connections = (list <map <string, string> >)merge( connection_wizard_connections, connections );
   }
+  // Determine if there is at least one "hp:/usb/" DeviceURI:
+  boolean hp_usb_uri_exists = false;
+  foreach( map< string, string > connection_entry,
+           connections,
+           { if( "hp:/usb/" == substring( connection_entry["uri"]:"", 0, 8 ) )
+             { hp_usb_uri_exists = true;
+               break;
+             }
+           }
+         );
   // Make a list of uri, model, and info entries of the connections
   // and take the connection_filter_string into account (if it is not the empty string).
   selected_connections_index = -1;
@@ -917,15 +946,25 @@ global list ConnectionItems( string connection_filter_string )
                        || "hp:/" == substring( uri, 0, 4 )
                        || "ConnectionWizardDialog" == class
                      )
-                   { // Add trailing spaces because the current YaST UI
-                     // has almost no additional space between table columns
-                     // in partitcular not where the widest entry in a column is:
-                     connection_items = add( connection_items, `item( `id( connections_index ),
-                                                                      model + " ",
-                                                                      uri + " ",
-                                                                      info
-                                                                    )
-                                           );
+                   { // Skip "usb://HP/" DeviceURIs if there is at least one "hp:/usb/" DeviceURI
+                     // so that the "hp:/usb/" DeviceURI is used with preference.
+                     // The "usb://HP/" DeviceURI is still available via "MoreConnections".
+                     if( "usb://hp/" == tolower( substring( uri, 0, 9 ) )
+                         && hp_usb_uri_exists
+                       )
+                     { y2milestone( "skipped 'usb://HP/' DeviceURI '%1'", uri );
+                     }
+                     else
+                     { // Add trailing spaces because the current YaST UI
+                       // has almost no additional space between table columns
+                       // in partitcular not where the widest entry in a column is:
+                       connection_items = add( connection_items, `item( `id( connections_index ),
+                                                                        model + " ",
+                                                                        uri + " ",
+                                                                        info
+                                                                      )
+                                             );
+                     }
                    }
                  }
                  else
