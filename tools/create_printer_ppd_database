@@ -42,7 +42,11 @@ fi
 # Exit after timeout because then no empty YCP map is output
 # so that either an existing YCP map could be used or YaST could also exit
 # because without a PPD database printer setup makes not much sense.
-MAXIMUM_WAIT="60"
+# The very long timeout is usually only needed on slower machines
+# and there also usually only once after a new system installation
+# when the cupsd reads thousands of PPDs for the very first time
+# (see Novell/Suse Bugzilla bnc#429397):
+MAXIMUM_WAIT="300"
 $LPINFO -h localhost -l -m >$TMP_DATA_RAW &
 lpinfoPID=$!
 for i in $( seq $MAXIMUM_WAIT )
