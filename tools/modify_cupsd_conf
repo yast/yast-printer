@@ -47,7 +47,10 @@ then echo "Cannot read or write $CUPSDCONF." 1>&2
      exit 2
 fi
 
-# Remove duplicates (ignore case) and remove duplicate, leading and trailing spaces:
+# Remove duplicates (ignore case) and remove duplicate, leading and trailing spaces.
+# Case is only ignored if there are duplicates (e.g. 'host.domain.com' and 'Host.Domain.com')
+# but if there is e.g. only 'Host.Domain.com' it is written exactly this way to cupsd.conf
+# because the user may like to have it exactly in cupsd.conf (even if actually case may not matter):
 VALUE="$( for V in $2 ; do echo $V ; done | sort -b -f -u | tr -s '[:space:]' ' ' | sed -e 's/ *$//' )"
 
 # Make a backup of /etc/cups/cupsd.conf if it would be changed:
