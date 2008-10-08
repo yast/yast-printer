@@ -48,8 +48,8 @@ boolean initial_allow_remote_access = false;
 boolean initial_allow_local_network_access = false;
 boolean initial_publish_to_local_network = false;
 list< term > initial_interface_table_items = [];
-string initial_allow_input = "";
-string initial_browse_address_input = "";
+string initial_allow_input_value = "";
+string initial_browse_address_input_value = "";
 
 term widgetSharing = `VBox
                      ( `VSpacing( 1 ),
@@ -152,21 +152,21 @@ term widgetSharing = `VBox
                            ( `id(`specific_addresses_frame),
                              // A caption to allow remote access to local print queues
                              // for hosts and/or networks specified in two TextEntries below:
-                             _("Optional Specific IP Addresses or Networks"),
+                             _("For Experts: Optional Specific IP Addresses or Networks"),
                              `VBox
                              ( `Left
                                ( `TextEntry
                                  ( `id(`allow_input),
                                    // TextEntry to allow remote access to local print queues
                                    // for hosts and/or networks:
-                                   _("Allow remote access for &hosts or networks")
+                                   _("Allow remote access from those IP addresses or &network/netmask")
                                  )
                                ),
                                `Left
                                ( `Label
                                  ( `id(`allow_input_label),
                                    // Label to show the syntax for the TextEntry to allow remote access
-                                   // to local print queues for hosts and/or networks:
+                                   // to local print queues from IP addresses and/or networks:
                                    _("(each nnn.nnn.nnn.nnn or nnn.nnn.nnn.nnn/mmm.mmm.mmm.mmm separated by one space)")
                                  )
                                ),
@@ -176,8 +176,8 @@ term widgetSharing = `VBox
                                    `TextEntry
                                    ( `id(`browse_address_input),
                                      // TextEntry to publish local print queues
-                                     // to hosts and/or networks:
-                                     _("Publish to hosts or network &broadcast addresses")
+                                     // to IP addresses and/or network broadcast addresses:
+                                     _("Publish to those IP addresses or network &broadcast addresses")
                                    )
                                  )
                                ),
@@ -265,8 +265,12 @@ boolean ApplySharingSettings()
   y2milestone( "publish_to_local_network_check_box value: '%1'", publish_to_local_network );
   interface_table_items = (list<term>)UI::QueryWidget( `interface_table, `Items );
   y2milestone( "interface_table_items: %1", interface_table_items );
-  string allow_values = "";
-  string browse_address_values = "";
+  string current_allow_input_value = (string)UI::QueryWidget( `id(`allow_input), `Value );
+  y2milestone( "current_allow_input_value: %1", current_allow_input_value );
+  string current_browse_address_input_value = (string)UI::QueryWidget( `id(`browse_address_input), `Value );
+  y2milestone( "current_browse_address_input_value: %1", current_browse_address_input_value );
+  string allow_values = current_allow_input_value;
+  string browse_address_values = current_browse_address_input_value;
   foreach( term interface_table_item,
            interface_table_items,
            { string interface_name = interface_table_item[1]:"";
@@ -300,7 +304,8 @@ boolean ApplySharingSettings()
   // because this is the safe setting (even when allow_values is not empty):
   if( deny_remote_access
       || ! allow_remote_access
-      || "" == allow_values
+      || "" == filterchars( allow_values, Printer::alnum_chars + "*" )
+      || contains( splitstring( tolower( current_allow_input_value ), " " ), "none" )
     )
   { if( initial_deny_remote_access )
     { // Nothing has changed:
@@ -380,6 +385,19 @@ boolean ApplySharingSettings()
          );
   interface_table_entries = toset( interface_table_entries );
   if( mergestring( interface_table_entries, "" ) != mergestring( initial_interface_table_entries, "" ) )
+  { sharing_has_changed = true;
+  }
+  // Check if there are real changes in the values in allow_input and in browse_address_input.
+  // Do not ignore changes in the case (e.g. from 'host.domain.com' to 'Host.Domain.com')
+  // because the user may like to have it exactly in cupsd.conf (even if actually case may not matter):
+  list< string > initial_allow_input_set = toset( splitstring( initial_allow_input_value, " " ) );
+  list< string > current_allow_input_set = toset( splitstring( current_allow_input_value, " " ) );
+  if( mergestring( current_allow_input_set, "" ) != mergestring( initial_allow_input_set, "" ) )
+  { sharing_has_changed = true;
+  }
+  list< string > initial_browse_address_input_set = toset( splitstring( initial_browse_address_input_value, " " ) );
+  list< string > current_browse_address_input_set = toset( splitstring( current_browse_address_input_value, " " ) );
+  if( mergestring( current_browse_address_input_set, "" ) != mergestring( initial_browse_address_input_set, "" ) )
   { sharing_has_changed = true;
   }
   if( ! sharing_has_changed )
@@ -611,26 +629,29 @@ void initSharing( string key )
   initial_publish_to_local_network = false;
   UI::ChangeWidget( `publish_to_local_network_check_box, `Value, false );
   initial_interface_table_items = [];
-  initial_allow_input = "";
-  initial_browse_address_input = "";
+  initial_allow_input_value = "";
+  initial_browse_address_input_value = "";
   // Split the allow_values list together with the browse_address_values list
   // into the different values for the different widgets in the dialog.
   // By default no remote access is allowed (see the defaults in widgetSharing)
   // but if there is at least one none-empty allow_value, remote access should be allowed
   // except when there is no remote Listen entry:
+  boolean none_empty_allow_values = false;
+  boolean allow_none = false;
   foreach( string allow_value,
            allow_values,
            { if( "" == filterchars( allow_value, Printer::alnum_chars ) )
              { // Ignore an effectively empty allow_value:
                continue;
              }
-             if( listen_remote && initial_deny_remote_access )
-             { UI::ChangeWidget( `deny_remote_access_radio_button, `Value, false );
-               initial_deny_remote_access = false;
-               UI::ChangeWidget( `allow_remote_access_radio_button, `Value, true );
-               initial_allow_remote_access = true;
+             none_empty_allow_values = true;
+             if( "none" == tolower( allow_value ) )
+             { allow_none = true;
              }
-             if( "@LOCAL" == allow_value )
+             // To be safe against any unexpected locale mess, I use tolower for both strings so that
+             // equal strings result true regardless of what tolower/toupper results in which locale
+             // instead of an asymmetric comparison like "@LOCAL" == toupper(allow_value):
+             if( tolower( "@LOCAL" ) == tolower( allow_value ) )
              { UI::ChangeWidget( `allow_local_network_access_check_box, `Value, true );
                initial_allow_local_network_access = true;
                // Check if this value appears also in the browse_address_values:
@@ -640,7 +661,7 @@ void initSharing( string key )
                }
                continue;
              }
-             if( issubstring( allow_value, "@IF" ) )
+             if( issubstring( tolower( allow_value ), tolower( "@IF" ) ) )
              { // The allow_value has the form '@IF(interface-name)' e.g. '@IF(eth1)'.
                // Check if this value appears also in the browse_address_values:
                string publish_via_this_interface = "no";
@@ -661,29 +682,43 @@ void initSharing( string key )
                continue;
              }
              // When the allow_value is neither "@LOCAL" nor "@IF(...)"
-             // it is for the allow_input TextEntry:
-             initial_allow_input = initial_allow_input + allow_value;
+             // it is for the allow_input TextEntry (intentionally also if it is "none").
+             // Have a trailing space character so that the user can easily add something:
+             initial_allow_input_value = initial_allow_input_value + allow_value + " ";
            }
          );
+  // By default initial_deny_remote_access is true
+  // and initial_allow_remote_access is false (see above)
+  // and this is correct (i.e. it must not be changed)
+  // when the cupsd does not listen on a remote interface
+  // or when the allow_values are effectively empty
+  // or when one of the the allow_values is "none":
+  if( listen_remote && none_empty_allow_values && ! allow_none )
+  { UI::ChangeWidget( `deny_remote_access_radio_button, `Value, false );
+    initial_deny_remote_access = false;
+    UI::ChangeWidget( `allow_remote_access_radio_button, `Value, true );
+    initial_allow_remote_access = true;
+  }
   foreach( string browse_address_value,
            browse_address_values,
            { if( "" == filterchars( browse_address_value, Printer::alnum_chars ) )
              { // Ignore an effectively empty browse_address_value:
                continue;
              }
-             if( "@LOCAL" == browse_address_value )
+             if( tolower( "@LOCAL" ) == tolower( browse_address_value ) )
              { // Skip when the browse_address_value is "@LOCAL"
                // because this case is handled in the foreach for allow_values above:
                continue;
              }
-             if( issubstring( browse_address_value, "@IF" ) )
+             if( issubstring( tolower( browse_address_value ), tolower( "@IF" ) ) )
              { // Skip when the browse_address_value has the form '@IF(interface-name)'
                // because this case is handled in the foreach for allow_values above:
                continue;
              }
              // When the browse_address_value is neither "@LOCAL" nor "@IF(...)"
-             // it is for the browse_address_input TextEntry:
-             initial_browse_address_input = initial_browse_address_input + browse_address_value;
+             // it is for the browse_address_input TextEntry.
+             // Have a trailing space character so that the user can easily add something:
+             initial_browse_address_input_value = initial_browse_address_input_value + browse_address_value + " ";
            }
          );
   y2milestone( "Initial interface_table_items: %1", interface_table_items );
@@ -691,9 +726,12 @@ void initSharing( string key )
   initial_interface_table_items = interface_table_items;
   UI::ChangeWidget( `interface_table, `CurrentItem, -1 );
   // Determine the currently available IPv4 (-family inet) network interfaces in the system.
-  // Omit loopback interfaces.
+  // Omit all non-eth* interfaces because loopback interfaces do not make sense here
+  // and ppp* interfaces are usually used for DSL and analog modems to access the
+  // untrusted Internet from which no remote access should be allowed by accident
+  // (the user can enter any interface manually if he knows what he does):
   available_interfaces = [];
-  if( Printerlib::ExecuteBashCommand( "ip -family inet -oneline link show | grep -v -i loopback | cut -s -d ':' -f 2 | tr -s '[:space:]' ' '" ) )
+  if( Printerlib::ExecuteBashCommand( "ip -family inet -oneline link show | grep 'eth[0-9]' | cut -s -d ':' -f 2 | tr -s '[:space:]' ' '" ) )
   { // The command outputs a line where multiple network interfaces are separated by space.
     // Remove empty or effectively empty entries (otherwise it would be something like ["", "eth0", "eth1"]):
     available_interfaces = filter( string interface_name,
@@ -707,10 +745,10 @@ void initSharing( string key )
     available_interfaces = [];
   }
   y2milestone( "available_interfaces: %1", available_interfaces );
-  y2milestone( "Initial initial_allow_input: %1", initial_allow_input );
-  UI::ChangeWidget( `id(`allow_input), `Value, initial_allow_input );
-  y2milestone( "Initial initial_browse_address_input: %1", initial_browse_address_input );
-  UI::ChangeWidget( `id(`browse_address_input), `Value, initial_browse_address_input );
+  y2milestone( "Initial initial_allow_input_value: %1", initial_allow_input_value );
+  UI::ChangeWidget( `id(`allow_input), `Value, initial_allow_input_value );
+  y2milestone( "Initial initial_browse_address_input_value: %1", initial_browse_address_input_value );
+  UI::ChangeWidget( `id(`browse_address_input), `Value, initial_browse_address_input_value );
   y2milestone( "leaving initSharing" );
 }
 

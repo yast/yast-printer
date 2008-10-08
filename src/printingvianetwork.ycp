@@ -43,7 +43,8 @@ include "printer/helps.ycp";
 term widgetNetworkPrinting = `VBox
                              ( `VStretch(),
                                `Frame
-                               ( _("Use CUPS to Print Via Network"),
+                               ( // A caption for a Frame to set up to use CUPS to print via network:
+                                 _("Use CUPS to Print Via Network"),
                                  `RadioButtonGroup
                                  ( `id(`browsing_or_client_only_check_boxes),
                                    `VBox
@@ -51,6 +52,7 @@ term widgetNetworkPrinting = `VBox
                                      ( `RadioButton
                                        ( `id(`browsing_off_radio_button),
                                          `opt(`notify),
+                                         // A RadioButton to not receive printer information from remote CUPS servers:
                                          _("&Do not Receive Printer Information from Remote CUPS servers")
                                        )
                                      ),
@@ -58,6 +60,7 @@ term widgetNetworkPrinting = `VBox
                                      ( `RadioButton
                                        ( `id(`browsing_on_radio_button),
                                          `opt(`notify),
+                                         // A RadioButton to receive printer information from remote CUPS servers:
                                          _("Receive Printer &Information from Remote CUPS servers")
                                        )
                                      ),
@@ -67,6 +70,8 @@ term widgetNetworkPrinting = `VBox
                                        ( `Left
                                          ( `Label
                                            ( `id(`browse_allow_label),
+                                             // A header for a section to set up from which remote CUPS servers
+                                             // printer information is accepted:
                                              _("Accept Information from the Following Servers")
                                            )
                                          ),
@@ -74,6 +79,9 @@ term widgetNetworkPrinting = `VBox
                                          ( `ComboBox
                                            ( `id(`browse_allow_combo_box),
                                              `opt(`notify),
+                                             // A header for a ComboBox from which the user can select
+                                             // a usual general setting from which remote CUPS servers
+                                             // printer information is accepted:
                                              _("Usual &General Setting"),
 				             [ `item( `id(`browse_allow_all), "all hosts" ),
                                                `item( `id(`browse_allow_local), "hosts in the local network" ),
@@ -84,12 +92,18 @@ term widgetNetworkPrinting = `VBox
                                          `Left
                                          ( `TextEntry
                                            ( `id(`browse_allow_input),
+                                             // A header for a TextEntry where the user can optionally
+                                             // enter specific IP addresses and/or network/netmask
+                                             // from where remote printer information is accepted:
                                              _("Optional Specific IP Addresses or &Network/Netmask")
                                            )
                                          ),
                                          `Left
                                          ( `Label
                                            ( `id(`browse_allow_input_label),
+                                             // Label to show the syntax for the TextEntry where the user can
+                                             // enter specific IP addresses and/or network/netmask
+                                             // from where remote printer information is accepted:
                                              _("(each nnn.nnn.nnn.nnn or nnn.nnn.nnn.nnn/mmm.mmm.mmm.mmm separated by one space)")
                                            )
                                          )
@@ -100,6 +114,8 @@ term widgetNetworkPrinting = `VBox
                                      ( `RadioButton
                                        ( `id(`client_only_radio_button),
                                          `opt(`notify),
+                                         // A RadioButton to do all printing tasks directly
+                                         // only via one single remote CUPS server:
                                          _("Do All Your Printing Directly via &One Remote CUPS Server")
                                        )
                                      ),
@@ -109,6 +125,9 @@ term widgetNetworkPrinting = `VBox
                                        ( 2,
                                          `TextEntry
                                          ( `id(`client_conf_server_name_input),
+                                           // A header for a TextEntry where the user can enter
+                                           // the one single remote CUPS server which is used
+                                           // to do all his printing tasks:
                                            _("&Hostname / IP Address")
                                          )
                                        ),
@@ -116,6 +135,8 @@ term widgetNetworkPrinting = `VBox
                                        ( 1,
                                          `PushButton
                                          ( `id(`test_client_conf_server),
+                                           // A PushButton to test whether or not the one single remote CUPS server
+                                           // which is used to do all printing tasks is accessible:
                                            _("&Test Server")
                                          )
                                        ),
@@ -126,11 +147,15 @@ term widgetNetworkPrinting = `VBox
                                ),
                                `VStretch(),
                                `Frame
-                               ( _("Use Another Print Server or Use a Network Printer Directly"),
+                               ( // A caption for a Frame to set up to use another (i.e. non-CUPS) print server
+                                 // or to set up to use a network printer directly:
+                                 _("Use Another Print Server or Use a Network Printer Directly"),
                                  `Left
                                  ( `PushButton
                                    ( `id(`connection_wizard),
-                                     _("&Connection Wizard")
+                                     // Label of a PushButton to go to the "Connection Wizard"
+                                     // to specify the printer connection individually:
+                                     _("Connection &Wizard")
                                    )
                                  )
                                ),
@@ -418,9 +443,15 @@ boolean ApplyNetworkPrintingSettings()
     if( `browsing_on_radio_button == initial_radio_button )
     { // It was initially a "Get browsing info" config,
       // but now the user may have changed from which hosts browsing info is accepted:
-      if( current_browse_allow != initial_browse_allow
-          || current_browse_allow_input_value != initial_browse_allow_input_value
-        )
+      if( current_browse_allow != initial_browse_allow )
+      { printing_via_network_has_changed = true;
+      }
+      // Check if there are real changes in the values in browse_allow_input.
+      // Do not ignore changes in the case (e.g. from 'host.domain.com' to 'Host.Domain.com')
+      // because the user may like to have it exactly in cupsd.conf (even if actually case may not matter):
+      list< string > initial_browse_allow_input_set = toset( splitstring( initial_browse_allow_input_value, " " ) );
+      list< string > current_browse_allow_input_set = toset( splitstring( current_browse_allow_input_value, " " ) );
+      if( mergestring( current_browse_allow_input_set, "" ) != mergestring( initial_browse_allow_input_set, "" ) )
       { printing_via_network_has_changed = true;
       }
     }
@@ -694,6 +725,8 @@ void initNetworkPrinting( string key )
                                                         ),
                                                   " "
                                                 );
+  // Have a trailing space character so that the user can easily add something:
+  browse_allow_input_value = browse_allow_input_value + " ";
   initial_browse_allow_input_value = browse_allow_input_value;
   UI::ChangeWidget( `id(`browse_allow_input), `Value, browse_allow_input_value );
   UI::ChangeWidget( `id(`browse_allow_input_label), `Enabled, false );
