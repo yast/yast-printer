@@ -34,6 +34,12 @@ then echo "Read and write $CUPSDCONF (but does not restart cupsd)." 1>&2
      echo "BrowseAddress [ @LOCAL | @IF(name) | host-address | broadcast-address ] | BrowseAddress none" 1>&2
      echo "e.g.: BrowseAddress '@LOCAL @IF(eth1) 192.168.100.1 192.168.200.255'" 1>&2
      echo "      BrowseAddress none (to send no browse packets, i.e. no BrowseAddress line)" 1>&2
+     echo "Policies" 1>&2
+     echo "      (reports the existing policy names in '<Policy policy-name>' sections)" 1>&2
+     echo "DefaultPolicy [ policy-name ] | DefaultPolicy default" 1>&2
+     echo "      (The policy-name must exist as a '<Policy policy-name>' section)" 1>&2
+     echo "ErrorPolicy [ stop-printer | retry-job | abort-job ]" 1>&2
+     echo "      (if ErrorPolicy is not set, stop-printer is the CUPS default)" 1>&2
      echo "For the syntax for keywords and values see 'man cupsd.conf'" 1>&2
      echo "and http://www.cups.org/documentation.php/ref-cupsd-conf.html" 1>&2
      echo "In case of ambiguity use the syntax which is described above." 1>&2
@@ -69,7 +75,7 @@ then if rpm -V -f $CUPSDCONF | grep -q "^..5.*$CUPSDCONF\$"
      fi
 fi
 
-# Function to deal with 'Browsing [On|Off]'
+# Function to deal with 'Browsing [ On | Off ]'
 Browsing()
 { if test -n "$VALUE"
   then # Try to substitute an existing active Browsing line (ignore case).
@@ -264,10 +270,10 @@ Allow()
   fi
   # Report the resulting setting in any case:
   # The 'tr ... [:blank:]' makes sure that all active Allow entries
-  # are found if there is more than one which is allowed.
+  # in the root location are found if there is more than one which is allowed.
   # Remove leading spaces (to cut the right part).
   # Remove trailing spaces (needed for the test below).
-  RESULT="$( grep -i "^[[:space:]]*$KEY[[:space:]]" $CUPSDCONF | egrep -v '127.0.0.2' | sed -e 's/from//I' | tr -s '[:blank:]' ' ' | sed -e 's/^ *//' | cut -s -d ' ' -f2 | tr -s '\n' ' ' | sed -e 's/ *$//' )"
+  RESULT="$( sed -n -e '/[[:space:]]*<[[:space:]]*Location[[:space:]]*\/[[:space:]]*>/,/[[:space:]]*<[[:space:]]*\/[[:space:]]*Location[[:space:]]*>/p' $CUPSDCONF | grep -i "^[[:space:]]*$KEY[[:space:]]" | egrep -v '127.0.0.2' | sed -e 's/from//I' | tr -s '[:blank:]' ' ' | sed -e 's/^ *//' | cut -s -d ' ' -f2 | tr -s '\n' ' ' | sed -e 's/ *$//' )"
   echo -n "$RESULT"
   # For a nicer output on a terminal where stdout and stderr is mixed up,
   # output a '\n' on stderr to get subsequent stuff (e.g. the shell prompt
@@ -325,12 +331,102 @@ BrowseAddress()
   fi
 }
 
+# Function to report the existing 'Policies'
+Policies()
+{ # The 'tr ... [:blank:]' makes sure that all active '<Policy policy-name>' entries
+  # are found if there is more than one which is allowed.
+  # Remove leading spaces and trailing spaces for a nice output.
+  RESULT="$( grep -i "^[[:space:]]*<[[:space:]]*Policy[[:space:]]" $CUPSDCONF | tr -d '<>' | tr -s '[:blank:]' ' ' | sed -e 's/^ *//' | cut -s -d ' ' -f2 | tr -s '\n' ' ' | sed -e 's/ *$//' )"
+  echo -n "$RESULT"
+  # For a nicer output on a terminal where stdout and stderr is mixed up,
+  # output a '\n' on stderr to get subsequent stuff (e.g. the shell prompt
+  # or an error message because of a failed test below) on a new line:
+  echo 1>&2
+}
+
+# Function to deal with 'DefaultPolicy [ policy-name ] | DefaultPolicy default'
+DefaultPolicy()
+{ if test -n "$VALUE"
+  then # Try to substitute an existing active DefaultPolicy line (ignore case).
+       # (If there is more than one active DefaultPolicy line it is a broken config file):
+       sed -i -e "s/^[[:space:]]*$KEY.*/$KEY $VALUE/i" $CUPSDCONF
+       # There may exist no DefaultPolicy line:
+       if ! grep -q "^$KEY $VALUE$" $CUPSDCONF
+       then # Append a DefaultPolicy line below the last 'Policy' line
+            # which is usually a '</Policy>' a 'ErrorPolicy' line (ignore case)
+            # to have the new DefaultPolicy line at the matching place
+            # but if no 'Policy' line exists, append at the end of the file:
+            LAST_POLICY_LINE_NUMBER="$( sed -n -e '/Policy/I=' $CUPSDCONF | tail -n 1 )"
+            if test -n "$LAST_POLICY_LINE_NUMBER"
+            then sed -i -e "${LAST_POLICY_LINE_NUMBER}a$KEY $VALUE" $CUPSDCONF
+            else echo -en "\n$KEY $VALUE\n\n" >>$CUPSDCONF
+            fi
+       fi
+  fi
+  # Report the resulting setting in any case:
+  # The 'tr ... [:blank:]' makes sure that all active DefaultPolicy entries
+  # are found if there is more than one which is a broken config.
+  # Remove leading spaces (to cut the right part).
+  # Remove trailing spaces (needed for the test below).
+  RESULT="$( grep -i "^[[:space:]]*$KEY[[:space:]]" $CUPSDCONF | tr -s '[:blank:]' ' ' | sed -e 's/^ *//' | cut -s -d ' ' -f2 | tr -s '\n' ' ' | sed -e 's/ *$//' )"
+  echo -n "$RESULT"
+  # For a nicer output on a terminal where stdout and stderr is mixed up,
+  # output a '\n' on stderr to get subsequent stuff (e.g. the shell prompt
+  # or an error message because of a failed test below) on a new line:
+  echo 1>&2
+  # Test if the result is the expected one if a value was specified:
+  if test -n "$VALUE" -a "$RESULT" != "$VALUE"
+  then echo "Failed to set '$KEY $VALUE' in $CUPSDCONF." 1>&2
+       exit 5
+  fi
+}
+
+# Function to deal with 'ErrorPolicy [ stop-printer | retry-job | abort-job ]'
+ErrorPolicy()
+{ if test -n "$VALUE"
+  then # Try to substitute an existing active ErrorPolicy line (ignore case).
+       # (If there is more than one active ErrorPolicy line it is a broken config file):
+       sed -i -e "s/^[[:space:]]*$KEY.*/$KEY $VALUE/i" $CUPSDCONF
+       # There may exist no ErrorPolicy line:
+       if ! grep -q "^$KEY $VALUE$" $CUPSDCONF
+       then # Append a ErrorPolicy line below the last 'Policy' line
+            # which is usually a '</Policy>' or a 'DefaultPolicy' line (ignore case)
+            # to have the new ErrorPolicy line at the matching place
+            # but if no 'Policy' line exists, append at the end of the file:
+            LAST_POLICY_LINE_NUMBER="$( sed -n -e '/Policy/I=' $CUPSDCONF | tail -n 1 )"
+            if test -n "$LAST_POLICY_LINE_NUMBER"
+            then sed -i -e "${LAST_POLICY_LINE_NUMBER}a$KEY $VALUE" $CUPSDCONF
+            else echo -en "\n$KEY $VALUE\n\n" >>$CUPSDCONF
+            fi
+       fi
+  fi
+  # Report the resulting setting in any case:
+  # The 'tr ... [:blank:]' makes sure that all active ErrorPolicy entries
+  # are found if there is more than one which is a broken config.
+  # Remove leading spaces (to cut the right part).
+  # Remove trailing spaces (needed for the test below).
+  RESULT="$( grep -i "^[[:space:]]*$KEY[[:space:]]" $CUPSDCONF | tr -s '[:blank:]' ' ' | sed -e 's/^ *//' | cut -s -d ' ' -f2 | tr -s '\n' ' ' | sed -e 's/ *$//' )"
+  echo -n "$RESULT"
+  # For a nicer output on a terminal where stdout and stderr is mixed up,
+  # output a '\n' on stderr to get subsequent stuff (e.g. the shell prompt
+  # or an error message because of a failed test below) on a new line:
+  echo 1>&2 
+  # Test if the result is the expected one if a value was specified:
+  if test -n "$VALUE" -a "$RESULT" != "$VALUE"
+  then echo "Failed to set '$KEY $VALUE' in $CUPSDCONF." 1>&2
+       exit 5
+  fi
+}
+
 case "$KEY" in
      Browsing) Browsing;;
      BrowseAllow) BrowseAllow;;
      Listen) Listen;;
      Allow) Allow;;
      BrowseAddress) BrowseAddress;;
+     Policies) Policies;;
+     DefaultPolicy) DefaultPolicy;;
+     ErrorPolicy) ErrorPolicy;;
      *) echo "Ignoring keyword '$KEY'" 1>&2
         exit 4 ;;
 esac
