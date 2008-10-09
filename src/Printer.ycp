@@ -226,6 +226,7 @@ global list< map< string, any > > driver_options = [];
 /*
  * Local variables:
  */
+string create_database_progress_filename = "/var/lib/YaST2/create_printer_ppd_database.progress" ;
 string database_filename = "/var/lib/YaST2/printer_ppd_database.ycp";
 string create_database_commandline = "/usr/lib/YaST2/bin/create_printer_ppd_database >" + database_filename;
 string autodetect_printers_progress_filename = "/var/lib/YaST2/autodetect_printers.progress" ;
@@ -265,9 +266,9 @@ boolean CreateDatabase()
                               `ReplacePoint( `id(`create_database_progress_replace_point),
                                              `DownloadProgress( // Header of a DownloadProgress indicator:
                                                                 _("Retrieving printer driver information..."),
-                                                                database_filename,
-                                                                // On my openSUSE 10.3 the size is about 1700000 bytes:
-                                                                1900000
+                                                                create_database_progress_filename,
+                                                                // On my openSUSE 11.0 the size is about 80000 bytes:
+                                                                90000
                                                               )
                                            )
                             )
@@ -949,6 +950,24 @@ global list ConnectionItems( string connection_filter_string )
                    { // Skip "usb://HP/" DeviceURIs if there is at least one "hp:/usb/" DeviceURI
                      // so that the "hp:/usb/" DeviceURI is used with preference.
                      // The "usb://HP/" DeviceURI is still available via "MoreConnections".
+                     // It can happen that a "usb://HP/" DeviceURI is skipped
+                     // without a matching "hp:/usb/" DeviceURI because
+                     // the "hp" backend lists only devices which are known as supported by HPLIP.
+                     // If there are two HP printers connected but only one is supported by HPLIP,
+                     // there exists one "hp:/usb/" DeviceURI and therefore all "usb://HP/" DeviceURIs
+                     // are skipped even the one for the HP printer which is unknown to HPLIP.
+                     // But this is no real problem because all "usb://HP/" DeviceURIs are still
+                     // available via "MoreConnections".
+                     // Actually it is even good that HP printers which are unknown to HPLIP
+                     // are skipped by default because usually we do not provide a driver
+                     // for such printers so that the extra-cklick on "MoreConnections" may
+                     // make the user aware that something is fishy with this particular model
+                     // so that the user hopefully pays more attention which driver he selects.
+                     // If a HP printer is unknown to HPLIP it does not mean that it is unsupported
+                     // (it does also not mean that it is unsupported by HPLIP) because
+                     // it could be simply a new model which is not yet known to HPLIP
+                     // but compatible to a known model. In this case the user must pay attention
+                     // which exact driver he selects manually for his particular model.
                      if( "usb://hp/" == tolower( substring( uri, 0, 9 ) )
                          && hp_usb_uri_exists
                        )
