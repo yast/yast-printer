@@ -15,8 +15,10 @@ ynclude_DATA =			\
 	basicadd.ycp		\
 	basicmodify.ycp		\
 	connectionwizard.ycp	\
+	driveroptions.ycp	\
 	printingvianetwork.ycp	\
 	sharing.ycp		\
+	policies.ycp		\
 	dialogs.ycp
 
 desktop_DATA =			\

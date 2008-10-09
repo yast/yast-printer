@@ -21,7 +21,7 @@
 /**
  * File:        include/printer/dialogs.ycp
  * Package:     Configuration of printer
- * Summary:     Other (minor/smaller) dialogs definitions
+ * Summary:     Other dialog definitions
  * Authors:     Johannes Meixner <jsmeix@suse.de>
  *
  * $Id: dialogs.ycp 27914 2006-02-13 14:32:08Z locilka $
@@ -42,125 +42,7 @@ include "printer/helps.ycp";
 include "printer/overview.ycp";
 include "printer/printingvianetwork.ycp";
 include "printer/sharing.ycp";
-
-/**
- * DriverOptionsDialog dialog
- * @return dialog result
- */
-any DriverOptionsDialog()
-{ string name = Printer::queues[Printer::selected_queues_index,"name"]:"";
-  string caption = _("Driver Options for Queue") + " " + name;
-  term contents = `Tree( `id(`driver_options_tree),
-                         // The `notify option makes UI::UserInput() return immediately
-                         // as soon as the user selects a tree item rather than the default behaviour
-                         // which waits for the user to activate a button:
-                         `opt(`notify),
-                         // Header of a Tree which shows driver options:
-                         // _("Driver Options"),
-                         // No duplicate header because the dialog header is already "Driver Options":
-                         "",
-                         // Initially the parameter selected_keyword is the empty string
-                         // to have all values lists closed by default in the tree
-                         // and the parameter selected_value is also the empty string
-                         // because no value is initially selected:
-                         Printer::DriverOptionItems( "", "" )
-                       );
-  Wizard::SetContentsButtons( caption,
-                              contents,
-                              HELPS["driver_options_dialog"]:"",
-                              Label::BackButton(),
-                              // Set a different label for the "next" button
-                              // (i.e. the lower right button which results `next as UI::UserInput):
-                              Label::OKButton()
-                            );
-  any ret = nil;
-  while(true)
-  { ret = UI::UserInput();
-    if( ret == `abort || ret == `cancel || ret == `back ) break;
-    if( ret == `next )
-    { y2milestone( "Driver options: %1", Printer::driver_options );
-      string commandline = "/usr/sbin/lpadmin -h localhost -p '" + name + "'";
-      boolean something_has_changed = false;
-      foreach( map< string, any > driver_option,
-               Printer::driver_options,
-               { string keyword = driver_option["keyword"]:"";
-                 string selected_value = driver_option["selected"]:"";
-                 if( "" != keyword
-                     && "" != selected_value
-                   )
-                 { boolean really_changed = true;
-                   foreach( string value,
-                            driver_option["values"]:[],
-                            { if( value == "*" + selected_value )
-                              { really_changed = false;
-                              }
-                            }
-                          );
-                   if( really_changed )
-                   { commandline = commandline + " -o '" + keyword + "=" + selected_value + "'";
-                     something_has_changed = true;
-                   }
-                 }
-               }
-             );
-      if( something_has_changed )
-      { Wizard::DisableBackButton();
-        Wizard::DisableAbortButton();
-        Wizard::DisableNextButton();
-        if( ! Printerlib::ExecuteBashCommand( commandline ) )
-        { Popup::Error( // Message of a Popup::Error
-                        // where %1 will be replaced by the queue name.
-                        // Only a simple message because this error does not happen on a normal system
-                        // (i.e. a system which is not totally broken or totally messed up).
-                        sformat( _("Failed to set driver options for queue %1."), name )
-                      );
-        }
-        Wizard::EnableBackButton();
-        Wizard::EnableAbortButton();
-        Wizard::EnableNextButton();
-      }
-      // Exit this dialog in any case:
-      break;
-    }
-    if( ret == `driver_options_tree )
-    { list selected_branch = (list)UI::QueryWidget( `driver_options_tree, `CurrentBranch );
-      y2milestone( "Selected driver options tree branch: %1", selected_branch );
-      // The selected branch list has
-      // either one elemet which is the main keyword when an option is selected e.g. ["PageSize"]
-      // or it has two elements: main keyword and option value keyword e.g. ["PageSize", "A4"]
-      if( 2 == size( selected_branch ) )
-      { if( "" != selected_branch[0]:""
-            && "" != selected_branch[1]:""
-          )
-        { // Sleep a tenth of a second to let the user notice when he selected a value
-          // before the tree is re-built via the UI::ChangeWidget below:
-          sleep( 100 );
-          // The Printer::DriverOptionItems call stores the current setting
-          // in Printer::driver_options so that it is known later
-          // (in particular when the changes are committed when the dialog finishes):
-          UI::ChangeWidget( `driver_options_tree,
-                            `Items,
-                            Printer::DriverOptionItems( selected_branch[0]:"", selected_branch[1]:"" )
-                          );
-        }
-      }
-      else
-      { // Sleep a tenth of a second to let the user notice when he selected an option
-        // before the tree is re-built via the UI::ChangeWidget below:
-        sleep( 100 );
-        // Open the matching values list in the tree when the option is selected:
-        UI::ChangeWidget( `driver_options_tree,
-                          `Items,
-                          Printer::DriverOptionItems( selected_branch[0]:"", "" )
-                        );
-      }
-      continue;
-    }
-    y2milestone( "Ignoring unexpected returncode in DriverOptionsDialog: %1", ret );
-    continue;
-  }
-  return ret;
-}
+include "printer/policies.ycp";
 
 term widgetAutoconfig = `VBox(
 	`Left( `Label(_("Specify in which way USB printers are configured automatically")) ),
@@ -207,50 +89,6 @@ void storeAutoconfig(string key, map event){
  });
 }
 
-term widgetOperationPolicy = `VBox(
-        `Left( `Label(_("Specify the operation policy")) ),
-        `Left( `ComboBox(`id("operationpolicy"), _("The operation &policy"), [""]) ),
-        `HSpacing()
-);
-
-void initOperationPolicy(string key){
-# if( Printerlib::ExecuteBashCommand("{ grep -i '^DefaultPolicy ' /etc/cups/cupsd.conf.orig || echo "DefaultPolicy default" ; } | cut -d' ' -f2") ){
- if( Printerlib::ExecuteBashCommand("grep '^<Policy ' /etc/cups/cupsd.conf|cut -d' ' -f2|cut -d'>' -f1") ){
-  UI::ChangeWidget(`id("operationpolicy"), `Items, splitstring(Printerlib::result["stdout"]:"", "\n"));
- }
- foreach(map conf, Printerlib::operation_policy["value", 0, "value"]:[], {
-  if (conf["name"]:""=="operationpolicy")
-   UI::ChangeWidget(`id(conf["name"]:""), `Value, conf["value"]:"");
-  else UI::ChangeWidget(`id(conf["name"]:""), `Value, conf["value"]:""=="yes" ? true : false);
- });
-}
-
-void storeOperationPolicy(string key, map event){
- y2internal("storeOperationPolicy: here I am ;-)");
- foreach(string key, ["operationpolicy"], {
-  map value = $[
-              "comment" : "",
-              "kind"    : "value",
-              "name"    : key
-                ];
-  if (key=="operationpolicy") value["value"] = (string) UI::QueryWidget(`id(key), `Value);
-        else value["value"] = ((boolean)UI::QueryWidget(`id(key), `Value)) ? "yes" : "no";
-
-  y2internal("values for %1 : %2", key, value);
-  list<map> config=[];
-  boolean found=false;
-  foreach(map row, Printerlib::operation_policy["value", 0, "value"]:[], {
-   if (row["name"]:""==key){
-    row["value"]=value["value"]:"";
-    found=true;
-   }
-  config=add(config, row);
-  });
-  if (!found) config=add(config, value);
-  Printerlib::operation_policy["value", 0, "value"]=config;
- });
-}
-
 map<string, map<string,any> > wd = $[
 	"OVERVIEW" : $[
 		"widget" : `custom,
@@ -275,12 +113,12 @@ map<string, map<string,any> > wd = $[
                 "store" : storeSharing,
 		"help"	: HELPS["sharing_dialog"]:""
 	],
-        "OPERATIONPOLICY" : $[
+        "POLICIES" : $[
                 "widget" : `custom,
-                "custom_widget" : widgetOperationPolicy,
-                "init"  : initOperationPolicy,
-                "store" : storeOperationPolicy,
-                "help"  : HELPS["operation_policy"]:""
+                "custom_widget" : widgetPolicies,
+                "init"  : initPolicies,
+                "store" : storePolicies,
+                "help"  : HELPS["policies"]:""
         ],
 	"AUTOCONFIG" : $[
 		"widget" : `custom,
@@ -316,13 +154,13 @@ map tabs_descr = $[
           ),
          "widget_names" : ["SHARING"]
         ],
-        "operation_policy" : $[
-          "header" : _("Operation Policy"),
-          "tree_item_label" : _("Operation Policy"),
+        "policies" : $[
+          "header" : _("Policies"),
+          "tree_item_label" : _("Policies"),
           "contents" : `VBox (
-            "OPERATIONPOLICY"
+            "POLICIES"
           ),
-         "widget_names" : ["OPERATIONPOLICY"]
+         "widget_names" : ["POLICIES"]
         ],
         "autoconfig" : $[
           "header" : _("Autoconfig Settings"),
@@ -339,7 +177,7 @@ symbol runMainDialog(){
   string caption = _("Detected Printers");
 
    symbol ret = DialogTree::ShowAndRun ($[
-            "ids_order"         : [ "overview", "network", "sharing", "operation_policy", "autoconfig" ],
+            "ids_order"         : [ "overview", "network", "sharing", "policies", "autoconfig" ],
             "initial_screen"    : "overview",
             "screens"           : tabs_descr,
             "widget_descr"      : wd,
