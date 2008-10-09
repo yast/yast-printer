@@ -1,0 +1,87 @@
+/* ------------------------------------------------------------------------------
+ * Copyright (c) 2006 Novell, Inc. All Rights Reserved.
+ *
+ *
+ * This program is free software; you can redistribute it and/or modify it under
+ * the terms of version 2 of the GNU General Public License as published by the
+ * Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+ * FOR A PARTICULAR PURPOSE.  See the GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License along with
+ * this program; if not, contact Novell, Inc.
+ *
+ * To contact Novell about this file by physical or electronic mail, you may find
+ * current contact information at www.novell.com.
+ * ------------------------------------------------------------------------------
+ */
+
+/**
+ * File:        include/printer/policies.ycp
+ * Package:     Configuration of printer
+ * Summary:     DefaultPolicy and ErrorPolicy settings in cupsd.conf
+ * Authors:     Johannes Meixner <jsmeix@suse.de>
+ *
+ * $Id: policies.ycp 27914 2006-02-13 14:32:08Z locilka $
+ */
+
+{
+
+textdomain "printer";
+
+import "Label";
+import "Wizard";
+import "Printer";
+import "Printerlib";
+import "Popup";
+
+include "printer/helps.ycp";
+
+term widgetPolicies = `VBox(
+        `Left( `Label(_("Specify the operation policy")) ),
+        `Left( `ComboBox(`id("operationpolicy"), _("The operation &policy"), [""]) ),
+        `HSpacing()
+);
+
+void initPolicies(string key){
+# if( Printerlib::ExecuteBashCommand("{ grep -i '^DefaultPolicy ' /etc/cups/cupsd.conf.orig || echo "DefaultPolicy default" ; } | cut -d' ' -f2") ){
+ if( Printerlib::ExecuteBashCommand("grep '^<Policy ' /etc/cups/cupsd.conf|cut -d' ' -f2|cut -d'>' -f1") ){
+  UI::ChangeWidget(`id("operationpolicy"), `Items, splitstring(Printerlib::result["stdout"]:"", "\n"));
+ }
+ foreach(map conf, Printerlib::operation_policy["value", 0, "value"]:[], {
+  if (conf["name"]:""=="operationpolicy")
+   UI::ChangeWidget(`id(conf["name"]:""), `Value, conf["value"]:"");
+  else UI::ChangeWidget(`id(conf["name"]:""), `Value, conf["value"]:""=="yes" ? true : false);
+ });
+}
+
+void storePolicies(string key, map event){
+ y2internal("storeOperationPolicy: here I am ;-)");
+ foreach(string key, ["operationpolicy"], {
+  map value = $[
+              "comment" : "",
+              "kind"    : "value",
+              "name"    : key
+                ];
+  if (key=="operationpolicy") value["value"] = (string) UI::QueryWidget(`id(key), `Value);
+        else value["value"] = ((boolean)UI::QueryWidget(`id(key), `Value)) ? "yes" : "no";
+
+  y2internal("values for %1 : %2", key, value);
+  list<map> config=[];
+  boolean found=false;
+  foreach(map row, Printerlib::operation_policy["value", 0, "value"]:[], {
+   if (row["name"]:""==key){
+    row["value"]=value["value"]:"";
+    found=true;
+   }
+  config=add(config, row);
+  });
+  if (!found) config=add(config, value);
+  Printerlib::operation_policy["value", 0, "value"]=config;
+ });
+}
+
+/* EOF */
+}
