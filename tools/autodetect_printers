@@ -45,8 +45,12 @@ fi
 
 # Get the raw data:
 echo 'Retrieving the raw data...' >>$PROGRESS
-# Continue even after timeout because then an empty YCP map is output
-# which indicates that no printers were autodetected.
+# Exit after timeout because it is a real error if lpinfo does not respond.
+# In this case no empty YCP map is output so that either
+# an existing YCP map could be used or YaST could also exit
+# because printer setup makes not much sense when lpinfo does not respond.
+# Note that lpinfo does respond when no printer can be autodetected
+# e.g. when there is no locally connected printer.
 # Usually "lpinfo -l -v" needs a few seconds.
 # To be on the safe side, a one minute timeout is used.
 # Therefore the PROGRESS file can grow up to about 3600 bytes.
@@ -62,6 +66,7 @@ if ps $lpinfoPID &>/dev/null
 then kill -9 $lpinfoPID &>/dev/null
      echo "Aborted lpinfo after $MAXIMUM_WAIT seconds timeout." 1>&2
      echo "Aborted lpinfo after $MAXIMUM_WAIT seconds timeout." >>$PROGRESS
+     exit 3
 fi
 
 # Process the data:

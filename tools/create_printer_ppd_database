@@ -9,6 +9,9 @@ export LC_ALL="POSIX"
 export LANG="POSIX"
 umask 022
 
+# This file name for a progress indicator is also used in Printer.ycp:
+test -z "$PROGRESS" && PROGRESS="/var/lib/YaST2/create_printer_ppd_database.progress"
+
 MY_NAME=${0##*/}
 
 # Create temporary file names:
@@ -16,6 +19,7 @@ TMP_DATA=$(mktemp -u /tmp/$MY_NAME.XXXXXX)
 TMP_DATA_RAW=$(mktemp -u /tmp/$MY_NAME.XXXXXX)
 
 # Test if lpstat and lpinfo are executable:
+echo 'Testing if lpstat and lpinfo are executable...' >$PROGRESS
 LPSTAT="$( type -P lpstat )"
 if ! test -x "$LPSTAT"
 then echo "Cannot execute lpstat" 1>&2
@@ -31,6 +35,7 @@ fi
 # Only on localhost print queues should be set up.
 # CUPS supports even remote queue setup but this is not supported by YaST.
 # Therefore explicitely the cupsd on localhost is asked for printer driver information.
+echo 'Testing if cupsd on localhost is accessible...' >>$PROGRESS
 if ! $LPSTAT -h localhost -r &>/dev/null
 then echo "Cannot access cupsd on localhost" 1>&2
      exit 2
@@ -39,28 +44,32 @@ fi
 # Input:
 
 # Get the raw data:
+echo 'Retrieving the raw data...' >>$PROGRESS
 # Exit after timeout because then no empty YCP map is output
 # so that either an existing YCP map could be used or YaST could also exit
 # because without a PPD database printer setup makes not much sense.
 # The very long timeout is usually only needed on slower machines
 # and there also usually only once after a new system installation
 # when the cupsd reads thousands of PPDs for the very first time
-# (see Novell/Suse Bugzilla bnc#429397):
+# (see Novell/Suse Bugzilla bnc#429397).
+# Therefore the PROGRESS file can grow up to about 17000 bytes here:
 MAXIMUM_WAIT="300"
 $LPINFO -h localhost -l -m >$TMP_DATA_RAW &
 lpinfoPID=$!
 for i in $( seq $MAXIMUM_WAIT )
 do ps $lpinfoPID &>/dev/null || break
+   echo "Waiting for response from $LPINFO (PID $lpinfoPID)..." >>$PROGRESS
    sleep 1
 done
 if ps $lpinfoPID &>/dev/null
 then kill -9 $lpinfoPID &>/dev/null
      echo "Aborted lpinfo after $MAXIMUM_WAIT seconds timeout." 1>&2
+     echo "Aborted lpinfo after $MAXIMUM_WAIT seconds timeout." >>$PROGRESS
      exit 3
 fi
 
 # Process the data:
-
+echo 'Got the raw data.' >>$PROGRESS
 # Extract what is needed, quotation marks " are replaced by ' :
 tr '"' "'" <$TMP_DATA_RAW | egrep '^Model:|name =|make-and-model =|device-id =|natural_language =' >$TMP_DATA
 
@@ -74,14 +83,21 @@ sed -i -e 's/[[:space:]][[:space:]]*/ /g' \
        -e 's/[[:space:]]*$//' $TMP_DATA
 
 # Output:
-
+echo 'Creating the YCP map...' >>$PROGRESS
 # Output header:
 echo "[" 
 
-# Function to output one entry:
+# Function to output one entry.
+# Limit what is written to the PROGRESS file here to 8 characters per PPD.
+# Otherwise the PROGRESS file would grow up to more than 300000 bytes here
+# which would make the above "waiting for lpinfo" part too small
+# to be really visible in the DownloadProgress bar in YaST.
+# With the limited output here the PROGRESS file grows to about 80000 bytes
+# for the about 8000 PPDs which are installed by default in openSUSE 11.0:
 Output()
 { if [ -n "$PPD" -a -n "$NICKNAME" ]
   then echo -e "  \$[ \"ppd\":\"$PPD\",\n     \"nickname\":\"$NICKNAME\",\n     \"deviceID\":\"$ID\",\n     \"language\":\"$LANGUAGE\",\n     \"manufacturer\":\"$MANUFACTURER\",\n     \"modelname\":\"$MODELNAME\"\n  ],"
+  echo "$NICKNAME" | cut -b-8 >>$PROGRESS
   fi
 }
 
@@ -110,5 +126,6 @@ echo -e "  \$[]\n]"
 
 # Remove the temporary files 
 rm $TMP_DATA_RAW $TMP_DATA
+echo 'Finished.' >>$PROGRESS
 exit 0
 
