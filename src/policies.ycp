@@ -39,48 +39,155 @@ import "Popup";
 
 include "printer/helps.ycp";
 
-term widgetPolicies = `VBox(
-        `Left( `Label(_("Specify the operation policy")) ),
-        `Left( `ComboBox(`id("operationpolicy"), _("The operation &policy"), [""]) ),
-        `HSpacing()
-);
+string initial_operation_policy = "default";
+// An entry for a ComboBox from which the user can select that the CUPS error policy
+// which is used when it fails to send a job to the printer is to
+// stop the printer and keep the job for future printing:
+string error_policy_stop_printer_string = _("stop the printer and keep the job for future printing");
+// An entry for a ComboBox from which the user can select that the CUPS error policy
+// which is used when it fails to send a job to the printer is to
+// re-send the job from the beginning after waiting some time
+// (the default JobRetryInterval is 30 seconds but this can be changed):
+string error_policy_retry_job_string = _("re-send the job from the beginning after waiting some time");
+// An entry for a ComboBox from which the user can select that the CUPS error policy
+// which is used when it fails to send a job to the printer is to
+// abort and delete the job and proceed with the next job:
+string error_policy_abort_job_string = _("abort and delete the job and proceed with the next job");
+string initial_error_policy = "stop-printer";
 
-void initPolicies(string key){
-# if( Printerlib::ExecuteBashCommand("{ grep -i '^DefaultPolicy ' /etc/cups/cupsd.conf.orig || echo "DefaultPolicy default" ; } | cut -d' ' -f2") ){
- if( Printerlib::ExecuteBashCommand("grep '^<Policy ' /etc/cups/cupsd.conf|cut -d' ' -f2|cut -d'>' -f1") ){
-  UI::ChangeWidget(`id("operationpolicy"), `Items, splitstring(Printerlib::result["stdout"]:"", "\n"));
- }
- foreach(map conf, Printerlib::operation_policy["value", 0, "value"]:[], {
-  if (conf["name"]:""=="operationpolicy")
-   UI::ChangeWidget(`id(conf["name"]:""), `Value, conf["value"]:"");
-  else UI::ChangeWidget(`id(conf["name"]:""), `Value, conf["value"]:""=="yes" ? true : false);
- });
+term widgetPolicies = `VBox
+                      ( `VStretch(),
+                        `Left
+                        ( `ComboBox
+                          ( `id("operation_policy"),
+                            // Header for a ComboBox to specify the CUPS operation policy:
+                             _("Specify the &operation policy"),
+                             [""]
+                          )
+                        ),
+                        `VStretch(),
+                        `Left
+                        ( `ComboBox
+                          ( `id("error_policy"),
+                            // Header for a ComboBox to specify the CUPS error policy:
+                             _("Specify the &error policy"),
+                             [ `item( `id("stop-printer"), error_policy_stop_printer_string ),
+                               `item( `id("retry-job"), error_policy_retry_job_string ),
+                               `item( `id("abort-job"), error_policy_abort_job_string ),
+                             ]
+                          )
+                        ),
+                        `VStretch()
+                      );
+
+void initPolicies( string key )
+{ y2milestone( "entering initPolicies with key '%1'", key );
+  // Determine the existing policy names in '<Policy policy-name>' sections in /etc/cups/cupsd.conf:
+  list< string > policy_names = [ "" ];
+  if( Printerlib::ExecuteBashCommand( Printerlib::yast_bin_dir + "modify_cupsd_conf Policies" ) )
+  { // The command outputs a line where multiple policy names are separated by space
+    // but possible duplicate policy names are not removed in the command output:
+    policy_names = toset( splitstring( Printerlib::result["stdout"]:"", " " ) );
+  }
+  else
+  { // Use fallback value when the command above failed:
+    policy_names = [ "default" ];
+  }
+  // Determine the DefaultPolicy in /etc/cups/cupsd.conf:
+  if( Printerlib::ExecuteBashCommand( Printerlib::yast_bin_dir + "modify_cupsd_conf DefaultPolicy" ) )
+  { // The command outputs a line where multiple DefaultPolicy entries are separated by space
+    // but possible duplicate policy names are not removed in the command output.
+    // Multiple DefaultPolicy entries are a broken config but it can happen
+    // and in this case the first DefaultPolicy entry is used:
+    initial_operation_policy = splitstring( Printerlib::result["stdout"]:"", " " )[0]:"default";
+  }
+  else
+  { // Use fallback value when the command above failed:
+    initial_operation_policy = "default";
+  }
+  // Use only the plain strings in the policy_names list without an id
+  // for the operation_policy ComboBox:
+  UI::ChangeWidget(`id("operation_policy"), `Items, policy_names);
+  // Have the initial_operation_policy preselected:
+  UI::ChangeWidget(`id("operation_policy"), `Value, initial_operation_policy);
+  // Determine the ErrorPolicy in /etc/cups/cupsd.conf:
+  if( Printerlib::ExecuteBashCommand( Printerlib::yast_bin_dir + "modify_cupsd_conf ErrorPolicy" ) )
+  { // The command outputs a line where multiple ErrorPolicy entries are separated by space
+    // but possible duplicate policy names are not removed in the command output.
+    // Multiple ErrorPolicy entries are a broken config but it can happen
+    // and in this case the first ErrorPolicy entry is used:
+    initial_error_policy = splitstring( Printerlib::result["stdout"]:"", " " )[0]:"stop-printer";
+  }
+  else
+  { // Use fallback value when the command above failed:
+    initial_error_policy = "stop-printer";
+  }
+  // Have the initial_error_policy preselected:
+  UI::ChangeWidget(`id("error_policy"), `Value, `id(initial_error_policy));
+  y2milestone( "leaving initPolicies with\ninitial_operation_policy = '%1'\ninitial_error_policy = '%2'", initial_operation_policy, initial_error_policy );
 }
 
-void storePolicies(string key, map event){
- y2internal("storeOperationPolicy: here I am ;-)");
- foreach(string key, ["operationpolicy"], {
-  map value = $[
-              "comment" : "",
-              "kind"    : "value",
-              "name"    : key
-                ];
-  if (key=="operationpolicy") value["value"] = (string) UI::QueryWidget(`id(key), `Value);
-        else value["value"] = ((boolean)UI::QueryWidget(`id(key), `Value)) ? "yes" : "no";
-
-  y2internal("values for %1 : %2", key, value);
-  list<map> config=[];
-  boolean found=false;
-  foreach(map row, Printerlib::operation_policy["value", 0, "value"]:[], {
-   if (row["name"]:""==key){
-    row["value"]=value["value"]:"";
-    found=true;
-   }
-  config=add(config, row);
-  });
-  if (!found) config=add(config, value);
-  Printerlib::operation_policy["value", 0, "value"]=config;
- });
+void storePolicies( string key, map event)
+{ y2milestone( "entering storePolicies with key '%1'\nand event '%2'", key, event );
+  boolean applied_policies = true;
+  // Get the actual settings and values from the dialog:
+  string current_operation_policy = (string)UI::QueryWidget( `id("operation_policy"), `Value );
+  y2milestone( "current_operation_policy: '%1'", current_operation_policy );
+  string current_error_policy = (string)UI::QueryWidget( `id("error_policy"), `Value );
+  y2milestone( "current_error_policy: '%1'", current_error_policy );
+  if( current_operation_policy == initial_operation_policy
+      && current_error_policy == initial_error_policy )
+  { y2milestone( "Nothing changed in 'Policies' dialog." );
+    Popup::ShowFeedback( // No title for such a simple feedback message:
+                         "",
+                         // Message of a Popup::ShowFeedback when nothing was changed:
+                         _("Nothing changed.")
+                       );
+    sleep( 1000 );
+    Popup::ClearFeedback();
+    y2milestone( "leaving storePolicies" );
+    return nil;
+  }
+  if( current_operation_policy != initial_operation_policy )
+  { if( ! Printerlib::ExecuteBashCommand( Printerlib::yast_bin_dir + "modify_cupsd_conf DefaultPolicy " + current_operation_policy ) )
+    { Popup::ErrorDetails( sformat( // Popup::ErrorDetails message
+                                    // where %1 will be replaced by the default operation policy value.
+                                    // Do not change or translate "DefaultPolicy", it is a system settings name.
+                                    _("Failed to set 'DefaultPolicy %1' in /etc/cups/cupsd.conf"),
+                                    current_operation_policy
+                                  ),
+                           Printerlib::result["stderr"]:""
+                         );
+      applied_policies = false;
+    }
+  }
+  if( current_error_policy != initial_error_policy )
+  { if( ! Printerlib::ExecuteBashCommand( Printerlib::yast_bin_dir + "modify_cupsd_conf ErrorPolicy " + current_error_policy ) )
+    { Popup::ErrorDetails( sformat( // Popup::ErrorDetails message
+                                    // where %1 will be replaced by the default error policy value.
+                                    // Do not change or translate "ErrorPolicy", it is a system settings name.
+                                    _("Failed to set 'ErrorPolicy %1' in /etc/cups/cupsd.conf"),
+                                    current_error_policy
+                                  ),
+                           Printerlib::result["stderr"]:""
+                         );
+      applied_policies = false;
+    }
+  }
+  // If a local cupsd is accessible, restart it,
+  // otherwise do nothing (i.e. do not start it now):
+  if( Printerlib::GetAndSetCupsdStatus( "" ) )
+  { if( ! Printerlib::GetAndSetCupsdStatus( "restart" ) )
+    { applied_policies = false;
+    }
+  }
+  if( ! applied_policies )
+  { Popup::Error( // Popup::Error message:
+                  _("Failed to apply the settings to the system.")
+                );
+  }
+  y2milestone( "leaving storePolicies" );
+  return nil;
 }
 
 /* EOF */
