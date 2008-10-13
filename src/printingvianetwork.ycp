@@ -40,6 +40,25 @@ import "Service";
 
 include "printer/helps.ycp";
 
+boolean printing_via_network_has_changed = false;
+any initial_radio_button = nil;
+any initial_browse_allow = nil;
+string initial_browse_allow_input_value = "";
+string initial_server_name_input_value = "";
+// An entry for a ComboBox from which the user can select
+// that printer information is accepted from
+// all remote CUPS servers:
+string browse_allow_all_string = _("all hosts");
+// An entry for a ComboBox from which the user can select
+// that printer information is accepted from
+// remote CUPS servers in the local network:
+string browse_allow_local_string = _("hosts in the local network");
+// An entry for a ComboBox from which the user can select
+// that printer information is accepted only from
+// remote CUPS servers with specific addresses
+// where the specific addresses are specified in a TextEntry below:
+string browse_allow_specific_string = _("only specific addresses");
+
 term widgetNetworkPrinting = `VBox
                              ( `VStretch(),
                                `Frame
@@ -83,9 +102,9 @@ term widgetNetworkPrinting = `VBox
                                              // a usual general setting from which remote CUPS servers
                                              // printer information is accepted:
                                              _("Usual &General Setting"),
-				             [ `item( `id(`browse_allow_all), "all hosts" ),
-                                               `item( `id(`browse_allow_local), "hosts in the local network" ),
-                                               `item( `id(`browse_allow_specific), "only specific addresses" ),
+				             [ `item( `id(`browse_allow_all), browse_allow_all_string ),
+                                               `item( `id(`browse_allow_local), browse_allow_local_string ),
+                                               `item( `id(`browse_allow_specific), browse_allow_specific_string ),
                                              ]
                                            )
                                          ),
@@ -161,12 +180,6 @@ term widgetNetworkPrinting = `VBox
                                ),
                                `VStretch()
                              );
-
-boolean printing_via_network_has_changed = false;
-any initial_radio_button = nil;
-any initial_browse_allow = nil;
-string initial_browse_allow_input_value = "";
-string initial_server_name_input_value = "";
 
 boolean TestClientOnlyServer( string server_name )
 { string netcat_test_good_message = sformat( // Popup message
@@ -333,7 +346,7 @@ boolean ApplyNetworkPrintingSettings()
 { printing_via_network_has_changed = false;
   // Get the actual settings and values from the dialog:
   any current_radio_button = UI::QueryWidget( `id(`browsing_or_client_only_check_boxes), `CurrentButton );
-  any current_browse_allow = UI::QueryWidget( `id(`browse_allow_combo_box),  `Value );
+  any current_browse_allow = UI::QueryWidget( `id(`browse_allow_combo_box), `Value );
   string current_browse_allow_input_value = (string)UI::QueryWidget( `id(`browse_allow_input), `Value );
   string current_server_name_input_value = (string)UI::QueryWidget( `id(`client_conf_server_name_input), `Value );
   y2milestone( "ApplyNetworkPrintingSettings with\ncurrent_radio_button = '%1'\ncurrent_browse_allow = '%2'\ncurrent_browse_allow_input_value = '%3'\ncurrent_server_name_input_value = '%4'", current_radio_button, current_browse_allow, current_browse_allow_input_value, current_server_name_input_value );
@@ -795,7 +808,7 @@ symbol handleNetworkPrinting( string key, map event )
       UI::ChangeWidget( `id(`connection_wizard), `Enabled, true );
     }
     if( `browse_allow_combo_box == event["ID"]:nil )
-    { if( `browse_allow_all == UI::QueryWidget( `id(`browse_allow_combo_box),  `Value ) )
+    { if( `browse_allow_all == UI::QueryWidget( `id(`browse_allow_combo_box), `Value ) )
       { // If browsing info is accepted from all hosts,
         // it is useless to additionally accept it from specific IPs or networks:
         UI::ChangeWidget( `id(`browse_allow_input), `Enabled, false );
