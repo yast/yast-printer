@@ -7,6 +7,8 @@ import "Printer";
 import "Wizard";
 include "printer/helps.ycp";
 
+string connectionURI="";
+
 term getContentFromBackend(string backend){
  list items=[];
  backend=sformat("%1:/", backend);
@@ -211,7 +213,6 @@ void changeSettingsDialog(symbol selected){
  UI::ReplaceWidget(`rp, content);
 }
 
-
 any ConnectionWizardDialog(){
 term contents =
 `VBox(
@@ -291,14 +292,147 @@ term contents =
                               Label::OKButton()
                             );
 
+boolean validateSettingsDialog(symbol type){
+ boolean valid=false;
+ connectionURI="";
+ switch(type){
+  case(`uri):
+  case(`ipp):
+	connectionURI=(string) UI::QueryWidget(`uri, `Value);
+	if (size(connectionURI)>0) valid=true;
+		else y2error("Couldn't be empty!");
+	break;
+  case(`smb):
+	map<string, any> smb=$[
+		"hostname"	: UI::QueryWidget(`hostname, `Value),
+		"printer"	: UI::QueryWidget(`printer, `Value),
+		"domain"	: UI::QueryWidget(`domain, `Value),
+		"user"		: UI::QueryWidget(`user, `Value),
+		"pass"		: UI::QueryWidget(`pass, `Value)
+			];
+		connectionURI="smb://";
+		if (size(smb["hostname"]:"")==0 || size(smb["printer"]:"")==0){
+		 y2error("Servername and printer couldn't be empty!");
+		} else {
+		 if (size(smb["user"]:"")>0 && size(smb["pass"]:"")>0){
+		  connectionURI=sformat("%1%2:%3@", connectionURI, smb["user"]:"", smb["pass"]:"");
+		 }
+		 if(size(smb["domain"]:"")>0) connectionURI=sformat("%1%2/%3/%4", connectionURI, smb["domain"]:"", smb["hostname"]:"", smb["printer"]:"");
+			else connectionURI=sformat("%1%2/%3", connectionURI, smb["hostname"]:"", smb["printer"]:"");
+		 valid=true;
+		}
+	break;
+  case(`tcp):
+	map<string, any> tcp=$[
+		"hostname" : UI::QueryWidget(`hostname, `Value),
+		"port" : UI::QueryWidget(`port, `Value)
+		];
+		if (size(tcp["hostname"]:"")>0 && size(tcp["port"]:"")>0){
+		 connectionURI=sformat("socket://%1:%2", tcp["hostname"]:"", tcp["port"]:"");
+		 valid=true;
+		}else{
+		 y2error("Servername and port couldn't be empty!");
+		}
+	break;
+  case(`lpr):
+  case(`lpd):
+	map<string, any> lpd=$[
+		"hostname" : UI::QueryWidget(`hostname, `Value),
+		"queue" : UI::QueryWidget(`port, `Value)
+		];
+		if (size(lpd["hostname"]:"")>0 && size(lpd["queue"]:"")>0){
+		 connectionURI=sformat("lpd://%1/%2", lpd["hostname"]:"", lpd["queue"]:"");
+		 valid=true;
+		}else{
+		 y2error("Servername and queue name couldn't be empty!");
+		}
+	break;
+  case(`cups):
+	map<string, any> cups=$[
+		"hostname" : UI::QueryWidget(`hostname, `Value),
+		"queue" : UI::QueryWidget(`queue, `Value)
+		];
+		if (size(cups["hostname"]:"")>0 && size(cups["queue"]:"")>0){
+		 connectionURI=sformat("ipp://%1/printers/%2", cups["hostname"]:"", cups["queue"]:"");
+		 valid=true;
+		}else{
+		 y2error("Servername and queue name couldn't be empty!");
+		}
+	break;
+  case(`ipx):
+	map<string, any> ipx=$[
+		"hostname"	: UI::QueryWidget(`hostname, `Value),
+		"printer"	: UI::QueryWidget(`queue, `Value),
+		"user"		: UI::QueryWidget(`user, `Value),
+		"pass"		: UI::QueryWidget(`pass, `Value)
+			];
+		y2internal("novell ipx map %1", ipx);
+		connectionURI="novell://";
+		if (size(ipx["hostname"]:"")==0 || size(ipx["printer"]:"")==0){
+		 y2error("Servername and printer couldn't be empty!");
+		} else {
+		 if (size(ipx["user"]:"")>0 && size(ipx["pass"]:"")>0){
+		  connectionURI=sformat("%1%2:%3@", connectionURI, ipx["user"]:"", ipx["pass"]:"");
+		 }
+		 connectionURI=sformat("%1%2/%3", connectionURI, ipx["hostname"]:"", ipx["printer"]:"");
+		 valid=true;
+		}
+	break;
+  case(`beh):
+	map<string, any> beh=$[
+		"uri"		: UI::QueryWidget(`queue, `Value),
+		"dont_disable"	: UI::QueryWidget(`beh_do_not_disable, `Value),
+		"attempts"	: UI::QueryWidget(`beh_attempts, `Value),
+		"delay"		: UI::QueryWidget(`beh_delay, `Value)
+			];
+		y2internal("novell ipx map %1", beh);
+		if (size(beh["uri"]:"")==0 || size(beh["attempts"]:"")==0 || size(beh["delay"]:"")==0){
+		 y2error("Servername and printer couldn't be empty!");
+		} else {
+		  connectionURI=sformat("beh://%1/%2/%3/%4", (beh["dont_disable"]:false ? "1" : "0"), beh["attempts"]:"0", beh["delay"]:"", beh["uri"]:"0");
+		 valid=true;
+		}
+	break;
+  case(`pipe):
+	string pipe = (string) UI::QueryWidget(`program, `Value);
+	if (size(pipe)>0){
+	 connectionURI=sformat("program:/%1", pipe);
+	 valid=true;
+	}
+		else y2error("Couldn't be empty!");
+	break;
+  default:
+	y2warning("Unknown type %1", type);
+	break;
+ }
+ if (!valid) connectionURI="";
+ return valid;
+}
+
+boolean storeQueue(symbol selected){
+ boolean stored=false;
+ y2internal("Storing type %1 : %2", selected, connectionURI);
+ Printer::connections=add(Printer::connections, $[
+			"uri"	: connectionURI,
+			"class"	: "ConnectionWizardDialog"
+			]);
+ return stored;
+}
 
 //UI::OpenDialog(content);
 any ret = nil;
 while(ret!=`abort && ret!=`back && ret!=`next){
  ret = UI::UserInput();
- if (ret == `tree_selection) changeSettingsDialog( (symbol)UI::QueryWidget(`tree_selection, `Value) );
+ symbol selected = (symbol)UI::QueryWidget(`tree_selection, `Value);
+ if (ret == `tree_selection) changeSettingsDialog( selected );
  if (ret == `next){
-  y2milestone("Writing settings");
+  if (validateSettingsDialog( selected )) {
+   y2milestone("Writing settings");
+   storeQueue( selected );
+  } else {
+	  y2error("Couldn't validate %1", selected);
+	  ret=nil;
+         }
  }
 }
  return ret;
