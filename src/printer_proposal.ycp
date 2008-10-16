@@ -47,7 +47,7 @@ map ret = $[];
 
 /* create a textual proposal */
 if(func == "MakeProposal") {
-    string proposal = "";
+    list<string> proposal = [];
     string warning = nil;
     symbol warning_level = nil;
     boolean force_reset = param["force_reset"]:false;
@@ -58,11 +58,17 @@ if(func == "MakeProposal") {
 	Printer::Read();
 	Progress::set (progress_orig);
     }
-    list sum = Printer::QueueItems( true, true );
-    proposal = sum[0]:"";
+
+    proposal = maplist ( map< string, string > queue, Printer::queues, {
+	string description = queue["description"]:"";
+	return description;
+    });
+    proposal = filter (string p, proposal, { return p != ""; });
+    if (size (proposal) == 0)
+	proposal = [ _("No printer queue configured.") ];
 
     ret = $[
-	"preformatted_proposal" : proposal,
+	"raw_proposal" : proposal,
 	"warning_level" : warning_level,
 	"warning" : warning,
     ];
