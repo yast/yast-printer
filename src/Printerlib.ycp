@@ -400,28 +400,5 @@ global boolean DetermineBrowseAllow()
   return true;
 }
 
-global map<string, any> cups_autoconfig = $[];
-
-global void Read()
-{ // Determine the 'Browsing [ On | Off ]' value in /etc/cups/cupsd.conf
-  // and ignore when it fails (i.e. use the fallback value silently):
-  DetermineBrowsing();
-  // Determine the 'BrowseAllow [ all | none | @LOCAL | IP-address[/netmask] ]'
-  // values in /etc/cups/cupsd.conf and ignore when it fails (i.e. use the fallback value silently):
-  DetermineBrowseAllow();
-  // Determine the 'ServerName' value in /etc/cups/client.conf
-  // and ignore when it fails (i.e. use the fallback value silently):
-  DetermineClientOnly();
-  // Read cups-autoconfiguration settings:
-  cups_autoconfig = (map<string, any>)SCR::Read(.etc.cups-auto.all);
-  y2internal("read cups-auto %1", cups_autoconfig);
-}
-
-global void Write()
-{ // Write cups-autoconfiguration settings:
-  y2milestone("Writing cups-autoconfig.conf\n%1", cups_autoconfig);
-  SCR::Write(.etc.cups-auto.all, cups_autoconfig);
-}
-
 }
 

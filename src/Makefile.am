@@ -19,6 +19,7 @@ ynclude_DATA =			\
 	printingvianetwork.ycp	\
 	sharing.ycp		\
 	policies.ycp		\
+	autoconfig.ycp		\
 	dialogs.ycp
 
 desktop_DATA =			\

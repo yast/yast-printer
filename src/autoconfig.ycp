@@ -1,0 +1,256 @@
+/* ------------------------------------------------------------------------------
+ * Copyright (c) 2006 Novell, Inc. All Rights Reserved.
+ *
+ *
+ * This program is free software; you can redistribute it and/or modify it under
+ * the terms of version 2 of the GNU General Public License as published by the
+ * Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+ * FOR A PARTICULAR PURPOSE.  See the GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License along with
+ * this program; if not, contact Novell, Inc.
+ *
+ * To contact Novell about this file by physical or electronic mail, you may find
+ * current contact information at www.novell.com.
+ * ------------------------------------------------------------------------------
+ */
+
+/**
+ * File:        include/printer/dialogs.ycp
+ * Package:     Configuration of printer
+ * Summary:     Autoconfig settings dialog definition
+ * Authors:     Johannes Meixner <jsmeix@suse.de>
+ *
+ * $Id: autoconfig.ycp 27914 2006-02-13 14:32:08Z locilka $
+ */
+
+{
+
+textdomain "printer";
+
+import "Printerlib";
+import "Popup";
+
+include "printer/helps.ycp";
+
+// By default the ConfigureNewPrinters value in /etc/cups-autoconfig.conf is set to "yes":
+boolean initial_cups_autoconfig_ConfigureNewPrinters = true;
+// By default the DisablePrintersOnRemoval value in /etc/cups-autoconfig.conf is set to "no":
+boolean initial_cups_autoconfig_DisablePrintersOnRemoval = false;
+// By default the DefaultCUPSPolicy value in /etc/cups-autoconfig.conf is set to the empty string:
+string initial_cups_autoconfig_DefaultCUPSPolicy = "";
+
+term widgetAutoconfig = `VBox
+                        ( `Left
+                          ( `Label
+                            ( `id("cups_autoconfig_label"),
+                              // Header for a dialog section where the user can
+                              // specify in which way USB printers are configured automatically:
+                              _("Specify in which way USB printers are configured automatically")
+                            )
+                          ),
+                          `Left
+                          ( `CheckBox
+                            ( `id("cups_autoconfig_configure_new_attachend"),
+                              // CheckBox to enable that a print queue is automatically created
+                              // when a USB printer is connected for the first time to the USB:
+                              _("Enable &Automatic Configuration of New Attachend USB Printers")
+                            )
+                          ),
+                          `Left
+                          ( `CheckBox
+                            ( `id("cups_autoconfig_disable_on_removal"),
+                              // CheckBox to disable the print queue
+                              // when a USB printer is disconnected from the USB:
+                              _("&Disable Printout when Disconnecting an USB Printer")
+                            )
+                          ),
+                          `Left
+                          ( `ComboBox
+                            ( `id("cups_autoconfig_operation_policy"),
+                              // Header for a ComboBox to specify the CUPS operation policy
+                              // for print queues which are automatically created
+                              // when a USB printer is connected for the first time to the USB:
+                              _("Operation &Policy for Automatically Configured USB Printers"),
+                              [""]
+                            )
+                          )
+                        );
+
+void initAutoconfig( string key )
+{ y2milestone( "entering initAutoconfig with key '%1'", key );
+  // The whole Autoconfig Settings dialog is useless without having cups-autoconfig installed:
+  boolean autoconfig_settings_dialog_is_useless = false;
+  if( ! Printerlib::TestAndInstallPackage( "cups-autoconfig" ) )
+  { autoconfig_settings_dialog_is_useless = true;
+    Popup::Error( // Popup::Error message
+                  // Do not change or translate "cups-autoconfig", it is a RPM package  name.
+                  _("This dialog is useless without having cups-autoconfig installed")
+                );
+  }
+  // Read cups-autoconfig settings.
+  // Ignore errors when the bash commands fail because the default values are used as fallback values.
+  // By default the ConfigureNewPrinters value in /etc/cups-autoconfig.conf is set to "yes":
+  initial_cups_autoconfig_ConfigureNewPrinters = true;
+  Printerlib::ExecuteBashCommand( "grep -i '^ConfigureNewPrinters' /etc/cups-autoconfig.conf | cut -s -d '=' -f2 | tr -d -c '[:alnum:]'" );
+  if( "no" == tolower( Printerlib::result["stdout"]:"yes" ) )
+  { initial_cups_autoconfig_ConfigureNewPrinters = false;
+  }
+  // By default the DisablePrintersOnRemoval value in /etc/cups-autoconfig.conf is set to "no":
+  initial_cups_autoconfig_DisablePrintersOnRemoval = false;
+  Printerlib::ExecuteBashCommand( "grep -i '^DisablePrintersOnRemoval' /etc/cups-autoconfig.conf | cut -s -d '=' -f2 | tr -d -c '[:alnum:]'" );
+  if( "yes" == tolower( Printerlib::result["stdout"]:"no" ) )
+  { initial_cups_autoconfig_DisablePrintersOnRemoval = true;
+  }
+  // By default the DefaultCUPSPolicy value in /etc/cups-autoconfig.conf is set to the empty string:
+  Printerlib::ExecuteBashCommand( "grep -i '^DefaultCUPSPolicy' /etc/cups-autoconfig.conf | cut -s -d '=' -f2 | tr -d -c '[:alnum:]'" );
+  initial_cups_autoconfig_DefaultCUPSPolicy = tolower( Printerlib::result["stdout"]:"" );
+  // By default the DefaultCUPSPolicy value in /etc/cups-autoconfig.conf is set to the empty string.
+  // Therefore an empty policy name could be added as additional possible value
+  // but an empty policy name would be meningless for the user
+  // so that the more verbose string "not set" is used for this case.
+  // Therefore "not set" in the cups_autoconfig_operation_policy ComboBox means actually
+  // an empty value for DefaultCUPSPolicy in /etc/cups-autoconfig.conf which
+  // means to use the DefaultPolicy value in /etc/cups/cupsd.conf also for cups_autoconfig.
+  if( "" == initial_cups_autoconfig_DefaultCUPSPolicy )
+  { initial_cups_autoconfig_DefaultCUPSPolicy = "not set";
+  }
+  // Set the different values for the different widgets in the dialog
+  // and use the default values as fallback values:
+  UI::ChangeWidget( `id("cups_autoconfig_configure_new_attachend"), `Value, initial_cups_autoconfig_ConfigureNewPrinters );
+  UI::ChangeWidget( `id("cups_autoconfig_disable_on_removal"), `Value, initial_cups_autoconfig_DisablePrintersOnRemoval );
+  // Determine the existing policy names in '<Policy policy-name>' sections in /etc/cups/cupsd.conf:
+  list< string > operation_policy_names = [ "" ];
+  if( Printerlib::ExecuteBashCommand( Printerlib::yast_bin_dir + "modify_cupsd_conf Policies" ) )
+  { // The command outputs a line where multiple policy names are separated by space
+    // but possible duplicate policy names are not removed in the command output:
+    operation_policy_names = toset( splitstring( Printerlib::result["stdout"]:"", " " ) );
+  }
+  else
+  { // Use fallback value when the command above failed.
+    operation_policy_names = [ "default" ];
+  }
+  // Add the special case "not set" (see above) to the available operation_policy_names:
+  operation_policy_names  = prepend( operation_policy_names, "not set" );
+  // Use only the plain strings in the operation_policy_names list without an id
+  // for the operation_policy ComboBox:
+  UI::ChangeWidget( `id("cups_autoconfig_operation_policy"), `Items, operation_policy_names );
+  // Have the initial_cups_autoconfig_DefaultCUPSPolicy preselected
+  // if it is available in operation_policy_names
+  // otherwise have the special value "not set" preselected:
+  if( contains( operation_policy_names, initial_cups_autoconfig_DefaultCUPSPolicy ) )
+  { UI::ChangeWidget( `id("cups_autoconfig_operation_policy"), `Value, initial_cups_autoconfig_DefaultCUPSPolicy );
+  }
+  else
+  { UI::ChangeWidget( `id("cups_autoconfig_operation_policy"), `Value, "not set" );
+  }
+  if( autoconfig_settings_dialog_is_useless )
+  { UI::ChangeWidget( `id("cups_autoconfig_label"), `Enabled, false );
+    UI::ChangeWidget( `id("cups_autoconfig_configure_new_attachend"), `Enabled, false );
+    UI::ChangeWidget( `id("cups_autoconfig_disable_on_removal"), `Enabled, false );
+    UI::ChangeWidget( `id("cups_autoconfig_operation_policy"), `Enabled, false );
+  }
+  y2milestone( "leaving initAutoconfig with\ninitial_cups_autoconfig_ConfigureNewPrinters = '%1'\ninitial_cups_autoconfig_DisablePrintersOnRemoval = '%2'\ninitial_cups_autoconfig_DefaultCUPSPolicy = '%3'", initial_cups_autoconfig_ConfigureNewPrinters, initial_cups_autoconfig_DisablePrintersOnRemoval, initial_cups_autoconfig_DefaultCUPSPolicy );
+
+}
+
+void storeAutoconfig( string key, map event )
+{ y2milestone( "entering storeAutoconfig with key '%1'\nand event '%2'", key, event );
+  boolean applied_autoconfig_settings = true;
+  // Get the actual settings and values from the dialog:
+  boolean current_cups_autoconfig_ConfigureNewPrinters = (boolean)UI::QueryWidget( `id("cups_autoconfig_configure_new_attachend"), `Value );
+  boolean current_cups_autoconfig_DisablePrintersOnRemoval = (boolean)UI::QueryWidget( `id("cups_autoconfig_disable_on_removal"), `Value );
+  string current_cups_autoconfig_DefaultCUPSPolicy = (string)UI::QueryWidget( `id("cups_autoconfig_operation_policy"), `Value );
+  y2milestone( "current_cups_autoconfig_ConfigureNewPrinters = '%1'\ncurrent_cups_autoconfig_DisablePrintersOnRemoval = '%2'\ncurrent_cups_autoconfig_DefaultCUPSPolicy = '%3'", current_cups_autoconfig_ConfigureNewPrinters, current_cups_autoconfig_DisablePrintersOnRemoval, current_cups_autoconfig_DefaultCUPSPolicy );
+  if( current_cups_autoconfig_ConfigureNewPrinters == initial_cups_autoconfig_ConfigureNewPrinters
+      && current_cups_autoconfig_DisablePrintersOnRemoval == initial_cups_autoconfig_DisablePrintersOnRemoval
+      && current_cups_autoconfig_DefaultCUPSPolicy == initial_cups_autoconfig_DefaultCUPSPolicy
+    )
+  { y2milestone( "Nothing changed in 'Autoconfig Settings' dialog." );
+    Popup::ShowFeedback( // No title for such a simple feedback message:
+                         "",
+                         // Message of a Popup::ShowFeedback when nothing was changed:
+                         _("Nothing changed.")
+                       );
+    sleep( 1000 );
+    Popup::ClearFeedback();
+    y2milestone( "leaving storeAutoconfig" );
+    return nil;
+  }
+  if( current_cups_autoconfig_ConfigureNewPrinters != initial_cups_autoconfig_ConfigureNewPrinters )
+  { if( current_cups_autoconfig_ConfigureNewPrinters )
+    { if( ! Printerlib::ExecuteBashCommand( "sed -i -e '/^[[:space:]]*ConfigureNewPrinters.*/Id' /etc/cups-autoconfig.conf && echo 'ConfigureNewPrinters=yes' >>/etc/cups-autoconfig.conf" ) )
+      { Popup::ErrorDetails( // Popup::ErrorDetails message
+                             // Do not change or translate "ConfigureNewPrinters=yes", it is a system settings name.
+                             _("Failed to set 'ConfigureNewPrinters=yes' in /etc/cups-autoconfig.conf"),
+                             Printerlib::result["stderr"]:""
+                           );
+        applied_autoconfig_settings = false;
+      }
+    }
+    else
+    { if( ! Printerlib::ExecuteBashCommand( "sed -i -e '/^[[:space:]]*ConfigureNewPrinters.*/Id' /etc/cups-autoconfig.conf && echo 'ConfigureNewPrinters=no' >>/etc/cups-autoconfig.conf" ) )
+      { Popup::ErrorDetails( // Popup::ErrorDetails message
+                             // Do not change or translate "ConfigureNewPrinters=no", it is a system settings name.
+                             _("Failed to set 'ConfigureNewPrinters=no' in /etc/cups-autoconfig.conf"),
+                             Printerlib::result["stderr"]:""
+                           );
+        applied_autoconfig_settings = false;
+      }
+    }
+  }
+  if( current_cups_autoconfig_DisablePrintersOnRemoval != initial_cups_autoconfig_DisablePrintersOnRemoval )
+  { if( current_cups_autoconfig_DisablePrintersOnRemoval )
+    { if( ! Printerlib::ExecuteBashCommand( "sed -i -e '/^[[:space:]]*DisablePrintersOnRemoval.*/Id' /etc/cups-autoconfig.conf && echo 'DisablePrintersOnRemoval=yes' >>/etc/cups-autoconfig.conf" ) )
+      { Popup::ErrorDetails( // Popup::ErrorDetails message
+                             // Do not change or translate "DisablePrintersOnRemoval=yes", it is a system settings name.
+                             _("Failed to set 'DisablePrintersOnRemoval=yes' in /etc/cups-autoconfig.conf"),
+                             Printerlib::result["stderr"]:""
+                           );
+        applied_autoconfig_settings = false;
+      }
+    }
+    else
+    { if( ! Printerlib::ExecuteBashCommand( "sed -i -e '/^[[:space:]]*DisablePrintersOnRemoval.*/Id' /etc/cups-autoconfig.conf && echo 'DisablePrintersOnRemoval=no' >>/etc/cups-autoconfig.conf" ) )
+      { Popup::ErrorDetails( // Popup::ErrorDetails message
+                             // Do not change or translate "DisablePrintersOnRemoval=no", it is a system settings name.
+                             _("Failed to set 'DisablePrintersOnRemoval=no' in /etc/cups-autoconfig.conf"),
+                             Printerlib::result["stderr"]:""
+                           );
+        applied_autoconfig_settings = false;
+      }
+    }
+  }
+  if( current_cups_autoconfig_DefaultCUPSPolicy != initial_cups_autoconfig_DefaultCUPSPolicy )
+  { if( "not set" == current_cups_autoconfig_DefaultCUPSPolicy )
+    { // By default the DefaultCUPSPolicy value in /etc/cups-autoconfig.conf is set to the empty string.
+      // Such an empty string was replaced in initAutoconfig() by the more verbose string "not set".
+      // Now this verbose string is re-replaced by the empty string:
+      current_cups_autoconfig_DefaultCUPSPolicy = "";
+    }
+    if( ! Printerlib::ExecuteBashCommand( "sed -i -e '/^[[:space:]]*DefaultCUPSPolicy.*/Id' /etc/cups-autoconfig.conf && echo 'DefaultCUPSPolicy=" + current_cups_autoconfig_DefaultCUPSPolicy + "' >>/etc/cups-autoconfig.conf" ) )
+    { Popup::ErrorDetails( sformat( // Popup::ErrorDetails message
+                                    // where %1 will be replaced by the cups-autoconfig error policy value.
+                                    // Do not change or translate "DefaultCUPSPolicy", it is a system settings name.
+                                    _("Failed to set 'DefaultCUPSPolicy=%1' in /etc/cups-autoconfig.conf"),
+                                    current_cups_autoconfig_DefaultCUPSPolicy
+                                  ),
+                           Printerlib::result["stderr"]:""
+                         );
+      applied_autoconfig_settings = false;
+    }
+  }
+  if( ! applied_autoconfig_settings )
+  { Popup::Error( // Popup::Error message:
+                  _("Failed to apply the settings to the system.")
+                );
+  }
+  y2milestone( "leaving storeAutoconfig" );
+  return nil;
+}
+
+/* EOF */
+}
