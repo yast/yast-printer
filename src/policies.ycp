@@ -31,9 +31,6 @@
 
 textdomain "printer";
 
-import "Label";
-import "Wizard";
-import "Printer";
 import "Printerlib";
 import "Popup";
 
@@ -107,9 +104,9 @@ void initPolicies( string key )
   }
   // Use only the plain strings in the policy_names list without an id
   // for the operation_policy ComboBox:
-  UI::ChangeWidget(`id("operation_policy"), `Items, policy_names);
+  UI::ChangeWidget( `id("operation_policy"), `Items, policy_names );
   // Have the initial_operation_policy preselected:
-  UI::ChangeWidget(`id("operation_policy"), `Value, initial_operation_policy);
+  UI::ChangeWidget( `id("operation_policy"), `Value, initial_operation_policy );
   // Determine the ErrorPolicy in /etc/cups/cupsd.conf:
   if( Printerlib::ExecuteBashCommand( Printerlib::yast_bin_dir + "modify_cupsd_conf ErrorPolicy" ) )
   { // The command outputs a line where multiple ErrorPolicy entries are separated by space
@@ -123,7 +120,7 @@ void initPolicies( string key )
     initial_error_policy = "stop-printer";
   }
   // Have the initial_error_policy preselected:
-  UI::ChangeWidget(`id("error_policy"), `Value, `id(initial_error_policy));
+  UI::ChangeWidget( `id("error_policy"), `Value, `id(initial_error_policy) );
   y2milestone( "leaving initPolicies with\ninitial_operation_policy = '%1'\ninitial_error_policy = '%2'", initial_operation_policy, initial_error_policy );
 }
 
@@ -136,7 +133,8 @@ void storePolicies( string key, map event)
   string current_error_policy = (string)UI::QueryWidget( `id("error_policy"), `Value );
   y2milestone( "current_error_policy: '%1'", current_error_policy );
   if( current_operation_policy == initial_operation_policy
-      && current_error_policy == initial_error_policy )
+      && current_error_policy == initial_error_policy
+    )
   { y2milestone( "Nothing changed in 'Policies' dialog." );
     Popup::ShowFeedback( // No title for such a simple feedback message:
                          "",

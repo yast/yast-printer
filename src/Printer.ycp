@@ -595,7 +595,9 @@ global boolean DetermineDriverOptions( string queue_name )
 }
 
 /**
- * Read all printer settings
+ * Initialize printer configuration (checks only the installed packages) see
+ * http://en.opensuse.org/YaST/Development/Printer_Enhancement#Basic_Implementation_Principles:
+ * for background information
  * @return true on success
  */
 global boolean Read()
@@ -603,16 +605,12 @@ global boolean Read()
   Progress::New( // Header of a Progress::New:
                  _("Initializing Printer Configuration"),
                  " ",
-                 2,
+                 1,
                  [ // 1. progress stage name of a Progress::New:
-                   _("Check installed packages"),
-                   // 2. progress stage name of a Progress::New:
-                   _("Determine basic print system settings")
+                   _("Check installed packages")
                  ],
                  [ // 1. progress step progress bar title of a Progress::New:
                    _("Checking installed packages..."),
-                   // 2. progress step progress bar title of a Progress::New:
-                   _("Determining basic print system settings..."),
                    // Last progress step progress bar title of a Progress::New:
                    _("Finished")
                  ],
@@ -632,20 +630,28 @@ global boolean Read()
   // Therefore try to install cups but because for a "client-only" config
   // only cups-client is required, proceed even if cups is not installed:
   Printerlib::TestAndInstallPackage( "cups" );
-  // Progress 2. stage (Determine basic print system settings):
-  if( Abort() ) return false;
-  Progress::NextStage();
   // Only in the second stage of the system installation make sure that a local cupsd is running
   // because it is needed for automated queue setup during system installation
   // see https://bugzilla.novell.com/show_bug.cgi?id=418585
   // Note that otherwise a local cupsd is not required (e.g. when it is a client-only setup).
   // There are various checks in each individual case whether or not a local cupsd is required.
   // E.g. it is required to "Add" a local queue or to "Share Printers" (i.e. share local queues).
-  if (Mode::installation() && Stage::cont()){
-   if (Service::Status("cups")!=0)
-	Service::Start("cups");
+  if( Mode::installation()
+      && Stage::cont()
+    )
+  { if( Service::Status( "cups" ) != 0 )
+    { Service::Start( "cups" );
+      // I don't know what to do in the second stage of the system installation
+      // when it fails to start the cupsd (should I show an error popup ?).
+      // Therefore a failure is currently simply ignored.
+      // Furthermore shouldn't it wait here until the cupsd is actually accessible
+      // i.e. until "lpstat -h localhost -r" returns successfully?
+      // See the Printerlib::GetAndSetCupsdStatus function.
+      // In particular for the very first start of the cupsd it may take several seconds
+      // (up to more than a minute on a slow machine) until it is actually accessible,
+      // compare https://bugzilla.novell.com/show_bug.cgi?id=429397
+    }
   }
-  Printerlib::Read();
   // Progress last stage (progress finished):
   if( Abort() ) return false;
   Progress::NextStage();
@@ -657,9 +663,10 @@ global boolean Read()
 }
 
 /**
- * Write printer settings:
- * - Finish printer configuration
- * @return true on success
+ * Finish printer configuration (does actually nothing except to exit verbosely) see
+ * http://en.opensuse.org/YaST/Development/Printer_Enhancement#Basic_Implementation_Principles:
+ * for background information
+ * @return true in any case (because it only exits)
  */
 global boolean Write()
 { // Define the progress stages:
@@ -678,17 +685,13 @@ global boolean Write()
                  ""
                );
   // Progress first stage (Finish printer configuration):
-  if( Abort() ) return false;
   Progress::NextStage();
-  Printerlib::Write();
   // Sleep half a second to let the user notice the progress:
   sleep( 500 );
   // Progress last stage (progress finished):
-  if( Abort() ) return false;
   Progress::Finish();
   // Sleep half a second to let the user notice that the progress is finished:
   sleep( 500 );
-  if( Abort() ) return false;
   return true;
 }
 

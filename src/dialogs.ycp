@@ -21,8 +21,8 @@
 /**
  * File:        include/printer/dialogs.ycp
  * Package:     Configuration of printer
- * Summary:     Other dialog definitions
- * Authors:     Johannes Meixner <jsmeix@suse.de>
+ * Summary:     DialogTree definition
+ * Authors:     Michal Zugec <mzugec@suse.de>
  *
  * $Id: dialogs.ycp 27914 2006-02-13 14:32:08Z locilka $
  */
@@ -32,62 +32,14 @@
 textdomain "printer";
 
 import "Label";
-import "Wizard";
-import "Printer";
-import "Popup";
 import "DialogTree";
-import "Mode";
 
 include "printer/helps.ycp";
 include "printer/overview.ycp";
 include "printer/printingvianetwork.ycp";
 include "printer/sharing.ycp";
 include "printer/policies.ycp";
-
-term widgetAutoconfig = `VBox(
-	`Left( `Label(_("Specify in which way USB printers are configured automatically")) ),
-	`Left( `CheckBox(`id("configurenewprinters"), _("Enable &Automatic Configuration of New Printers")) ),
-	`Left( `CheckBox(`id("disableprintersonremoval"), _("&Disable Printout when Disconnecting USB Printer")) ),
-	`Left( `ComboBox(`id("defaultcupspolicy"), _("The name of the CUPS &policy to assign to newly configured printers"), [""]) ),
-	`HSpacing()
-);
-
-void initAutoconfig(string key){
- if( Printerlib::ExecuteBashCommand("grep '^<Policy ' /etc/cups/cupsd.conf|cut -d' ' -f2|cut -d'>' -f1") ){
-  UI::ChangeWidget(`id("defaultcupspolicy"), `Items, splitstring(Printerlib::result["stdout"]:"", "\n"));
- }
- foreach(map conf, Printerlib::cups_autoconfig["value", 0, "value"]:[], {
-  if (conf["name"]:""=="defaultcupspolicy")
-   UI::ChangeWidget(`id(conf["name"]:""), `Value, conf["value"]:"");
-  else UI::ChangeWidget(`id(conf["name"]:""), `Value, conf["value"]:""=="yes" ? true : false);
- });
-}
-
-void storeAutoconfig(string key, map event){
- y2internal("Store: here I am ;-)");
- foreach(string key, ["configurenewprinters", "disableprintersonremoval", "defaultcupspolicy"], {
-  map value = $[
-	      "comment" : "",
-	      "kind"	: "value",
-	      "name"	: key
-		];
-  if (key=="defaultcupspolicy") value["value"] = (string) UI::QueryWidget(`id(key), `Value);
-	else value["value"] = ((boolean)UI::QueryWidget(`id(key), `Value)) ? "yes" : "no";
-
-  y2internal("values for %1 : %2", key, value);
-  list<map> config=[];
-  boolean found=false;
-  foreach(map row, Printerlib::cups_autoconfig["value", 0, "value"]:[], {
-   if (row["name"]:""==key){
-    row["value"]=value["value"]:"";
-    found=true;
-   }
-  config=add(config, row);
-  });
-  if (!found) config=add(config, value);
-  Printerlib::cups_autoconfig["value", 0, "value"]=config;
- });
-}
+include "printer/autoconfig.ycp";
 
 map<string, map<string,any> > wd = $[
 	"OVERVIEW" : $[
