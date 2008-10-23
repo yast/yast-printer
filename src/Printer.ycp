@@ -255,7 +255,7 @@ string determine_printer_driver_options_commandline = "/usr/lib/YaST2/bin/determ
  * @return true on success
  */
 boolean CreateDatabase()
-{ // Show feedback because creating the printer driver database takes a few seconds:
+{ // Show feedback because creating the printer driver database takes several seconds:
   boolean progress_feedback = UI::HasSpecialWidget( `DownloadProgress );
   if( progress_feedback )
   { // Show nice self-updating feedback:
@@ -316,7 +316,7 @@ boolean CreateDatabase()
     return false;
   }
   ppds = (list< map< string, string > >)SCR::Read( .target.ycp, database_filename );
-  if( nil == connections )
+  if( nil == ppds )
   { if( progress_feedback )
     { UI::CloseDialog();
     }
@@ -621,7 +621,7 @@ global boolean Read()
   // The cups-client RPM is the minimum requirement
   // for accessing remote CUPS servers via a "client-only" config.
   // Therefore abort (return false) if cups-client is not installed:
-  if( ! Printerlib::TestAndInstallPackage( "cups-client" ) )
+  if( ! Printerlib::TestAndInstallPackage( "cups-client", "install" ) )
   { return false;
   }
   // The cups RPM ist the default requirement
@@ -629,7 +629,7 @@ global boolean Read()
   // and it is the minimum requirement for local print queues.
   // Therefore try to install cups but because for a "client-only" config
   // only cups-client is required, proceed even if cups is not installed:
-  Printerlib::TestAndInstallPackage( "cups" );
+  Printerlib::TestAndInstallPackage( "cups", "install" );
   // Only in the second stage of the system installation make sure that a local cupsd is running
   // because it is needed for automated queue setup during system installation
   // see https://bugzilla.novell.com/show_bug.cgi?id=418585

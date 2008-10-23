@@ -1,0 +1,322 @@
+/* ------------------------------------------------------------------------------
+ * Copyright (c) 2006 Novell, Inc. All Rights Reserved.
+ *
+ *
+ * This program is free software; you can redistribute it and/or modify it under
+ * the terms of version 2 of the GNU General Public License as published by the
+ * Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+ * FOR A PARTICULAR PURPOSE.  See the GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License along with
+ * this program; if not, contact Novell, Inc.
+ *
+ * To contact Novell about this file by physical or electronic mail, you may find
+ * current contact information at www.novell.com.
+ * ------------------------------------------------------------------------------
+ */
+
+/**
+ * File:        include/printer/driveradd.ycp
+ * Package:     Configuration of printer
+ * Summary:     Add Driver dialog definition
+ * Authors:     Johannes Meixner <jsmeix@suse.de>
+ *
+ * $Id: driveradd.ycp 27914 2006-02-13 14:32:08Z locilka $
+ */
+
+{
+
+textdomain "printer";
+
+import "Label";
+import "Wizard";
+import "Printerlib";
+import "Printer";
+import "Popup";
+
+include "printer/helps.ycp";
+
+/**
+ * AddDriver dialog
+ * @return dialog result
+ */
+any AddDriverDialog()
+{ // Title of the Add Driver Dialog:
+  string caption = _("Add Driver");
+  boolean cups_drivers_installed = Printerlib::TestAndInstallPackage( "cups-drivers", "installed" );
+  boolean gutenprint_installed = Printerlib::TestAndInstallPackage( "gutenprint", "installed" );
+  boolean hplip_installed = Printerlib::TestAndInstallPackage( "hplip", "installed" );
+  boolean manufacturer_PPDs_installed = Printerlib::TestAndInstallPackage( "manufacturer-PPDs", "installed" );
+  boolean filters_installed = Printerlib::TestAndInstallPackage( "filters", "installed" );
+  term contents = `VBox
+                  ( `VStretch(),
+                    `Left
+                    ( `Label
+                      ( `id("driver_packages_label"),
+                        // Header for a dialog section where the user can
+                        // add or remove printer driver packages:
+                        _("Add or Remove Printer Driver Packages")
+                      )
+                    ),
+                    `HBox
+                    ( `HSpacing( 3 ),
+                      `VBox
+                      ( `Left
+                        ( `CheckBox
+                          ( `id("cups-drivers"),
+                            // CheckBox to select or un-select the printer driver package cups-drivers.
+                            // There is no need to have the package name "cups-drivers" in this text
+                            // because it is shown in a separated column to the left of this text.
+                            "&cups-drivers: " + _("Various Standard Drivers"),
+                            cups_drivers_installed
+                          )
+                        ),
+                        `Left
+                        ( `CheckBox
+                          ( `id("gutenprint"),
+                            // CheckBox to select or un-select the printer driver package gutenprint.
+                            // There is no need to have the package name "gutenprint" in this text
+                            // because it is shown in a separated column to the left of this text.
+                            // Do not change or translate "Gutenprint", it is a open source project name.
+                            // Do not change or translate "Gimp-Print", it is a open source project name.
+                            "&gutenprint: " + _("Gutenprint/Gimp-Print Driver"),
+                            gutenprint_installed
+                          )
+                        ),
+                        `Left
+                        ( `CheckBox
+                          ( `id("hplip"),
+                            // CheckBox to select or un-select the printer driver package hplip.
+                            // There is no need to have the package name "hplip" in this text
+                            // because it is shown in a separated column to the left of this text.
+                            "&hplip: " + _("Driver for HP Printers and All-in-One Devices"),
+                            hplip_installed
+                          )
+                        ),
+                        `Left
+                        ( `CheckBox
+                          ( `id("manufacturer-PPDs"),
+                            // CheckBox to select or un-select the printer driver package manufacturer-PPDs.
+                            // There is no need to have the package name "manufacturer-PPDs" in this text
+                            // because it is shown in a separated column to the left of this text.
+                            "&manufacturer-PPDs: " + _("Various PPD Files for PostScript printers"),
+                            manufacturer_PPDs_installed
+                          )
+                        ),
+                        `Left
+                        ( `CheckBox
+                          ( `id("filters"),
+                            // CheckBox to select or un-select the printer driver package filters.
+                            // There is no need to have the package name "filters" in this text
+                            // because it is shown in a separated column to the left of this text.
+                            "&filters: " + _("Makeshift Drivers for a Few Particular Printer Models"),
+                            filters_installed
+                          )
+                        )
+                      )
+                    ),
+                    `VStretch(),
+                    `Left
+                    ( `Label
+                      ( `id("ppd_path_label"),
+                        // Header for a dialog section where the user can
+                        // add a printer description file (PPD file):
+                        _("Add a Printer Description File")
+                      )
+                    ),
+                    `HBox
+                    ( `HSpacing( 3 ),
+                      `Left
+                      ( `TextEntry
+                        ( `id("ppd_path_input"),
+                          // TextEntry to specify the full path of a PPD file:
+                          _("Specify the full &path where the printer description file is located:")
+                        )
+                      )
+                    ),
+                    `VStretch()
+                  );
+  Wizard::SetContentsButtons( caption,
+                              contents,
+                              HELPS["add_driver_dialog"]:"",
+                              Label::BackButton(),
+                              // Set a different label for the "next" button
+                              // (i.e. the lower right button which results `next as UI::UserInput)
+                              // but do not use OKButton because "OK" may have a different meaning
+                              // (e.g. something like close the whole module or something like that):
+                              Label::AcceptButton()
+                            );
+  any ret = nil;
+  while(true)
+  { ret = UI::UserInput();
+    if( ret == `abort || ret == `cancel || ret == `back ) break;
+    if( ret == `next )
+    { // Get the actual settings and values from the dialog:
+      boolean cups_drivers_install = (boolean)UI::QueryWidget( `id("cups-drivers"), `Value );
+      boolean gutenprint_install = (boolean)UI::QueryWidget( `id("gutenprint"), `Value );
+      boolean hplip_install = (boolean)UI::QueryWidget( `id("hplip"), `Value );
+      boolean manufacturer_PPDs_install = (boolean)UI::QueryWidget( `id("manufacturer-PPDs"), `Value );
+      boolean filters_install = (boolean)UI::QueryWidget( `id("filters"), `Value );
+      string ppd_path_input_value = (string)UI::QueryWidget( `id("ppd_path_input"), `Value );
+      // Ignore an effectively empty ppd_path_input_value:
+      if( cups_drivers_install == cups_drivers_installed
+          && gutenprint_install == gutenprint_installed
+          && hplip_install == hplip_installed
+          && manufacturer_PPDs_install == manufacturer_PPDs_installed
+          && filters_install == filters_installed
+          && "" == filterchars( ppd_path_input_value, Printer::alnum_chars )
+        )
+      { // Nothing changed. Exit this dialog:
+        break;
+      }
+      Wizard::DisableBackButton();
+      Wizard::DisableAbortButton();
+      Wizard::DisableNextButton();
+      // The following steps might be optimized because currently
+      // the package manager is called anew for each individual package
+      // so that for each package which is installed SuSEconfig is run.
+      // On the other hand this way the user can confirm or reject
+      // for each individual package which is to be installed
+      // whether or not is should really be installed and
+      // for each individual package which is to be removed
+      // whether or not is should really be removed.
+      // Because of this and because I assume that usually the user
+      // does not install or remove several packages at once
+      // and because the maximum amount is only 5 packages,
+      // I prefer currently to run the package manager
+      // well separated for each individual package.
+      boolean package_changed = false;
+      if( cups_drivers_install != cups_drivers_installed )
+      { if( cups_drivers_install )
+        { if( Printerlib::TestAndInstallPackage( "cups-drivers", "install" ) )
+          { package_changed = true;
+          }
+        }
+        else
+        { if( Printerlib::TestAndInstallPackage( "cups-drivers", "remove" ) )
+          { package_changed = true;
+          }
+        }
+      }
+      if( gutenprint_install != gutenprint_installed )
+      { if( gutenprint_install )
+        { if( Printerlib::TestAndInstallPackage( "gutenprint", "install" ) )
+          { package_changed = true;
+          }
+        }
+        else
+        { if( Printerlib::TestAndInstallPackage( "gutenprint", "remove" ) )
+          { package_changed = true;
+          }
+        }
+      }
+      if( hplip_install != hplip_installed )
+      { if( hplip_install )
+        { if( Printerlib::TestAndInstallPackage( "hplip", "install" ) )
+          { package_changed = true;
+          }
+        }
+        else
+        { if( Printerlib::TestAndInstallPackage( "hplip", "remove" ) )
+          { package_changed = true;
+          }
+        }
+      }
+      if( manufacturer_PPDs_install != manufacturer_PPDs_installed )
+      { if( manufacturer_PPDs_install )
+        { if( Printerlib::TestAndInstallPackage( "manufacturer-PPDs", "install" ) )
+          { package_changed = true;
+          }
+        }
+        else
+        { if( Printerlib::TestAndInstallPackage( "manufacturer-PPDs", "remove" ) )
+          { package_changed = true;
+          }
+        }
+      }
+      if( filters_install != filters_installed )
+      { if( filters_install )
+        { if( Printerlib::TestAndInstallPackage( "filters", "install" ) )
+          { package_changed = true;
+          }
+        }
+        else
+        { if( Printerlib::TestAndInstallPackage( "filters", "remove" ) )
+          { package_changed = true;
+          }
+        }
+      }
+      // If driver packages were actually changed (the user may have rejected it),
+      // enforce that the BasicAddDialog and/or the BasicModifyDialog
+      // (only form those dialogs this AddDriverDialog can be called)
+      // do re-retrieve the driver information anew from the system.
+      // Both the BasicAddDialog and the BasicModifyDialog call Printer::DriverItems
+      // and this calls Printer::CreateDatabase when the ppds list is empty.
+      // It would not be more failsafe not to clear the ppds list here
+      // because Printer::CreateDatabase overwrites it in any case.
+      if( package_changed )
+      { Printer::ppds = [];
+      }
+      // Ignore an effectively empty ppd_path_input_value:
+      if( "" != filterchars( ppd_path_input_value, Printer::alnum_chars ) )
+      { if( ! Printerlib::ExecuteBashCommand( "ls -l '" + ppd_path_input_value + "'" ) )
+        { Popup::ErrorDetails( sformat( // Popup::ErrorDetails message
+                                        // where %1 will be replaced by the file name:
+                                        _("Cannot access '%1'"),
+                                        ppd_path_input_value
+                                      ),
+                               Printerlib::result["stderr"]:""
+                             );
+          // Simply exit this dialog because it does not make sense to proceed here
+          // and there is nothing else to be done after this:
+          break;
+        }
+        if( ! Printerlib::ExecuteBashCommand( "cupstestppd -W constraints -W defaults -W translations -r -v '" + ppd_path_input_value + "'" ) )
+        { Popup::ErrorDetails( // Popup::ErrorDetails message:
+                               _("The printer description file is not in compliance to the specification."),
+                               // The cupstestppd report is on stdout:
+                               Printerlib::result["stdout"]:""
+                             );
+          if( ! Popup::ContinueCancelHeadline( // Header of a Popup::ContinueCancelHeadline
+                                               // when a PPD file is not in compliance:
+                                               _("Use the printer description file regardless of its errors?"),
+                                               // Body of a Popup::ContinueCancelHeadline
+                                               // when PPD file is not in compliance:
+                                               _("A non-compliant printer description file can lead to any printing failure.")
+                                             )
+            )
+          { // The user has decided not to continue:
+            break;
+          }
+        }
+        if( ! Printerlib::ExecuteBashCommand( "test -d /usr/share/cups/model/downloaded || mkdir /usr/share/cups/model/downloaded ; cp '" + ppd_path_input_value + "' /usr/share/cups/model/downloaded" ) )
+        { Popup::ErrorDetails( // Popup::ErrorDetails message:
+                               _("Failed to add the printer description file"),
+                               Printerlib::result["stderr"]:""
+                             );
+          // Simply exit this dialog because it does not make sense to proceed here
+          // and there is nothing else to be done after this:
+          break;
+        }
+        // If a ppd was actually installed in /usr/share/cups/model/downloaded
+        // enforce that the BasicAddDialog and/or the BasicModifyDialog
+        // re-retrieve the driver information anew from the system (see above):
+        Printer::ppds = [];
+      }
+      // Exit this dialog in any case:
+      break;
+    }
+    y2milestone( "Ignoring unexpected returncode in AddDriverDialog: %1", ret );
+    continue;
+  }
+  Wizard::EnableBackButton();
+  Wizard::EnableAbortButton();
+  Wizard::EnableNextButton();
+  return ret;
+}
+
+/* EOF */
+}
