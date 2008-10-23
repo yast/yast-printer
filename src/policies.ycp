@@ -32,6 +32,7 @@
 textdomain "printer";
 
 import "Printerlib";
+import "Printer";
 import "Popup";
 
 include "printer/helps.ycp";
@@ -52,17 +53,16 @@ string error_policy_retry_job_string = _("re-send the job from the beginning aft
 string error_policy_abort_job_string = _("abort and delete the job and proceed with the next job");
 string initial_error_policy = "stop-printer";
 
+// Have the error policy stuff first because this is of more importance for a normal user.
+// Normal users may like to change the CUPS upstream default "stop-printer" error policy
+// to "abort-job" because is often more convenient for a workstation with local printers
+// when a failing print job is simply removed instead of having the whole queue disabled
+// and get the failed job re-printed when the queue becomes re-enabled at any time later.
+// In contrast normal users should usually not change the CUPS upstream default
+// operation policy "default" to something else because other operation policies
+// are either less secure or too secure for usual printing operation.
 term widgetPolicies = `VBox
                       ( `VStretch(),
-                        `Left
-                        ( `ComboBox
-                          ( `id("operation_policy"),
-                            // Header for a ComboBox to specify the CUPS operation policy:
-                             _("Specify the &operation policy"),
-                             [""]
-                          )
-                        ),
-                        `VStretch(),
                         `Left
                         ( `ComboBox
                           ( `id("error_policy"),
@@ -74,11 +74,86 @@ term widgetPolicies = `VBox
                              ]
                           )
                         ),
+                        `Left
+                        ( `CheckBox
+                          ( `id("apply_error_policy"),
+                            // CheckBox to apply the CUPS error policy which is selected in the ComboBox above
+                            // to all local printer configurations (i.e. to all local print queues).
+                            // When possible we perefer to use the wording "printer configuration"
+                            // instead of "print queue" because the latter may sound too technical
+                            // but sometimes (e.g. in the Connection Wizard) we must use the exact technical term:
+                            _("&Apply this error policy to all local printer configurations")
+                          )
+                        ),
+                        `VStretch(),
+                        `Left
+                        ( `ComboBox
+                          ( `id("operation_policy"),
+                            // Header for a ComboBox to specify the CUPS operation policy:
+                             _("Specify the &operation policy"),
+                             [""]
+                          )
+                        ),
+                        `Left
+                        ( `CheckBox
+                          ( `id("apply_operation_policy"),
+                            // CheckBox to apply the CUPS operation policy which is selected in the ComboBox above
+                            // to all local printer configurations (i.e. to all local print queues).
+                            // When possible we perefer to use the wording "printer configuration"
+                            // instead of "print queue" because the latter may sound too technical
+                            // but sometimes (e.g. in the Connection Wizard) we must use the exact technical term:
+                            _("Apply this operation &policy to all local printer configurations")
+                          )
+                        ),
                         `VStretch()
                       );
 
 void initPolicies( string key )
 { y2milestone( "entering initPolicies with key '%1'", key );
+  // Note that the "Policies" dialog is not useless when there is no local queue.
+  // For example the user may like to configure the "Policies" before he set up the first local queue.
+  boolean policies_dialog_is_useless = false;
+  // Determine whether or not it is currently a real client-only config
+  // (i.e. a ServerName != "localhost/127.0.0.1" in /etc/cups/client.conf)
+  // and ignore when it fails (i.e. use the fallback value silently):
+  Printerlib::DetermineClientOnly();
+  if( Printerlib::client_only )
+  { if( ! Popup::YesNoHeadline( sformat( // PopupYesNoHeadline headline
+                                         // where %1 will be replaced by the server name:
+                                         _("Disable remote CUPS server '%1'"),
+                                         Printerlib::client_conf_server_name
+                                       ),
+                                // PopupYesNoHeadline body:
+                                _("A remote CUPS server setting conflicts with setting policies for the local system.")
+                              )
+      )
+    { policies_dialog_is_useless = true;
+      y2milestone( "policies_dialog_is_useless because user decided not to disable client-only CUPS server '%1'",
+                   Printerlib::client_conf_server_name
+                 );
+    }
+    else
+    { // Remove the 'ServerName' entry in /etc/cups/client.conf:
+      if( ! Printerlib::ExecuteBashCommand( Printerlib::yast_bin_dir + "cups_client_only none" ) )
+      { Popup::ErrorDetails( // Popup::ErrorDetails message:
+                             _("Failed to remove the 'ServerName' entry in /etc/cups/client.conf"),
+                             Printerlib::result["stderr"]:"" + "\n" + Printerlib::result["stdout"]:""
+                           );
+        policies_dialog_is_useless = true;
+        y2milestone( "policies_dialog_is_useless because it failed to disable client-only CUPS server '%1'",
+                     Printerlib::client_conf_server_name
+                   );
+      }
+    }
+  }
+  // Determine whether or not a local cupsd is accessible:
+  if( ! Printerlib::GetAndSetCupsdStatus( "" ) )
+  { // Printerlib::GetAndSetCupsdStatus already shows a confirmation popup:
+    if( ! Printerlib::GetAndSetCupsdStatus( "start" ) )
+    { policies_dialog_is_useless = true;
+      y2milestone( "policies_dialog_is_useless because 'rccups start' failed." );
+    }
+  }
   // Determine the existing policy names in '<Policy policy-name>' sections in /etc/cups/cupsd.conf:
   list< string > policy_names = [ "" ];
   if( Printerlib::ExecuteBashCommand( Printerlib::yast_bin_dir + "modify_cupsd_conf Policies" ) )
@@ -107,6 +182,9 @@ void initPolicies( string key )
   UI::ChangeWidget( `id("operation_policy"), `Items, policy_names );
   // Have the initial_operation_policy preselected:
   UI::ChangeWidget( `id("operation_policy"), `Value, initial_operation_policy );
+  // Have the CheckBox to apply the operation policy to all local print queues
+  // un-checked in any case:
+  UI::ChangeWidget( `id("apply_operation_policy"), `Value, false );
   // Determine the ErrorPolicy in /etc/cups/cupsd.conf:
   if( Printerlib::ExecuteBashCommand( Printerlib::yast_bin_dir + "modify_cupsd_conf ErrorPolicy" ) )
   { // The command outputs a line where multiple ErrorPolicy entries are separated by space
@@ -121,6 +199,15 @@ void initPolicies( string key )
   }
   // Have the initial_error_policy preselected:
   UI::ChangeWidget( `id("error_policy"), `Value, `id(initial_error_policy) );
+  // Have the CheckBox to apply the error policy to all local print queues
+  // un-checked in any case:
+  UI::ChangeWidget( `id("apply_error_policy"), `Value, false );
+  if( policies_dialog_is_useless )
+  { UI::ChangeWidget( `id("operation_policy"), `Enabled, false );
+    UI::ChangeWidget( `id("apply_operation_policy"), `Enabled, false );
+    UI::ChangeWidget( `id("error_policy"), `Enabled, false );
+    UI::ChangeWidget( `id("apply_error_policy"), `Enabled, false );
+  }
   y2milestone( "leaving initPolicies with\ninitial_operation_policy = '%1'\ninitial_error_policy = '%2'", initial_operation_policy, initial_error_policy );
 }
 
@@ -129,11 +216,15 @@ void storePolicies( string key, map event)
   boolean applied_policies = true;
   // Get the actual settings and values from the dialog:
   string current_operation_policy = (string)UI::QueryWidget( `id("operation_policy"), `Value );
-  y2milestone( "current_operation_policy: '%1'", current_operation_policy );
+  boolean apply_operation_policy = (boolean)UI::QueryWidget( `id("apply_operation_policy"), `Value );
+  y2milestone( "current_operation_policy: '%1' apply it to all local queues: '%2'", current_operation_policy, apply_operation_policy );
   string current_error_policy = (string)UI::QueryWidget( `id("error_policy"), `Value );
-  y2milestone( "current_error_policy: '%1'", current_error_policy );
+  boolean apply_error_policy = (boolean)UI::QueryWidget( `id("apply_error_policy"), `Value );
+  y2milestone( "current_error_policy: '%1' apply it to all local queues: '%2'", current_error_policy, apply_error_policy );
   if( current_operation_policy == initial_operation_policy
       && current_error_policy == initial_error_policy
+      && ! apply_operation_policy
+      && ! apply_error_policy
     )
   { y2milestone( "Nothing changed in 'Policies' dialog." );
     Popup::ShowFeedback( // No title for such a simple feedback message:
@@ -145,6 +236,43 @@ void storePolicies( string key, map event)
     Popup::ClearFeedback();
     y2milestone( "leaving storePolicies" );
     return nil;
+  }
+  if( apply_operation_policy
+      || apply_error_policy
+    )
+  { // When the module is started, the Overview dialog is shown in any case.
+    // The Overview dialog is also shown in any case after a queue was added.
+    // Finally the Overview dialog is re-run (with a re-created list of queues) via the sequencer
+    // after a queue was deleted.
+    // The Overview dialog calls Printer::QueueItems which calls AutodetectQueues so that
+    // the queues have been already autodetected and the Printer::queues list is up to date.
+    // so that there is no need to call Printer::AutodetectQueues here again.
+    foreach( map< string, string > queue,
+             Printer::queues,
+             { string name = queue["name"]:"";
+               if( "" == filterchars( name, Printer::alnum_chars ) )
+               { // Ignore an effectively empty queue name:
+                 continue;
+               }
+               string commandline = "/usr/sbin/lpadmin -h localhost -p '" + name + "'";
+               if( apply_operation_policy )
+               { commandline = commandline + " -o 'printer-op-policy=" + current_operation_policy + "'";
+               }
+               if( apply_error_policy )
+               { commandline = commandline + " -o 'printer-error-policy=" + current_error_policy + "'";
+               }
+               if( ! Printerlib::ExecuteBashCommand( commandline ) )
+               { Popup::ErrorDetails( sformat( // Popup::ErrorDetails message
+                                               // where %1 will be replaced by the print queue name.
+                                               _("Failed to apply the policy to '%1'"),
+                                               name
+                                             ),
+                                      Printerlib::result["stderr"]:""
+                                    );
+                 applied_policies = false;
+               }
+             }
+           );
   }
   if( current_operation_policy != initial_operation_policy )
   { if( ! Printerlib::ExecuteBashCommand( Printerlib::yast_bin_dir + "modify_cupsd_conf DefaultPolicy " + current_operation_policy ) )
@@ -172,11 +300,16 @@ void storePolicies( string key, map event)
       applied_policies = false;
     }
   }
-  // If a local cupsd is accessible, restart it,
-  // otherwise do nothing (i.e. do not start it now):
-  if( Printerlib::GetAndSetCupsdStatus( "" ) )
-  { if( ! Printerlib::GetAndSetCupsdStatus( "restart" ) )
-    { applied_policies = false;
+  // Restart a local cupsd only if a policy in /etc/cups/cupsd.conf was changed:
+  if( current_operation_policy != initial_operation_policy
+      || current_error_policy != initial_error_policy
+    )
+  { // If a local cupsd is accessible, restart it,
+    // otherwise do nothing (i.e. do not start it now):
+    if( Printerlib::GetAndSetCupsdStatus( "" ) )
+    { if( ! Printerlib::GetAndSetCupsdStatus( "restart" ) )
+      { applied_policies = false;
+      }
     }
   }
   if( ! applied_policies )
