@@ -62,10 +62,9 @@ any BasicModifyDialog()
   if( "yes" == Printer::queues[Printer::selected_queues_index,"disabled"]:"" )
   { printing_enabled = false;
   }
-  // After the "Modify" text the actual queue name is appended
-  // so that the result is e.g. "Modify funprinter1".
-  // The actual queue name is a system value which cannot be translated.
-  string caption = _("Modify") + " " + name;
+  // Title of the Basic Modify Dialog where %1 will be replaced by the queue name.
+  // The actual queue name is a system value which cannot be translated:
+  string caption = sformat( _("Modify %1") , name );
   string model = "";
   list <string> description_words = splitstring( description, " " );
   if( size( description_words ) > 2 )
@@ -529,12 +528,8 @@ any BasicModifyDialog()
       break;
     }
     if( ret == `add_driver )
-    { Popup::AnyMessage( // Header of a Popup::AnyMessage when "Add Driver" was selected:
-                         _("Not yet implemented"),
-                         // Body of a Popup::AnyMessage when the "Add Driver" was selected:
-                         _("The 'Add Driver' dialog is not yet implemented.")
-                       );
-      continue;
+    { // Exit this dialog and go to the AddDriverDialog via the sequencer in wizards.ycp:
+      break;
     }
     if( ret == `driver_options )
     { if( Printer::selected_queues_index < 0

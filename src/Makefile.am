@@ -16,6 +16,7 @@ ynclude_DATA =			\
 	basicmodify.ycp		\
 	connectionwizard.ycp	\
 	driveroptions.ycp	\
+	driveradd.ycp		\
 	printingvianetwork.ycp	\
 	sharing.ycp		\
 	policies.ycp		\

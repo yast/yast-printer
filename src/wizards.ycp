@@ -41,6 +41,7 @@ include "printer/basicmodify.ycp";
 include "printer/connectionwizard.ycp";
 include "printer/printingvianetwork.ycp";
 include "printer/driveroptions.ycp";
+include "printer/driveradd.ycp";
 include "printer/dialogs.ycp";
 
 /**
@@ -51,8 +52,10 @@ any MainSequence()
 { map aliases = $[ "overview" : ``( runMainDialog() ),
                    "add" : ``( BasicAddDialog() ),
                    "add_connection_wizard" : ``( ConnectionWizardDialog() ),
+                   "add_driver_add" : ``( AddDriverDialog() ),
                    "modify" : ``( BasicModifyDialog() ),
                    "modify_connection_wizard" : ``( ConnectionWizardDialog() ),
+                   "modify_driver_add" : ``( AddDriverDialog() ),
                    "modify_driver_options" : ``( DriverOptionsDialog() ),
                    "printing_via_network_connection_wizard" : ``( ConnectionWizardDialog() )
                  ];
@@ -66,19 +69,27 @@ any MainSequence()
                                  ],
                     "add" : $[ `abort : `abort,
                                `next : "overview",
-                               `connection_wizard : "add_connection_wizard"
+                               `connection_wizard : "add_connection_wizard",
+                               `add_driver : "add_driver_add"
                              ],
                     "add_connection_wizard" : $[ `abort : `abort,
                                                  `next : "add"
                                                ],
+                    "add_driver_add" : $[ `abort : `abort,
+                                          `next : "add"
+                                        ],
                     "modify" : $[ `abort : `abort,
                                   `next : "overview",
                                   `connection_wizard : "modify_connection_wizard",
+                                  `add_driver : "modify_driver_add",
                                   `driver_options : "modify_driver_options"
                                 ],
                     "modify_connection_wizard" : $[ `abort : `abort,
                                                     `next : "modify"
                                                   ],
+                    "modify_driver_add" : $[ `abort : `abort,
+                                             `next : "modify"
+                                           ],
                     "modify_driver_options" : $[ `abort : `abort,
                                                  `next : "modify"
                                                ],
