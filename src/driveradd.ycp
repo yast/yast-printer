@@ -50,7 +50,9 @@ any AddDriverDialog()
   boolean gutenprint_installed = Printerlib::TestAndInstallPackage( "gutenprint", "installed" );
   boolean hplip_installed = Printerlib::TestAndInstallPackage( "hplip", "installed" );
   boolean manufacturer_PPDs_installed = Printerlib::TestAndInstallPackage( "manufacturer-PPDs", "installed" );
+  boolean ghostscript_omni_installed = Printerlib::TestAndInstallPackage( "ghostscript-omni", "installed" );
   boolean filters_installed = Printerlib::TestAndInstallPackage( "filters", "installed" );
+  y2milestone( "entering AddDriverDialog with cups_drivers_installed:'%1' gutenprint_installed:'%2' hplip_installed:'%3' manufacturer_PPDs_installed:'%4' ghostscript_omni_installed:'%5' filters_installed:'%6'", cups_drivers_installed, gutenprint_installed, hplip_installed, manufacturer_PPDs_installed, ghostscript_omni_installed, filters_installed );
   term contents = `VBox
                   ( `VStretch(),
                     `Left
@@ -58,7 +60,7 @@ any AddDriverDialog()
                       ( `id("driver_packages_label"),
                         // Header for a dialog section where the user can
                         // add or remove printer driver packages:
-                        _("Add or Remove Printer Driver Packages")
+                        _("Install or Remove Printer Driver Packages")
                       )
                     ),
                     `HBox
@@ -70,7 +72,7 @@ any AddDriverDialog()
                             // CheckBox to select or un-select the printer driver package cups-drivers.
                             // There is no need to have the package name "cups-drivers" in this text
                             // because it is shown in a separated column to the left of this text.
-                            "&cups-drivers: " + _("Various Standard Drivers"),
+                            "&cups-drivers : " + _("Various Standard Drivers"),
                             cups_drivers_installed
                           )
                         ),
@@ -82,17 +84,17 @@ any AddDriverDialog()
                             // because it is shown in a separated column to the left of this text.
                             // Do not change or translate "Gutenprint", it is a open source project name.
                             // Do not change or translate "Gimp-Print", it is a open source project name.
-                            "&gutenprint: " + _("Gutenprint/Gimp-Print Driver"),
+                            "&gutenprint : " + _("Gutenprint/Gimp-Print Driver"),
                             gutenprint_installed
                           )
                         ),
                         `Left
                         ( `CheckBox
                           ( `id("hplip"),
-                            // CheckBox to select or un-select the printer driver package hplip.
-                            // There is no need to have the package name "hplip" in this text
-                            // because it is shown in a separated column to the left of this text.
-                            "&hplip: " + _("Driver for HP Printers and All-in-One Devices"),
+                            // CheckBox to select or un-select the printer driver packages hplip and hplip-hpijs.
+                            // There is no need to have the package names "hplip" and "hplip-hpijs" in this text
+                            // because they are shown in a separated column to the left of this text.
+                            "&hplip + hplip-hpijs : " + _("Driver for HP Printers and All-in-One Devices"),
                             hplip_installed
                           )
                         ),
@@ -102,17 +104,29 @@ any AddDriverDialog()
                             // CheckBox to select or un-select the printer driver package manufacturer-PPDs.
                             // There is no need to have the package name "manufacturer-PPDs" in this text
                             // because it is shown in a separated column to the left of this text.
-                            "&manufacturer-PPDs: " + _("Various PPD Files for PostScript printers"),
+                            "&manufacturer-PPDs : " + _("Printer Description Files for PostScript Printers"),
                             manufacturer_PPDs_installed
                           )
                         ),
                         `Left
                         ( `CheckBox
+                          ( `id("ghostscript-omni"),
+                            // CheckBox to select or un-select the printer driver package ghostscript-omni.
+                            // There is no need to have the package name "ghostscript-omni" in this text
+                            // because it is shown in a separated column to the left of this text.
+                            "ghostscript-&omni : " + _("The Omni Printer Driver (Unmaintained)"),
+                            ghostscript_omni_installed
+                          )
+                        ),
+                        `Left
+                        ( `CheckBox
                           ( `id("filters"),
-                            // CheckBox to select or un-select the printer driver package filters.
+                            // CheckBox to select or un-select the printer driver package filters
+                            // which provides some makeshift drivers only for a few of the
+                            // non-standard printers (the so called "GDI printers").
                             // There is no need to have the package name "filters" in this text
                             // because it is shown in a separated column to the left of this text.
-                            "&filters: " + _("Makeshift Drivers for a Few Particular Printer Models"),
+                            "&filters : " + _("Makeshift Drivers for a Few Non-Standard (GDI) Printers"),
                             filters_installed
                           )
                         )
@@ -123,8 +137,9 @@ any AddDriverDialog()
                     ( `Label
                       ( `id("ppd_path_label"),
                         // Header for a dialog section where the user can
-                        // add a printer description file (PPD file):
-                        _("Add a Printer Description File")
+                        // make a printer description file (PPD file) available
+                        // so that it can be used to set up a print queue with it:
+                        _("Make a Printer Description File Available")
                       )
                     ),
                     `HBox
@@ -133,7 +148,7 @@ any AddDriverDialog()
                       ( `TextEntry
                         ( `id("ppd_path_input"),
                           // TextEntry to specify the full path of a PPD file:
-                          _("Specify the full &path where the printer description file is located:")
+                          _("&Printer description file name with full path where it is located")
                         )
                       )
                     ),
@@ -159,6 +174,7 @@ any AddDriverDialog()
       boolean gutenprint_install = (boolean)UI::QueryWidget( `id("gutenprint"), `Value );
       boolean hplip_install = (boolean)UI::QueryWidget( `id("hplip"), `Value );
       boolean manufacturer_PPDs_install = (boolean)UI::QueryWidget( `id("manufacturer-PPDs"), `Value );
+      boolean ghostscript_omni_install = (boolean)UI::QueryWidget( `id("ghostscript-omni"), `Value );
       boolean filters_install = (boolean)UI::QueryWidget( `id("filters"), `Value );
       string ppd_path_input_value = (string)UI::QueryWidget( `id("ppd_path_input"), `Value );
       // Ignore an effectively empty ppd_path_input_value:
@@ -166,10 +182,19 @@ any AddDriverDialog()
           && gutenprint_install == gutenprint_installed
           && hplip_install == hplip_installed
           && manufacturer_PPDs_install == manufacturer_PPDs_installed
+          && ghostscript_omni_install == ghostscript_omni_installed
           && filters_install == filters_installed
           && "" == filterchars( ppd_path_input_value, Printer::alnum_chars )
         )
-      { // Nothing changed. Exit this dialog:
+      { y2milestone( "Nothing changed in AddDriverDialog." );
+        Popup::ShowFeedback( // No title for such a simple feedback message:
+                             "",
+                             // Message of a Popup::ShowFeedback when nothing was changed:
+                             _("Nothing changed.")
+                           );
+        sleep( 1000 );
+        Popup::ClearFeedback();
+        // Exit this dialog:
         break;
       }
       Wizard::DisableBackButton();
@@ -188,6 +213,13 @@ any AddDriverDialog()
       // and because the maximum amount is only 5 packages,
       // I prefer currently to run the package manager
       // well separated for each individual package.
+      // Furthermore I do not want to run into whatever complicated issues
+      // when I would let the package manager install several packages at once
+      // but one package is not avaialble in the repository to be installed.
+      // For example on a host without Internet access when whatever rarely used
+      // drivers (e.g. ghostscript-omni or filters) or too-big drivers (e.g. hplip)
+      // are not provided on whatever media for whatever product
+      // (e.g. our Live CD or a stripped DVD/CD in whatever magazine).
       boolean package_changed = false;
       if( cups_drivers_install != cups_drivers_installed )
       { if( cups_drivers_install )
@@ -215,13 +247,70 @@ any AddDriverDialog()
       }
       if( hplip_install != hplip_installed )
       { if( hplip_install )
-        { if( Printerlib::TestAndInstallPackage( "hplip", "install" ) )
+        { // When hpijs-standalone is installed, it must be removed first of all
+          // because hpijs-standalone conflicts with hplip-hpijs which is required by hplip.
+          if( Printerlib::TestAndInstallPackage( "hpijs-standalone", "installed" ) )
+          { Printerlib::TestAndInstallPackage( "hpijs-standalone", "remove" );
+          }
+          if( Printerlib::TestAndInstallPackage( "hplip", "install" ) )
           { package_changed = true;
+          }
+          else
+          { // We are here either when the user has rejected to install hplip
+            // or if the installation of hplip has actually failed.
+            // Installation of hplip may have failed because
+            // an old hplip-hpijs may have been still installed
+            // (hplip requires the exact matching hplip-hpijs version).
+            // Therefore here a special error handling if hplip-hpijs is installed.
+            // This special error handling would be also done when hplip-hpijs is installed
+            // and the user has rejected to install hplip but in this very special case
+            // the user just needs to continue to reject all the stuff to get out
+            // without any changes in his installed packages.
+            // Unfortunately even PackageSystem::CheckAndInstallPackagesInteractive(["hplip"])
+            // does neither show a useful error message why an installation failed to the user
+            // (the SATResolver reports the problems and solutions perfectly in y2log)
+            // nor does it let the user do any useful error handling
+            // (it does not let the user choose one of the solutions of the SATResolver)
+            // except a blind and trivial "continue" or "cancel".
+            // It even exits with true if the user decided to "continue" in case of an error
+            // so that the caller cannot distinguish easily if it was a successful installation
+            // or if the installation failed but the user decided to "continue" nevertheless.
+            // Therefore PackageSystem::CheckAndInstallPackagesInteractive(["hplip"])
+            // is totally useless for me here and therefore I implement some
+            // best guess and best effort error handling here on my own.
+            if( Printerlib::TestAndInstallPackage( "hplip-hpijs", "installed" ) )
+            { if( Printerlib::TestAndInstallPackage( "hplip-hpijs", "remove" ) )
+              { // Try again to install hplip only if hplip-hpijs was actually removed.
+                if( Printerlib::TestAndInstallPackage( "hplip", "install" ) )
+                { package_changed = true;
+                }
+                else
+                { // Very special error handling:
+                  // For whatever reason hpijs-standalone becomes installed on openSUSE 11.0
+                  // by whatever magic automatically after hplip-hpijs was removed
+                  // but hpijs-standalone conflicts with hplip-hpijs which is required by hplip.
+                  if( Printerlib::TestAndInstallPackage( "hpijs-standalone", "installed" ) )
+                  { if( Printerlib::TestAndInstallPackage( "hpijs-standalone", "remove" ) )
+                    { // Try again to install hplip only if hpijs-standalone was actually removed.
+                      if( Printerlib::TestAndInstallPackage( "hplip", "install" ) )
+                      { package_changed = true;
+                      }
+                    }
+                  }
+                }
+              }
+            }
           }
         }
         else
         { if( Printerlib::TestAndInstallPackage( "hplip", "remove" ) )
           { package_changed = true;
+            // The user is free to decide to keep hplip-hpijs installed
+            // because hplip-hpijs contains only the hpijs binary and required libraries
+            // but all the rest (in particular the PPDs and the hp backend) is in hplip
+            // so that after hplip was removed neither a "hp:/" DeviceURI is autodetected
+            // nor a hplip/hpijs driver description exists.
+            Printerlib::TestAndInstallPackage( "hplip-hpijs", "remove" );
           }
         }
       }
@@ -233,6 +322,18 @@ any AddDriverDialog()
         }
         else
         { if( Printerlib::TestAndInstallPackage( "manufacturer-PPDs", "remove" ) )
+          { package_changed = true;
+          }
+        }
+      }
+      if( ghostscript_omni_install != ghostscript_omni_installed )
+      { if( ghostscript_omni_install )
+        { if( Printerlib::TestAndInstallPackage( "ghostscript-omni", "install" ) )
+          { package_changed = true;
+          }
+        }
+        else
+        { if( Printerlib::TestAndInstallPackage( "ghostscript-omni", "remove" ) )
           { package_changed = true;
           }
         }
@@ -253,12 +354,24 @@ any AddDriverDialog()
       // enforce that the BasicAddDialog and/or the BasicModifyDialog
       // (only form those dialogs this AddDriverDialog can be called)
       // do re-retrieve the driver information anew from the system.
-      // Both the BasicAddDialog and the BasicModifyDialog call Printer::DriverItems
+      // Both the BasicAddDialog and the BasicModifyDialog are re-launched
+      // via the sequencer when this AddDriverDialog has finished
+      // so that BasicAddDialog and BasicModifyDialog call Printer::DriverItems anew
       // and this calls Printer::CreateDatabase when the ppds list is empty.
       // It would not be more failsafe not to clear the ppds list here
       // because Printer::CreateDatabase overwrites it in any case.
+      // If driver packages were actually changed (the user may have rejected it),
+      // CUPS backends could have been added or removed (in particular the "hp" backend)
+      // so that printer autodetection must also be re-done.
+      // Both the BasicAddDialog and the BasicModifyDialog are re-launched
+      // via the sequencer when this AddDriverDialog has finished
+      // so that BasicAddDialog and BasicModifyDialog call Printer::ConnectionItems anew
+      // and this calls Printer::AutodetectPrinters when the connections list is empty.
+      // It would not be more failsafe not to clear the connections list here
+      // because Printer::AutodetectPrinters overwrites it in any case.
       if( package_changed )
       { Printer::ppds = [];
+        Printer::connections = [];
       }
       // Ignore an effectively empty ppd_path_input_value:
       if( "" != filterchars( ppd_path_input_value, Printer::alnum_chars ) )
@@ -285,7 +398,7 @@ any AddDriverDialog()
                                                _("Use the printer description file regardless of its errors?"),
                                                // Body of a Popup::ContinueCancelHeadline
                                                // when PPD file is not in compliance:
-                                               _("A non-compliant printer description file can lead to any printing failure.")
+                                               _("A non-compliant printer description file can lead to arbitrary failures.")
                                              )
             )
           { // The user has decided not to continue:
@@ -294,7 +407,7 @@ any AddDriverDialog()
         }
         if( ! Printerlib::ExecuteBashCommand( "test -d /usr/share/cups/model/downloaded || mkdir /usr/share/cups/model/downloaded ; cp '" + ppd_path_input_value + "' /usr/share/cups/model/downloaded" ) )
         { Popup::ErrorDetails( // Popup::ErrorDetails message:
-                               _("Failed to add the printer description file"),
+                               _("Failed make the printer description file available"),
                                Printerlib::result["stderr"]:""
                              );
           // Simply exit this dialog because it does not make sense to proceed here
@@ -315,6 +428,7 @@ any AddDriverDialog()
   Wizard::EnableBackButton();
   Wizard::EnableAbortButton();
   Wizard::EnableNextButton();
+  y2milestone( "leaving AddDriverDialog" );
   return ret;
 }
 
