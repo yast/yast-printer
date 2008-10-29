@@ -145,10 +145,18 @@ any AddDriverDialog()
                     `HBox
                     ( `HSpacing( 3 ),
                       `Left
-                      ( `TextEntry
-                        ( `id("ppd_path_input"),
-                          // TextEntry to specify the full path of a PPD file:
-                          _("&Printer description file name with full path where it is located")
+                      ( `HBox
+                        ( `TextEntry
+                          ( `id("ppd_path_input"),
+                            // TextEntry to specify the full path of a PPD file:
+                            _("&Printer description file name with full path where it is located")
+                          ),
+                          `PushButton
+                          ( `id("ppd_file_browser"),
+                            // Label of a PushButton to open a file selection box
+                            // to browse the file system to select a PPD file:
+                            _("&Browse")
+                          )
                         )
                       )
                     ),
@@ -168,6 +176,18 @@ any AddDriverDialog()
   while(true)
   { ret = UI::UserInput();
     if( ret == `abort || ret == `cancel || ret == `back ) break;
+    if( ret == "ppd_file_browser" )
+    { string ppd_file_name = UI::AskForExistingFile( "/tmp",
+                                                     "*.ppd *.ppd.gz",
+                                                     // Header for a AskForExistingFile popup dialog
+                                                     // to browse the file system to select a PPD file:
+                                                     "Select a printer description file"
+                                                   );
+      if( "" != filterchars( ppd_file_name, Printer::alnum_chars ) )
+      { UI::ChangeWidget( `id("ppd_path_input"), `Value, ppd_file_name );
+      }
+      continue;
+    }
     if( ret == `next )
     { // Get the actual settings and values from the dialog:
       boolean cups_drivers_install = (boolean)UI::QueryWidget( `id("cups-drivers"), `Value );
@@ -387,11 +407,12 @@ any AddDriverDialog()
           // and there is nothing else to be done after this:
           break;
         }
-        if( ! Printerlib::ExecuteBashCommand( "cupstestppd -W constraints -W defaults -W translations -r -v '" + ppd_path_input_value + "'" ) )
+        if( ! Printerlib::ExecuteBashCommand( "cupstestppd -W constraints -W defaults -W translations -r '" + ppd_path_input_value + "'" ) )
         { Popup::ErrorDetails( // Popup::ErrorDetails message:
                                _("The printer description file is not in compliance to the specification."),
                                // The cupstestppd report is on stdout:
                                Printerlib::result["stdout"]:""
+                               + "\nREF is the Adobe PostScript Printer Description File Format Specification"
                              );
           if( ! Popup::ContinueCancelHeadline( // Header of a Popup::ContinueCancelHeadline
                                                // when a PPD file is not in compliance:
