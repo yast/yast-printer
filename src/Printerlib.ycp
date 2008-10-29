@@ -92,24 +92,24 @@ global boolean TestAndInstallPackage( string package_name, string action )
   // but I am only interested in real package names here.
   if( "installed" == action )
   { if( ExecuteBashCommand( "rpm -q '" + package_name + "'" ) )
-    { y2milestone( "package '%1' is installed", result["stdout"]:package_name );
+    { y2milestone( "TestAndInstallPackage: package '%1' is installed", result["stdout"]:package_name );
       return true;
     }
     // The "%1" makes the YCP Parser happy, otherwise it shows the warning
     // "Format string is not constant, no parameter checking possible".
-    y2milestone( "%1", result["stdout"]:"package is not installed" );
+    y2milestone( "TestAndInstallPackage: %1", result["stdout"]:"TestAndInstallPackage: package is not installed" );
     return false;
   }
   if( "install" == action )
   { if( ExecuteBashCommand( "rpm -q '" + package_name + "'" ) )
-    { y2milestone( "package '%1' is already installed", result["stdout"]:package_name );
+    { y2milestone( "TestAndInstallPackage: package '%1' is already installed", result["stdout"]:package_name );
       return true;
     }
     // Is the package available to be installed?
     // Package::Available returns nil if no package source is available.
     boolean package_available = Package::Available( package_name );
     if( nil == package_available )
-    { y2milestone( "Required package %1 is not installed and there is no package repository available.", package_name );
+    { y2milestone( "TestAndInstallPackage: Required package %1 is not installed and there is no package repository available.", package_name );
       Popup::Error( sformat( // Message of a Popup::Error where %1 will be replaced by the package name:
                              _("Required package %1 is not installed and there is no package repository available."),
                              package_name
@@ -118,7 +118,7 @@ global boolean TestAndInstallPackage( string package_name, string action )
       return false;
     }
     if( ! package_available )
-    { y2milestone( "Required package %1 is not installed and not available in the repository.", package_name );
+    { y2milestone( "TestAndInstallPackage: Required package %1 is not installed and not available in the repository.", package_name );
       Popup::Error( sformat( // Message of a Popup::Error where %1 will be replaced by the package name:
                              _("Required package %1 is not installed and not available in the repository."),
                              package_name
@@ -127,7 +127,7 @@ global boolean TestAndInstallPackage( string package_name, string action )
       return false;
     }
     if( ! Package::Install( package_name ) )
-    { y2milestone( "Failed to install required package %1.", package_name );
+    { y2milestone( "TestAndInstallPackage: Failed to install required package %1.", package_name );
       Popup::Error( // Message of a Popup::Error where %1 will be replaced by the package name.
                     // Only a simple message because:
                     // Either the user has explicitely rejected to install the package,
@@ -142,11 +142,11 @@ global boolean TestAndInstallPackage( string package_name, string action )
   }
   if( "remove" == action )
   { if( ! ExecuteBashCommand( "rpm -q '" + package_name + "'" ) )
-    { y2milestone( "skip remove because %1", result["stdout"]:"package is not installed" );
+    { y2milestone( "TestAndInstallPackage: skip remove because %1", result["stdout"]:"package is not installed" );
       return true;
     }
     if( ! Package::Remove( package_name ) )
-    { y2milestone( "Failed to remove package %1.", package_name );
+    { y2milestone( "TestAndInstallPackage: Failed to remove package %1.", package_name );
       Popup::Error( // Message of a Popup::Error where %1 will be replaced by the package name.
                     // Only a simple message because:
                     // Either the user has explicitely rejected to remove the package,
