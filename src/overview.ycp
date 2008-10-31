@@ -125,7 +125,35 @@ term widgetOverview = `VBox
                       );
 
 void initOverview( string key )
-{ boolean local_content_selected = Printer::queue_filter_show_local;
+{ // First of all the multi-line string because such strings cannot be indented:
+  string required_cupsd_not_accessible =
+  // Message of a Popup::ErrorDetails
+  // when a local cupsd is required but it is not accessible.
+  // YaST did already run 'lpstat -h localhost -r'
+  // to check whether or not a local cupsd is accessible.
+  // The command is shown here to the user (even if it is a bit technical)
+  // to have him informed what goes on here and what he can do on his own.
+_("A local running CUPS daemon is required but it seems to be not accessible.
+Check with 'lpstat -h localhost -r' whether a local cupsd is accessible.
+A non-accessible cupsd leads to an endless sequence of further failures.
+");
+  string cupsd_not_on_official_port =
+  // Message of a Popup::ErrorDetails
+  // when the local cupsd does not use the official IPP port (631).
+  // A rather technical text because this does not happen on normal systems
+  // By default the cupsd uses the official IPP port (631).
+  // If not, the user must have intentionally and manually changed
+  // the port setting for the cupsd in /etc/cups/cupsd.conf
+_("The CUPS daemon seems not to listen on the official IANA IPP port (631).
+Check with 'netstat -nap | grep cupsd' where the cupsd actually listens.
+This happens when there is a 'Listen ...:1234' or 'Port 1234' setting
+in /etc/cups/cupsd.conf (check also if there is 'BrowsePort 1234').
+The YaST printer modue does not support a non-official port.
+A non-official port leads to an endless sequence of further failures.
+If you really must use a non-official port, you cannot use
+the YaST printer modue to configure your printers.
+");
+  boolean local_content_selected = Printer::queue_filter_show_local;
   boolean remote_content_selected = Printer::queue_filter_show_remote;
   boolean local_cupsd_required = true;
   // Determine whether or not it is currently a real client-only config
@@ -149,8 +177,46 @@ void initOverview( string key )
   }
   // Determine whether or not a local cupsd is accessible:
   if( local_cupsd_required && ! Printerlib::GetAndSetCupsdStatus( "" ) )
-  { // Printerlib::GetAndSetCupsdStatus already shows a confirmation popup:
-    Printerlib::GetAndSetCupsdStatus( "start" );
+  { // Printerlib::GetAndSetCupsdStatus results also false when
+    // a local running cupsd does not listen on the official IPP port.
+    // Therefore, to be on the safe side, do a restart here.
+    // Printerlib::GetAndSetCupsdStatus already shows a confirmation popup:
+    Printerlib::GetAndSetCupsdStatus( "restart" );
+    // Check again whether a required local cupsd is actually accessible
+    // because the user may have rejected to start it in the above call or
+    // the user may have aborted the Popup::TimedMessage from the above call
+    // which would wait until a started cupsd becomes actually accessible.
+    if( ! Printerlib::GetAndSetCupsdStatus( "" ) )
+    { Popup::ErrorDetails( required_cupsd_not_accessible,
+                           Printerlib::result["stderr"]:"" + "\n" + Printerlib::result["stdout"]:""
+                         );
+      // A special case is when the cupsd does not listen on the official IANA IPP port (631).
+      // Then "lpstat -h localhost -r" also fails ("-h localhost:port" would have to be used).
+      // When there is a process which runs the command "cupsd"
+      // check if something is accessible on port 631.
+      // Do this test only here (and not in Printerlib::GetAndSetCupsdStatus)
+      // because the Overview is the initial dialog which is shown to the user
+      // when the YaST printer module started and if the cupsd does not listen
+      // on the official IPP port, a single error popup when the Overview dialog
+      // is launched is sufficient.
+      // The YaST printer modue does not support when the cupsd listens
+      // on a non-official port e.g. via "Listen *:9999" and/or "Port 9999"
+      // and/or "BrowsePort 9999" settings in /etc/cups/cupsd.conf.
+      // Skip this test (and hope for the best) when netcat is not available
+      // because in yast2-printer.spec there can be only "Recommends: netcat"
+      // because there have been narrow-minded user complaints who insist
+      // not to have netcat installed because "netcat is a hacker intrusion tool"
+      // (explanations of the difference between netcat and e.g. nmap did not help).
+      if( Printerlib::ExecuteBashCommand( "ps -C cupsd" )
+          && Printerlib::ExecuteBashCommand( "type -P netcat" )
+        )
+      { if( ! Printerlib::ExecuteBashCommand( "netcat -v -w 1 -z localhost 631" ) )
+        { Popup::ErrorDetails( cupsd_not_on_official_port,
+                               Printerlib::result["stderr"]:"" + "\n" + Printerlib::result["stdout"]:""
+                             );
+        }
+      }
+    }
   }
   UI::ChangeWidget( `local_content_checkbox, `Value, local_content_selected );
   UI::ChangeWidget( `remote_content_checkbox, `Value, remote_content_selected );
