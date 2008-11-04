@@ -53,8 +53,7 @@ boolean firewall_first_sharing_widget_is_checkbox = false;
 boolean firewall_second_sharing_widget_is_checkbox = false;
 
 term widgetSharing = `VBox
-                     ( `VSpacing( 1 ),
-                       `RadioButtonGroup
+                     ( `RadioButtonGroup
                        ( `id(`deny_or_allow_remote_access),
                          `VBox
                          ( `Left
@@ -66,7 +65,6 @@ term widgetSharing = `VBox
                                initial_deny_remote_access
                              )
                            ),
-                           `VSpacing( 2 ),
                            `Left
                            ( `RadioButton
                              ( `id(`allow_remote_access_radio_button),
@@ -78,7 +76,6 @@ term widgetSharing = `VBox
                            )
                          )
                        ),
-                       `VSpacing( 1 ),
                        `HBox
                        ( `HSpacing( 3 ),
                          `VBox
@@ -104,7 +101,6 @@ term widgetSharing = `VBox
                                )
                              )
                            ),
-                           `VSpacing( 1 ),
                            `Left
                            ( `Label
                              ( `id(`interface_table_label),
@@ -148,27 +144,23 @@ term widgetSharing = `VBox
                                )
                              )
                            ),
-                           `VSpacing( 1 ),
-                           `Frame
-                           ( `id(`specific_addresses_frame),
-                             // A caption to allow remote access to local print queues
-                             // for hosts and/or networks specified in two TextEntries below:
-                             _("For Experts: Optional Specific IP Addresses or Networks"),
+                           `Left
+                           ( `Label
+                             ( `id(`specific_addresses_label),
+                               // A caption to allow remote access to local print queues
+                               // for hosts and/or networks specified in two TextEntries below:
+                               _("For Experts: Optional Specific IP Addresses or Networks")
+                             )
+                           ),
+                           `HBox
+                           ( `HSpacing( 2 ),
                              `VBox
                              ( `Left
                                ( `TextEntry
                                  ( `id(`allow_input),
                                    // TextEntry to allow remote access to local print queues
                                    // for hosts and/or networks:
-                                   _("Allow remote access from those IP addresses or &network/netmask")
-                                 )
-                               ),
-                               `Left
-                               ( `Label
-                                 ( `id(`allow_input_label),
-                                   // Label to show the syntax for the TextEntry to allow remote access
-                                   // to local print queues from IP addresses and/or networks:
-                                   _("(each nnn.nnn.nnn.nnn or nnn.nnn.nnn.nnn/mmm.mmm.mmm.mmm separated by one space)")
+                                   _("Allow remote access from those IP addresses or &network/netmask (separated by space)")
                                  )
                                ),
                                `Left
@@ -178,18 +170,7 @@ term widgetSharing = `VBox
                                    ( `id(`browse_address_input),
                                      // TextEntry to publish local print queues
                                      // to IP addresses and/or network broadcast addresses:
-                                     _("Publish to those IP addresses or network &broadcast addresses")
-                                   )
-                                 )
-                               ),
-                               `Left
-                               ( `HBox
-                                 ( `HSpacing( 2 ),
-                                   `Label
-                                   ( `id(`browse_address_input_label),
-                                     // Label to show the syntax for the TextEntry to to publish
-                                     // local print queues to hosts and/or networks:
-                                     _("(each nnn.nnn.nnn.nnn or nnn.nnn.nnn.255 separated by one space)")
+                                     _("Publish to those IP addresses or network &broadcast addresses (separated by space)")
                                    )
                                  )
                                )
@@ -197,7 +178,6 @@ term widgetSharing = `VBox
                            )
                          )
                        ),
-                       `VSpacing( 1 ),
                        `Left
                        ( `Label
                          ( `id(`firewall_sharing_settings_label),
@@ -225,8 +205,7 @@ term widgetSharing = `VBox
                              )
                            )
                          )
-                       ),
-                       `VSpacing( 1 )
+                       )
                      );
 
 map< string, string > showInterfacePopup( string interface_name, boolean is_published )
@@ -592,11 +571,9 @@ void initSharing( string key )
     UI::ChangeWidget( `add_interface, `Enabled, false );
     UI::ChangeWidget( `edit_interface, `Enabled, false );
     UI::ChangeWidget( `delete_interface, `Enabled, false );
-    UI::ChangeWidget( `specific_addresses_frame, `Enabled, false );
+    UI::ChangeWidget( `specific_addresses_label, `Enabled, false );
     UI::ChangeWidget( `allow_input, `Enabled, false );
-    UI::ChangeWidget( `allow_input_label, `Enabled, false );
     UI::ChangeWidget( `browse_address_input, `Enabled, false );
-    UI::ChangeWidget( `browse_address_input_label, `Enabled, false );
     UI::ChangeWidget( `firewall_sharing_settings_label, `Enabled, false );
     UI::ChangeWidget( `firewall_first_sharing_widget, `Enabled, false );
     UI::ChangeWidget( `firewall_second_sharing_widget, `Enabled, false );
@@ -852,7 +829,7 @@ void initSharing( string key )
                            `CheckBox
                            ( `id(`firewall_first_sharing_widget),
                              // CheckBox whether or not the Suse Firewall allows CUPS access from the INT zone:
-                             _("Allow access from the internal network zone"),
+                             _("Allow access from the &internal network zone"),
                              Printer::firewall_config["access_from_int"]:true
                            )
                          );
@@ -876,7 +853,7 @@ void initSharing( string key )
                            `CheckBox
                            ( `id(`firewall_second_sharing_widget),
                              // CheckBox whether or not the Suse Firewall denies CUPS access from the EXT zone:
-                             _("Deny access from the external network zone"),
+                             _("Deny access from the &external network zone"),
                              false
                            )
                          );
@@ -1049,11 +1026,9 @@ symbol handleSharing( string key, map event )
     UI::ChangeWidget(`add_interface, `Enabled, remote_access);
     UI::ChangeWidget(`edit_interface, `Enabled, remote_access);
     UI::ChangeWidget(`delete_interface, `Enabled, remote_access);
-    UI::ChangeWidget(`specific_addresses_frame, `Enabled, remote_access);
+    UI::ChangeWidget(`specific_addresses_label, `Enabled, remote_access);
     UI::ChangeWidget(`allow_input, `Enabled, remote_access);
-    UI::ChangeWidget(`allow_input_label, `Enabled, remote_access);
     UI::ChangeWidget(`browse_address_input, `Enabled, remote_access);
-    UI::ChangeWidget(`browse_address_input_label, `Enabled, remote_access);
     if( remote_access )
     { boolean interface_modify_buttons = true;
       if( 0 == size((list)UI::QueryWidget(`interface_table, `Items)) ) interface_modify_buttons = false;
@@ -1073,13 +1048,6 @@ void storeSharing( string key, map event )
   }
   if( ! sharing_has_changed )
   { y2milestone( "Nothing changed in 'Share Printers' dialog." );
-    Popup::ShowFeedback( // No title for such a simple feedback message:
-                         "",
-                         // Message of a Popup::ShowFeedback when nothing was changed:
-                         _("Nothing changed.")
-                       );
-    sleep( 1000 );
-    Popup::ClearFeedback();
   }
   y2milestone( "leaving storeSharing" );
   return nil;
