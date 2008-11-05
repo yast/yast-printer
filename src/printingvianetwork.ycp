@@ -84,7 +84,7 @@ term widgetNetworkPrinting = `VBox
                                        )
                                      ),
                                      `HBox
-                                     ( `HSpacing( 3 ),
+                                     ( `HSpacing( 4 ),
                                        `VBox
                                        ( `Left
                                          ( `Label
@@ -114,16 +114,7 @@ term widgetNetworkPrinting = `VBox
                                              // A header for a TextEntry where the user can optionally
                                              // enter specific IP addresses and/or network/netmask
                                              // from where remote printer information is accepted:
-                                             _("Optional Specific IP Addresses or &Network/Netmask")
-                                           )
-                                         ),
-                                         `Left
-                                         ( `Label
-                                           ( `id(`browse_allow_input_label),
-                                             // Label to show the syntax for the TextEntry where the user can
-                                             // enter specific IP addresses and/or network/netmask
-                                             // from where remote printer information is accepted:
-                                             _("(each nnn.nnn.nnn.nnn or nnn.nnn.nnn.nnn/mmm.mmm.mmm.mmm separated by one space)")
+                                             _("Optional Specific IP Addresses or &Network/Netmask (separated by space)")
                                            )
                                          ),
                                          `Left
@@ -158,7 +149,6 @@ term widgetNetworkPrinting = `VBox
                                          )
                                        )
                                      ),
-                                     `VSpacing( 1 ),
                                      `Left
                                      ( `RadioButton
                                        ( `id(`client_only_radio_button),
@@ -169,7 +159,7 @@ term widgetNetworkPrinting = `VBox
                                        )
                                      ),
                                      `HBox
-                                     ( `HSpacing( 3 ),
+                                     ( `HSpacing( 4 ),
                                        `HWeight
                                        ( 2,
                                          `TextEntry
@@ -796,7 +786,6 @@ void initNetworkPrinting( string key )
   browse_allow_input_value = browse_allow_input_value + " ";
   initial_browse_allow_input_value = browse_allow_input_value;
   UI::ChangeWidget( `id(`browse_allow_input), `Value, browse_allow_input_value );
-  UI::ChangeWidget( `id(`browse_allow_input_label), `Enabled, false );
   UI::ChangeWidget( `id(`client_only_radio_button), `Value, false );
   UI::ChangeWidget( `id(`client_conf_server_name_input), `Enabled, false );
   initial_server_name_input_value = Printerlib::client_conf_server_name;
@@ -829,7 +818,6 @@ void initNetworkPrinting( string key )
       // it is useless to additionally accept it from specific IPs or networks:
       if( ! contains( Printerlib::cupsd_conf_browse_allow, "all" ) )
       { UI::ChangeWidget( `id(`browse_allow_input), `Enabled, true );
-        UI::ChangeWidget( `id(`browse_allow_input_label), `Enabled, true );
       }
     }
     else
@@ -941,7 +929,6 @@ symbol handleNetworkPrinting( string key, map event )
     { UI::ChangeWidget( `id(`browse_allow_label), `Enabled, false );
       UI::ChangeWidget( `id(`browse_allow_combo_box), `Enabled, false );
       UI::ChangeWidget( `id(`browse_allow_input), `Enabled, false );
-      UI::ChangeWidget( `id(`browse_allow_input_label), `Enabled, false );
       UI::ChangeWidget( `id(`client_conf_server_name_input), `Enabled, false );
       UI::ChangeWidget( `id(`test_client_conf_server), `Enabled, false );
       UI::ChangeWidget( `id(`connection_wizard), `Enabled, true );
@@ -950,7 +937,6 @@ symbol handleNetworkPrinting( string key, map event )
     { UI::ChangeWidget( `id(`browse_allow_label), `Enabled, true );
       UI::ChangeWidget( `id(`browse_allow_combo_box), `Enabled, true );
       UI::ChangeWidget( `id(`browse_allow_input), `Enabled, true );
-      UI::ChangeWidget( `id(`browse_allow_input_label), `Enabled, true );
       UI::ChangeWidget( `id(`client_conf_server_name_input), `Enabled, false );
       UI::ChangeWidget( `id(`test_client_conf_server), `Enabled, false );
       UI::ChangeWidget( `id(`connection_wizard), `Enabled, true );
@@ -960,18 +946,15 @@ symbol handleNetworkPrinting( string key, map event )
       { // If browsing info is accepted from all hosts,
         // it is useless to additionally accept it from specific IPs or networks:
         UI::ChangeWidget( `id(`browse_allow_input), `Enabled, false );
-        UI::ChangeWidget( `id(`browse_allow_input_label), `Enabled, false );
       }
       else
       { UI::ChangeWidget( `id(`browse_allow_input), `Enabled, true );
-        UI::ChangeWidget( `id(`browse_allow_input_label), `Enabled, true );
       }
     }
     if( `client_only_radio_button == event["ID"]:nil )
     { UI::ChangeWidget( `id(`browse_allow_label), `Enabled, false );
       UI::ChangeWidget( `id(`browse_allow_combo_box), `Enabled, false );
       UI::ChangeWidget( `id(`browse_allow_input), `Enabled, false );
-      UI::ChangeWidget( `id(`browse_allow_input_label), `Enabled, false );
       UI::ChangeWidget( `id(`client_conf_server_name_input), `Enabled, true );
       UI::ChangeWidget( `id(`test_client_conf_server), `Enabled, true );
       UI::ChangeWidget( `id(`connection_wizard), `Enabled, false );

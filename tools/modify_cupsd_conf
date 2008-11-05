@@ -73,6 +73,8 @@ then if rpm -V -f $CUPSDCONF | grep -q "^..5.*$CUPSDCONF\$"
           exit 3
           fi
      fi
+     # Log the current change:
+     echo "# $(date '+%F,%T') $MY_NAME $KEY $VALUE" >>$CUPSDCONF
 fi
 
 # Function to deal with 'Browsing [ On | Off ]'
@@ -83,10 +85,10 @@ Browsing()
        sed -i -e "s/^[[:space:]]*$KEY.*/$KEY $VALUE/i" $CUPSDCONF
        # There may exist no Browsing line:
        if ! grep -q "^$KEY $VALUE$" $CUPSDCONF
-       then # Append a Browsing line below the last 'Brows' line (ignore case)
+       then # Append a Browsing line below the last active 'Brows' line (ignore case)
             # to have the new Browsing line at the matching place
             # but if no 'Brows' line exists, append at the end of the file:
-            LAST_BROWSE_LINE_NUMBER="$( sed -n -e '/Brows/I=' $CUPSDCONF | tail -n 1 )"
+            LAST_BROWSE_LINE_NUMBER="$( sed -n -e '/^[^#]*Brows/I=' $CUPSDCONF | tail -n 1 )"
             if test -n "$LAST_BROWSE_LINE_NUMBER"
             then sed -i -e "${LAST_BROWSE_LINE_NUMBER}a$KEY $VALUE" $CUPSDCONF
             else echo -en "\n$KEY $VALUE\n\n" >>$CUPSDCONF
@@ -119,10 +121,10 @@ BrowseAllow()
        # and finally deny from certain sources via BrowseDeny entries.
        # All existing active BrowseOrder lines are removed (ignore case).
        sed -i -e '/^[[:space:]]*BrowseOrder.*/Id' $CUPSDCONF
-       # Append the new BrowseOrder line below the last 'Brows' line (ignore case)
+       # Append the new BrowseOrder line below the last active 'Brows' line (ignore case)
        # to have the new BrowseOrder line at the matching place
        # but if no 'Brows' line exists, append at the end of the file:
-       LAST_BROWSE_LINE_NUMBER="$( sed -n -e '/Brows/I=' $CUPSDCONF | tail -n 1 )"
+       LAST_BROWSE_LINE_NUMBER="$( sed -n -e '/^[^#]*Brows/I=' $CUPSDCONF | tail -n 1 )"
        if test -n "$LAST_BROWSE_LINE_NUMBER" 
        then sed -i -e "${LAST_BROWSE_LINE_NUMBER}aBrowseOrder allow,deny" $CUPSDCONF
        else echo -en "\nBrowseOrder allow,deny\n\n" >>$CUPSDCONF
@@ -143,7 +145,7 @@ BrowseAllow()
        # and in the ordering of the values (needed for the test below):
        if ! test "none" = "$VALUE"
        then for V in $VALUE
-            do sed -i -e "/^BrowseOrder /i$KEY $V" $CUPSDCONF
+            do test -n "$V" && sed -i -e "/^BrowseOrder /i$KEY $V" $CUPSDCONF
             done
        else # The 'BrowseOrder allow,deny' line denies browse packets by default
             # to be 100% on the safe side have explicite 'BrowseAllow none' and 'BrowseDeny all' lines too:
@@ -177,19 +179,18 @@ Listen()
        # Those lines are not removed because YaST does not support Port lines
        # so that a remove would silently delete Port information:
        sed -i -e 's/^[[:space:]]*\(Port.*\)$/#\1/i' $CUPSDCONF
-       # Determine the first 'Listen' line (ignore case):
-       FIRST_LISTEN_LINE_NUMBER="$( sed -n -e '/Listen/I=' $CUPSDCONF | head -n 1 )"
+       # Determine the first active 'Listen' line (ignore case):
+       FIRST_LISTEN_LINE_NUMBER="$( sed -n -e '/^[[:space:]]*Listen/I=' $CUPSDCONF | head -n 1 )"
        # All existing active Listen lines are removed (ignore case).
        # Those lines can be removed because YaST supports Listen lines
        # (YaST shows the Listen entries in the "share printers" dialog):
        sed -i -e '/^[[:space:]]*Listen.*/Id' $CUPSDCONF
-       # Append the mandatory 'Listen localhost' line (see http://www.cups.org/str.php?L2834
+       # Insert the mandatory 'Listen localhost' line (see http://www.cups.org/str.php?L2834
        # "What is *not* supported is a configuration where only a domain socket is enabled")
-       # below the first 'Listen' line (ignore case)
-       # to have the new Listen line at the matching place
+       # to have the new Listen line where the first active Listen line was
        # but if no 'Listen' line exists, append at the end of the file:
        if test -n "$FIRST_LISTEN_LINE_NUMBER"
-       then sed -i -e "${FIRST_LISTEN_LINE_NUMBER}aListen localhost:631" $CUPSDCONF
+       then sed -i -e "${FIRST_LISTEN_LINE_NUMBER}iListen localhost:631" $CUPSDCONF
        else echo -en "\nListen localhost:631\n\n" >>$CUPSDCONF
        fi
        # Append a Listen line for the domain socket (if such a line was there):
@@ -204,7 +205,7 @@ Listen()
           then V="*"
           fi
           if ! test "localhost" = "$V"
-          then sed -i -e "/^Listen localhost/i$KEY $V:631" $CUPSDCONF
+          then test -n "$V" && sed -i -e "/^Listen localhost/i$KEY $V:631" $CUPSDCONF
           fi
        done
   fi
@@ -215,7 +216,9 @@ Listen()
   # Remove trailing spaces (needed for the test below).
   # Remove '/var/run/cups/cups.sock' because it is only
   # an optional default (i.e. not really of interest).
-  RESULT="$( grep -i "^[[:space:]]*$KEY[[:space:]]" $CUPSDCONF | sed -e 's/[^ ]*\/cups\.sock//' -e 's/:631//' -e 's/\*/all/' | tr -s '[:blank:]' ' ' | sed -e 's/^ *//' | cut -s -d ' ' -f2 | tr -s '\n' ' ' | sed -e 's/ *$//' )"
+  # Unify a localhost (ignore case) or 127.0.0.1 value to "localhost".
+  # Replace the actual value '*' by the more meaningful word "all".
+  RESULT="$( grep -i "^[[:space:]]*$KEY[[:space:]]" $CUPSDCONF | sed -e 's/localhost/localhost/i' -e 's/127\.0*0\.0*0\.0*1/localhost/' -e 's/[^ ]*\/cups\.sock//' -e 's/:631//' -e 's/\*/all/' | tr -s '[:blank:]' ' ' | sed -e 's/^ *//' | cut -s -d ' ' -f2 | tr -s '\n' ' ' | sed -e 's/ *$//' )"
   echo -n "$RESULT"
   # For a nicer output on a terminal where stdout and stderr is mixed up,
   # output a '\n' on stderr to get subsequent stuff (e.g. the shell prompt
@@ -237,7 +240,10 @@ Listen()
 # Function to deal with 'Allow [ all | @LOCAL | @IF(name) | host-address | network-address/netmask ] | Allow none'
 Allow()
 { if test -n "$VALUE"
-  then # Determine where the (first) root location starts (ignore case and ignore spaces):
+  then # Remove '127.0.0.2' from the value because it is set by default in any case
+       # and it is therefore also removed from the output of the resulting setting.
+       VALUE="$( echo $VALUE | sed -e 's/127\.00*\.00*\.0*2//g' | tr -s '[:space:]' ' ' | sed -e 's/^ *//' -e 's/ *$//' )"
+       # Determine where the (first) root location starts (ignore case and ignore spaces):
        ROOT_LOCATION_LINE_NUMBER="$( sed -n -e '/[[:space:]]*<[[:space:]]*Location[[:space:]]*\/[[:space:]]*>/I=' $CUPSDCONF | head -n 1 )"
        # Remove all root locations (ignore case and ignore spaces).
        # (If there is more than one root location it is a broken config file).
@@ -261,7 +267,7 @@ Allow()
        # in the original ordering of the values (needed for the test below):
        if ! test "none" = "$VALUE"
        then for V in $( echo "$VALUE" | tac -s ' ' )
-            do sed -i -e "${ROOT_LOCATION_LINE_NUMBER}a$KEY $V" $CUPSDCONF
+            do test -n "$V" && sed -i -e "${ROOT_LOCATION_LINE_NUMBER}a$KEY $V" $CUPSDCONF
             done
        else # The 'Order allow,deny' line denies packets by default
             # to be 100% on the safe side have explicite 'Allow none' and 'Deny all' lines too:
@@ -294,16 +300,16 @@ BrowseAddress()
        # (YaST shows BrowseAddress entries in the "share printers" dialog):
        sed -i -e '/^[[:space:]]*BrowseAddress.*/Id' $CUPSDCONF
        if ! test "none" = "$VALUE"
-       then # Append the new BrowseAddress lines below the last 'Brows' line (ignore case)
+       then # Append the new BrowseAddress lines below the last active 'Brows' line (ignore case)
             # to have the new BrowseAddress lines at the matching place
             # but if no 'Brows' line exists, append at the end of the file.
             # Invert the ordering of the values to get the lines
             # in the original ordering of the values (needed for the test below):
-            LAST_BROWSE_LINE_NUMBER="$( sed -n -e '/Brows/I=' $CUPSDCONF | tail -n 1 )"
+            LAST_BROWSE_LINE_NUMBER="$( sed -n -e '/^[^#]*Brows/I=' $CUPSDCONF | tail -n 1 )"
             for V in $( echo "$VALUE" | tac -s ' ' )
             do if test -n "$LAST_BROWSE_LINE_NUMBER"
-               then sed -i -e "${LAST_BROWSE_LINE_NUMBER}a$KEY $V" $CUPSDCONF
-               else echo -en "\n$KEY $V\n" >>$CUPSDCONF
+               then test -n "$V" && sed -i -e "${LAST_BROWSE_LINE_NUMBER}a$KEY $V" $CUPSDCONF
+               else test -n "$V" && echo -en "\n$KEY $V\n" >>$CUPSDCONF
                fi
             done
        fi
@@ -352,11 +358,11 @@ DefaultPolicy()
        sed -i -e "s/^[[:space:]]*$KEY.*/$KEY $VALUE/i" $CUPSDCONF
        # There may exist no DefaultPolicy line:
        if ! grep -q "^$KEY $VALUE$" $CUPSDCONF
-       then # Append a DefaultPolicy line below the last 'Policy' line
-            # which is usually a '</Policy>' a 'ErrorPolicy' line (ignore case)
+       then # Append a DefaultPolicy line below the last active 'Policy' line
+            # which is usually a '</Policy>' or a 'ErrorPolicy' line (ignore case)
             # to have the new DefaultPolicy line at the matching place
             # but if no 'Policy' line exists, append at the end of the file:
-            LAST_POLICY_LINE_NUMBER="$( sed -n -e '/Policy/I=' $CUPSDCONF | tail -n 1 )"
+            LAST_POLICY_LINE_NUMBER="$( sed -n -e '/^[^#]*Policy/I=' $CUPSDCONF | tail -n 1 )"
             if test -n "$LAST_POLICY_LINE_NUMBER"
             then sed -i -e "${LAST_POLICY_LINE_NUMBER}a$KEY $VALUE" $CUPSDCONF
             else echo -en "\n$KEY $VALUE\n\n" >>$CUPSDCONF
@@ -389,11 +395,11 @@ ErrorPolicy()
        sed -i -e "s/^[[:space:]]*$KEY.*/$KEY $VALUE/i" $CUPSDCONF
        # There may exist no ErrorPolicy line:
        if ! grep -q "^$KEY $VALUE$" $CUPSDCONF
-       then # Append a ErrorPolicy line below the last 'Policy' line
+       then # Append a ErrorPolicy line below the last active 'Policy' line
             # which is usually a '</Policy>' or a 'DefaultPolicy' line (ignore case)
             # to have the new ErrorPolicy line at the matching place
             # but if no 'Policy' line exists, append at the end of the file:
-            LAST_POLICY_LINE_NUMBER="$( sed -n -e '/Policy/I=' $CUPSDCONF | tail -n 1 )"
+            LAST_POLICY_LINE_NUMBER="$( sed -n -e '/^[^#]*Policy/I=' $CUPSDCONF | tail -n 1 )"
             if test -n "$LAST_POLICY_LINE_NUMBER"
             then sed -i -e "${LAST_POLICY_LINE_NUMBER}a$KEY $VALUE" $CUPSDCONF
             else echo -en "\n$KEY $VALUE\n\n" >>$CUPSDCONF
