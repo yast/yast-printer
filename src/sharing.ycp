@@ -24,7 +24,7 @@
  * Summary:     Print queue sharing and publishing dialog definition
  * Authors:     Johannes Meixner <jsmeix@suse.de>
  *
- * $Id: dialogs.ycp 27914 2006-02-13 14:32:08Z locilka $
+ * $Id: sharing.ycp 27914 2006-02-13 14:32:08Z locilka $
  */
 
 {
@@ -77,7 +77,7 @@ term widgetSharing = `VBox
                          )
                        ),
                        `HBox
-                       ( `HSpacing( 3 ),
+                       ( `HSpacing( 4 ),
                          `VBox
                          ( `Left
                            ( `CheckBox
@@ -106,24 +106,29 @@ term widgetSharing = `VBox
                              ( `id(`interface_table_label),
                                // A caption for a table to allow remote access to local print queues
                                // via network interfaces specified in the table below:
-                               _("Via network interfaces specified below")
+                               _("Optionally via network interfaces specified below")
                              )
                            ),
-                           `Table
-                           ( `id(`interface_table),
-                             `opt(`keepSorting),
-                             `header
-                             ( // A table column header where the column lists network interfaces:
-                               _("Interface"),
-                               // A table column header where the column shows whether or not
-                               // local print queues are published by default
-                               // via the network interface in the other table column:
-                               _("Publish printers by default via this interface")
+                           `HBox
+                           ( `VSquash
+                             ( `MinHeight
+                               ( 5,
+                                 `Table
+                                 ( `id(`interface_table),
+                                   `opt(`keepSorting),
+                                   `header
+                                   ( // A table column header where the column lists network interfaces:
+                                     _("Interface"),
+                                     // A table column header where the column shows whether or not
+                                     // local print queues are published by default
+                                     // via the network interface in the other table column:
+                                     _("Publish printers by default via this interface")
+                                   ),
+                                   initial_interface_table_items
+                                 )
+                               )
                              ),
-                             initial_interface_table_items
-                           ),
-                           `Left
-                           ( `HBox
+                             `VBox
                              ( `PushButton
                                ( `id(`add_interface),
                                  // A PushButton label to add a network interface to the table which shows
@@ -389,6 +394,16 @@ boolean ApplySharingSettings()
   }
   // Any kind of allow_remote_access:
   // Check if there are real changes:
+  if( allow_remote_access && initial_deny_remote_access )
+  { // When it is initially "deny remote access"
+    // and the user changed it to "allow remote access"
+    // but nothing else changed, then sharing_has_changed is true
+    // if there is at least one real allow value set.
+    // The last condition is true here because when allow_values is empty,
+    // it is a deny_remote_access case, see above.
+    sharing_has_changed = true;
+  }
+  // Check if there are real changes regarding the "@LOCAL" settings:
   if( allow_local_network_access != initial_allow_local_network_access
       || publish_to_local_network != initial_publish_to_local_network
     )
@@ -433,6 +448,8 @@ boolean ApplySharingSettings()
   if( mergestring( current_browse_address_input_set, "" ) != mergestring( initial_browse_address_input_set, "" ) )
   { sharing_has_changed = true;
   }
+  // Exit if no real change was detected above to avoid useless changes of cupsd.conf
+  // and subsequent useless restarts of the cupsd:
   if( ! sharing_has_changed )
   { // Nothing has changed:
     return true;
@@ -604,7 +621,12 @@ void initSharing( string key )
   foreach( string listen_value,
            listen_values,
            { if( "" != listen_value )
-             { if( "localhost" == listen_value )
+             { if( "all" == listen_value )
+               { listen_local = true;
+                 listen_remote = true;
+                 break;
+               }
+               if( "localhost" == listen_value )
                { listen_local = true;
                }
                else
@@ -614,7 +636,12 @@ void initSharing( string key )
            }
          );
   if( ! listen_local )
-  { // 'Listen localhost' is mandatory (i.e. it is a broken config when it is missing).
+  { // A local running cupsd must mandatoty listen on the localhost interface
+    // (e.g. listen only on /var/run/cups/cups.sock is a broken config)
+    // but this does not mean that there must be a line "Listen localhost:631"
+    // in cupsd.conf because listening on all interfaces via "Listen *:631"
+    // lets it also listen on the localhost interface
+    // (see above how listen_local is set to true).
     // Try to do a simple fix for the broken config but ignore possible failures.
     // Set only 'Listen localhost:631' in /etc/cups/cupsd.conf which means
     // that all possibly existing non-'localhost' Listen entries are removed.
