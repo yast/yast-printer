@@ -306,7 +306,7 @@ boolean CreateDatabase()
                          "",
                          // Busy message:
                          // Body of a Popup::ShowFeedback:
-                         _("Retrieving printer driver information...")
+                         _("Retrieving printer driver information...\n(this could take more than a minute)")
                        );
   }
   if( ! Printerlib::ExecuteBashCommand( create_database_commandline ) )
@@ -1211,6 +1211,10 @@ global list DriverItems( string driver_filter_string, boolean preselection )
       // It will be replaced by real content, when a connection is selected.
       driver_string = _("Select a connection, then matching drivers show up here.");
       driver_items =  [ `item( `id( -1 ), driver_string ) ];
+      // Invalidate selected_ppds_index to be on the safe side.
+      // Otherwise it is possible to set up a queue with a previously selected driver
+      // even if the current dialog does not show it.
+      selected_ppds_index = -1;
     }
     return driver_items;
   }
@@ -1255,8 +1259,12 @@ global list DriverItems( string driver_filter_string, boolean preselection )
   if( size( driver_items ) == 0 )
   { // If the driver_items list is empty (e.g. because of a too restrictive driver_filter_string),
     // show a meaningful text as fallback entry.
-    driver_string = _("No matching driver found. Try 'More Drivers' or 'All Drivers'.");
+    driver_string = _("No matching driver found.");
     driver_items =  [ `item( `id( -1 ), driver_string ) ];
+    // Invalidate selected_ppds_index to be on the safe side.
+    // Otherwise it is possible to set up a queue with a previously selected driver
+    // even if the current dialog does not show it.
+    selected_ppds_index = -1;
     Popup::ClearFeedback();
     return driver_items;
   }
@@ -1314,9 +1322,10 @@ global list DriverItems( string driver_filter_string, boolean preselection )
     y2milestone( "Already preselected driver: '%1'", driver_string );
   }
   else
-  { // Invalidate selected_ppds_index to be safe:
+  { // Invalidate selected_ppds_index to be on the safe side.
+    // Otherwise it is possible to set up a queue with a previously selected driver
+    // even if the current dialog does not show it.
     selected_ppds_index = -1;
-    y2milestone( "No driver preselected." );
   }
   // Sort the driver_items list.
   // There are two kind of sorting the driver_items list.
@@ -1582,7 +1591,7 @@ global list DriverItems( string driver_filter_string, boolean preselection )
         sorted_driver_items[0] = `item( `id( selected_ppds_index ), driver_string, true );
         y2milestone( "Preselected driver: '%1'", driver_string );
       }
-      // The specially sorted_driver_items list has a maximum of 10 entries which is o.k. for the log:
+      // The specially sorted_driver_items list has a maximum of 20 entries which is o.k. for the log:
       y2milestone( "sorted_driver_items: %1", sorted_driver_items );
       Popup::ClearFeedback();
       return sorted_driver_items;
@@ -1598,6 +1607,13 @@ global list DriverItems( string driver_filter_string, boolean preselection )
                               }
                             );
   Popup::ClearFeedback();
+  if( selected_ppds_index < 0 )
+  { // When no driver was preselected, prepend a dummy entry and have it preselected
+    // because the first entry in a SelectionBox is always preselected in the GUI
+    // (it does not help to have all items in a SelectionBox with 'false' as third argument).
+    sorted_driver_items = prepend( sorted_driver_items, `item( `id( -1 ), _("Select a driver."), true ) );
+    y2milestone( "No driver preselected." );
+  }
   return sorted_driver_items;
 }
 
