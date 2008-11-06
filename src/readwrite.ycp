@@ -34,7 +34,6 @@ textdomain "printer";
 import "Label";
 import "Popup";
 import "Wizard";
-import "Wizard_hw";
 import "Confirm";
 import "Printer";
 
@@ -44,39 +43,73 @@ include "printer/helps.ycp";
  * Return a modification status
  * @return true if data was modified
  */
-boolean Modified() {
-    return Printer::Modified();
+boolean Modified()
+{ return Printer::Modified();
 }
 
-boolean ReallyAbort() {
-    return !Printer::Modified() || Popup::ReallyAbort(true);
+/**
+ * Ask for user confirmation if necessary before aborting.
+ * At present full transaction semantics (with roll-back) is not implemented.
+ * What is implemented is that it does not leave the system in an inconsistent state.
+ * It does one setup completely or not at all (i.e. all or nothing semantics regarding one setup.)
+ * "One setup" means the smallest amount of setup actions
+ * which lead from one consistent state to another consistent state.
+ * "Consistent state" is meant from the user's point of view
+ * (i.e. set up one print queue completely or set up printing via network completely)
+ * and not from a low-level (e.g. filesystem or kernel) point of view.
+ * If the user does malicious stuff (e.g. killing YaST)
+ * or if the user ignores warning messages then it is possible (and it is accepted)
+ * that the user can force to set up even an inconsistent state
+ * (e.g. set up share print queues but don't re-start the cupsd).
+ * At present all what is needed for one setup is committed to the system instantly.
+ * For background information and details see
+ * http://en.opensuse.org/YaST/Development/Printer_Enhancement
+ * @return true if nothing was committed or if user confirms to abort
+ */
+boolean ReallyAbort()
+{ // As roll-back is not implemented 'Popup::ReallyAbort(true)' doesn't make sense.
+  return !Printer::Modified() || Popup::ReallyAbort(false);
 }
 
-boolean PollAbort() {
-    return UI::PollInput() == `abort;
+boolean PollAbort()
+{ return UI::PollInput() == `abort;
 }
 
 /**
  * Read settings dialog
  * @return `abort if aborted and `next otherwise
  */
-symbol ReadDialog() {
-    Wizard::RestoreHelp(HELPS["read"]:"");
-    // Printer::AbortFunction = PollAbort;
-    if (!Confirm::MustBeRoot()) return `abort;
-    boolean ret = Printer::Read();
-    return ret ? `next : `abort;
+symbol ReadDialog()
+{ // Confirm::MustBeRoot() returns 'true' when the current user is root.
+  // Otherwise the user is asked for confirmation whether he want's to continue
+  // despite the fact that the module might not work correctly.
+  if( !Confirm::MustBeRoot() ) return `abort;
+  // According to http://en.opensuse.org/YaST/Style_Guide#Single_Configuration.2FOverview.2FEdit_Dialog
+  // the "abort" button in a single configuration dialog must now be named "cancel":
+  Wizard::SetAbortButton( `abort, Label::CancelButton() );
+  // No "back" or "next" button at all makes any sense here
+  // because there is no dialog where to go "back"
+  // and the "next" dialog (i.e. the Overview dialog) is launced automatically
+  Wizard::HideBackButton();
+  Wizard::HideNextButton();
+  Wizard::RestoreHelp(HELPS["read"]:"");
+  // Printer::AbortFunction = PollAbort;
+  boolean ret = Printer::Read();
+  return ret ? `next : `abort;
 }
 
 /**
  * Write settings dialog
  * @return `abort if aborted and `next otherwise
  */
-symbol WriteDialog() {
-    Wizard::RestoreHelp(HELPS["write"]:"");
-    // Printer::AbortFunction = PollAbort;
-    boolean ret = Printer::Write();
-    return ret ? `next : `abort;
+symbol WriteDialog()
+{ // No "abort" or "back" or "next" button at all makes any sense here:
+  Wizard::HideAbortButton();
+  Wizard::HideBackButton();
+  Wizard::HideNextButton();
+  Wizard::RestoreHelp(HELPS["write"]:"");
+  boolean ret = Printer::Write();
+  return ret ? `next : `abort;
 }
 
 /* EOF */

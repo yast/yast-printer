@@ -37,7 +37,6 @@ textdomain "printer";
 
 import "Progress";
 import "Summary";
-import "Message";
 import "Popup";
 import "Printerlib";
 import "Mode";
@@ -1608,10 +1607,14 @@ global list DriverItems( string driver_filter_string, boolean preselection )
                             );
   Popup::ClearFeedback();
   if( selected_ppds_index < 0 )
-  { // When no driver was preselected, prepend a dummy entry and have it preselected
+  { // When no driver was preselected, prepend a dummy entry
     // because the first entry in a SelectionBox is always preselected in the GUI
     // (it does not help to have all items in a SelectionBox with 'false' as third argument).
-    sorted_driver_items = prepend( sorted_driver_items, `item( `id( -1 ), _("Select a driver."), true ) );
+    // Do not have this dummy entry preselected (i.e. no 'true' as a third argument)
+    // because in the BasicModifyDialog the currenlty used driver is additionally prepended
+    // and then the currenlty used driver must be preselected by default because
+    // the currenlty used driver is then the very first entry in the SelectionBox.
+    sorted_driver_items = prepend( sorted_driver_items, `item( `id( -1 ), _("Select a driver.") ) );
     y2milestone( "No driver preselected." );
   }
   return sorted_driver_items;

@@ -44,7 +44,8 @@ include "printer/helps.ycp";
  * @return dialog result
  */
 any BasicModifyDialog()
-{ string commandline = "";
+{ y2milestone( "entering BasicModifyDialog for queue '%1'", Printer::queues[Printer::selected_queues_index]:$[] );
+  string commandline = "";
   string name = Printer::queues[Printer::selected_queues_index,"name"]:"";
   string uri = Printer::queues[Printer::selected_queues_index,"uri"]:"";
   string description = Printer::queues[Printer::selected_queues_index,"description"]:"";
@@ -388,15 +389,24 @@ any BasicModifyDialog()
                       )
                     )
                   );
+  // According to http://en.opensuse.org/YaST/Style_Guide#Single_Configuration.2FOverview.2FEdit_Dialog
+  // there is no longer a "abort" functionality which exits the whole module.
+  // Instead this button is now named "Cancel" and its functionality is
+  // to go back to the Overview dialog (i.e. what the "back" button would do)
+  // because it reads "Cancel - Closes the window and returns to the overview."
+  // Therefore the button with the "abort" functionality is not shown at all
+  // and the button with the "back" functionality is named "Cancel".
+  // According to http://en.opensuse.org/YaST/Style_Guide#Single_Configuration.2FOverview.2FEdit_Dialog
+  // the "finish" button in a single (step) configuration dialog must now be named "OK".
   Wizard::SetContentsButtons( caption,
                               contents,
                               HELPS["basic_modify_dialog"]:"",
-                              Label::BackButton(),
-                              // Set a different label for the "next" button
-                              // (i.e. the lower right button which results `next as UI::UserInput).
-                              // This button finishes the "add" procedure:
-                              _("&Finish Modify")
+                              // Set a new label for the "back" button, see the comment above:
+                              Label::CancelButton(),
+                              // Set a new label for the "next" button, see the comment above:
+                              Label::OKButton()
                             );
+  Wizard::HideAbortButton();
   any ret = nil;
   while(true)
   { ret = UI::UserInput();
@@ -440,17 +450,21 @@ any BasicModifyDialog()
           }
         }
       }
-      string description_input = (string)UI::QueryWidget( `id(`description_input), `Value);
+      string description_input = (string)UI::QueryWidget( `id(`description_input), `Value );
+      // Delete ' characters because they are used for quoting in the bash commandline:
+      description_input = deletechars( description_input, "'" );
       if( description_input != description )
       { commandline = commandline + " -D '" + description_input + "'";
         something_has_changed = true;
       }
-      string location_input = (string)UI::QueryWidget( `id(`location_input), `Value);
+      string location_input = (string)UI::QueryWidget( `id(`location_input), `Value );
+      // Delete ' characters because they are used for quoting in the bash commandline:
+      location_input = deletechars( location_input, "'" );
       if( location_input != location )
       { commandline = commandline + " -L '" + location_input + "'";
         something_has_changed = true;
       }
-      boolean is_default_input = (boolean)UI::QueryWidget( `id(`default_queue_checkbox), `Value);
+      boolean is_default_input = (boolean)UI::QueryWidget( `id(`default_queue_checkbox), `Value );
       if( is_default_input != is_default )
       { something_has_changed = true;
         if( is_default_input )
@@ -493,18 +507,17 @@ any BasicModifyDialog()
       }
       if( something_has_changed )
       { Wizard::DisableBackButton();
-        Wizard::DisableAbortButton();
         Wizard::DisableNextButton();
         if( ! Printerlib::ExecuteBashCommand( commandline ) )
-        { Popup::Error( // Message of a Popup::Error
-                        // where %1 will be replaced by the queue name.
-                        // Only a simple message because this error does not happen on a normal system
-                        // (i.e. a system which is not totally broken or totally messed up).
-                        sformat( _("Failed to modify %1."), name )
-                      );
+        { Popup::ErrorDetails( // Message of a Popup::ErrorDetails
+                               // where %1 will be replaced by the queue name.
+                               // Only a simple message because this error does not happen on a normal system
+                               // (i.e. a system which is not totally broken or totally messed up).
+                               sformat( _("Failed to modify %1."), name ),
+                               Printerlib::result["stderr"]:""
+                             );
         }
         Wizard::EnableBackButton();
-        Wizard::EnableAbortButton();
         Wizard::EnableNextButton();
       }
       else
@@ -729,7 +742,9 @@ any BasicModifyDialog()
         continue;
       }
       // selected_ppd_index is -1 for the currently used driver
-      // which is an invalid index in the ppds list because
+      // and also for a possible dummy entry "Select a driver" which is inserted
+      // by the DriverItems function when no driver was preselected.
+      // -1 is an invalid index in the ppds list and
       // it means that the driver is not to be exchanged.
       // To be safe that the currently used driver cannot be exchanged
       // Printer::selected_ppds_index is set to -1 in this case.
@@ -749,19 +764,29 @@ any BasicModifyDialog()
       }
       if( selected_ppd_index >= 0 )
       { // When the currently used driver is to be exchanged,
-        // the widgets to change options for the currently used driver are removed:
-        UI::ReplaceWidget( `id(`paper_choice_and_driver_options_replace_point),
-                           `Empty()
-                         );
+        // the widgets to change options for the currently used driver are removed and
+        // the description_input field is overwritten with the NickName of the new selected driver:
+        UI::ReplaceWidget( `id(`paper_choice_and_driver_options_replace_point), `Empty() );
+        string new_description = Printer::ppds[selected_ppd_index,"nickname"]:"";
+        if( "" != model
+            && "unknown" != tolower( model )
+          )
+        { new_description = model + " with driver " + new_description;
+        }
+        // Delete ' characters because they are used for quoting in the bash commandline:
+        new_description = deletechars( new_description, "'" );
+        UI::ChangeWidget( `id(`description_input), `Value, new_description );
       }
       else
       { // When the currently used driver is re-selected,
-        // the widgets to change options for the currently used driver are recreated:
+        // the widgets to change options for the currently used driver are recreated and
+        // the description_input field is restored with the current description of the queue:
         UI::ReplaceWidget( `id(`paper_choice_and_driver_options_replace_point),
                            `VBox( `Left( paper_choice_content ),
                                   `Left( driver_options_content )
                                 )
                          );
+        UI::ChangeWidget( `id(`description_input), `Value, description );
       }
       continue;
     }
@@ -798,6 +823,7 @@ any BasicModifyDialog()
     y2milestone( "Ignoring unexpected returncode in BasicModifyDialog: %1", ret );
     continue;
   }
+  y2milestone( "leaving BasicModifyDialog" );
   return ret;
 }
 

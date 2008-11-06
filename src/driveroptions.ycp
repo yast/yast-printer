@@ -45,6 +45,7 @@ include "printer/helps.ycp";
  */
 any DriverOptionsDialog()
 { string name = Printer::queues[Printer::selected_queues_index,"name"]:"";
+  y2milestone( "entering DriverOptionsDialog for queue '%1'", name );
   // Title of the Driver Options Dialog where %1 will be replaced by the queue name.
   // The actual queue name is a system value which cannot be translated:
   string caption = sformat( _("Driver Options for Queue %1") , name );
@@ -63,16 +64,26 @@ any DriverOptionsDialog()
                          // because no value is initially selected:
                          Printer::DriverOptionItems( "", "" )
                        );
+  // According to http://en.opensuse.org/YaST/Style_Guide#Single_Configuration.2FOverview.2FEdit_Dialog
+  // there is no longer a "abort" functionality which exits the whole module.
+  // Instead this button is now named "Cancel" and its functionality is
+  // to go back to the Overview dialog (i.e. what the "back" button would do)
+  // because it reads "Cancel - Closes the window and returns to the overview."
+  // In this case the "overview" is not the actual Overview dialog but the dialog
+  // from which this DriverOptionsDialog was called i.e. BasicModifyDialog.
+  // Therefore the button with the "abort" functionality is not shown at all
+  // and the button with the "back" functionality is named "Cancel".
+  // According to http://en.opensuse.org/YaST/Style_Guide#Single_Configuration.2FOverview.2FEdit_Dialog
+  // the "finish" button in a single (step) configuration dialog must now be named "OK".
   Wizard::SetContentsButtons( caption,
                               contents,
                               HELPS["driver_options_dialog"]:"",
-                              Label::BackButton(),
-                              // Set a different label for the "next" button
-                              // (i.e. the lower right button which results `next as UI::UserInput)
-                              // but do not use OKButton because "OK" may have a different meaning
-                              // (e.g. something like close the whole module or something like that):
-                              Label::AcceptButton()
+                              // Set a new label for the "back" button, see the comment above:
+                              Label::CancelButton(),
+                              // Set a new label for the "next" button, see the comment above:
+                              Label::OKButton()
                             );
+  Wizard::HideAbortButton();
   any ret = nil;
   while(true)
   { ret = UI::UserInput();
@@ -105,7 +116,6 @@ any DriverOptionsDialog()
              );
       if( something_has_changed )
       { Wizard::DisableBackButton();
-        Wizard::DisableAbortButton();
         Wizard::DisableNextButton();
         if( ! Printerlib::ExecuteBashCommand( commandline ) )
         { Popup::Error( // Message of a Popup::Error
@@ -116,7 +126,6 @@ any DriverOptionsDialog()
                       );
         }
         Wizard::EnableBackButton();
-        Wizard::EnableAbortButton();
         Wizard::EnableNextButton();
       }
       // Exit this dialog in any case:
@@ -159,6 +168,7 @@ any DriverOptionsDialog()
     y2milestone( "Ignoring unexpected returncode in DriverOptionsDialog: %1", ret );
     continue;
   }
+  y2milestone( "leaving DriverOptionsDialog" );
   return ret;
 }
 
