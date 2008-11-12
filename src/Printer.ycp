@@ -698,7 +698,7 @@ global boolean Write()
   Progress::New( // Header of a Progress::New:
                  _("Finishing Printer Configuration"),
                  " ",
-                 0,
+                 1,
                  [ // 1. progress stage name of a Progress::New:
                    _("Finish printer configuration")
                  ],
@@ -1625,12 +1625,14 @@ global list DriverItems( string driver_filter_string, boolean preselection )
  * @return true on success
  */
 global boolean AddQueue( string queue_name )
-{ string uri = connections[selected_connections_index,"uri"]:"";
-  string ppd = ppds[selected_ppds_index,"ppd"]:"";
-  // Delete ' characters because they are used for quoting in the bash commandline below:
+{ // Delete ' characters because they are used for quoting in the bash commandline below:
+  queue_name = deletechars( queue_name, "'" );
+  string uri = deletechars( connections[selected_connections_index,"uri"]:"", "'" );
+  string ppd = deletechars( ppds[selected_ppds_index,"ppd"]:"", "'" );
   string model = deletechars( connections[selected_connections_index,"model"]:"", "'" );
   string description = deletechars( ppds[selected_ppds_index,"nickname"]:"", "'" );
-  if( "" != model
+  if( "" != description
+      && "" != model
       && "unknown" != tolower( model )
       && ! issubstring( filterchars( tolower( description ), lower_alnum_chars ),
                         filterchars( tolower( model ), lower_alnum_chars )
@@ -1639,12 +1641,21 @@ global boolean AddQueue( string queue_name )
   { description = model + " with driver " + description;
   }
   if( "" == uri || "" == ppd || "" == queue_name )
-  { return false;
+  { y2milestone( "Cannot set up queue because of empty mandatory parameter: queue_name = '%1', uri = '%2', ppd = '%3'", queue_name, uri, ppd );
+    return false;
   }
-  // Note the bash quotings of the queue_name and description strings with ' characters:
-  string commandline = "/usr/sbin/lpadmin -h localhost -p '" + queue_name + "' -v " + uri + " -m " + ppd + " -D '" + description + "' -E";
+  // Note the bash quotings of the parameters with ' characters:
+  string commandline = "/usr/sbin/lpadmin -h localhost -p '" + queue_name + "' -v '" + uri + "' -m '" + ppd + "' -D '" + description + "' -E";
   if( ! Printerlib::ExecuteBashCommand( commandline ) )
-  { return false;
+  { Popup::ErrorDetails( sformat( // Popup::ErrorDetails message where %1 will be replaced by the queue name.
+                                  // Only a simple message because this error does not happen on a normal system
+                                  // (i.e. a system which is not totally broken or totally messed up).
+                                  _("Failed to set up queue %1."),
+                                  queue_name
+                                ),
+                                Printerlib::result["stderr"]:""
+                       );
+    return false;
   }
   return true;
 }
@@ -1657,18 +1668,30 @@ global boolean DeleteQueue( string queue_name )
 { if( "" == queue_name )
   { queue_name = queues[selected_queues_index,"name"]:"";
     if( "local" != queues[selected_queues_index,"config"]:"remote" )
-    { return false;
+    { y2milestone( "Cannot delete queue '%1' because it is no local queue", queue_name );
+      return false;
     }
   }
+  // Delete ' characters because they are used for quoting in the bash commandline below:
+  queue_name = deletechars( queue_name, "'" );
   if( "" == queue_name )
-  { return false;
+  { y2milestone( "Cannot delete queue because queue_name is the empty string" );
+    return false;
   }
   // To be safe invalidate selected_queues_index in any case:
   selected_queues_index = -1;
   // Note the bash quoting of the queue_name string with ' characters:
   string commandline = "/usr/sbin/lpadmin -h localhost -x '" + queue_name + "'";
   if( ! Printerlib::ExecuteBashCommand( commandline ) )
-  { return false;
+  { Popup::ErrorDetails( sformat( // Popup::ErrorDetails message where %1 will be replaced by the queue name.
+                                  // Only a simple message because this error does not happen on a normal system
+                                  // (i.e. a system which is not totally broken or totally messed up).
+                                  _("Failed to delete queue %1."),
+                                  queue_name
+                                ),
+                                Printerlib::result["stderr"]:""
+                       );
+    return false;
   }
   return true;
 }
