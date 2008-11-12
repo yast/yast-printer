@@ -35,7 +35,6 @@ import "Sequencer";
 import "Wizard";
 
 include "printer/readwrite.ycp";
-//include "printer/overview.ycp";
 include "printer/basicadd.ycp";
 include "printer/basicmodify.ycp";
 include "printer/connectionwizard.ycp";
@@ -61,39 +60,52 @@ any MainSequence()
                  ];
   map sequence = $[ "ws_start" : "overview",
                     "overview": $[ `abort : `abort,
+                                   `back : `abort,
                                    `next : `next,
                                    `add : "add",
                                    `modify : "modify",
                                    `delete : "overview",
-                                   `connection_wizard : "printing_via_network_connection_wizard"
+                                   `printing_via_network_back : "overview",
+                                   `printing_via_network_connection_wizard : "printing_via_network_connection_wizard",
+                                   `sharing_back : "overview",
+                                   `policies_back : "overview",
+                                   `autoconfig_back : "overview"
                                  ],
                     "add" : $[ `abort : `abort,
+                               `back : "overview",
                                `next : "overview",
                                `connection_wizard : "add_connection_wizard",
                                `add_driver : "add_driver_add"
                              ],
                     "add_connection_wizard" : $[ `abort : `abort,
+                                                 `back : "add",
                                                  `next : "add"
                                                ],
                     "add_driver_add" : $[ `abort : `abort,
+                                          `back : "add",
                                           `next : "add"
                                         ],
                     "modify" : $[ `abort : `abort,
+                                  `back : "overview",
                                   `next : "overview",
                                   `connection_wizard : "modify_connection_wizard",
                                   `add_driver : "modify_driver_add",
                                   `driver_options : "modify_driver_options"
                                 ],
                     "modify_connection_wizard" : $[ `abort : `abort,
+                                                    `back : "modify",
                                                     `next : "modify"
                                                   ],
                     "modify_driver_add" : $[ `abort : `abort,
+                                             `back : "modify",
                                              `next : "modify"
                                            ],
                     "modify_driver_options" : $[ `abort : `abort,
+                                                 `back : "modify",
                                                  `next : "modify"
                                                ],
                     "printing_via_network_connection_wizard" : $[ `abort : `abort,
+                                                                  `back : "overview",
                                                                   `next : "add"
                                                                 ],
                   ];
@@ -121,6 +133,7 @@ any PrinterSequence()
                                ]
                   ];
     Wizard::CreateDialog();
+    Wizard::SetDesktopIcon("printer");
     any ret = Sequencer::Run(aliases, sequence);
     UI::CloseDialog();
     return ret;
