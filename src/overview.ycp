@@ -328,14 +328,8 @@ symbol handleOverview( string key, map event )
     { // To be safe invalidate Printer::selected_queues_index in any case:
       Printer::selected_queues_index = -1;
       y2milestone( "To be deleted:'%1', selected_queue_index = %2", queue_name, selected_queue_index );
-      if( ! Printer::DeleteQueue( queue_name ) )
-      { Popup::Error( // Message of a Popup::Error
-                      // where %1 will be replaced by the queue name.
-                      // Only a simple message because before the function Printer::DeleteQueue
-                      // was called and this function would have shown more specific messages.
-                      sformat( _("Failed to delete configuration %1."), queue_name )
-                    );
-      }
+      // No error messages here because Printer::DeleteQueue already shows them:
+      Printer::DeleteQueue( queue_name );
       // Re-run the OverviewDialog (with a re-created list of queues) via the sequencer:
       return `delete;
     }

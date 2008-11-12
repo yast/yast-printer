@@ -1650,11 +1650,21 @@ global boolean AddQueue( string queue_name )
   { Popup::ErrorDetails( sformat( // Popup::ErrorDetails message where %1 will be replaced by the queue name.
                                   // Only a simple message because this error does not happen on a normal system
                                   // (i.e. a system which is not totally broken or totally messed up).
-                                  _("Failed to set up queue %1."),
+                                  _("Failed to add queue %1."),
                                   queue_name
                                 ),
                                 Printerlib::result["stderr"]:""
                        );
+    // When the PPD file is totally broken, it will not be accepted by the cupsd.
+    // In this case lpadmin shows an error message and exits with non-zero exit code
+    // but nevertherless the queue is created without a PPD file, i.e. as a raw queue.
+    // It seems that first of all lpadmin creates the queue and then
+    // in a second step it is modified to assign the PPD file,
+    // see http://www.cups.org/newsgroups.php?gcups.bugs+T+Q"STR+%232949"
+    // Because this AddQueue function is only used to add a not-yet-existing queue,
+    // it is safe to try to remove the queue in any case if the setup had failed
+    // but ignore any possible errors here (e.g. when the queue does not exist).
+    Printerlib::ExecuteBashCommand( "/usr/sbin/lpadmin -h localhost -x '" + queue_name + "'" );
     return false;
   }
   return true;
@@ -1686,7 +1696,7 @@ global boolean DeleteQueue( string queue_name )
   { Popup::ErrorDetails( sformat( // Popup::ErrorDetails message where %1 will be replaced by the queue name.
                                   // Only a simple message because this error does not happen on a normal system
                                   // (i.e. a system which is not totally broken or totally messed up).
-                                  _("Failed to delete queue %1."),
+                                  _("Failed to delete configuration %1."),
                                   queue_name
                                 ),
                                 Printerlib::result["stderr"]:""
