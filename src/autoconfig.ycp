@@ -109,6 +109,7 @@ term widgetAutoconfig = `VBox
                               `Left
                               ( `CheckBox
                                 ( `id("cups_autoconfig_trigger"),
+                                  `opt(`notify),
                                   // CheckBox to trigger that print queues are automatically created right now:
                                   _("&Trigger Automatic Configuration")
                                 )
@@ -336,9 +337,17 @@ symbol handleAutoconfig( string key, map event )
     if( "cups_autoconfig_configure_new_attached" == event["WidgetID"]:"" )
     { // Set the CheckBox to trigger automatic configuration to "off"
       // when cups-autoconfig should not do an automatic configuration
-      // but do not automatically set the trigger to "on" in the other case:
+      // but do not automatically set the trigger to "on" in the opposite case:
       if( ! (boolean)UI::QueryWidget( `id("cups_autoconfig_configure_new_attached"), `Value ) )
       { UI::ChangeWidget( `id("cups_autoconfig_trigger"), `Value, false );
+      }
+    }
+    if( "cups_autoconfig_trigger" == event["WidgetID"]:"" )
+    { // Set the CheckBox to do an automatic configuration to "on"
+      // when the CheckBox to trigger automatic configuration is set to "on"
+      // but do not automatically disable automatic configuration in the opposite case:
+      if( (boolean)UI::QueryWidget( `id("cups_autoconfig_trigger"), `Value ) )
+      { UI::ChangeWidget( `id("cups_autoconfig_configure_new_attached"), `Value, true );
       }
     }
   }
