@@ -261,13 +261,26 @@ symbol handleOverview( string key, map event )
   // so that the button with "back/cancel" functionality must be carefully re-enabled
   // whenever the Overview dialog is replaced by another dialog tab in the DialogTree
   // so that the other dialogs in the DialogTree have a button with "cancel" functionality.
+  // In graphical mode:
+  // When the Overview dialog is to be replaced by another dialog tab in the DialogTree
+  // the event has the form e.g.: $["EventSerialNo":2, "EventType":"MenuEvent", "ID":"network"]
+  // i.e. the EventType is "MenuEvent" so that testing only this general condition
+  // (without a specific match if "ID" is one of "network","sharing","policies","autoconfig")
+  // should be sufficiently safe to get the button with "back/cancel" functionality restored.
+  // In ncurses mode:
+  // When the Overview dialog is to be replaced by another dialog tab in the DialogTree
+  // the event has the form e.g.: $["EventReason":"Activated", "EventSerialNo":0, "EventType":"WidgetEvent",
+  //                                "ID":`wizardTree, "WidgetClass":`Tree, "WidgetID":`wizardTree]
+  // The EventType "WidgetEvent" cannot be used here because it is too unspecific
+  // because "WidgetEvent" type events are all kind of clicked buttons so that
+  // for ncurses mode the ID is used as test if the Overview dialog is to be
+  // replaced by another dialog tab in the DialogTree.
+  // This strange testing method works at least for openSUSE 11.0 and openSUSE 11.1.
   Wizard::HideBackButton();
-  if( "MenuEvent" == event["EventType"]:"" )
-  { // When the Overview dialog is to be replaced by another dialog tab in the DialogTree
-    // the EventType is "MenuEvent" so that testing only this general condition
-    // (without a specific match if "ID" is one of "network","sharing","policies","autoconfig")
-    // should be sufficiently safe to get the button with "back/cancel" functionality restored.
-    Wizard::RestoreBackButton();
+  if( "MenuEvent" == event["EventType"]:""
+      || `wizardTree == event["ID"]:nil
+    )
+  { Wizard::RestoreBackButton();
     // The above RestoreBackButton restores also its label to the default "Back"
     // but according to the new YaST style guide at
     // http://en.opensuse.org/YaST/Style_Guide#Single_Configuration.2FOverview.2FEdit_Dialog
