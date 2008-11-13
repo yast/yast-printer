@@ -66,6 +66,7 @@ term widgetAutoconfig = `VBox
                                   // because initAutoconfig checks if cups-autoconfig is installed
                                   // and if not it tries to install it.
                                   `id("cups_autoconfig_remove"),
+                                  `opt(`notify),
                                   // CheckBox to have no automatic configuration of USB printers at all
                                   // by removing the cups-autoconfig RPM package.
                                   // Do not change or translate "cups-autoconfig", it is a RPM package name.
@@ -77,7 +78,8 @@ term widgetAutoconfig = `VBox
                               `VSpacing( 1 ),
                               `Left
                               ( `CheckBox
-                                ( `id("cups_autoconfig_configure_new_attachend"),
+                                ( `id("cups_autoconfig_configure_new_attached"),
+                                  `opt(`notify),
                                   // CheckBox to enable that a print queue is automatically created
                                   // when a USB printer is connected for the first time to the USB:
                                   _("Enable &Automatic Configuration of New Attachend USB Printers")
@@ -99,6 +101,16 @@ term widgetAutoconfig = `VBox
                                   // when a USB printer is connected for the first time to the USB:
                                   _("Operation &Policy for Automatically Configured USB Printers"),
                                   [""]
+                                )
+                              ),
+                              // Have space between the settings for automatic configuration
+                              // and the choice to "Trigger Automatic Configuration":
+                              `VSpacing( 1 ),
+                              `Left
+                              ( `CheckBox
+                                ( `id("cups_autoconfig_trigger"),
+                                  // CheckBox to trigger that print queues are automatically created right now:
+                                  _("&Trigger Automatic Configuration")
                                 )
                               )
                             )
@@ -151,7 +163,7 @@ void initAutoconfig( string key )
   }
   // Set the different values for the different widgets in the dialog
   // and use the default values as fallback values:
-  UI::ChangeWidget( `id("cups_autoconfig_configure_new_attachend"), `Value, initial_cups_autoconfig_ConfigureNewPrinters );
+  UI::ChangeWidget( `id("cups_autoconfig_configure_new_attached"), `Value, initial_cups_autoconfig_ConfigureNewPrinters );
   UI::ChangeWidget( `id("cups_autoconfig_disable_on_removal"), `Value, initial_cups_autoconfig_DisablePrintersOnRemoval );
   // Determine the existing policy names in '<Policy policy-name>' sections in /etc/cups/cupsd.conf:
   list< string > operation_policy_names = [ "" ];
@@ -178,32 +190,22 @@ void initAutoconfig( string key )
   else
   { UI::ChangeWidget( `id("cups_autoconfig_operation_policy"), `Value, "not set" );
   }
+  // The CheckBox to trigger automatic configuration is initially always off:
+  UI::ChangeWidget( `id("cups_autoconfig_trigger"), `Value, false );
+  // Disable all widgets if autoconfig_settings_dialog_is_useless:
   if( autoconfig_settings_dialog_is_useless )
   { UI::ChangeWidget( `id("cups_autoconfig_remove"), `Enabled, false );
     UI::ChangeWidget( `id("cups_autoconfig_label"), `Enabled, false );
-    UI::ChangeWidget( `id("cups_autoconfig_configure_new_attachend"), `Enabled, false );
+    UI::ChangeWidget( `id("cups_autoconfig_configure_new_attached"), `Enabled, false );
     UI::ChangeWidget( `id("cups_autoconfig_disable_on_removal"), `Enabled, false );
     UI::ChangeWidget( `id("cups_autoconfig_operation_policy"), `Enabled, false );
+    UI::ChangeWidget( `id("cups_autoconfig_trigger"), `Enabled, false );
   }
   y2milestone( "leaving initAutoconfig with\ninitial_cups_autoconfig_ConfigureNewPrinters = '%1'\ninitial_cups_autoconfig_DisablePrintersOnRemoval = '%2'\ninitial_cups_autoconfig_DefaultCUPSPolicy = '%3'", initial_cups_autoconfig_ConfigureNewPrinters, initial_cups_autoconfig_DisablePrintersOnRemoval, initial_cups_autoconfig_DefaultCUPSPolicy );
 }
 
-symbol handleAutoconfig( string key, map event )
-{ y2milestone( "entering handleAutoconfig with key '%1'\nand event '%2'", key, event );
-  if( "Activated" == event["EventReason"]:"" )
-  { if( `back == event["ID"]:nil )
-    { return `autoconfig_back;
-    }
-    if( `next == event["ID"]:nil )
-    { return `autoconfig_next;
-    }
-  }
-  return nil;
-}
-
-void storeAutoconfig( string key, map event )
-{ y2milestone( "entering storeAutoconfig with key '%1'\nand event '%2'", key, event );
-  // If the cups-autoconfig RPM should be removed and when it is currently installed,
+boolean ApplyAutoconfigSettings()
+{ // If the cups-autoconfig RPM should be removed and when it is currently installed,
   // try to remove it and return because nothing else matters in this case.
   // Return even when the user decided to reject the removal because
   // it would lead to unexpected results when cups-autoconfig settings
@@ -219,22 +221,25 @@ void storeAutoconfig( string key, map event )
   { if( Printerlib::TestAndInstallPackage( "cups-autoconfig", "installed" ) )
     { Printerlib::TestAndInstallPackage( "cups-autoconfig", "remove" );
       y2milestone( "leaving storeAutoconfig" );
-      return nil;
+      //return `autoconfig_next;
+      return true;
     }
   }
   boolean applied_autoconfig_settings = true;
   // Get the actual settings and values from the dialog:
-  boolean current_cups_autoconfig_ConfigureNewPrinters = (boolean)UI::QueryWidget( `id("cups_autoconfig_configure_new_attachend"), `Value );
+  boolean current_cups_autoconfig_ConfigureNewPrinters = (boolean)UI::QueryWidget( `id("cups_autoconfig_configure_new_attached"), `Value );
   boolean current_cups_autoconfig_DisablePrintersOnRemoval = (boolean)UI::QueryWidget( `id("cups_autoconfig_disable_on_removal"), `Value );
   string current_cups_autoconfig_DefaultCUPSPolicy = (string)UI::QueryWidget( `id("cups_autoconfig_operation_policy"), `Value );
   y2milestone( "current_cups_autoconfig_ConfigureNewPrinters = '%1'\ncurrent_cups_autoconfig_DisablePrintersOnRemoval = '%2'\ncurrent_cups_autoconfig_DefaultCUPSPolicy = '%3'", current_cups_autoconfig_ConfigureNewPrinters, current_cups_autoconfig_DisablePrintersOnRemoval, current_cups_autoconfig_DefaultCUPSPolicy );
+  boolean cups_autoconfig_triggered = (boolean)UI::QueryWidget( `id("cups_autoconfig_trigger"), `Value );
   if( current_cups_autoconfig_ConfigureNewPrinters == initial_cups_autoconfig_ConfigureNewPrinters
       && current_cups_autoconfig_DisablePrintersOnRemoval == initial_cups_autoconfig_DisablePrintersOnRemoval
       && current_cups_autoconfig_DefaultCUPSPolicy == initial_cups_autoconfig_DefaultCUPSPolicy
+      && ! cups_autoconfig_triggered
     )
   { y2milestone( "Nothing changed in 'Autoconfig Settings' dialog." );
     y2milestone( "leaving storeAutoconfig" );
-    return nil;
+    return true;
   }
   if( current_cups_autoconfig_ConfigureNewPrinters != initial_cups_autoconfig_ConfigureNewPrinters )
   { if( current_cups_autoconfig_ConfigureNewPrinters )
@@ -299,12 +304,57 @@ void storeAutoconfig( string key, map event )
       applied_autoconfig_settings = false;
     }
   }
-  if( ! applied_autoconfig_settings )
-  { Popup::Error( // Popup::Error message:
-                  _("Failed to apply the settings to the system.")
-                );
+  if( applied_autoconfig_settings )
+  { // After the autoconfig settings have been successfully applied,
+    // check if cups-autoconfig should run now:
+    if( cups_autoconfig_triggered )
+    { if( ! Printerlib::ExecuteBashCommand( "/usr/lib/cups-autoconfig/cups-autoconfig --add" ) )
+      { Popup::ErrorDetails( // Popup::ErrorDetails message.
+                             _("Automatic configuration failed."),
+                             Printerlib::result["stderr"]:""
+                           );
+        applied_autoconfig_settings = false;
+      }
+    }
   }
   y2milestone( "leaving storeAutoconfig" );
+  return applied_autoconfig_settings;
+}
+
+symbol handleAutoconfig( string key, map event )
+{ y2milestone( "entering handleAutoconfig with key '%1'\nand event '%2'", key, event );
+  if( "ValueChanged" == event["EventReason"]:"" )
+  { if( "cups_autoconfig_remove" == event["WidgetID"]:"" )
+    { // Enable or disable the other widgets depending on whether or not
+      // the cups-autoconfig RPM should be removed:
+      boolean have_cups_autoconfig = ! (boolean)UI::QueryWidget( `id("cups_autoconfig_remove"), `Value );
+      UI::ChangeWidget( `id("cups_autoconfig_configure_new_attached"), `Enabled, have_cups_autoconfig );
+      UI::ChangeWidget( `id("cups_autoconfig_disable_on_removal"), `Enabled, have_cups_autoconfig );
+      UI::ChangeWidget( `id("cups_autoconfig_operation_policy"), `Enabled, have_cups_autoconfig );
+      UI::ChangeWidget( `id("cups_autoconfig_trigger"), `Enabled, have_cups_autoconfig );
+    }
+    if( "cups_autoconfig_configure_new_attached" == event["WidgetID"]:"" )
+    { // Set the CheckBox to trigger automatic configuration to "off"
+      // when cups-autoconfig should not do an automatic configuration
+      // but do not automatically set the trigger to "on" in the other case:
+      if( ! (boolean)UI::QueryWidget( `id("cups_autoconfig_configure_new_attached"), `Value ) )
+      { UI::ChangeWidget( `id("cups_autoconfig_trigger"), `Value, false );
+      }
+    }
+  }
+  if( "Activated" == event["EventReason"]:"" )
+  { if( `back == event["ID"]:nil )
+    { return `autoconfig_back;
+    }
+    if( `next == event["ID"]:nil )
+    { if( ! ApplyAutoconfigSettings() )
+      { Popup::Error( // Popup::Error message:
+                      _("Failed to apply the settings to the system.")
+                    );
+      }
+      return `autoconfig_next;
+    }
+  }
   return nil;
 }
 

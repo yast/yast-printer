@@ -122,7 +122,8 @@ term widgetOverview = `VBox
                       );
 
 void initOverview( string key )
-{ // First of all the multi-line string because such strings cannot be indented:
+{ y2milestone( "entering initOverview with key '%1'", key );
+  // First of all the multi-line string because such strings cannot be indented:
   string required_cupsd_not_accessible =
   // Message of a Popup::ErrorDetails
   // when a local cupsd is required but it is not accessible.
@@ -151,6 +152,11 @@ If you really must use a non-official port, you cannot use
 the YaST printer modue to configure your printers.
 ");
   Wizard::SetDesktopIcon("printer");
+  // The button with "back/cancel" functionality is removed here
+  // only because here it happens faster than only in the handleOverview function
+  // to avoid that the button is visible for some time until it is actually removed.
+  // See the handleOverview function for details why this button is removed.
+  Wizard::HideBackButton();
   boolean local_content_selected = Printer::queue_filter_show_local;
   boolean remote_content_selected = Printer::queue_filter_show_remote;
   boolean local_cupsd_required = true;
@@ -221,6 +227,7 @@ the YaST printer modue to configure your printers.
   UI::ChangeWidget( `overview_table, `Items,
                     Printer::QueueItems( Printer::queue_filter_show_local, Printer::queue_filter_show_remote )
                   );
+  y2milestone( "leaving initOverview" );
 }
 
 /**
@@ -230,7 +237,45 @@ the YaST printer modue to configure your printers.
  * test button and refresh overview
  */
 symbol handleOverview( string key, map event )
-{ if( ( `remote_content_checkbox == event["ID"]:nil
+{ y2milestone( "entering handleOverview with key '%1'\nand event '%2'", key, event );
+  // In the Overview dialog it does not make sense to have a button with "back" functionality
+  // which is named "Cancel" according to the new YaST style guide at
+  // http://en.opensuse.org/YaST/Style_Guide#Single_Configuration.2FOverview.2FEdit_Dialog
+  // because there is nothing to "cancel" in the Overview dialog because it
+  // only shows information about the current state of the configuration
+  // but the Overview dialog itself does not do any change of the configuration.
+  // The Overview dialog has actually the same meaning for the user
+  // as a plain notification popup which has only a "OK" button.
+  // If the user does not agree to what is shown in the Overview dialog
+  // he must launch a configuration sub-dialog to change the configuration.
+  // If the user accepted in such a configuration sub-dialog what he changed
+  // via the "OK" button there, the change is applied and the Overview dialog
+  // shows the new current state of the configuration, see
+  // http://en.opensuse.org/YaST/Development/Printer_Enhancement#Basic_Implementation_Principles:
+  // so that it is not possible to "cancel" the change in the Overview dialog.
+  // Any change of the configuration is done in sub-dialogs which are called
+  // from the Overview dialog (even the "Confirm Deletion" popup is such a sub-dialog)
+  // and in all those sub-dialogs there is a button with "cancel" functionality.
+  // Note that all the different dialogs in the DialogTree (see dialogs.ycp) are
+  // for the Wizard only different tabs of one same dialog (see "overview" in wizards.ycp)
+  // so that the button with "back/cancel" functionality must be carefully re-enabled
+  // whenever the Overview dialog is replaced by another dialog tab in the DialogTree
+  // so that the other dialogs in the DialogTree have a button with "cancel" functionality.
+  Wizard::HideBackButton();
+  if( "MenuEvent" == event["EventType"]:"" )
+  { // When the Overview dialog is to be replaced by another dialog tab in the DialogTree
+    // the EventType is "MenuEvent" so that testing only this general condition
+    // (without a specific match if "ID" is one of "network","sharing","policies","autoconfig")
+    // should be sufficiently safe to get the button with "back/cancel" functionality restored.
+    Wizard::RestoreBackButton();
+    // The above RestoreBackButton restores also its label to the default "Back"
+    // but according to the new YaST style guide at
+    // http://en.opensuse.org/YaST/Style_Guide#Single_Configuration.2FOverview.2FEdit_Dialog
+    // this button is now named "Cancel":
+    Wizard::SetBackButton( `back, Label::CancelButton() );
+  }
+
+  if( ( `remote_content_checkbox == event["ID"]:nil
         || `local_content_checkbox == event["ID"]:nil
       ) && "ValueChanged" == event["EventReason"]:""
     )
@@ -353,7 +398,7 @@ symbol handleOverview( string key, map event )
                          // Body of a Popup::AnyMessage when the queue rejects print jobs:
                          _("The testpage cannot be printed because print jobs are rejected.")
                        );
-        return nil;
+      return nil;
     }
     if( "yes" == Printer::queues[selected_queue_index,"disabled"]:"no" )
     { Popup::AnyMessage( // Header of a Popup::AnyMessage when printing is disabled for the queue:

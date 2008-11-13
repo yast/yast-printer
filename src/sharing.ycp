@@ -499,6 +499,22 @@ boolean ApplySharingSettings()
       return false;
     }
   }
+  else
+  { // When there are no browse_address_values,
+    // do not change the global "Browsing On/Off" entry in cupsd.conf
+    // because "Browsing Off" disables also receiving
+    // of remote queue information from remote CUPS servers
+    // which might be needed by the "Print Via Network" dialog.
+    // Instead remove only the "BrowseAddress" entries in cupsd.conf:
+    if( ! Printerlib::ExecuteBashCommand( Printerlib::yast_bin_dir + "modify_cupsd_conf BrowseAddress none" ) )
+    { Popup::ErrorDetails( // Popup::ErrorDetails message.
+                           // Do not change or translate "BrowseAddress", it is a system settings name.
+                           _("Failed to remove 'BrowseAddress' entries from /etc/cups/cupsd.conf"),
+                           Printerlib::result["stderr"]:""
+                         );
+      return false;
+    }
+  }
   // Only if all the above was successfully set, Listen is set too:
   // Currently 'Listen *:631' is simply set for any kind of remote access
   // because the Listen directive supports only network addresses as value.
@@ -931,7 +947,15 @@ symbol handleSharing( string key, map event )
     { return `sharing_back;
     }
     if( `next == event["ID"]:nil )
-    { return `sharing_next;
+    { if( ! ApplySharingSettings() )
+      { Popup::Error( // Popup::Error message:
+                      _("Failed to apply the settings to the system.")
+                    );
+      }
+      if( ! sharing_has_changed )
+      { y2milestone( "Nothing changed in 'Share Printers' dialog." );
+      }
+      return `sharing_next;
     }
     switch( event["WidgetID"]:`nil )
     { integer current_item = -1;
@@ -1069,20 +1093,6 @@ symbol handleSharing( string key, map event )
       UI::ChangeWidget(`delete_interface, `Enabled, interface_modify_buttons);
     }
   }
-  return nil;
-}
-
-void storeSharing( string key, map event )
-{ y2milestone( "entering storeSharing with key '%1'\nand event '%2'", key, event );
-  if( ! ApplySharingSettings() )
-  { Popup::Error( // Popup::Error message:
-                  _("Failed to apply the settings to the system.")
-                );
-  }
-  if( ! sharing_has_changed )
-  { y2milestone( "Nothing changed in 'Share Printers' dialog." );
-  }
-  y2milestone( "leaving storeSharing" );
   return nil;
 }
 
