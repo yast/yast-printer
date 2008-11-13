@@ -965,7 +965,22 @@ symbol handleNetworkPrinting( string key, map event )
     { return `printing_via_network_back;
     }
     if( `next == event["ID"]:nil )
-    { return `printing_via_network_next;
+    { if( ! ApplyNetworkPrintingSettings() )
+      { Popup::Error( // Popup::Error message:
+                      _("Failed to apply the settings to the system.")
+                    );
+      }
+      if( ! printing_via_network_has_changed )
+      { y2milestone( "Nothing changed in 'Printing via Network' dialog." );
+      }
+      else
+      { // Regardles of the ApplyNetworkPrintingSettings result,
+        // when something was to be changed,
+        // enforce to show also remote queues in the "Overview"
+        // in particular when no local queues were shown before:
+        Printer::queue_filter_show_remote = true;
+      }
+      return `printing_via_network_next;
     }
     if( `connection_wizard == event["ID"]:nil )
     { return `printing_via_network_connection_wizard;
@@ -976,27 +991,6 @@ symbol handleNetworkPrinting( string key, map event )
       TestClientOnlyServer( deletechars( tolower( current_server_name_input_value ), " " ) );
     }
   }
-  return nil;
-}
-
-void storeNetworkPrinting( string key, map event )
-{ y2milestone( "entering storeNetworkPrinting with key '%1'\nand event '%2'", key, event );
-  if( ! ApplyNetworkPrintingSettings() )
-  { Popup::Error( // Popup::Error message:
-                  _("Failed to apply the settings to the system.")
-                );
-  }
-  if( ! printing_via_network_has_changed )
-  { y2milestone( "Nothing changed in 'Printing via Network' dialog." );
-  }
-  else
-  { // Regardles of the ApplyNetworkPrintingSettings result,
-    // when something was to be changed,
-    // enforce to show also remote queues in the "Overview"
-    // in particular when no local queues were shown before:
-    Printer::queue_filter_show_remote = true;
-  }
-  y2milestone( "leaving storeNetworkPrinting" );
   return nil;
 }
 

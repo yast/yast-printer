@@ -270,8 +270,14 @@ Allow()
             do test -n "$V" && sed -i -e "${ROOT_LOCATION_LINE_NUMBER}a$KEY $V" $CUPSDCONF
             done
        else # The 'Order allow,deny' line denies packets by default
-            # to be 100% on the safe side have explicite 'Allow none' and 'Deny all' lines too:
-            sed -i -e "${ROOT_LOCATION_LINE_NUMBER}aDeny all\nAllow none" $CUPSDCONF
+            # to be on the safe side have en explicite 'Deny all' line
+            # but do not have an additional 'Allow none' line too
+            # because an explicite 'Allow none' line results in YaST
+            # a "none" entry for the experts settings in the Shareing dialog
+            # and such a "none" expert setting overrules any other setting
+            # so that all user would have to remove this expert setting
+            # manually to allow any kind of remote access.
+            sed -i -e "${ROOT_LOCATION_LINE_NUMBER}aDeny all" $CUPSDCONF
        fi
   fi
   # Report the resulting setting in any case:
@@ -286,9 +292,15 @@ Allow()
   # or an error message because of a failed test below) on a new line:
   echo 1>&2
   # Test if the result is the expected one if a value was specified:
-  if test -n "$VALUE" -a "$RESULT" != "$VALUE"
-  then echo "Failed to set '$KEY $VALUE' in $CUPSDCONF." 1>&2
-       exit 5
+  if test -n "$VALUE"
+  then if test "none" = "$VALUE"
+       then EXPECTED_RESULT=""
+       else EXPECTED_RESULT="$VALUE"
+       fi
+       if test "$RESULT" != "$EXPECTED_RESULT"
+       then echo "Failed to set '$KEY $VALUE' in $CUPSDCONF." 1>&2
+            exit 5
+       fi
   fi
 }
 

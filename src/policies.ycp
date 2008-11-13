@@ -211,22 +211,8 @@ void initPolicies( string key )
   y2milestone( "leaving initPolicies with\ninitial_operation_policy = '%1'\ninitial_error_policy = '%2'", initial_operation_policy, initial_error_policy );
 }
 
-symbol handlePolicies( string key, map event )
-{ y2milestone( "entering handlePolicies with key '%1'\nand event '%2'", key, event );
-  if( "Activated" == event["EventReason"]:"" )
-  { if( `back == event["ID"]:nil )
-    { return `policies_back;
-    }
-    if( `next == event["ID"]:nil )
-    { return `policies_next;
-    }
-  }
-  return nil;
-}
-
-void storePolicies( string key, map event)
-{ y2milestone( "entering storePolicies with key '%1'\nand event '%2'", key, event );
-  boolean applied_policies = true;
+boolean ApplyPoliciesSettings()
+{ boolean applied_policies = true;
   // Get the actual settings and values from the dialog:
   string current_operation_policy = (string)UI::QueryWidget( `id("operation_policy"), `Value );
   boolean apply_operation_policy = (boolean)UI::QueryWidget( `id("apply_operation_policy"), `Value );
@@ -241,7 +227,7 @@ void storePolicies( string key, map event)
     )
   { y2milestone( "Nothing changed in 'Policies' dialog." );
     y2milestone( "leaving storePolicies" );
-    return nil;
+    return true;
   }
   if( apply_operation_policy
       || apply_error_policy
@@ -318,12 +304,25 @@ void storePolicies( string key, map event)
       }
     }
   }
-  if( ! applied_policies )
-  { Popup::Error( // Popup::Error message:
-                  _("Failed to apply the settings to the system.")
-                );
-  }
   y2milestone( "leaving storePolicies" );
+  return applied_policies;
+}
+
+symbol handlePolicies( string key, map event )
+{ y2milestone( "entering handlePolicies with key '%1'\nand event '%2'", key, event );
+  if( "Activated" == event["EventReason"]:"" )
+  { if( `back == event["ID"]:nil )
+    { return `policies_back;
+    }
+    if( `next == event["ID"]:nil )
+    { if( ! ApplyPoliciesSettings() )
+      { Popup::Error( // Popup::Error message:
+                      _("Failed to apply the settings to the system.")
+                    );
+      }
+      return `policies_next;
+    }
+  }
   return nil;
 }
 
