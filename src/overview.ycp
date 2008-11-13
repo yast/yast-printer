@@ -372,25 +372,26 @@ symbol handleOverview( string key, map event )
                        );
       return nil;
     }
-    if( Popup::AnyQuestion( // Header of a confirmation popup before a queue will be deleted:
-                            _("Confirm Deletion"),
-                            // Body of a confirmation popup before a queue will be deleted:
-                            _("The selected configuration would be deleted immediately and cannot be restored."),
-                            // 'Yes' button label of a confirmation popup before a queue will be deleted:
-                            sformat( _("Delete configuration %1"), queue_name ),
-                            // 'No' button label of a confirmation popup before a queue will be deleted:
-                            _("Do not delete it"),
-                            `focus_no
-                          )
+    if( ! Popup::AnyQuestion( // Header of a confirmation popup before a queue will be deleted:
+                              _("Confirm Deletion"),
+                              // Body of a confirmation popup before a queue will be deleted:
+                              _("The selected configuration would be deleted immediately and cannot be restored."),
+                              // 'Yes' button label of a confirmation popup before a queue will be deleted:
+                              sformat( _("Delete configuration %1"), queue_name ),
+                              // 'No' button label of a confirmation popup before a queue will be deleted:
+                              _("Do not delete it"),
+                              `focus_no
+                            )
       )
-    { // To be safe invalidate Printer::selected_queues_index in any case:
-      Printer::selected_queues_index = -1;
-      y2milestone( "To be deleted:'%1', selected_queue_index = %2", queue_name, selected_queue_index );
-      // No error messages here because Printer::DeleteQueue already shows them:
-      Printer::DeleteQueue( queue_name );
-      // Re-run the OverviewDialog (with a re-created list of queues) via the sequencer:
-      return `delete;
+    { return nil;
     }
+    // To be safe invalidate Printer::selected_queues_index in any case:
+    Printer::selected_queues_index = -1;
+    y2milestone( "To be deleted:'%1', selected_queue_index = %2", queue_name, selected_queue_index );
+    // No error messages here because Printer::DeleteQueue already shows them:
+    Printer::DeleteQueue( queue_name );
+    // Re-run the OverviewDialog (with a re-created list of queues) via the sequencer:
+    return `delete;
   }
 
   if( `test == event["ID"]:nil && "Activated" == event["EventReason"]:"" )
@@ -422,26 +423,121 @@ symbol handleOverview( string key, map event )
       return nil;
     }
     if( "local" == Printer::queues[selected_queue_index,"config"]:"remote" )
-    { Printer::selected_queues_index = selected_queue_index;
+    { // When it is a local queue, remember it as the currently selected queue
+      // so that the user can just click the button with "modify" functionality
+      // if he likes to change the configuration when the testprint is not o.k.
+      Printer::selected_queues_index = selected_queue_index;
+      // Test whether there are already pending jobs in a local queue.
+      // Usually it is currently actively printing because the test above
+      // makes sure that the queue has printing enabled.
+      if( Printerlib::ExecuteBashCommand( "/usr/bin/lpstat -o '"
+                                          + queue_name
+                                          + "' | egrep -q '^"
+                                          + queue_name
+                                          + "-[0-9]+'"
+                                        )
+        )
+      { if( Popup::AnyQuestion( // Header of a confirmation popup before all pending jobs in a queue will be deleted:
+                                _("Delete Pending Print Jobs"),
+                                // Body of a confirmation popup before a queue will be deleted:
+                                _("There are pending print jobs which might be deleted before the testpage is printed."),
+                                // 'Yes' button label of a confirmation popup
+                                // before all pending jobs in a queue will be deleted:
+                                sformat( _("Delete all pending jobs for %1"), queue_name ),
+                                // 'No' button label of a confirmation popup
+                                // before all pending jobs in a queue will be deleted:
+                                _("Print the testpage after the other jobs"),
+                                `focus_no
+                              )
+          )
+        { if( ! Printerlib::ExecuteBashCommand( "/usr/bin/cancel -a '" + queue_name + "'" ) )
+          { Popup::ErrorDetails( sformat( // Message of a Popup::ErrorDetails
+                                          // where %1 will be replaced by the queue name.
+                                          // Only a simple message because this error does not happen on a normal system.
+                                          _("Failed to delete all pending jobs for %1."),
+                                          queue_name
+                                        ),
+                                 Printerlib::result["stderr"]:""
+                               );
+          }
+        }
+      }
     }
     if( ! Printerlib::ExecuteBashCommand( "/usr/bin/lp -d '"
                                           + queue_name
-                                          + "' -o page-label=\"Testprint:$(hostname)\" /usr/share/cups/data/testprint.ps"
+                                          + "' -o page-label=\"Testprint_from_$(hostname)\" /usr/share/cups/data/testprint.ps"
                                         )
       )
-    { Popup::Error( // Message of a Popup::Error
-                    // where %1 will be replaced by the queue name.
-                    // Only a simple message because this error does not happen on a normal system
-                    // (i.e. a system which is not totally broken or totally messed up).
-                    sformat( _("Failed to print testpage for %1."), queue_name )
-                  );
+    { Popup::ErrorDetails( sformat( // Message of a Popup::ErrorDetails
+                                    // where %1 will be replaced by the queue name.
+                                    // Only a simple message because this error does not happen on a normal system.
+                                    _("Failed to print testpage for %1."),
+                                    queue_name
+                                  ),
+                           Printerlib::result["stderr"]:""
+                         );
       return nil;
     }
-    Popup::TimedMessage( // Popup message
-                         // where %1 will be replaced by the queue name.
-                         sformat( _("Sent testpage to %1. It should start to print soon."), queue_name ),
-                         60
-                       );
+    Popup::TimedAnyQuestion( // Popup::TimedAnyQuestion header:
+                             _("Wait Until Testprint Finished"),
+                             // Popup::TimedAnyQuestion message
+                             // where %1 will be replaced by the queue name.
+                             sformat( _("Sent testpage to %1. It should start to print soon."), queue_name ),
+                             // Popup::TimedAnyQuestion 'Yes' button label:
+                             Label::StopButton(),
+                             // Popup::TimedAnyQuestion 'No' button label:
+                             Label::OKButton(),
+                             `focus_yes,
+                             120
+                           );
+    if( "local" == Printer::queues[selected_queue_index,"config"]:"remote" )
+    { // When it is a local queue and there are still pending jobs in the queue,
+      // it seems something went wrong with the testpage printing
+      // so that the user can delete all pending jobs now.
+      // Via the "cancel" command the cupsd sends termination signals
+      // to running filter processes for the queue so that the filters
+      // (in particular the printer driver) could do whatever is needed
+      // to switch an actively printing printer device into a clean state
+      // (e.g. exit its graphics mode and switch back to normal mode).
+      // This helps in usual cases if something had messed up
+      // for an actively printing job but unfortunately
+      // there is no option for the "cancel" command
+      // which lets the cupsd immediatelly kill the backend process
+      // as emergency brake when e.g. a wrong driver lets the printer
+      // spit out zillions of sheets with nonsense characters.
+      if( Printerlib::ExecuteBashCommand( "/usr/bin/lpstat -o '"
+                                          + queue_name
+                                          + "' | egrep -q '^"
+                                          + queue_name
+                                          + "-[0-9]+'"
+                                        )
+        )
+      { if( Popup::AnyQuestion( // Header of a confirmation popup before all pending jobs in a queue will be deleted:
+                                _("Delete Pending Print Jobs"),
+                                // Body of a confirmation popup before a queue will be deleted:
+                                _("There are pending print jobs which might be deleted now."),
+                                // 'Yes' button label of a confirmation popup
+                                // before all pending jobs in a queue will be deleted:
+                                sformat( _("Delete all pending jobs for %1"), queue_name ),
+                                // 'No' button label of a confirmation popup
+                                // before all pending jobs in a queue will be deleted:
+                                _("Do not delete them"),
+                                `focus_no
+                              )
+          )
+        { if( ! Printerlib::ExecuteBashCommand( "/usr/bin/cancel -a '" + queue_name + "'" ) )
+          { Popup::ErrorDetails( sformat( // Message of a Popup::ErrorDetails
+                                          // where %1 will be replaced by the queue name.
+                                          // Only a simple message because this error does not happen on a normal system.
+                                          _("Failed to delete all pending jobs for %1."),
+                                          queue_name
+                                        ),
+                                 Printerlib::result["stderr"]:""
+                               );
+          }
+        }
+      }
+    }
     return nil;
   }
 
