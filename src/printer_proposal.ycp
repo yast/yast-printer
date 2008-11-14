@@ -36,6 +36,7 @@ textdomain "printer";
 
 import "Printer";
 import "Progress";
+import "String";
 
 /* The main () */
 y2milestone("----------------------------------------");
@@ -59,10 +60,39 @@ if(func == "MakeProposal") {
 	Progress::set (progress_orig);
     }
 
+// Propose configuration for each local printer
+// TODO: replace by cups-autoconfig
+
+ list<term> detected_printers = filter(term row, (list<term>)Printer::ConnectionItems( "BasicAddDialog" ), { return (!issubstring(String::CutBlanks(row[1]:""), "Unknown")); });
+ y2milestone("Detected local printers : %1", detected_printers);
+ if (size(detected_printers)>0){
+  y2milestone("Local printers detected, will configure");
+  foreach(term printer, detected_printers, {
+   y2internal("Configure queue for backend %1", printer[2]:"");
+   string queue_name = Printer::NewQueueName( tolower( printer[1]:"" ));
+   y2milestone("Proposed queue name : %1", queue_name);
+   list drivers = Printer::DriverItems( filterchars( tolower( String::CutBlanks(printer[1]:"") ), Printer::lower_alnum_chars ), true );
+   if (size(drivers)>0){
+    y2internal("Available drivers : %1", drivers);
+    y2internal("Selected driver : %1", drivers[0]:nil);
+    Printer::selected_ppds_index=drivers[0,0,0]:-1;
+    Printer::selected_connections_index=printer[0,0]:-1;
+    Printer::AddQueue(queue_name);
+   } else y2error("No available drivers for printer %1", printer);
+  });
+ } else {
+  y2milestone("No local printers detected");
+ }
+
+    foreach( term queue, (list<term>) Printer::QueueItems(true, false), {
+	proposal = add(proposal, queue[3]:"");
+    });
+/*
     proposal = maplist ( map< string, string > queue, Printer::queues, {
 	string description = queue["description"]:"";
 	return description;
     });
+*/
     proposal = filter (string p, proposal, { return p != ""; });
     if (size (proposal) == 0)
 	proposal = [ _("No printer queue configured.") ];
