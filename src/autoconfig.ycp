@@ -120,17 +120,65 @@ term widgetAutoconfig = `VBox
 
 void initAutoconfig( string key )
 { y2milestone( "entering initAutoconfig with key '%1'", key );
-  // The whole Autoconfig Settings dialog is useless without having cups-autoconfig installed.
+  boolean autoconfig_settings_dialog_is_useless = false;
+  // The whole Autoconfig Settings dialog is useless if it is a "client-only" config.
+  // Determine whether or not it is currently a real client-only config
+  // (i.e. a ServerName != "localhost/127.0.0.1" in /etc/cups/client.conf)
+  // and ignore when it fails (i.e. use the fallback value silently):
+  Printerlib::DetermineClientOnly();
+  if( Printerlib::client_only )
+  { if( ! Popup::YesNoHeadline( sformat( // PopupYesNoHeadline headline
+                                         // where %1 will be replaced by the server name:
+                                         _("Disable remote CUPS server '%1'"),
+                                         Printerlib::client_conf_server_name
+                                       ),
+                                // PopupYesNoHeadline body:
+                                _("A remote CUPS server setting conflicts with automatic configuration of printers for the local system.")
+                              )
+      )
+    { autoconfig_settings_dialog_is_useless = true;
+      y2milestone( "autoconfig_settings_dialog_is_useless because user decided not to disable client-only CUPS server '%1'",
+                   Printerlib::client_conf_server_name
+                 );
+    }
+    else
+    { // Remove the 'ServerName' entry in /etc/cups/client.conf:
+      if( ! Printerlib::ExecuteBashCommand( Printerlib::yast_bin_dir + "cups_client_only none" ) )
+      { Popup::ErrorDetails( // Popup::ErrorDetails message:
+                             _("Failed to remove the 'ServerName' entry in /etc/cups/client.conf"),
+                             Printerlib::result["stderr"]:"" + "\n" + Printerlib::result["stdout"]:""
+                           );
+        autoconfig_settings_dialog_is_useless = true;
+        y2milestone( "putoconfig_settings_dialog_is_useless because it failed to disable client-only CUPS server '%1'",
+                     Printerlib::client_conf_server_name
+                   );
+      }
+    }
+  }
+  // When it is no "client-only" config,
+  // determine whether or not a local cupsd is accessible:
+  if( ! autoconfig_settings_dialog_is_useless )
+  { if( ! Printerlib::GetAndSetCupsdStatus( "" ) )
+    { // Printerlib::GetAndSetCupsdStatus already shows a confirmation popup:
+      if( ! Printerlib::GetAndSetCupsdStatus( "start" ) )
+      { autoconfig_settings_dialog_is_useless = true;
+        y2milestone( "autoconfig_settings_dialog_is_useless because 'rccups start' failed." );
+      }
+    }
+  }
+  // When it is no "client-only" config and when a local cupsd is accessible,
+  // the whole dialog is still useless without having cups-autoconfig installed.
   // Therefore check if cups-autoconfig is installed and if not try to install it.
   // It is perfectly o.k. when the user rejects cups-autoconfig to be installed
   // (perhaps he selected it to be removed before in this dialog
   // and re-launched this dialog by accident or to check the current setting).
   // Therefore there is no additional message shown here when the dialog is useless
   // because there was a Popup request that cups-autoconfig must be installed.
-  boolean autoconfig_settings_dialog_is_useless = false;
-  if( ! Printerlib::TestAndInstallPackage( "cups-autoconfig", "installed" ) )
-  { if( ! Printerlib::TestAndInstallPackage( "cups-autoconfig", "install" ) )
-    { autoconfig_settings_dialog_is_useless = true;
+  if( ! autoconfig_settings_dialog_is_useless )
+  { if( ! Printerlib::TestAndInstallPackage( "cups-autoconfig", "installed" ) )
+    { if( ! Printerlib::TestAndInstallPackage( "cups-autoconfig", "install" ) )
+      { autoconfig_settings_dialog_is_useless = true;
+      }
     }
   }
   UI::ChangeWidget( `id("cups_autoconfig_remove"), `Value, autoconfig_settings_dialog_is_useless );
@@ -139,18 +187,18 @@ void initAutoconfig( string key )
   // fallback values in particular when the cups-autoconfig RPM is not installed.
   // By default the ConfigureNewPrinters value in /etc/cups-autoconfig.conf is set to "yes":
   initial_cups_autoconfig_ConfigureNewPrinters = true;
-  Printerlib::ExecuteBashCommand( "grep -i '^ConfigureNewPrinters' /etc/cups-autoconfig.conf | cut -s -d '=' -f2 | tr -d -c '[:alnum:]'" );
+  Printerlib::ExecuteBashCommand( "grep -i '^[[:space:]]*ConfigureNewPrinters' /etc/cups-autoconfig.conf | cut -s -d '=' -f2 | tr -d -c '[:alnum:]'" );
   if( "no" == tolower( Printerlib::result["stdout"]:"yes" ) )
   { initial_cups_autoconfig_ConfigureNewPrinters = false;
   }
   // By default the DisablePrintersOnRemoval value in /etc/cups-autoconfig.conf is set to "no":
   initial_cups_autoconfig_DisablePrintersOnRemoval = false;
-  Printerlib::ExecuteBashCommand( "grep -i '^DisablePrintersOnRemoval' /etc/cups-autoconfig.conf | cut -s -d '=' -f2 | tr -d -c '[:alnum:]'" );
+  Printerlib::ExecuteBashCommand( "grep -i '^[[:space:]]*DisablePrintersOnRemoval' /etc/cups-autoconfig.conf | cut -s -d '=' -f2 | tr -d -c '[:alnum:]'" );
   if( "yes" == tolower( Printerlib::result["stdout"]:"no" ) )
   { initial_cups_autoconfig_DisablePrintersOnRemoval = true;
   }
   // By default the DefaultCUPSPolicy value in /etc/cups-autoconfig.conf is set to the empty string:
-  Printerlib::ExecuteBashCommand( "grep -i '^DefaultCUPSPolicy' /etc/cups-autoconfig.conf | cut -s -d '=' -f2 | tr -d -c '[:alnum:]'" );
+  Printerlib::ExecuteBashCommand( "grep -i '^[[:space:]]*DefaultCUPSPolicy' /etc/cups-autoconfig.conf | cut -s -d '=' -f2 | tr -d -c '[:alnum:]'" );
   initial_cups_autoconfig_DefaultCUPSPolicy = tolower( Printerlib::result["stdout"]:"" );
   // By default the DefaultCUPSPolicy value in /etc/cups-autoconfig.conf is set to the empty string.
   // Therefore an empty policy name could be added as additional possible value

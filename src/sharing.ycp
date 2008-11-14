@@ -577,12 +577,15 @@ void initSharing( string key )
       }
     }
   }
-  // Determine whether or not a local cupsd is accessible:
-  if( ! Printerlib::GetAndSetCupsdStatus( "" ) )
-  { // Printerlib::GetAndSetCupsdStatus already shows a confirmation popup:
-    if( ! Printerlib::GetAndSetCupsdStatus( "start" ) )
-    { share_printers_dialog_is_useless = true;
-      y2milestone( "share_printers_dialog_is_useless because 'rccups start' failed." );
+  // When it is no "client-only" config,
+  // determine whether or not a local cupsd is accessible:
+  if( ! share_printers_dialog_is_useless )
+  { if( ! Printerlib::GetAndSetCupsdStatus( "" ) )
+    { // Printerlib::GetAndSetCupsdStatus already shows a confirmation popup:
+      if( ! Printerlib::GetAndSetCupsdStatus( "start" ) )
+      { share_printers_dialog_is_useless = true;
+        y2milestone( "share_printers_dialog_is_useless because 'rccups start' failed." );
+      }
     }
   }
   // Note that the "Share Printers" dialog is not useless when there is no local queue.

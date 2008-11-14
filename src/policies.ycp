@@ -146,12 +146,15 @@ void initPolicies( string key )
       }
     }
   }
-  // Determine whether or not a local cupsd is accessible:
-  if( ! Printerlib::GetAndSetCupsdStatus( "" ) )
-  { // Printerlib::GetAndSetCupsdStatus already shows a confirmation popup:
-    if( ! Printerlib::GetAndSetCupsdStatus( "start" ) )
-    { policies_dialog_is_useless = true;
-      y2milestone( "policies_dialog_is_useless because 'rccups start' failed." );
+  // When it is no "client-only" config,
+  // determine whether or not a local cupsd is accessible:
+  if( ! policies_dialog_is_useless )
+  {if( ! Printerlib::GetAndSetCupsdStatus( "" ) )
+    { // Printerlib::GetAndSetCupsdStatus already shows a confirmation popup:
+      if( ! Printerlib::GetAndSetCupsdStatus( "start" ) )
+      { policies_dialog_is_useless = true;
+        y2milestone( "policies_dialog_is_useless because 'rccups start' failed." );
+      }
     }
   }
   // Determine the existing policy names in '<Policy policy-name>' sections in /etc/cups/cupsd.conf:

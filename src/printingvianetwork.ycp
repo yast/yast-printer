@@ -519,11 +519,11 @@ boolean ApplyNetworkPrintingSettings()
       // if the browse_allow_value string is effectively empty or it contains "none"
       // so that the client-only config is to be disabled in any case:
       if( ! Popup::YesNoHeadline( // PopupYesNoHeadline headline
-                                    // where %1 will be replaced by the server name:
-                                    sformat( _("Disable remote CUPS server '%1'"), Printerlib::client_conf_server_name ),
-                                    // PopupYesNoHeadline body:
-                                    _("A remote CUPS server setting conflicts with receiving printer information.")
-                                  )
+                                  // where %1 will be replaced by the server name:
+                                  sformat( _("Disable remote CUPS server '%1'"), Printerlib::client_conf_server_name ),
+                                  // PopupYesNoHeadline body:
+                                  _("A remote CUPS server setting conflicts with receiving printer information.")
+                                )
         )
       { return false;
       }
@@ -791,7 +791,9 @@ void initNetworkPrinting( string key )
   initial_server_name_input_value = Printerlib::client_conf_server_name;
   UI::ChangeWidget( `id(`client_conf_server_name_input), `Value, Printerlib::client_conf_server_name );
   UI::ChangeWidget( `id(`test_client_conf_server), `Enabled, false );
-  UI::ChangeWidget( `id(`connection_wizard), `Enabled, false );
+  // The "Connection Wizard" button is enabled by default
+  // and disabled in case of "client_only", see below:
+  UI::ChangeWidget( `id(`connection_wizard), `Enabled, true );
   // Enable those widgets which match to the current settings in the system:
   // If there is 'Browsing On' in /etc/cups/cupsd.conf
   // but there is also an active ServerName (!="localhost") in /etc/cups/client.conf
@@ -801,11 +803,20 @@ void initNetworkPrinting( string key )
     UI::ChangeWidget( `id(`client_only_radio_button), `Value, true );
     UI::ChangeWidget( `id(`client_conf_server_name_input), `Enabled, true );
     UI::ChangeWidget( `id(`test_client_conf_server), `Enabled, true );
+    // The "Connection Wizard" button is disabled in case of "client_only".
+    // In this case it is never again enabled as long as the dialog runs
+    // because  the user can select one of the radio buttons
+    // to receive or not receive printer information via CUPS Browsing
+    // which would switch from "client_only" to a local running cupsd
+    // but only when finishing the dialog via ApplyNetworkPrintingSettings().
+    // Therefore in case of "client_only" to use a network printer directly
+    // the user must first switch from "client_only" to a local running cupsd
+    // (e.g. by changing the client-only server to the empty string or to 'none')
+    // and close the dialog to apply this change and re-launch the dialog afterwards.
+    UI::ChangeWidget( `id(`connection_wizard), `Enabled, false );
   }
   else
-  { // The "Connection Wizard" button is only disabled in casae of "client_only":
-    UI::ChangeWidget( `id(`connection_wizard), `Enabled, true );
-    // If "none" is present as a BrowseAllow value, no 'Browsing On' widget is enabled
+  { // If "none" is present as a BrowseAllow value, no 'Browsing On' widget is enabled
     // but the 'Browsing Off' widget is enabled instead:
     if( Printerlib::cupsd_conf_browsing_on
         && ! contains( Printerlib::cupsd_conf_browse_allow, "none" )
@@ -931,7 +942,12 @@ symbol handleNetworkPrinting( string key, map event )
       UI::ChangeWidget( `id(`browse_allow_input), `Enabled, false );
       UI::ChangeWidget( `id(`client_conf_server_name_input), `Enabled, false );
       UI::ChangeWidget( `id(`test_client_conf_server), `Enabled, false );
-      UI::ChangeWidget( `id(`connection_wizard), `Enabled, true );
+      if( ! Printerlib::client_only )
+      { // The "Connection Wizard" button is enabled by default
+        // and disabled if currently a "client_only" config is active.
+        // In this case it is never again enabled as long as the dialog runs, see above:
+        UI::ChangeWidget( `id(`connection_wizard), `Enabled, true );
+      }
     }
     if( `browsing_on_radio_button == event["ID"]:nil )
     { UI::ChangeWidget( `id(`browse_allow_label), `Enabled, true );
@@ -939,7 +955,12 @@ symbol handleNetworkPrinting( string key, map event )
       UI::ChangeWidget( `id(`browse_allow_input), `Enabled, true );
       UI::ChangeWidget( `id(`client_conf_server_name_input), `Enabled, false );
       UI::ChangeWidget( `id(`test_client_conf_server), `Enabled, false );
-      UI::ChangeWidget( `id(`connection_wizard), `Enabled, true );
+      if( ! Printerlib::client_only )
+      { // The "Connection Wizard" button is enabled by default
+        // and disabled if currently a "client_only" config is active.
+        // In this case it is never again enabled as long as the dialog runs, see above:
+        UI::ChangeWidget( `id(`connection_wizard), `Enabled, true );
+      }
     }
     if( `browse_allow_combo_box == event["ID"]:nil )
     { if( `browse_allow_all == UI::QueryWidget( `id(`browse_allow_combo_box), `Value ) )
