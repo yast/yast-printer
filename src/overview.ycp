@@ -428,9 +428,11 @@ symbol handleOverview( string key, map event )
       // if he likes to change the configuration when the testprint is not o.k.
       Printer::selected_queues_index = selected_queue_index;
       // Test whether there are already pending jobs in a local queue.
-      // Usually it is currently actively printing because the test above
-      // makes sure that the queue has printing enabled.
-      if( Printerlib::ExecuteBashCommand( "/usr/bin/lpstat -o '"
+      // If yes, the queue is usually currently actively printing because
+      // the test above makes sure that the queue has printing enabled.
+      // When this command fails for whatever reason, it is a safe fallback
+      // to assume that there are no pending jobs in the queue:
+      if( Printerlib::ExecuteBashCommand( "/usr/bin/lpstat -h localhost -o '"
                                           + queue_name
                                           + "' | egrep -q '^"
                                           + queue_name
@@ -450,7 +452,7 @@ symbol handleOverview( string key, map event )
                                 `focus_no
                               )
           )
-        { if( ! Printerlib::ExecuteBashCommand( "/usr/bin/cancel -a '" + queue_name + "'" ) )
+        { if( ! Printerlib::ExecuteBashCommand( "/usr/bin/cancel -a -h localhost '" + queue_name + "'" ) )
           { Popup::ErrorDetails( sformat( // Message of a Popup::ErrorDetails
                                           // where %1 will be replaced by the queue name.
                                           // Only a simple message because this error does not happen on a normal system.
@@ -463,6 +465,8 @@ symbol handleOverview( string key, map event )
         }
       }
     }
+    // Do not enforce to talk to the cupsd on localhost when submiting the testpage
+    // because testpage printing must also work for a "client-only" config:
     if( ! Printerlib::ExecuteBashCommand( "/usr/bin/lp -d '"
                                           + queue_name
                                           + "' -o page-label=\"Testprint_from_$(hostname)\" /usr/share/cups/data/testprint.ps"
@@ -498,14 +502,17 @@ symbol handleOverview( string key, map event )
       // to running filter processes for the queue so that the filters
       // (in particular the printer driver) could do whatever is needed
       // to switch an actively printing printer device into a clean state
-      // (e.g. exit its graphics mode and switch back to normal mode).
-      // This helps in usual cases if something had messed up
-      // for an actively printing job but unfortunately
-      // there is no option for the "cancel" command
+      // (e.g. exit its graphics printing mode and switch back to normal mode).
+      // The backend process terminates when the filters have finished.
+      // This helps in usual cases (in particular when a good driver is used)
+      // if something had messed up for an actively printing job but
+      // unfortunately there is no option for the "cancel" command
       // which lets the cupsd immediatelly kill the backend process
       // as emergency brake when e.g. a wrong driver lets the printer
       // spit out zillions of sheets with nonsense characters.
-      if( Printerlib::ExecuteBashCommand( "/usr/bin/lpstat -o '"
+      // When this command fails for whatever reason, it is a safe fallback
+      // to assume that there are no pending jobs in the queue:
+      if( Printerlib::ExecuteBashCommand( "/usr/bin/lpstat -h localhost -o '"
                                           + queue_name
                                           + "' | egrep -q '^"
                                           + queue_name
@@ -525,7 +532,7 @@ symbol handleOverview( string key, map event )
                                 `focus_no
                               )
           )
-        { if( ! Printerlib::ExecuteBashCommand( "/usr/bin/cancel -a '" + queue_name + "'" ) )
+        { if( ! Printerlib::ExecuteBashCommand( "/usr/bin/cancel -a -h localhost '" + queue_name + "'" ) )
           { Popup::ErrorDetails( sformat( // Message of a Popup::ErrorDetails
                                           // where %1 will be replaced by the queue name.
                                           // Only a simple message because this error does not happen on a normal system.
