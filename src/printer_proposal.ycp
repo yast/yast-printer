@@ -67,9 +67,17 @@ if(func == "MakeProposal") {
  y2milestone("Detected local printers : %1", detected_printers);
  if (size(detected_printers)>0){
   y2milestone("Local printers detected, will configure");
+  // Autodetect existing queues so that Printer::NewQueueName can compare against existing queue names
+  // but ignore whatever failures (an empty list of autodetected queues is the fallback result):
+  Printer::AutodetectQueues();
+  list<string> already_set_up_queue_names = [];
   foreach(term printer, detected_printers, {
    y2internal("Configure queue for backend %1", printer[2]:"");
    string queue_name = Printer::NewQueueName( tolower( printer[1]:"" ));
+   if (contains(already_set_up_queue_names, queue_name)){
+    y2internal("Skipping printer '%1' because it is already set up as queue %2", printer, queue_name);
+    continue;
+   }
    y2milestone("Proposed queue name : %1", queue_name);
    list drivers = Printer::DriverItems( filterchars( tolower( String::CutBlanks(printer[1]:"") ), Printer::lower_alnum_chars ), true );
    if (size(drivers)>0){
@@ -77,7 +85,7 @@ if(func == "MakeProposal") {
     y2internal("Selected driver : %1", drivers[0]:nil);
     Printer::selected_ppds_index=drivers[0,0,0]:-1;
     Printer::selected_connections_index=printer[0,0]:-1;
-    Printer::AddQueue(queue_name);
+    if (Printer::AddQueue(queue_name)) already_set_up_queue_names = add(already_set_up_queue_names, queue_name);
    } else y2error("No available drivers for printer %1", printer);
   });
  } else {
@@ -85,7 +93,7 @@ if(func == "MakeProposal") {
  }
 
     foreach( term queue, (list<term>) Printer::QueueItems(true, false), {
-	proposal = add(proposal, queue[3]:"");
+	proposal = add(proposal, queue[2]:"" + " : " + queue[3]:"");
     });
 /*
     proposal = maplist ( map< string, string > queue, Printer::queues, {

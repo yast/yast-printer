@@ -923,13 +923,17 @@ global list ConnectionItems( string connection_filter_string )
     // which is needed here to preserve any entry to be on the safe side:
     connections = (list <map <string, string> >)merge( connection_wizard_connections, connections );
   }
-  // Determine if there is at least one "hp:/usb/" DeviceURI:
+  // Determine if there is at least one "hp:/usb/" DeviceURI
+  // and if there is at least one "parallel:/" DeviceURI
   boolean hp_usb_uri_exists = false;
+  boolean parallel_uri_exists = false;
   foreach( map< string, string > connection_entry,
            connections,
            { if( "hp:/usb/" == substring( connection_entry["uri"]:"", 0, 8 ) )
              { hp_usb_uri_exists = true;
-               break;
+             }
+             if( "parallel:/" == substring( connection_entry["uri"]:"", 0, 10 ) )
+             { parallel_uri_exists = true;
              }
            }
          );
@@ -1002,15 +1006,35 @@ global list ConnectionItems( string connection_filter_string )
                      { y2milestone( "skipped 'usb://HP/' DeviceURI '%1'", uri );
                      }
                      else
-                     { // Add trailing spaces because the current YaST UI
-                       // has almost no additional space between table columns
-                       // in partitcular not where the widest entry in a column is:
-                       connection_items = add( connection_items, `item( `id( connections_index ),
-                                                                        model + " ",
-                                                                        uri + " ",
-                                                                        info
-                                                                      )
-                                             );
+                     { // Skip "hp:/par/" DeviceURIs if there is at least one "parallel:/" DeviceURI
+                       // so that the "parallel:/" DeviceURI is used with preference.
+                       // The reason for this preference is that for my LaserJet 1220
+                       // which is accessible via "parallel:/dev/lp0" and
+                       // via "hp:/par/HP_LaserJet_1220?device=/dev/parport0"
+                       // it does not work for the "hp:/par/" DeviceURI and in /var/log/messages there is
+                       // ... parport0: io/hpmud/pp.c 517: compat_write_data transfer stalled
+                       // ... parport0: io/hpmud/musb.c 1339: unable to write data
+                       //     hp:/par/HP_LaserJet_1220?device=/dev/parport0: Resource temporarily unavailable
+                       // so that the generic "parallel:/" DeviceURI seems to be the better fail-safe default.
+                       // It should not happen that a "hp:/par/" DeviceURI is skipped without
+                       // having a matching  generic "parallel:/" DeviceURI available.
+                       // The "hp:/par/" DeviceURI is still available via "MoreConnections".
+                       if( "hp:/par/" == tolower( substring( uri, 0, 8 ) )
+                           && parallel_uri_exists
+                         )
+                       { y2milestone( "skipped 'hp:/par/' DeviceURI '%1'", uri );
+                       }
+                       else
+                       { // Add trailing spaces because the current YaST UI
+                         // has almost no additional space between table columns
+                         // in partitcular not where the widest entry in a column is:
+                         connection_items = add( connection_items, `item( `id( connections_index ),
+                                                                          model + " ",
+                                                                          uri + " ",
+                                                                          info
+                                                                        )
+                                               );
+                       }
                      }
                    }
                  }
