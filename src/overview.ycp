@@ -104,8 +104,8 @@ term widgetOverview = `VBox
                                        Label::AddButton()
                                      ),
                           `PushButton( `id(`edit),
-                                       // PushButton label to modify an already configured print queue:
-                                       _("&Configure")),
+                                       Label::EditButton()
+                                     ),
                           `PushButton( `id(`delete),
                                        Label::DeleteButton()
                                      ),
@@ -355,7 +355,8 @@ symbol handleOverview( string key, map event )
   UI::ChangeWidget( `delete, `Enabled, Printer::selected_queues_index >= 0 );
 
   if( `delete == event["ID"]:nil && "Activated" == event["EventReason"]:"" )
-  { string queue_name = Printer::queues[selected_queue_index,"name"]:"";
+  { // Delete ' characters because they are used for quoting in the bash commandlines below:
+    string queue_name = deletechars( Printer::queues[selected_queue_index,"name"]:"", "'" );
     if( "" == queue_name )
     { Popup::AnyMessage( // Header of a Popup::AnyMessage when no queue was selected from the list:
                          _("Nothing Selected"),
@@ -396,8 +397,8 @@ symbol handleOverview( string key, map event )
 
   if( `test == event["ID"]:nil && "Activated" == event["EventReason"]:"" )
   { y2milestone( "printing test page" );
-    string queue_name = "";
-    queue_name = Printer::queues[selected_queue_index,"name"]:"";
+    // Delete ' characters because they are used for quoting in the bash commandlines below:
+    string queue_name = deletechars( Printer::queues[selected_queue_index,"name"]:"", "'" );
     if( "" == queue_name )
     { Popup::AnyMessage( // Header of a Popup::AnyMessage when no queue was selected from the list:
                          _("Nothing Selected"),
@@ -465,11 +466,16 @@ symbol handleOverview( string key, map event )
         }
       }
     }
+    string testprint_job_title = "YaST2testprint_" + queue_name;
     // Do not enforce to talk to the cupsd on localhost when submiting the testpage
     // because testpage printing must also work for a "client-only" config:
     if( ! Printerlib::ExecuteBashCommand( "/usr/bin/lp -d '"
                                           + queue_name
-                                          + "' -o page-label=\"Testprint_from_$(hostname)\" /usr/share/cups/data/testprint.ps"
+                                          + "' -t '"
+                                          + testprint_job_title
+                                          + "' -o page-label=\""
+                                          + queue_name
+                                          + "_testprint_from_$(hostname)\" /usr/share/cups/data/testprint.ps"
                                         )
       )
     { Popup::ErrorDetails( sformat( // Message of a Popup::ErrorDetails
@@ -593,7 +599,8 @@ symbol handleOverview( string key, map event )
   }
 
   if( `edit == event["ID"]:nil && event["EventReason"]:"" == "Activated" )
-  { string queue_name = Printer::queues[selected_queue_index,"name"]:"";
+  { // Delete ' characters because they are used for quoting in the bash commandlines below:
+    string queue_name = deletechars( Printer::queues[selected_queue_index,"name"]:"", "'" );
     if( "" == queue_name )
     { Popup::AnyMessage( // Header of a Popup::AnyMessage when no queue was selected from the list:
                          _("Nothing Selected"),
