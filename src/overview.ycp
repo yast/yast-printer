@@ -399,6 +399,8 @@ symbol handleOverview( string key, map event )
   { y2milestone( "printing test page" );
     // Delete ' characters because they are used for quoting in the bash commandlines below:
     string queue_name = deletechars( Printer::queues[selected_queue_index,"name"]:"", "'" );
+    // The URI scheme is the first word up to the ':' character in the URI:
+    string uri_scheme = splitstring( Printer::queues[selected_queue_index,"uri"]:"", ":" )[0]:"";
     if( "" == queue_name )
     { Popup::AnyMessage( // Header of a Popup::AnyMessage when no queue was selected from the list:
                          _("Nothing Selected"),
@@ -475,7 +477,7 @@ symbol handleOverview( string key, map event )
                                           + testprint_job_title
                                           + "' -o page-label=\""
                                           + queue_name
-                                          + "_testprint_from_$(hostname)\" /usr/share/cups/data/testprint.ps"
+                                          + ":YaST2testprint@$(hostname)\" /usr/share/cups/data/testprint.ps"
                                         )
       )
     { Popup::ErrorDetails( sformat( // Message of a Popup::ErrorDetails
@@ -513,8 +515,8 @@ symbol handleOverview( string key, map event )
       // This helps in usual cases (in particular when a good driver is used)
       // if something had messed up for an actively printing job but
       // unfortunately there is no option for the "cancel" command
-      // which lets the cupsd immediatelly kill the backend process
-      // as emergency brake when e.g. a wrong driver lets the printer
+      // which lets the cupsd kill the backend process as emergency brake
+      // when something is really wrong e.g. a wrong driver lets the printer
       // spit out zillions of sheets with nonsense characters.
       // When this command fails for whatever reason, it is a safe fallback
       // to assume that there are no pending jobs in the queue:
@@ -547,6 +549,36 @@ symbol handleOverview( string key, map event )
                                         ),
                                  Printerlib::result["stderr"]:""
                                );
+          }
+          // Deal with the backend process regardless whether or not
+          // the above cancel command was successful because
+          // killing the backend process is an emergency brake
+          // when something is really wrong:
+          string backend_is_running_commandline = "ps -C '"
+                                                  + uri_scheme
+                                                  + "' -o pid=,args= | grep '"
+                                                  + testprint_job_title
+                                                  + "'";
+          // Do nothing to be on the safe side if the next command fails for whatever reason:
+          if( Printerlib::ExecuteBashCommand( backend_is_running_commandline ) )
+          { // A matching backend process is running.
+            // Sleep 10 seconds to let the backend process terminate orderly
+            // when the filters have finished because of the above cancel command.
+            // There is no user feedback while waiting here because I assume that
+            // the user expects that it takes a bit of time to delete all pending jobs.
+            sleep( 10000 );
+            if( Printerlib::ExecuteBashCommand( backend_is_running_commandline ) )
+            { // A matching backend process is still running.
+              y2milestone( "Still running backend process to be killed: '%1'", Printerlib::result["stdout"]:"" );
+              // Kill the backend process:
+              Printerlib::ExecuteBashCommand( backend_is_running_commandline
+                                              + " | cut -s -d ' ' -f1 | head -n 1 | tr -d -c '[:digit:]'"
+                                            );
+              string backend_pid = Printerlib::result["stdout"]:"";
+              if( "" != backend_pid )
+              { Printerlib::ExecuteBashCommand( "kill -9 '" + backend_pid + "'" );
+              }
+            }
           }
         }
       }

@@ -39,9 +39,6 @@ import "Progress";
 import "Summary";
 import "Popup";
 import "Printerlib";
-import "Mode";
-import "Stage";
-import "Service";
 import "SuSEFirewall";
 
 /**
@@ -655,28 +652,6 @@ global boolean Read()
   // Therefore try to install cups but because for a "client-only" config
   // only cups-client is required, proceed even if cups is not installed:
   Printerlib::TestAndInstallPackage( "cups", "install" );
-  // Only in the second stage of the system installation make sure that a local cupsd is running
-  // because it is needed for automated queue setup during system installation
-  // see https://bugzilla.novell.com/show_bug.cgi?id=418585
-  // Note that otherwise a local cupsd is not required (e.g. when it is a client-only setup).
-  // There are various checks in each individual case whether or not a local cupsd is required.
-  // E.g. it is required to "Add" a local queue or to "Share Printers" (i.e. share local queues).
-  if( Mode::installation()
-      && Stage::cont()
-    )
-  { if( Service::Status( "cups" ) != 0 )
-    { Service::Start( "cups" );
-      // I don't know what to do in the second stage of the system installation
-      // when it fails to start the cupsd (should I show an error popup ?).
-      // Therefore a failure is currently simply ignored.
-      // Furthermore shouldn't it wait here until the cupsd is actually accessible
-      // i.e. until "lpstat -h localhost -r" returns successfully?
-      // See the Printerlib::GetAndSetCupsdStatus function.
-      // In particular for the very first start of the cupsd it may take several seconds
-      // (up to more than a minute on a slow machine) until it is actually accessible,
-      // compare https://bugzilla.novell.com/show_bug.cgi?id=429397
-    }
-  }
   // Progress last stage (progress finished):
   if( Abort() ) return false;
   Progress::NextStage();
