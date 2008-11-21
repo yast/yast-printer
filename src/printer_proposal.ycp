@@ -57,195 +57,245 @@ if( func == "MakeProposal" )
   string warning = nil;
   symbol warning_level = nil;
   boolean force_reset = param["force_reset"]:false;
-
   if( force_reset || ! Printer::proposal_valid )
   { Printer::proposal_valid = true;
-    boolean progress_orig = Progress::set( false );
-    Printer::Read();
-    Progress::set( progress_orig );
+    // Do not call Printer::Read() here to
+    // avoid that the hardware proposal asks the user
+    // to install the packages cups-client and cups, see
+    // https://bugzilla.novell.com/show_bug.cgi?id=445719#c13
+    //boolean progress_orig = Progress::set( false );
+    //Printer::Read();
+    //Progress::set( progress_orig );
+    y2milestone("Not calling Printer::Read() to avoid that the proposal asks to install cups-client and cups.");
   }
-
-  // Propose configuration for each local printer
+  // Propose configuration for each local printer:
   // TODO: replace by cups-autoconfig
-
-  // Determine whether or not it is currently a real client-only config
-  // (i.e. a ServerName != "localhost/127.0.0.1" in /etc/cups/client.conf)
-  // and ignore when it fails (i.e. use the fallback value silently):
-  Printerlib::DetermineClientOnly();
-  // Skip automated queue setup when it is a client-only config:
-  if( ! Printerlib::client_only )
-  { // Determine whether or not a local cupsd is accessible:
-    if( ! Printerlib::GetAndSetCupsdStatus( "" ) )
-    { // Only in the second stage of the system installation
-      // try to make silently sure that a local cupsd is running
-      // (i.e. start the cupsd without user confirmation)
-      // because it is needed for automated queue setup
-      // see https://bugzilla.novell.com/show_bug.cgi?id=418585
-      // Note that because of Mode::installation() this happens only
-      // if we are doing a fresh installation (but e.g. not for an update)
-      // and because of Stage::cont() we are continuing the installation
-      // in the target system (but we are e.g. not in the inst-sys system)
-      // so that it should be sufficiently safe to (re)-start and enable
-      // the cupsd without user confirmation here:
-      if( Mode::installation() && Stage::cont() )
-      { y2milestone("Silently start and enable the cupsd because we are continuing a fresh installation in the target system.");
-        if( Service::Status( "cups" ) != 0 )
-        { Service::Start( "cups" );
+  // Check if the packages cups-client and cups are installed
+  // and skip the automated queue setup if one of them is missing, see
+  // https://bugzilla.novell.com/show_bug.cgi?id=445719#c13
+  // If cups-client is missing, it would run into an endless sequence of errors.
+  // If cups is missing, theer can be no local running cupsd which is
+  // mandatory to set up local print queues.
+  if( ! Printerlib::TestAndInstallPackage( "cups-client", "installed" ) )
+  { y2milestone("Skipped automated queue setup because the package cups-client is not installed.");
+    proposal = [ _("Cannot configure printing (required package cups-client is not installed).") ];
+  }
+  else
+  { if( ! Printerlib::TestAndInstallPackage( "cups", "installed" ) )
+    { y2milestone("Skipped automated queue setup because the package cups is not installed.");
+      proposal = [ _("Cannot configure local printers (required package cups is not installed).") ];
+    }
+    else
+    { // Determine whether or not it is currently a real client-only config
+      // (i.e. a ServerName != "localhost/127.0.0.1" in /etc/cups/client.conf)
+      // and ignore when it fails (i.e. use the fallback value silently):
+      Printerlib::DetermineClientOnly();
+      // Skip automated queue setup when it is a client-only config:
+      if( Printerlib::client_only )
+      { y2milestone("Skipped automated queue setup because it is a client-only config.");
+        proposal = [ sformat( _("No local printer accessible (using remote CUPS server '%1' for printing)."),
+                              Printerlib::client_conf_server_name
+                            )
+                   ];
+      }
+      else
+      { // Determine whether or not a local cupsd is accessible:
+        if( ! Printerlib::GetAndSetCupsdStatus( "" ) )
+        { // Only in the second stage of the system installation
+          // try to make silently sure that a local cupsd is running
+          // (i.e. start the cupsd without user confirmation)
+          // because it is needed for automated queue setup
+          // see https://bugzilla.novell.com/show_bug.cgi?id=418585
+          // Note that because of Mode::installation() this happens only
+          // if we are doing a fresh installation (but e.g. not for an update)
+          // and because of Stage::cont() we are continuing the installation
+          // in the target system (but we are e.g. not in the inst-sys system)
+          // so that it should be sufficiently safe to (re)-start and enable
+          // the cupsd without user confirmation here:
+          if( Mode::installation() && Stage::cont() )
+          { y2milestone("Silently start and enable the cupsd because we are continuing a fresh installation in the target system.");
+            if( Service::Status( "cups" ) != 0 )
+            { Service::Start( "cups" );
+            }
+            else
+            { // Restart the cupsd when it seems to run according to Service::Status
+              // but actually it is not accessible according to GetAndSetCupsdStatus.
+              // For example the cupsd may run but failed to bind to the IPP port 631
+              // because whatever other service grabbed this port for a short while
+              // so that a restart could help here (a known ypbind/portmapper issue):
+              Service::Restart( "cups" );
+            }
+            Service::Enable( "cups" );
+            // Wait until the cupsd is actually accessible.
+            // In particular for the very first start of the cupsd it may take several seconds
+            // (up to more than a minute on a slow machine) until it is actually accessible,
+            // compare https://bugzilla.novell.com/show_bug.cgi?id=429397
+            // Sleep one second in any case so that the new started cupsd can become ready to operate:
+            sleep( 1000 );
+            if( ! Printerlib::GetAndSetCupsdStatus( "" ) )
+            { // The cupsd is not yet accessible.
+              // Sleep 9 seconds so that the new started cupsd has more time to become ready to operate:
+              sleep( 9000 );
+            }
+            if( ! Printerlib::GetAndSetCupsdStatus( "" ) )
+            { // After waiting 10 seconds without user notification, become verbose now.
+              // Wait half a minute for a new started cupsd:
+              Popup::TimedMessage( _("Started the CUPS daemon.\nWaiting half a minute so that it is ready to operate..."),
+                                   30
+                                 );
+            }
+            if( ! Printerlib::GetAndSetCupsdStatus( "" ) )
+            { // It can take up to a few minutes when a cupsd is started
+              // for the very first time (e.g. on a new installed system)
+              // until the cupsd is actually ready to operate.
+              // E.g. because parsing of thousands of PPDs may need much time.
+              // Therefore enforce waiting one minute now.
+              // (Plain busy message without title.)
+              Popup::ShowFeedback( "", _("The CUPS daemon in not yet accessible.\nWaiting one minute so that it is ready to operate...") );
+              sleep( 60000 );
+              Popup::ClearFeedback();
+            }
+          }
+        }
+        // Skip automated queue setup when the cupsd is not accessible up to now.
+        // A special case is when the cupsd does not listen on the official IANA IPP port (631).
+        // Then Printerlib::GetAndSetCupsdStatus("") returns false because it calls
+        // "lpstat -h localhost -r" which fails ("-h localhost:port" would have to be used).
+        // The YaST printer modue does not support when the cupsd listens on a non-official port
+        // so that also in this special case no automated queue setup is done.
+        if( ! Printerlib::GetAndSetCupsdStatus( "" ) )
+        { y2milestone("Skipped automated queue setup because there is no local cupsd accessible (via port 631).");
+          proposal = [ _("Cannot configure local printers (no local cupsd accessible).") ];
         }
         else
-        { // Restart the cupsd when it seems to run according to Service::Status
-          // but actually it is not accessible according to GetAndSetCupsdStatus.
-          // For example the cupsd may run but failed to bind to the IPP port 631
-          // because whatever other service grabbed this port for a short while
-          // so that a restart could help here (a known ypbind/portmapper issue):
-          Service::Restart( "cups" );
-        }
-        Service::Enable( "cups" );
-        // Wait until the cupsd is actually accessible.
-        // In particular for the very first start of the cupsd it may take several seconds
-        // (up to more than a minute on a slow machine) until it is actually accessible,
-        // compare https://bugzilla.novell.com/show_bug.cgi?id=429397
-        // Sleep one second in any case so that the new started cupsd can become ready to operate:
-        sleep( 1000 );
-        if( ! Printerlib::GetAndSetCupsdStatus( "" ) )
-        { // The cupsd is not yet accessible.
-          // Sleep 9 seconds so that the new started cupsd has more time to become ready to operate:
-          sleep( 9000 );
-        }
-        if( ! Printerlib::GetAndSetCupsdStatus( "" ) )
-        { // After waiting 10 seconds without user notification, become verbose now.
-          // Wait half a minute for a new started cupsd:
-          Popup::TimedMessage( _("Started the CUPS daemon.\nWaiting half a minute so that it is ready to operate..."),
-                               30
-                             );
-        }
-        if( ! Printerlib::GetAndSetCupsdStatus( "" ) )
-        { // It can take up to a few minutes when a cupsd is started
-          // for the very first time (e.g. on a new installed system)
-          // until the cupsd is actually ready to operate.
-          // E.g. because parsing of thousands of PPDs may need much time.
-          // Therefore enforce waiting one minute now.
-          // (Plain busy message without title.)
-          Popup::ShowFeedback( "", _("The CUPS daemon in not yet accessible.\nWaiting one minute so that it is ready to operate...") );
-          sleep( 60000 );
-          Popup::ClearFeedback();
-        }
-      }
-    }
-    // Skip automated queue setup when the cupsd is not accessible up to now.
-    // A special case is when the cupsd does not listen on the official IANA IPP port (631).
-    // Then Printerlib::GetAndSetCupsdStatus("") returns false because it calls
-    // "lpstat -h localhost -r" which fails ("-h localhost:port" would have to be used).
-    // The YaST printer modue does not support when the cupsd listens on a non-official port
-    // so that also in this special case no automated queue setup is done.
-    if( Printerlib::GetAndSetCupsdStatus( "" ) )
-    { list<term> detected_printers = filter( term row,
-                                             (list<term>)Printer::ConnectionItems( "BasicAddDialog" ),
-                                             { return( ! issubstring( String::CutBlanks(row[1]:""), "Unknown" ) );
-                                             }
-                                           );
-      y2milestone( "Detected local printers: %1", detected_printers );
-      if( size(detected_printers) > 0 )
-      { y2milestone("Local printers detected, will set up queues for them:");
-        list<string> already_set_up_uris = [];
-        // An empty list of autodetected queues is the fallback which is correct:
-        Printer::AutodetectQueues();
-        foreach( map< string, string > queue,
-                 Printer::queues,
-                 { if( "" != queue["uri"]:"" )
-                   { already_set_up_uris = add( already_set_up_uris, queue["uri"]:"" );
-                   }
-                 }
-               );
-        foreach( term printer,
-                 detected_printers,
-                 { string model = String::CutBlanks(printer[1]:"");
-                   if( "" != model && "unknown" != tolower( model ) )
-                   { string uri = String::CutBlanks(printer[2]:"");
-                     if( "" != uri )
-                     { y2internal("Setting up a queue for URI '%1'", uri);
-                       string queue_name = Printer::NewQueueName( tolower( model ) );
-                       if( contains( already_set_up_uris, uri ) )
-                       { y2internal("Skipping printer '%1' because a queue with the same URI already exists.", printer);
-                         continue;
+        { list<term> detected_printers = filter( term row,
+                                                 (list<term>)Printer::ConnectionItems( "BasicAddDialog" ),
+                                                 { // Printer::ConnectionItems does not return entries
+                                                   // with an empty URI (i.e. no need to test this here)
+                                                   // but Printer::ConnectionItems adds trailing spaces
+                                                   // because the current YaST UI has almost no additional
+                                                   // space between table columns:
+                                                   string model = String::CutBlanks(row[1]:"");
+                                                   return( ! issubstring( tolower( model ), "unknown" ) );
+                                                 }
+                                               );
+          y2milestone( "Detected local printers: %1", detected_printers );
+          if( size(detected_printers) < 1 )
+          { y2milestone("Skipped automated queue setup because there is no local printer detected.");
+            proposal = [ _("No local printer detected.") ];
+          }
+          else
+          { y2milestone("Local printers detected, will set up queues for them:");
+            list<string> already_set_up_uris = [];
+            // An empty list of autodetected queues is the fallback which is correct:
+            Printer::AutodetectQueues();
+            foreach( map< string, string > queue,
+                     Printer::queues,
+                     { if( "" != queue["uri"]:"" )
+                       { already_set_up_uris = add( already_set_up_uris, queue["uri"]:"" );
                        }
-                       y2milestone("Proposed queue name: %1", queue_name);
-                       string driver_filter_string = "^" + filterchars( tolower( model ), Printer::lower_alnum_chars );
-                       if( "^" != driver_filter_string )
-                       { list drivers = Printer::DriverItems( driver_filter_string, true );
-                         if( size(drivers) > 0 )
-                         { y2internal("Available drivers: %1", drivers);
-                           y2internal("Selected driver: %1", drivers[0]:nil);
-                           Printer::selected_ppds_index = drivers[0,0,0]:-1;
-                           Printer::selected_connections_index = printer[0,0]:-1;
-                           if( Printer::AddQueue( queue_name ) )
-                           { already_set_up_uris = add( already_set_up_uris, uri );
-                             // Autodetect queues again so that Printer::NewQueueName
-                             // can compare with existing queue names but ignore whatever failures
-                             // (an empty list of autodetected queues is the fallback result):
-                             Printer::AutodetectQueues();
+                     }
+                   );
+            foreach( term printer,
+                     detected_printers,
+                     { // Printer::ConnectionItems adds trailing spaces because the current YaST UI
+                       // has almost no additional space between table columns:
+                       string model = String::CutBlanks(printer[1]:"");
+                       if( "" != model && "unknown" != tolower( model ) )
+                       { string uri = String::CutBlanks(printer[2]:"");
+                         if( "" != uri )
+                         { y2internal("Setting up a queue for URI '%1'", uri);
+                           string queue_name = Printer::NewQueueName( tolower( model ) );
+                           if( contains( already_set_up_uris, uri ) )
+                           { y2internal("Skipping printer '%1' because a queue with the same URI already exists.", printer);
+                             continue;
                            }
-                         }
-                         else
-                         { y2error("No available drivers for printer %1", printer);
+                           y2milestone("Proposed queue name: %1", queue_name);
+                           string driver_filter_string = "^" + filterchars( tolower( model ), Printer::lower_alnum_chars );
+                           if( "^" != driver_filter_string )
+                           { list drivers = Printer::DriverItems( driver_filter_string, true );
+                             if( size(drivers) > 0 )
+                             { y2internal("Available drivers: %1", drivers);
+                               y2internal("Selected driver: %1", drivers[0]:nil);
+                               Printer::selected_ppds_index = drivers[0,0,0]:-1;
+                               Printer::selected_connections_index = printer[0,0]:-1;
+                               if( Printer::AddQueue( queue_name ) )
+                               { already_set_up_uris = add( already_set_up_uris, uri );
+                                 // Autodetect queues again so that Printer::NewQueueName
+                                 // can compare with existing queue names but ignore whatever failures
+                                 // (an empty list of autodetected queues is the fallback result):
+                                 Printer::AutodetectQueues();
+                               }
+                             }
+                             else
+                             { y2error("No available drivers for printer %1", printer);
+                             }
+                           }
                          }
                        }
                      }
+                   );
+          }
+          foreach( term queue,
+                   (list<term>)Printer::QueueItems( true, false ),
+                   { // Printer::QueueItems adds trailing spaces because the current YaST UI
+                     // has almost no additional space between table columns:
+                     string name = String::CutBlanks(queue[2]:"");
+                     string description = String::CutBlanks(queue[3]:"");
+                     proposal = add( proposal, name + ": " + description );
                    }
-                 }
-               );
+                 );
+        }
       }
-      else
-      { y2milestone("No local printers detected");
-      }
-      foreach( term queue,
-               (list<term>)Printer::QueueItems( true, false ),
-               { // Each proposal entry is a string of queue name and description:
-                 proposal = add(proposal, queue[2]:"" + ": " + queue[3]:"");
-               }
-             );
     }
   }
-
   proposal = filter( string p, proposal, { return p != ""; } );
-  if( size (proposal) == 0 )
-  { proposal = [ _("No printer queue configured.") ];
+  if( size(proposal) == 0 )
+  { proposal = [ _("No local printer configured.") ];
   }
-
   ret = $[ "raw_proposal" : proposal,
            "warning_level" : warning_level,
            "warning" : warning,
          ];
 }
-
 /* run the module */
-else if(func == "AskUser") {
-    map stored = Printer::Export();
-    symbol seq = (symbol) WFM::CallFunction("printer", [.propose]);
-    if(seq != `next) Printer::Import(stored);
-    y2debug("stored=%1",stored);
-    y2debug("seq=%1",seq);
-    ret = $[
-	"workflow_sequence" : seq
-    ];
+else if(func == "AskUser")
+{ // Call Printer::Read() here (compare "MakeProposal" above)
+  // to make sure that when the full printer module is launched
+  // it asks the user to install the packages cups-client and cups:
+  boolean progress_orig = Progress::set( false );
+  Printer::Read();
+  Progress::set( progress_orig );
+  // TODO FIXME: Printer::Export exists but there is nothing implemented
+  map stored = Printer::Export();
+  symbol seq = (symbol) WFM::CallFunction("printer", [.propose]);
+  // TODO FIXME: Printer::Import exists but there is nothing implemented
+  if(seq != `next) Printer::Import(stored);
+  y2debug("stored=%1",stored);
+  y2debug("seq=%1",seq);
+  ret = $[ "workflow_sequence" : seq ];
 }
 /* create titles */
-else if(func == "Description") {
-    ret = $[
-	/* Rich text title for Printer in proposals */
-	"rich_text_title" : _("Printer"),
-	/* Menu title for Printer in proposals */
-	"menu_title" : _("&Printer"),
-	"id" : "printer",
-    ];
+else if(func == "Description")
+{ ret = $[ /* Rich text title for Printer in proposals */
+           "rich_text_title" : _("Printer"),
+           /* Menu title for Printer in proposals */
+           "menu_title" : _("&Printer"),
+           "id" : "printer",
+         ];
 }
 /* write the proposal */
-else if(func == "Write") {
-    Printer::Write();
+else if(func == "Write")
+{ // There is no need to call Printer::Write() here because
+  // it does actually nothing except to exit verbosely, see
+  // http://en.opensuse.org/YaST/Development/Printer_Enhancement#Basic_Implementation_Principles:
+  // for background information.
+  //Printer::Write();
+  y2milestone("No need to call Printer::Write() because it does nothing.");
 }
 /* unknown function */
-else {
-    y2error("unknown function: %1", func);
+else
+{ y2error("unknown function: %1", func);
 }
 
 /* Finish */
@@ -256,3 +306,4 @@ return ret;
 
 /* EOF */
 }
+
