@@ -59,7 +59,7 @@ term getNetworkContent(list<string>text){
  term content=`VBox(
         `HBox(
 		//TRANSLATORS: Text entry to fill IP or hostname of remote server
-	      `InputField(`id(`hostname), _("IP Address or Host Name")),
+	      `ComboBox(`id(`hostname), `opt(`editable), _("IP Address or Host Name")),
 		//TRANSLATORS: Label for menu to search for remote servers
 	      `MenuButton(_("Look Up"),
 	       [
@@ -119,12 +119,24 @@ void changeSettingsDialog(symbol selected){
  // print via
   case(`smb):
        content=`VBox(
+		`HBox(
 		//TRANSLATORS: Text entry for remote server name
-        `InputField(`id(`hostname), _("Server (NetBIOS Host Name)")),
+		`ComboBox(`id(`hostname), `opt(`editable), _("Server (NetBIOS Host Name)")),
+		//TRANSLATORS: Label for menu to search for remote servers
+		      `MenuButton(_("Look Up"),
+			[
+			`item(`id(`scan), _("Scan for samba printers")),
+			//TRANSLATORS: Buttonto search for remote servers
+			`item(`id(`scan_all), _("Look Up for All Hosts"))
+			])
+		),
 		//TRANSLATORS: Text entry for printer name
         `InputField(`id(`printer), _("Printer (Share Name)")),
+//	`HBox(
 		//TRANSLATORS: Text entry for samba domain
-        `InputField(`id(`domain), _("Workgroup (Domain Name)")),
+	`ComboBox(`id(`domain), `opt(`editable), _("Workgroup (Domain Name)")),
+//		PushButton(`id(`scan_domain), _("Scan for Windows Share Domains"))
+//	)
 	//TRANSLATORS: Frame label for authentication
         `Frame(_("Authenticate As"), `VBox(
 	//TRANSLATORS: Text entry for username (authentication)
@@ -144,11 +156,11 @@ void changeSettingsDialog(symbol selected){
 	content=`VBox(
         `HBox(
 		//TRANSLATORS: Text entry for IP or hostname of remote server
-	      `InputField(`id(`hostname), _("IP Address or Host Name")),
+	      `ComboBox(`id(`hostname), `opt(`editable), _("IP Address or Host Name")),
 		//TRANSLATORS: Label for menu to search for remote servers
 	      `MenuButton(_("Look Up"),
 	       [
-		`item(`id(`scan_ipp), _("Scan for IPP Servers")),
+		`item(`id(`scan), _("Scan for IPP Servers")),
 		`item(`id(`scan_broadcast), _("Scan for IPP Broadcasts")),
 		`item(`id(`scan_all), _("Look Up for All Hosts"))
 	       ]
@@ -300,7 +312,7 @@ boolean validateSettingsDialog(symbol type){
   case(`ipp):
 	connectionURI=(string) UI::QueryWidget(`uri, `Value);
 	if (size(connectionURI)>0) valid=true;
-		else y2error("Couldn't be empty!");
+		else Popup::Error(_("Couldn't be empty!"));
 	break;
   case(`smb):
 	map<string, any> smb=$[
@@ -312,7 +324,7 @@ boolean validateSettingsDialog(symbol type){
 			];
 		connectionURI="smb://";
 		if (size(smb["hostname"]:"")==0 || size(smb["printer"]:"")==0){
-		 y2error("Servername and printer couldn't be empty!");
+		 Popup::Error(_("Servername and printer couldn't be empty!"));
 		} else {
 		 if (size(smb["user"]:"")>0 && size(smb["pass"]:"")>0){
 		  connectionURI=sformat("%1%2:%3@", connectionURI, smb["user"]:"", smb["pass"]:"");
@@ -331,7 +343,7 @@ boolean validateSettingsDialog(symbol type){
 		 connectionURI=sformat("socket://%1:%2", tcp["hostname"]:"", tcp["port"]:"");
 		 valid=true;
 		}else{
-		 y2error("Servername and port couldn't be empty!");
+		 Popup::Error(_("Servername and port couldn't be empty!"));
 		}
 	break;
   case(`lpr):
@@ -344,7 +356,7 @@ boolean validateSettingsDialog(symbol type){
 		 connectionURI=sformat("lpd://%1/%2", lpd["hostname"]:"", lpd["queue"]:"");
 		 valid=true;
 		}else{
-		 y2error("Servername and queue name couldn't be empty!");
+		 Popup::Error(_("Servername and queue name couldn't be empty!"));
 		}
 	break;
   case(`cups):
@@ -356,7 +368,7 @@ boolean validateSettingsDialog(symbol type){
 		 connectionURI=sformat("ipp://%1/printers/%2", cups["hostname"]:"", cups["queue"]:"");
 		 valid=true;
 		}else{
-		 y2error("Servername and queue name couldn't be empty!");
+		 Popup::Error(_("Servername and queue name couldn't be empty!"));
 		}
 	break;
   case(`ipx):
@@ -369,7 +381,7 @@ boolean validateSettingsDialog(symbol type){
 		y2internal("novell ipx map %1", ipx);
 		connectionURI="novell://";
 		if (size(ipx["hostname"]:"")==0 || size(ipx["printer"]:"")==0){
-		 y2error("Servername and printer couldn't be empty!");
+		 Popup::Error(_("Servername and printer couldn't be empty!"));
 		} else {
 		 if (size(ipx["user"]:"")>0 && size(ipx["pass"]:"")>0){
 		  connectionURI=sformat("%1%2:%3@", connectionURI, ipx["user"]:"", ipx["pass"]:"");
@@ -387,7 +399,7 @@ boolean validateSettingsDialog(symbol type){
 			];
 		y2internal("novell ipx map %1", beh);
 		if (size(beh["uri"]:"")==0 || size(beh["attempts"]:"")==0 || size(beh["delay"]:"")==0){
-		 y2error("Servername and printer couldn't be empty!");
+		 Popup::Error("Servername and printer couldn't be empty!");
 		} else {
 		  connectionURI=sformat("beh://%1/%2/%3/%4", (beh["dont_disable"]:false ? "1" : "0"), beh["attempts"]:"0", beh["delay"]:"", beh["uri"]:"0");
 		 valid=true;
@@ -399,7 +411,7 @@ boolean validateSettingsDialog(symbol type){
 	 connectionURI=sformat("program:/%1", pipe);
 	 valid=true;
 	}
-		else y2error("Couldn't be empty!");
+		else Popup::Error(_("Couldn't be empty!"));
 	break;
   default:
 	y2warning("Unknown type %1", type);
@@ -407,6 +419,112 @@ boolean validateSettingsDialog(symbol type){
  }
  if (!valid) connectionURI="";
  return valid;
+}
+
+void scanForServers(symbol selected, boolean all){
+list<string> hosts = [];
+if (all) hosts = (list<string>)SCR::Read (.net.hostnames);
+ else
+  switch (selected){
+   case (`tcp):
+	hosts=(list<string>)SCR::Read (.net.hostnames, 9100);
+	break;
+   case (`smb):
+	hosts=(list<string>)SCR::Read (.net.hostnames.samba);
+	break;
+   case (`lpr):
+   case (`lpd):
+	hosts=(list<string>)SCR::Read (.net.hostnames, 515);
+	break;
+   case (`cups):
+   case (`ipp):
+            hosts = (list<string>)SCR::Read (.net.hostnames, 631);
+/*
+            hosts = (list<string>)filter (string h, hosts, ``{
+                list queues = (list<string>)SCR::Read (.cups.remote, h);
+                return size (queues) > 0;
+            });
+*/
+	break;
+   default:
+	y2warning("Unknown value: %1", selected);
+  }
+ UI::ChangeWidget(`hostname, `Items, hosts);
+ y2milestone("scanForServers selected:%1", selected);
+ y2milestone("hosts %1", hosts);
+
+}
+
+boolean testQueue(symbol selected){
+ boolean test=true;
+ string host=(string)UI::QueryWidget(`hostname, `Value);
+ integer ping_res = (integer) SCR::Execute(.target.bash, sformat("ping -c 1 -w 5 %1", host));
+ y2milestone("ping %1 : %2", host, ping_res);
+ if(ping_res!=0) {
+		 Popup::Error(sformat(_("Host %1 unreachable!"), host));
+		 test=false;
+		 return false;
+		}
+
+ string port=(string)UI::QueryWidget(`port, `Value);
+ integer port_test=-1;
+ integer port_test_res=-1;
+ switch(selected){
+  case (`tcp):
+	port_test = (integer) SCR::Execute(.target.bash, sformat("netcat -w 5 -z %1 %2 2>&1", host, port));
+	y2internal("Test port result : %1", port_test);
+	if (port_test!=0){
+	 Popup::Error(sformat("%1 %2", _("No connection possible to port"), port));
+	 test=false;
+	 return false;
+	}
+	port_test_res = (integer) SCR::Execute(.target.bash, sformat("echo -en \"\\r\" | netcat -w 5 %1 %2 2>&1", host, port));
+	y2internal("Test connection accept result : %1", port_test_res);
+	if(port_test_res!=0){
+	 Popup::Error(sformat("%1 %2 %3 %4 %5", _("Port"),  port,  _("on host"),  host, _("doesn't accepts data")));
+	 test=false;
+	} else Popup::Message(_("Test OK"));
+	break;
+  case(`lpd):
+  case(`lpr):
+	string queue=port;
+	port="515";
+        port_test = (integer) SCR::Execute(.target.bash, sformat("netcat -w 5 -z %1 %2 2>&1", host, port));
+        y2internal("Test port result : %1", port_test);
+        if (port_test!=0){
+         Popup::Error(sformat("%1 %2", _("No connection possible to port"), port));
+         test=false;
+         return false;
+        }
+	map<string, any> available_port=(map<string, any>)SCR::Execute(.target.bash_output, "for I in 721 722 723 724 725 726 727 728 729 730 731; do fuser -n tcp $I &>/dev/null || { echo -n $I ; break ; } done");
+	y2milestone("available port %1", available_port);
+	map<string, any> test_lpd = (map<string, any>)SCR::Execute(.target.bash_output, sformat("
+TMP_IN=$(mktemp -u /tmp/lpd_test.in.XXXXXX)
+TMP_OUT=$(mktemp -u /tmp/lpd_test.out.XXXXXX)
+mkfifo $TMP_IN
+mkfifo $TMP_OUT
+netcat -w 1 -p %1 %2 %3 <$TMP_IN >$TMP_OUT 2>/dev/null &
+NETCAT_PID=$!
+{ sleep 5s ; kill $NETCAT_PID &>/dev/null ; } &
+
+RESULT=''
+{ echo -en \"\\002%4\\n\" ; \
+  RESULT=$(head --bytes=1 <$TMP_OUT | tr '\\000' '0') ; \
+  [ \"$RESULT\" = \"0\" ] && echo -en \"\\001\\n\" ; } >$TMP_IN
+
+rm $TMP_IN
+rm $TMP_OUT
+exit $RESULT
+",available_port["stdout"]:"", host, port, queue
+));
+	if (test_lpd["exit"]:-1==0) Popup::Message(_("Test OK"));
+		else{
+		 Popup::Error(test_lpd["stderr"]:"");
+		 test=false;
+		}
+	break;
+ }
+ return test;
 }
 
 boolean storeQueue(symbol selected){
@@ -424,15 +542,32 @@ any ret = nil;
 while(ret!=`abort && ret!=`back && ret!=`next){
  ret = UI::UserInput();
  symbol selected = (symbol)UI::QueryWidget(`tree_selection, `Value);
- if (ret == `tree_selection) changeSettingsDialog( selected );
- if (ret == `next){
-  if (validateSettingsDialog( selected )) {
-   y2milestone("Writing settings");
-   storeQueue( selected );
-  } else {
-	  y2error("Couldn't validate %1", selected);
-	  ret=nil;
-         }
+ switch( (symbol)ret ){
+  case(`tree_selection):
+			 changeSettingsDialog( selected );
+			 break;
+  case(`next):
+	  if (validateSettingsDialog( selected )) {
+	    y2milestone("Writing settings");
+	    storeQueue( selected );
+	   } else {
+		  y2error("Couldn't validate %1", selected);
+		  ret=nil;
+	         }
+		break;
+  case(`cancel):
+		return `abort;
+		break;
+  case(`scan_all):
+		scanForServers(selected, true);
+		break;
+  case(`scan):
+		scanForServers(selected, false);
+		break;
+  case(`test):
+		if (validateSettingsDialog(selected)) testQueue(selected);
+		break;
+  y2internal("ret %1", ret);
  }
 }
  return ret;
