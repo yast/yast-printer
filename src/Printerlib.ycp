@@ -82,14 +82,16 @@ global boolean ExecuteBashCommand( string bash_commandline )
  * and if yes then install it (Package::Install) if it is not yet installed or
  * remove the package (Package::Remove) if it is installed.
  * @param package_name string of the package name
- * @param package_name string of the action to be done (installed or install or remove).
+ * @param action string of the action to be done (installed or install or remove).
  * @return true on success
  */
 global boolean TestAndInstallPackage( string package_name, string action )
 { y2milestone( "TestAndInstallPackage '%1' with action '%2'", package_name, action );
   // Intentionally Package::Installed(package_name) is not used here
-  // because it does 'rpm -q' and if this fails 'rpm -q --whatprovides'
-  // but I am only interested in real package names here.
+  // because it does 'rpm -q' and if this fails it does 'rpm -q --whatprovides'
+  // but I am only interested in the result for the real package name here
+  // because alternatives would be handled in the upper-level functions
+  // (e.g. in the user dialogs) which call TestAndInstallPackage:
   if( "installed" == action )
   { if( ExecuteBashCommand( "rpm -q '" + package_name + "'" ) )
     { y2milestone( "TestAndInstallPackage: package '%1' is installed", result["stdout"]:package_name );
@@ -97,7 +99,7 @@ global boolean TestAndInstallPackage( string package_name, string action )
     }
     // The "%1" makes the YCP Parser happy, otherwise it shows the warning
     // "Format string is not constant, no parameter checking possible".
-    y2milestone( "TestAndInstallPackage: %1", result["stdout"]:"TestAndInstallPackage: package is not installed" );
+    y2milestone( "TestAndInstallPackage: %1", result["stdout"]:"package is not installed" );
     return false;
   }
   if( "install" == action )
@@ -177,14 +179,19 @@ global boolean TestAndInstallPackage( string package_name, string action )
     // (the user may have intentionally accepted whatever package conflict).
     // Furthermore Package::Remove(package_name) does additionally install
     // whatever other packages for example to "automatically solve" whatever
-    // kind of RPM soft requirements (Recommends) for other packages.
-    // I am only interested to remove exactly the one package which was specified
-    // and I am not interested to get whatever replacement package installed.
+    // kind of soft requirements (Recommends) for other packages.
+    // I am only interested to remove exactly the one package which was specified and
+    // I am not interested to get whatever replacement package installed automatically
+    // because alternatives and/or substitutes would be handled in the upper-level functions
+    // (e.g. in the user dialogs) which call TestAndInstallPackage.
     // Usually (i.e. in a openSUSE standard system) the packages which are removed here
     // do not have dependencies or the calling function removes dependant packages
     // in the right order (e.g. first hplip and then hplip-hpijs, see driveradd.ycp)
     // but the user might have installed whatever third-party packages
     // which could have dependencies to the package which should be removed here.
+    // Therefore there is a test if the removal would break RPM dependencies
+    // but intentionally it is not tested whether the removal
+    // would "break" whatever kind of soft requirements (Recommends).
     if( ! ExecuteBashCommand( "rpm -e --test '" + package_name + "'" )   )
     { // There is no Popup::ContinueCancelHeadlineDetails available.
       // Therefore the exact RPM message is shown via a separated Popup::ErrorDetails.
