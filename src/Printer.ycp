@@ -954,7 +954,8 @@ global list ConnectionItems( string connection_filter_string )
                        || "hp:/" == substring( uri, 0, 4 )
                        || "ConnectionWizardDialog" == class
                      )
-                   { // Skip "usb://HP/" DeviceURIs if there is at least one "hp:/usb/" DeviceURI
+                   { // Skip "usb://HP/" DeviceURIs if it was not created by the Connection Wizard
+                     // and if there is at least one "hp:/usb/" DeviceURI
                      // so that the "hp:/usb/" DeviceURI is used with preference.
                      // The "usb://HP/" DeviceURI is still available via "MoreConnections".
                      // It can happen that a "usb://HP/" DeviceURI is skipped
@@ -977,11 +978,13 @@ global list ConnectionItems( string connection_filter_string )
                      // which exact driver he selects manually for his particular model.
                      if( "usb://hp/" == tolower( substring( uri, 0, 9 ) )
                          && hp_usb_uri_exists
+                         && class != "ConnectionWizardDialog"
                        )
                      { y2milestone( "skipped 'usb://HP/' DeviceURI '%1'", uri );
                      }
                      else
-                     { // Skip "hp:/par/" DeviceURIs if there is at least one "parallel:/" DeviceURI
+                     { // Skip "hp:/par/" DeviceURIs if it was not created by the Connection Wizard
+                       // and if there is at least one "parallel:/" DeviceURI
                        // so that the "parallel:/" DeviceURI is used with preference.
                        // The reason for this preference is that for my LaserJet 1220
                        // which is accessible via "parallel:/dev/lp0" and
@@ -996,6 +999,7 @@ global list ConnectionItems( string connection_filter_string )
                        // The "hp:/par/" DeviceURI is still available via "MoreConnections".
                        if( "hp:/par/" == tolower( substring( uri, 0, 8 ) )
                            && parallel_uri_exists
+                           && class != "ConnectionWizardDialog"
                          )
                        { y2milestone( "skipped 'hp:/par/' DeviceURI '%1'", uri );
                        }
@@ -1586,11 +1590,27 @@ global list DriverItems( string driver_filter_string, boolean preselection )
         )
       { // Preselect the first entry and set selected_ppds_index accordingly.
         selected_ppds_index = sorted_driver_items[0,0,0]:-1;
-        sorted_driver_items[0] = `item( `id( selected_ppds_index ), driver_string, true );
+        // The first entry in a SelectionBox is always preselected in the GUI
+        // (it does not help to have all items in a SelectionBox with 'false' as third argument).
+        // Do not have this entry preselected (i.e. no 'true' as a third argument)
+        // because in the BasicModifyDialog the currently used driver is additionally prepended
+        // and then the currently used driver must be preselected by default because
+        // the currently used driver is then the very first entry in the SelectionBox.
         y2milestone( "Preselected driver: '%1'", driver_string );
       }
       // The specially sorted_driver_items list has a maximum of 20 entries which is o.k. for the log:
       y2milestone( "sorted_driver_items: %1", sorted_driver_items );
+      if( selected_ppds_index < 0 )
+      { // When no driver was preselected, prepend a dummy entry
+        // because the first entry in a SelectionBox is always preselected in the GUI
+        // (it does not help to have all items in a SelectionBox with 'false' as third argument).
+        // Do not have this dummy entry preselected (i.e. no 'true' as a third argument)
+        // because in the BasicModifyDialog the currently used driver is additionally prepended
+        // and then the currently used driver must be preselected by default because
+        // the currently used driver is then the very first entry in the SelectionBox.
+        sorted_driver_items = prepend( sorted_driver_items, `item( `id( -1 ), _("Select a driver.") ) );
+        y2milestone( "No driver preselected." );
+      }
       Popup::ClearFeedback();
       return sorted_driver_items;
     }
@@ -1604,18 +1624,18 @@ global list DriverItems( string driver_filter_string, boolean preselection )
                               { return tolower(one_item[1]:"") < tolower(another_item[1]:"");
                               }
                             );
-  Popup::ClearFeedback();
   if( selected_ppds_index < 0 )
   { // When no driver was preselected, prepend a dummy entry
     // because the first entry in a SelectionBox is always preselected in the GUI
     // (it does not help to have all items in a SelectionBox with 'false' as third argument).
     // Do not have this dummy entry preselected (i.e. no 'true' as a third argument)
-    // because in the BasicModifyDialog the currenlty used driver is additionally prepended
-    // and then the currenlty used driver must be preselected by default because
-    // the currenlty used driver is then the very first entry in the SelectionBox.
+    // because in the BasicModifyDialog the currently used driver is additionally prepended
+    // and then the currently used driver must be preselected by default because
+    // the currently used driver is then the very first entry in the SelectionBox.
     sorted_driver_items = prepend( sorted_driver_items, `item( `id( -1 ), _("Select a driver.") ) );
     y2milestone( "No driver preselected." );
   }
+  Popup::ClearFeedback();
   return sorted_driver_items;
 }
 
