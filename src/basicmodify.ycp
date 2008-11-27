@@ -627,16 +627,16 @@ any BasicModifyDialog()
           )
         { driver_filter_input_text = model;
           driver_filter_string = filterchars( tolower( model ), Printer::lower_alnum_chars );
-          if( Printer::connections[Printer::selected_connections_index,"class"]:"" != "ConnectionWizardDialog" )
-          { // Match at the beginning only if the connection is not from the connection wizard:
-            driver_filter_string = "^" + driver_filter_string;
-          }
+          // Match at the beginning also if the connection is from the connection wizard
+          // because here the model is only the manufacturer name (or "Generic" or "Raw Queue")
+          // so that match at the beginning is exactly right for connections from the connection wizard:
+          driver_filter_string = "^" + driver_filter_string;
         }
       }
       else
       { // When the currently used connection is re-selected,
         // derive the driver_filter_string from the NickName of the currently used PPD
-        // or derive the driver_filter_string from the  description of the currently used connection:
+        // or derive the driver_filter_string from the description of the currently used connection:
         if( "" != nick_name )
         { driver_filter_input_text = nick_name;
           // Match only at the beginning of the NickName entry in the PPD:

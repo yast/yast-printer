@@ -328,10 +328,10 @@ any BasicAddDialog()
       { queue_name_proposal = Printer::NewQueueName( tolower( model ) );
         driver_filter_input_text = model;
         driver_filter_string = filterchars( tolower( model ), Printer::lower_alnum_chars );
-        if( Printer::connections[Printer::selected_connections_index,"class"]:"" != "ConnectionWizardDialog" )
-        { // Match at the beginning only if the connection is not from the connection wizard:
-          driver_filter_string = "^" + driver_filter_string;
-        }
+        // Match at the beginning also if the connection is from the connection wizard
+        // because here the model is only the manufacturer name (or "Generic" or "Raw Queue")
+        // so that match at the beginning is exactly right for connections from the connection wizard:
+        driver_filter_string = "^" + driver_filter_string;
       }
       if( "" == driver_filter_string )
       { // Set a fallback driver_filter_string which does not match to anything
