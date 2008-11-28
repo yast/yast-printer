@@ -34,6 +34,7 @@ textdomain "printer";
 
 import "Label";
 import "Printer";
+import "Printerlib";
 import "Popup";
 import "Wizard";
 
@@ -216,7 +217,7 @@ term getNetworkContent( list<string>text )
                      )
                    ),
                    `Left
-                   ( `InputField( `id(`port), text[1]:"", text[2]:"" )
+                   ( `InputField( `id(`port_or_queue), text[1]:"", text[2]:"" )
                    ),
                    `Left
                    ( // TRANSLATORS: Button to test remote printer machine
@@ -738,28 +739,35 @@ boolean validateSettingsDialog( symbol type )
           { Popup::Error( _("Servername and printer couldn't be empty!") );
           }
           else
-          { connection_uri = "smb://";
-            if( size( smb["user"]:"" ) > 0
-                && size( smb["pass"]:"" ) > 0
+          { if( ( size( smb["user"]:"" ) > 0 && size( smb["pass"]:"" ) == 0 )
+                || ( size( smb["user"]:"" ) == 0 && size( smb["pass"]:"" ) > 0 )
               )
-            { connection_uri = sformat( "%1%2:%3@",
-                                        connection_uri,
-                                        smb["user"]:"",
-                                        smb["pass"]:""
-                                      );
+            { Popup::Error( _("Both user and password must be specified!") );
             }
-            if( size( smb["domain"]:"" ) > 0 )
-            { connection_uri = sformat( "%1%2/",
+            else
+            { connection_uri = "smb://";
+              if( size( smb["user"]:"" ) > 0
+                  && size( smb["pass"]:"" ) > 0
+                )
+              { connection_uri = sformat( "%1%2:%3@",
+                                          connection_uri,
+                                          smb["user"]:"",
+                                          smb["pass"]:""
+                                        );
+              }
+              if( size( smb["domain"]:"" ) > 0 )
+              { connection_uri = sformat( "%1%2/",
+                                          connection_uri,
+                                          smb["domain"]:""
+                                        );
+              }
+              connection_uri = sformat( "%1%2/%3",
                                         connection_uri,
-                                        smb["domain"]:""
+                                        smb["hostname"]:"",
+                                        smb["printer"]:""
                                       );
+              valid = true;
             }
-            connection_uri = sformat( "%1%2/%3",
-                                      connection_uri,
-                                      smb["hostname"]:"",
-                                      smb["printer"]:""
-                                    );
-            valid = true;
           }
           if( valid )
           { connection_model = (string)UI::QueryWidget( `id("manufacturers_combo_box"), `Value );
@@ -771,7 +779,7 @@ boolean validateSettingsDialog( symbol type )
           break;
     case(`tcp):
           map<string, any> tcp = $[ "hostname" : UI::QueryWidget( `hostname, `Value ),
-                                    "port" : UI::QueryWidget( `port, `Value )
+                                    "port" : UI::QueryWidget( `port_or_queue, `Value )
                                   ];
           if( size( tcp["hostname"]:"" ) > 0
               && size( tcp["port"]:"" ) > 0
@@ -792,7 +800,7 @@ boolean validateSettingsDialog( symbol type )
           break;
     case(`lpd):
           map<string, any> lpd = $[ "hostname" : UI::QueryWidget( `hostname, `Value ),
-                                    "queue" : UI::QueryWidget( `port, `Value )
+                                    "queue" : UI::QueryWidget( `port_or_queue, `Value )
                                   ];
           if( size( lpd["hostname"]:"" ) > 0
               && size( lpd["queue"]:"" ) > 0
@@ -813,7 +821,7 @@ boolean validateSettingsDialog( symbol type )
           break;
     case(`lpr):
           map<string, any> lpr = $[ "hostname" : UI::QueryWidget( `hostname, `Value ),
-                                    "queue" : UI::QueryWidget( `port, `Value )
+                                    "queue" : UI::QueryWidget( `port_or_queue, `Value )
                                   ];
           if( size( lpr["hostname"]:"" ) > 0
               && size( lpr["queue"]:"" ) > 0
@@ -978,80 +986,140 @@ void scanForServers( symbol selected, boolean all )
 }
 
 boolean testQueue( symbol selected )
-{ boolean test = true;
-  string host = (string)UI::QueryWidget( `hostname, `Value );
-  integer ping_res = (integer)SCR::Execute( .target.bash, sformat( "ping -c 1 -w 5 %1", host ) );
-  y2milestone( "ping %1 : %2", host, ping_res );
-  if( ping_res != 0 )
-  { Popup::Error(sformat(_("Host %1 unreachable!"), host));
-    test = false;
-    return false;
-  }
-  string port = (string)UI::QueryWidget( `port, `Value );
-  integer port_test = -1;
-  integer port_test_res = -1;
+{ string test_command = "";
+  string timeout = "5";
+  string host = "";
+  string port = "";
+  string queue = "";
+  string workgroup = "";
+  string user = "";
+  string password = "";
   switch(selected)
   { case(`tcp):
-          port_test = (integer)SCR::Execute( .target.bash, sformat( "netcat -w 5 -z %1 %2 2>&1", host, port ) );
-          y2internal( "Test port result : %1", port_test );
-          if( port_test != 0 )
-          { Popup::Error( sformat( "%1 %2", _("No connection possible to port"), port ) );
-            test = false;
+          host = (string)UI::QueryWidget( `hostname, `Value );
+          port = (string)UI::QueryWidget( `port_or_queue, `Value );
+          test_command = sformat( "%1test_remote_socket \"%2\" \"%3\" %4",
+                                  Printerlib::yast_bin_dir,
+                                  host,
+                                  port,
+                                  timeout
+                                );
+          if( ! Printerlib::ExecuteBashCommand( test_command) )
+          { Popup::ErrorDetails( sformat( // Message of a Popup::ErrorDetails
+                                          // where %1 will be replaced by the port number
+                                          // and %2 will be replaced by the host name:
+                                          _("Access test failed for port '%1' on host '%2'."),
+                                          port,
+                                          host
+                                        ),
+                                 Printerlib::result["stderr"]:"" + "\n" + Printerlib::result["stdout"]:""
+                               );
             return false;
-          }
-          port_test_res = (integer)SCR::Execute( .target.bash, sformat( "echo -en \"\\r\" | netcat -w 5 %1 %2 2>&1",
-                                                                        host,
-                                                                        port
-                                                                      )
-                                               );
-          y2internal( "Test connection accept result : %1", port_test_res );
-          if( port_test_res != 0 )
-          { Popup::Error( sformat( "%1 %2 %3 %4 %5", _("Port"), port, _("on host"), host, _("doesn't accepts data") ) );
-            test = false;
-          }
-          else
-          { Popup::Message( _("Test OK") );
           }
           break;
     case(`lpd):
     case(`lpr):
-          string queue = port;
+          host = (string)UI::QueryWidget( `hostname, `Value );
+          queue = (string)UI::QueryWidget( `port_or_queue, `Value );
           port = "515";
-          port_test = (integer)SCR::Execute( .target.bash, sformat( "netcat -w 5 -z %1 %2 2>&1", host, port ) );
-          y2internal( "Test port result : %1", port_test );
-          if( port_test != 0 )
-          { Popup::Error( sformat( "%1 %2", _("No connection possible to port"), port ) );
-            test = false;
+          test_command = sformat( "%1test_remote_lpd \"%2\" \"%3\" %4",
+                                  Printerlib::yast_bin_dir,
+                                  host,
+                                  queue,
+                                  timeout
+                                );
+          if( ! Printerlib::ExecuteBashCommand( test_command) )
+          { Popup::ErrorDetails( sformat( // Message of a Popup::ErrorDetails
+                                          // where %1 will be replaced by the queue name
+                                          // and %2 will be replaced by the host name:
+                                          _("Access test failed for queue '%1' on host '%2'."),
+                                          queue,
+                                          host
+                                        ),
+                                 Printerlib::result["stderr"]:"" + "\n" + Printerlib::result["stdout"]:""
+                               );
             return false;
           }
-          map<string, any> available_port = (map<string, any>)SCR::Execute( .target.bash_output, "for I in 721 722 723 724 725 726 727 728 729 730 731; do fuser -n tcp $I &>/dev/null || { echo -n $I ; break ; } done" );
-          y2milestone( "available port %1", available_port );
-          map<string, any> test_lpd = (map<string, any>)SCR::Execute( .target.bash_output, sformat( "
-TMP_IN=$(mktemp -u /tmp/lpd_test.in.XXXXXX)
-TMP_OUT=$(mktemp -u /tmp/lpd_test.out.XXXXXX)
-mkfifo $TMP_IN
-mkfifo $TMP_OUT
-netcat -w 1 -p %1 %2 %3 <$TMP_IN >$TMP_OUT 2>/dev/null &
-NETCAT_PID=$!
-{ sleep 5s ; kill $NETCAT_PID &>/dev/null ; } &
-RESULT=''
-{ echo -en \"\\002%4\\n\" ; \
-  RESULT=$(head --bytes=1 <$TMP_OUT | tr '\\000' '0') ; \
-  [ \"$RESULT\" = \"0\" ] && echo -en \"\\001\\n\" ; } >$TMP_IN
-rm $TMP_IN
-rm $TMP_OUT
-exit $RESULT
-", available_port["stdout"]:"", host, port, queue ) );
-          if( test_lpd["exit"]:-1 == 0 )
-          { Popup::Message( _("Test OK") );
+          break;
+    case(`cups):
+          host = (string)UI::QueryWidget( `hostname, `Value );
+          queue = (string)UI::QueryWidget( `queue, `Value );
+          test_command = sformat( "%1test_remote_ipp \"%2\" \"%3\" %4",
+                                  Printerlib::yast_bin_dir,
+                                  host,
+                                  queue,
+                                  timeout
+                                );
+          if( ! Printerlib::ExecuteBashCommand( test_command) )
+          { Popup::ErrorDetails( sformat( // Message of a Popup::ErrorDetails
+                                          // where %1 will be replaced by the queue name
+                                          // and %2 will be replaced by the host name:
+                                          _("Access test failed for queue '%1' on host '%2'."),
+                                          queue,
+                                          host
+                                        ),
+                                 Printerlib::result["stderr"]:"" + "\n" + Printerlib::result["stdout"]:""
+                               );
+            return false;
           }
-          else
-          { Popup::Error( test_lpd["stderr"]:"" );
-            test = false;
+          break;
+    case(`smb):
+          host = (string)UI::QueryWidget( `hostname, `Value );
+          queue = (string)UI::QueryWidget( `printer, `Value );
+          workgroup = (string)UI::QueryWidget( `domain, `Value );
+          user = (string)UI::QueryWidget( `user, `Value );
+          password = (string)UI::QueryWidget( `pass, `Value );
+          test_command = sformat( "%1test_remote_smb \"%2\" \"%3\" \"%4\" \"%5\" \"%6\" %7",
+                                  Printerlib::yast_bin_dir,
+                                  workgroup,
+                                  host,
+                                  queue,
+                                  user,
+                                  password,
+                                  timeout
+                                );
+          if( ! Printerlib::ExecuteBashCommand( test_command) )
+          { Popup::ErrorDetails( sformat( // Message of a Popup::ErrorDetails
+                                          // where %1 will be replaced by the SMB share name
+                                          // and %2 will be replaced by the host name:
+                                          _("Access test failed for share '%1' on host '%2'."),
+                                          queue,
+                                          host
+                                        ),
+                                 Printerlib::result["stderr"]:"" + "\n" + Printerlib::result["stdout"]:""
+                               );
+            return false;
           }
-        break;
+          break;
+    case(`ipx):
+          host = (string)UI::QueryWidget( `hostname, `Value );
+          queue = (string)UI::QueryWidget( `queue, `Value );
+          user = (string)UI::QueryWidget( `user, `Value );
+          password = (string)UI::QueryWidget( `pass, `Value );
+          test_command = sformat( "%1test_remote_novell \"%2\" \"%3\" \"%4\" \"%5\" %6",
+                                  Printerlib::yast_bin_dir,
+                                  host,
+                                  queue,
+                                  user,
+                                  password,
+                                  timeout
+                                );
+          if( ! Printerlib::ExecuteBashCommand( test_command) )
+          { Popup::ErrorDetails( sformat( // Message of a Popup::ErrorDetails
+                                          // where %1 will be replaced by the queue name
+                                          // and %2 will be replaced by the host name:
+                                          _("Access test failed for queue '%1' on host '%2'."),
+                                          queue,
+                                          host
+                                        ),
+                                 Printerlib::result["stderr"]:"" + "\n" + Printerlib::result["stdout"]:""
+                               );
+            return false;
+          }
+          break;
   }
-  return test;
+  Popup::Message( _("Test OK") );
+  return true;
 }
 
 boolean storeQueue( symbol selected )
