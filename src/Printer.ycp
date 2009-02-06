@@ -2063,7 +2063,9 @@ global boolean FirewallConfig( string action )
  * @return boolean True on success
  */
 global boolean Import (map settings) {
-    // TODO FIXME: your code here (fill the above mentioned variables)...
+y2internal("Import : %1", settings);
+//	Printerlib::client_conf_server_name = settings["cups_remote_server"]:"";
+//	Printerlib::WriteCupsSettings(settings["server_settings"]:$[]);
     return true;
 }
 
@@ -2073,8 +2075,17 @@ global boolean Import (map settings) {
  * @return map Dumped settings (later acceptable by Import ())
  */
 global map Export () {
-    // TODO FIXME: your code here (return the above mentioned variables)...
-    return $[];
+    Printerlib::DetermineClientOnly();
+    Printer::AutodetectQueues();
+    list <map> p_queues = filter(map queue, Printer::queues, { return (queue["config"]:""=="local"); });
+    map exp = $[
+//	"queues" : p_queues,
+//	"filters" : Printerlib::ExportFilters( p_queues ),
+	"server_settings" : (map)SCR::Read(.cups.server),
+	"cups_remote_server" : (map)SCR::Read(.cups.client)
+	];
+//y2internal("export %1", exp);
+   return exp;
 }
 
 /**
