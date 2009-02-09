@@ -107,24 +107,61 @@ sub Execute {
     return 1;
 }
 
-sub write_conf {
-    my ($file, $data_r) = @_;
-$file=">/tmp/agent.log";
-my $data=@$data_r[0];
+sub write_params {
+ my ($key, $options) = @_;
 
-open( WRT, $file );
+ my @output=();
+ foreach my $params (@$options){
+   push (@output, "$key $params");
+ }
+ return @output;
+}
+
+sub write_conf {
+    my ($file, $data) = @_;
+    my @output = ();
+
 foreach my $key(keys %$data){
  foreach my $options ($$data{$key}){
   if ($key eq "sections"){
-   print WRT Dumper($options);
-  }else{
-   foreach my $params (@$options){
-    print WRT "$key $params\n";
+   foreach my $item (@$options){  
+
+    my $section=$$item{'Key'};
+    push(@output, "<$section $$item{'Value'}>");
+    delete $$item{'Key'};
+    delete $$item{'Value'};
+    foreach my $key2 (keys %$item){
+      if ($key2 eq "sections"){
+
+   foreach my $subitem (@{$$item{'sections'}}){  
+    my $subsection=$$subitem{'Key'};
+    push(@output, "<$subsection $$subitem{'Value'}>");
+    delete $$subitem{'Key'};
+    delete $$subitem{'Value'};
+    foreach my $key2 (keys %$subitem){
+        @output=(@output, write_params($key2, $$subitem{$key2}));
+    }
+    push(@output, "</$subsection>");
    }
+
+      } else{
+        @output=(@output, write_params($key2, $$item{$key2}));
+      }
+    }
+    push(@output, "</$section>");
+   }
+  }else{
+    @output=(@output, write_params($key, $options));
   }
  }
 }
-close(WRT);
+
+ open( OUT, $file );
+ foreach my $line (@output){
+  print OUT "$line\n";
+ }
+ close(OUT);
+
  return 1;
 }
 
@@ -150,8 +187,8 @@ sub Read {
 sub Write {
     my $class = shift;
     my ($path, @args) = @_;
-    my $server = "< /etc/cups/cupsd.conf";
-    my $client = "< /etc/cups/client.conf";
+    my $server = "> /etc/cups/cupsd.conf";
+    my $client = "> /etc/cups/client.conf";
 
     if ($path eq ".client"){
 	    return write_conf($client, $args[0]);
