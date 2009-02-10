@@ -360,7 +360,13 @@ boolean ApplyAutoconfigSettings()
   { // After the autoconfig settings have been successfully applied,
     // check if cups-autoconfig should run now:
     if( cups_autoconfig_triggered )
-    { if( ! Printerlib::ExecuteBashCommand( "/usr/lib/cups-autoconfig/cups-autoconfig --add" ) )
+    { // Depending on the architecture /usr/lib*/cups-autoconfig/cups-autoconfig could actually
+      // be /usr/lib/cups-autoconfig/cups-autoconfig (in SLE11 on i586, ia64, ppc, s390)
+      // or /usr/lib64/cups-autoconfig/cups-autoconfig (in SLE11 on ppc64, s390x, x86_64)
+      // or /usr/lib32/cups-autoconfig/cups-autoconfig (not in SLE11 but possible in a third-party package).
+      // If several /usr/lib*/cups-autoconfig/cups-autoconfig exist, simply the first one
+      // in the ls output which is /usr/lib/cups-autoconfig/cups-autoconfig is used here:
+      if( ! Printerlib::ExecuteBashCommand( "$( ls -1 /usr/lib*/cups-autoconfig/cups-autoconfig | head -n1 ) --add" ) )
       { Popup::ErrorDetails( // Popup::ErrorDetails message.
                              _("Automatic configuration failed."),
                              Printerlib::result["stderr"]:""
