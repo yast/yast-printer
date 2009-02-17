@@ -49,8 +49,6 @@ boolean initial_publish_to_local_network = false;
 list< term > initial_interface_table_items = [];
 string initial_allow_input_value = "";
 string initial_browse_address_input_value = "";
-boolean firewall_first_sharing_widget_is_checkbox = false;
-boolean firewall_second_sharing_widget_is_checkbox = false;
 
 term widgetSharing = `VBox
                      ( `RadioButtonGroup
@@ -181,33 +179,13 @@ term widgetSharing = `VBox
                                  )
                                )
                              )
-                           )
-                         )
-                       ),
-                       `Left
-                       ( `Label
-                         ( `id(`firewall_sharing_settings_label),
-                           // A caption to make Firewall settings to allow remote access to CUPS:
-                           _("Firewall Settings")
-                         )
-                       ),
-                       `HBox
-                       ( `HSpacing( 2 ),
-                         `VBox
-                         ( `Left
-                           ( `ReplacePoint
-                             ( `id(`firewall_first_sharing_replace_point),
-                               `Empty
-                               ( `id(`firewall_first_sharing_widget)
-                               )
-                             )
                            ),
                            `Left
-                           ( `ReplacePoint
-                             ( `id(`firewall_second_sharing_replace_point),
-                               `Empty
-                               ( `id(`firewall_second_sharing_widget)
-                               )
+                           ( `Label
+                             ( `id(`firewall_label),
+                               // A notification to make the user aware of possible Firewall restrictions
+                               // regarding remote access to CUPS via the IPP protocol (TCP/UDP port 631):
+                               _("If a firewall is used, check that remote access to CUPS is allowed via IPP on port 631.")
                              )
                            )
                          )
@@ -262,30 +240,6 @@ map< string, string > showInterfacePopup( string interface_name, boolean is_publ
 
 boolean ApplySharingSettings()
 { sharing_has_changed = false;
-  // Do the Firewall stuff first of all:
-  boolean firewall_allow_from_int = true;
-  boolean firewall_deny_from_ext = true;
-  if( firewall_first_sharing_widget_is_checkbox )
-  { firewall_allow_from_int = (boolean)UI::QueryWidget( `firewall_first_sharing_widget, `Value );
-    y2milestone( "firewall_allow_from_int value: '%1'", firewall_allow_from_int );
-    Printer::firewall_config["ui_access_from_int"] = firewall_allow_from_int;
-  }
-  if( firewall_second_sharing_widget_is_checkbox )
-  { firewall_deny_from_ext = (boolean)UI::QueryWidget( `firewall_second_sharing_widget, `Value );
-    y2milestone( "firewall_deny_from_ext value: '%1'", firewall_deny_from_ext );
-    Printer::firewall_config["ui_deny_from_ext"] = firewall_deny_from_ext;
-  }
-  if( Printer::firewall_config["access_from_int"]:false != Printer::firewall_config["ui_access_from_int"]:true
-      || Printer::firewall_config["deny_from_ext"]:false != Printer::firewall_config["ui_deny_from_ext"]:true
-    )
-  { // The user has changed a Firewall setting:
-    sharing_has_changed = true;
-    if( ! Printer::FirewallConfig( "write" ) )
-    { // No error message here because Printer::FirewallConfig shows already error messages:
-      return false;
-    }
-  }
-  // Do the CUPS sharing stuff after the Firewall stuff.
   // Get the actual settings and values from the dialog.
   // It does not work well to query the RadioButtonGroup with something like
   // UI::QueryWidget(`deny_or_allow_remote_access,`CurrentButton))
@@ -611,9 +565,7 @@ void initSharing( string key )
     UI::ChangeWidget( `specific_addresses_label, `Enabled, false );
     UI::ChangeWidget( `allow_input, `Enabled, false );
     UI::ChangeWidget( `browse_address_input, `Enabled, false );
-    UI::ChangeWidget( `firewall_sharing_settings_label, `Enabled, false );
-    UI::ChangeWidget( `firewall_first_sharing_widget, `Enabled, false );
-    UI::ChangeWidget( `firewall_second_sharing_widget, `Enabled, false );
+    UI::ChangeWidget( `firewall_label, `Enabled, false );
   }
   // Regardless whether or not the "Share Printers" dialog is useless,
   // fill in the values of the current settings in the system:
@@ -831,94 +783,6 @@ void initSharing( string key )
   y2milestone( "Initial initial_browse_address_input_value: %1", initial_browse_address_input_value );
   UI::ChangeWidget( `id(`browse_address_input), `Value, initial_browse_address_input_value );
   y2milestone( "Initial browse_address_values: %1", browse_address_values );
-  // Determine the Firewall settings.
-  // Ignore errors because Printer::FirewallConfig results a firewall_config fallback map.
-  Printer::FirewallConfig( "read" );
-  // Set the content and values for the firewall related widgets in the dialog:
-  if( ! Printer::firewall_config["suse_firewall_used"]:true )
-  { // Not the Suse Firewall but another firewall is used:
-    UI::ReplaceWidget( `firewall_first_sharing_replace_point,
-                       `Label
-                       ( `id(`firewall_first_sharing_widget),
-                         // Label when not the Suse Firewall but another firewall is used:
-                         _("Not the Suse Firewall but another firewall is used")
-                       )
-                     );
-    UI::ReplaceWidget( `firewall_second_sharing_replace_point,
-                       `Empty
-                       ( `id(`firewall_second_sharing_widget)
-                       )
-                     );
-  }
-  else
-  { // The Suse Firewall is used:
-    if( ! Printer::firewall_config["firewall_active"]:true )
-    { // The Suse Firewall is not running:
-      UI::ReplaceWidget( `firewall_first_sharing_replace_point,
-                         `Label
-                         ( `id(`firewall_first_sharing_widget),
-                           // Label when the Suse Firewall is not running:
-                           _("The Suse Firewall is not active")
-                         )
-                       );
-      UI::ReplaceWidget( `firewall_second_sharing_replace_point,
-                         `Empty
-                         ( `id(`firewall_second_sharing_widget)
-                         )
-                       );
-    }
-    else
-    { // The Suse Firewall is running:
-      if( ! Printer::firewall_config["no_firewall_for_int"]:true )
-      { // The Suse Firewall does potect the INT zone:
-        // Let the user deny or allow CUPS access from the INT zone here:
-        UI::ReplaceWidget( `firewall_first_sharing_replace_point,
-                           `CheckBox
-                           ( `id(`firewall_first_sharing_widget),
-                             // CheckBox whether or not the Suse Firewall allows CUPS access from the INT zone:
-                             _("Allow access from the &internal network zone"),
-                             Printer::firewall_config["access_from_int"]:true
-                           )
-                         );
-        firewall_first_sharing_widget_is_checkbox = true;
-      }
-      else
-      { // The Suse Firewall does not potect the INT zone:
-        UI::ReplaceWidget( `firewall_first_sharing_replace_point,
-                           `Label
-                           ( `id(`firewall_first_sharing_widget),
-                             // Label when the Suse Firewall does not potect the internal network zone
-                             // which means that CUPS access from the INT zone is allowed:
-                             _("Access from the internal network zone is allowed")
-                           )
-                         );
-      }
-      if( ! Printer::firewall_config["deny_from_ext"]:true )
-      { // The Suse Firewall does not deny CUPS access from the EXT zone.
-        // Let the user deny CUPS access from the EXT zone here:
-        UI::ReplaceWidget( `firewall_second_sharing_replace_point,
-                           `CheckBox
-                           ( `id(`firewall_second_sharing_widget),
-                             // CheckBox whether or not the Suse Firewall denies CUPS access from the EXT zone:
-                             _("Deny access from the &external network zone"),
-                             false
-                           )
-                         );
-        firewall_second_sharing_widget_is_checkbox = true;
-      }
-      else
-      { // The Suse Firewall denies CUPS access from the EXT zone.
-        // Do not let the user allow CUPS access from the EXT zone here:
-        UI::ReplaceWidget( `firewall_second_sharing_replace_point,
-                           `Label
-                           ( `id(`firewall_second_sharing_widget),
-                             // Label when the Suse Firewall denies CUPS access from the external network zone:
-                             _("Access from the external network zone is denied")
-                           )
-                         );
-      }
-    }
-  }
   y2milestone( "leaving initSharing" );
 }
 
@@ -1080,21 +944,22 @@ symbol handleSharing( string key, map event )
     // does not trigger any event even not with "`opt(`notify, `immediate)"
     // so that this special action is unnoticed.
     boolean remote_access = (boolean)UI::QueryWidget( `allow_remote_access_radio_button, `Value );
-    UI::ChangeWidget(`allow_local_network_access_check_box, `Enabled, remote_access);
-    UI::ChangeWidget(`publish_to_local_network_check_box, `Enabled, remote_access);
-    UI::ChangeWidget(`interface_table_label, `Enabled, remote_access);
-    UI::ChangeWidget(`interface_table, `Enabled, remote_access);
-    UI::ChangeWidget(`add_interface, `Enabled, remote_access);
-    UI::ChangeWidget(`edit_interface, `Enabled, remote_access);
-    UI::ChangeWidget(`delete_interface, `Enabled, remote_access);
-    UI::ChangeWidget(`specific_addresses_label, `Enabled, remote_access);
-    UI::ChangeWidget(`allow_input, `Enabled, remote_access);
-    UI::ChangeWidget(`browse_address_input, `Enabled, remote_access);
+    UI::ChangeWidget( `allow_local_network_access_check_box, `Enabled, remote_access );
+    UI::ChangeWidget( `publish_to_local_network_check_box, `Enabled, remote_access );
+    UI::ChangeWidget( `interface_table_label, `Enabled, remote_access );
+    UI::ChangeWidget( `interface_table, `Enabled, remote_access );
+    UI::ChangeWidget( `add_interface, `Enabled, remote_access );
+    UI::ChangeWidget( `edit_interface, `Enabled, remote_access );
+    UI::ChangeWidget( `delete_interface, `Enabled, remote_access );
+    UI::ChangeWidget( `specific_addresses_label, `Enabled, remote_access );
+    UI::ChangeWidget( `allow_input, `Enabled, remote_access );
+    UI::ChangeWidget( `browse_address_input, `Enabled, remote_access );
+    UI::ChangeWidget( `firewall_label, `Enabled, remote_access );
     if( remote_access )
     { boolean interface_modify_buttons = true;
       if( 0 == size((list)UI::QueryWidget(`interface_table, `Items)) ) interface_modify_buttons = false;
-      UI::ChangeWidget(`edit_interface, `Enabled, interface_modify_buttons);
-      UI::ChangeWidget(`delete_interface, `Enabled, interface_modify_buttons);
+      UI::ChangeWidget( `edit_interface, `Enabled, interface_modify_buttons );
+      UI::ChangeWidget( `delete_interface, `Enabled, interface_modify_buttons );
     }
   }
   return nil;
