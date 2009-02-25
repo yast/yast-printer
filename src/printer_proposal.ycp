@@ -214,12 +214,25 @@ if( func == "MakeProposal" )
                            string driver_filter_string = "^" + filterchars( tolower( model ), Printer::lower_alnum_chars );
                            if( "^" != driver_filter_string )
                            { list drivers = Printer::DriverItems( driver_filter_string, true );
-                             if( size(drivers) > 0 )
-                             { y2internal("Available drivers: %1", drivers);
-                               y2internal("Selected driver: %1", drivers[0]:nil);
-                               Printer::selected_ppds_index = drivers[0,0,0]:-1;
-                               Printer::selected_connections_index = printer[0,0]:-1;
-                               if( Printer::AddQueue( queue_name ) )
+                             // Printer::DriverItems may result a drivers list with one single element
+                             //   [ `item( `id( -1 ), _("No matching driver found.") ) ]
+                             // to show at least a meaningful text as fallback entry to the user
+                             // or Printer::DriverItems may result a drivers list with the first item
+                             //   [ `item( `id( -1 ), _("Select a driver.") ), ... ]
+                             // when Printer::DriverItems could not preselect a driver item.
+                             // In contrast if a valid driver was found and preselected, there would be
+                             // a non-negative id value of the first element which is drivers[0,0,0]
+                             // (id[0] is the value of the id, see the comment in Printer::DriverItems).
+                             // Only a test if both selected_ppds_index and selected_connections_index
+                             // are non-negative makes sure that there is a valid driver and a valid connection.
+                             y2internal("Available drivers: %1", drivers);
+                             Printer::selected_ppds_index = drivers[0,0,0]:-1;
+                             Printer::selected_connections_index = printer[0,0]:-1;
+                             if( Printer::selected_ppds_index >= 0
+                                 && Printer::selected_connections_index >= 0
+                               )
+                             { y2internal("Selected driver: %1", drivers[0]:nil);
+                               if( Printer::AddQueue( queue_name, "" ) )
                                { already_set_up_uris = add( already_set_up_uris, uri );
                                  // Autodetect queues again so that Printer::NewQueueName
                                  // can compare with existing queue names but ignore whatever failures
