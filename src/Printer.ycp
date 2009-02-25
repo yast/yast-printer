@@ -108,6 +108,67 @@ global string alnum_chars = number_chars + letter_chars;
 global string lower_alnum_chars = number_chars + lower_chars;
 
 /**
+ * Explicite listing of all known manufacturers in a standard installation
+ * which one gets as output from the command
+ * lpinfo -l -m | grep make-and-model | cut -s -d '=' -f 2 | cut -s -d ' ' -f 2 | sort -f -u
+ * and then a bit changing it (in particular removing duplicates and nonsense entries).
+ * The current list was made on openSUSE 11.0.
+ */
+global list< string > known_manufacturers = [ "Generic",
+                                              "Alps",
+                                              "Anitech",
+                                              "Apollo",
+                                              "Apple",
+                                              "Brother",
+                                              "Canon",
+                                              "Citizen",
+                                              "CItoh",
+                                              "Compaq",
+                                              "DEC",
+                                              "Dell",
+                                              "Dymo",
+                                              "Epson",
+                                              "Fujifilm",
+                                              "Fujitsu",
+                                              "Gestetner",
+                                              "Heidelberg",
+                                              "Hitachi",
+                                              "HP",
+                                              "IBM",
+                                              "Infotec",
+                                              "Kodak",
+                                              "KS",
+                                              "Kyocera",
+                                              "Lanier",
+                                              "Lexmark",
+                                              "Minolta",
+                                              "Mitsubishi",
+                                              "NEC",
+                                              "NRG",
+                                              "Oce",
+                                              "Oki",
+                                              "Olivetti",
+                                              "Olympus",
+                                              "Panasonic",
+                                              "PCPI",
+                                              "QMS",
+                                              "Raven",
+                                              "Ricoh",
+                                              "Samsung",
+                                              "Savin",
+                                              "Seiko",
+                                              "Sharp",
+                                              "Shinko",
+                                              "Sony",
+                                              "Star",
+                                              "Tally",
+                                              "Tektronix",
+                                              "Toshiba",
+                                              "Xerox",
+                                              "Zebra"
+                                            ];
+
+/**
  * PPD database:
  * the database is created anew in Printer::CreateDatabase() which calls
  * the bash script "/usr/lib/YaST2/bin/create_ppd_database"
@@ -1233,8 +1294,8 @@ global list DriverItems( string driver_filter_string, boolean preselection )
          );
   if( size( driver_items ) == 0 )
   { // If the driver_items list is empty (e.g. because of a too restrictive driver_filter_string),
-    // show a meaningful text as fallback entry.
-    driver_string = _("No matching driver found.");
+    // show a meaningful text as fallback entry ('More Drivers' is a button label).
+    driver_string = _("No matching driver found. Change the search string or try 'More Drivers'.");
     driver_items =  [ `item( `id( -1 ), driver_string ) ];
     // Invalidate selected_ppds_index to be on the safe side.
     // Otherwise it is possible to set up a queue with a previously selected driver
@@ -1616,7 +1677,7 @@ global list DriverItems( string driver_filter_string, boolean preselection )
  * Add new queue or overwrite existing queue
  * @return true on success
  */
-global boolean AddQueue( string queue_name )
+global boolean AddQueue( string queue_name, string default_paper_size )
 { // Delete ' characters because they are used for quoting in the bash commandline below:
   queue_name = deletechars( queue_name, "'" );
   string uri = deletechars( connections[selected_connections_index,"uri"]:"", "'" );
@@ -1658,6 +1719,25 @@ global boolean AddQueue( string queue_name )
     // but ignore any possible errors here (e.g. when the queue does not exist).
     Printerlib::ExecuteBashCommand( "/usr/sbin/lpadmin -h localhost -x '" + queue_name + "'" );
     return false;
+  }
+  // Try to set the requested default_paper_size if it is an available choice for this queue.
+  // If no default_paper_size is requested, the CUPS default is used.
+  // For the CUPS 1.3 default see http://www.cups.org/str.php?L2846
+  // For CUPS 1.4 the default depends on the "DefaultPaperSize" setting in cupsd.conf
+  // see https://bugzilla.novell.com/show_bug.cgi?id=395760
+  // and http://www.cups.org/str.php?L2848
+  if( "" != default_paper_size )
+  { // The following command fails intentionally if the queue has no PPD file - i.e. when it is a "raw" queue
+    // (a queue with a "System V style interface script" cannot be set up with YaST).
+    // '\>' is used to find an available choice also when it is the last value on the line.
+    // Note the YCP quoting: \\< becomes \< and \\> becomes \> in the commandline.
+    commandline = "lpoptions -h localhost -p '" + queue_name + "' -l | grep '^PageSize.*\\<" + default_paper_size + "\\>'";
+    if( Printerlib::ExecuteBashCommand( commandline ) )
+    { commandline = "/usr/sbin/lpadmin -h localhost -p '" + queue_name + "' -o 'PageSize=" + default_paper_size + "'";
+      // Do not care if it fails to set the default_paper_size (i.e. show no error message to the user)
+      // because the default_paper_size setting is nice to have but not mandatoty for a working queue:
+      Printerlib::ExecuteBashCommand( commandline );
+    }
   }
   return true;
 }
