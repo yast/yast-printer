@@ -66,6 +66,16 @@ any BasicModifyDialog()
   // Title of the Basic Modify Dialog where %1 will be replaced by the queue name.
   // The actual queue name is a system value which cannot be translated:
   string caption = sformat( _("Modify %1") , name );
+  // Clear whatever content of a previous dialog which would show up here for several seconds
+  // until all the following stuff is done before Wizard::SetContentsButtons is called
+  // which finally shows the right content for this dialog.
+  Wizard::SetContents( caption,
+                       `Empty(),
+                       HELPS["basic_modify_dialog"]:"",
+                       false,
+                       false
+                     );
+  Wizard::HideAbortButton();
   string model = "";
   list <string> description_words = splitstring( description, " " );
   if( size( description_words ) > 2 )
@@ -296,7 +306,7 @@ any BasicModifyDialog()
                     ( `Left
                       ( `Label
                         ( // Caption for a printer driver selection:
-                          _("Driver")
+                          _("Adjust Options of the Current Driver or Assign a Different Driver")
                         )
                       ),
                       `ReplacePoint
@@ -971,16 +981,17 @@ any BasicModifyDialog()
         driver_items = Printer::DriverItems( "", true );
       }
       UI::ReplaceWidget( `id(`driver_selection_replace_point),
-                         `SelectionBox
-                         ( `id(`driver_selection),
-                           // By default there is no UserInput()
-                           // if only something was selected in the SelectionBox
-                           // (without clicking additionally a button)
-                           // but the notify option forces UserInput() in this case:
-                           `opt(`notify),
-                           "",
-                           driver_items
-                         )
+                         `SelectionBox( `id(`driver_selection),
+                                        // By default there is no UserInput()
+                                        // if only something was selected in the SelectionBox
+                                        // (without clicking additionally a button)
+                                        // but the notify option forces UserInput() in this case:
+                                        `opt(`notify),
+                                        "",
+                                        prepend( driver_items,
+                                                 current_driver
+                                               )
+                                      )
                        );
       continue;
     }
