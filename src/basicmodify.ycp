@@ -218,6 +218,29 @@ any BasicModifyDialog()
       }
     }
   }
+  // If the currently used driver is replaced by another driver,
+  // show the same content as in the BasicAddDialog to set the default paper size:
+  term new_driver_paper_choice_content = `RadioButtonGroup
+                                         ( `id(`paper_size_radio_buttons),
+                                           `HBox
+                                           ( `Label
+                                             ( // Label of a RadioButtonGroup to specify the default paper size:
+                                               _("Default paper size (if printer and driver supports it)")
+                                             ),
+                                             // Have none of the RadioButtons preselected which means that
+                                             // by default the CUPS default is used for the default paper size.
+                                             // For the CUPS 1.3 default see http://www.cups.org/str.php?L2846
+                                             // For CUPS 1.4 the default depends on the "DefaultPaperSize"
+                                             // setting in cupsd.conf
+                                             // see https://bugzilla.novell.com/show_bug.cgi?id=395760
+                                             // and http://www.cups.org/str.php?L2848
+                                             `HSpacing( 2 ),
+                                             `RadioButton( `id(`a4), "A&4" ),
+                                             `HSpacing( 1 ),
+                                             `RadioButton( `id(`letter), "Le&tter" ),
+                                             `HStretch()
+                                           )
+                                         );
   // Usually the id in the connection items is the matching index number in the connections list.
   // Here the id of the current connection is set to -1 because the uri of the current connection
   // is derived from the queues list and this uri may be not present in the connections list
@@ -437,6 +460,7 @@ any BasicModifyDialog()
     if( ret == `next )
     { commandline = "/usr/sbin/lpadmin -h localhost -p '" + name + "'";
       boolean something_has_changed = false;
+      boolean set_paper_size_later = false;
       integer selected_connection_index = (integer)UI::QueryWidget( `id(`connection_selection), `CurrentItem );
       if( selected_connection_index >= 0 )
       { uri = Printer::connections[selected_connection_index,"uri"]:"";
@@ -451,10 +475,13 @@ any BasicModifyDialog()
         if( "" != ppd )
         { commandline = commandline + " -m '" + ppd + "'";
           something_has_changed = true;
+          // The paper size for a new driver will be only set
+          // after the new driver was actually successfully set:
+          set_paper_size_later = true;
         }
       }
-      if( -1 == selected_ppd_index )
-      { // The default paper size can be only set for the currently used driver.
+      else
+      { // The default paper size is only set in the same command for the currently used driver.
         // Depending on the currently used driver no paper size selection might exists
         // in particular not for a 'raw' queue or when a 'System V style interface script' is used:
         if( UI::WidgetExists( `id(`paper_size_radio_buttons) ) )
@@ -539,6 +566,44 @@ any BasicModifyDialog()
                                sformat( _("Failed to modify %1."), name ),
                                Printerlib::result["stderr"]:""
                              );
+        }
+        else
+        { // Set the default paper size for a new driver only
+          // after a new driver was actually successfully set.
+          if( set_paper_size_later )
+          { // Depending on the previously used driver no paper size selection might exists
+            // in particular not for a 'raw' queue or when a 'System V style interface script' is used.
+            // When a driver is set for a 'raw' queue or for a queue with a 'System V style interface script',
+            // it is therefore not possible to set the default paper size for the new driver now
+            // so that the user would have to run the modify dialog again to do this.
+            if( UI::WidgetExists( `id(`paper_size_radio_buttons) ) )
+            { default_paper_size = "";
+              any paper_size = UI::QueryWidget( `id(`paper_size_radio_buttons), `CurrentButton );
+              if( `a4 == paper_size )
+              { default_paper_size = "A4";
+              }
+              if( `letter == paper_size )
+              { default_paper_size = "Letter";
+              }
+              // Try to set the requested default_paper_size if it is an available choice for this queue.
+              // If no default_paper_size is requested, the CUPS default is used.
+              // For the CUPS 1.3 default see http://www.cups.org/str.php?L2846
+              // For CUPS 1.4 the default depends on the "DefaultPaperSize" setting in cupsd.conf
+              // see https://bugzilla.novell.com/show_bug.cgi?id=395760
+              // and http://www.cups.org/str.php?L2848
+              if( "" != default_paper_size )
+              { // '\>' is used to find an available choice also when it is the last value on the line.
+                // Note the YCP quoting: \\< becomes \< and \\> becomes \> in the commandline.
+                commandline = "lpoptions -h localhost -p '" + name + "' -l | grep '^PageSize.*\\<" + default_paper_size + "\\>'";
+                if( Printerlib::ExecuteBashCommand( commandline ) )
+                { commandline = "/usr/sbin/lpadmin -h localhost -p '" + name + "' -o 'PageSize=" + default_paper_size + "'";
+                  // Do not care if it fails to set the default_paper_size (i.e. show no error message to the user)
+                  // because the default_paper_size setting is nice to have but not mandatoty for a working queue:
+                  Printerlib::ExecuteBashCommand( commandline );
+                }
+              }
+            }
+          }
         }
         Wizard::EnableBackButton();
         Wizard::EnableNextButton();
@@ -791,7 +856,10 @@ any BasicModifyDialog()
       { // When the currently used driver is to be exchanged,
         // the widgets to change options for the currently used driver are removed and
         // the description_input field is overwritten with the NickName of the new selected driver:
-        UI::ReplaceWidget( `id(`paper_choice_and_driver_options_replace_point), `Empty() );
+        //UI::ReplaceWidget( `id(`paper_choice_and_driver_options_replace_point), `Empty() );
+        UI::ReplaceWidget( `id(`paper_choice_and_driver_options_replace_point),
+                           `Left( new_driver_paper_choice_content )
+                         );
         string new_description = Printer::ppds[selected_ppd_index,"nickname"]:"";
         if( "" != model
             && "unknown" != tolower( model )
@@ -851,23 +919,23 @@ any BasicModifyDialog()
     { driver_filter_string = "";
       boolean valid_driver_found = false;
       list driver_items = [];
-      // Use the existing value of model because for each subsequent run of this more_drivers section
-      // the existing value of model is shortened at the end (the last word is removed) to get
-      // more and mor derivers for each subsequent run of this more_drivers section.
-      y2milestone( "More drivers for '%1'", model );
-      if( "" != model
-          && "unknown" != tolower( model )
+      // Use the existing value of driver_filter_input_text
+      // which is usually set to nick_name and to model as fallback.
+      driver_filter_input_text = (string)UI::QueryWidget( `id(`driver_filter_input), `Value );
+      y2milestone( "More drivers for '%1'", driver_filter_input_text );
+      if( "" != driver_filter_input_text
+          && "unknown" != tolower( driver_filter_input_text )
         )
-      { // If the model string does not contain a space,
-        // model_words is a singleton list which contains only model.
-        list <string> model_words = splitstring( model, " " );
-        if( size( model_words ) >= 2 )
+      { // If the driver_filter_input_text string does not contain a space,
+        // words is a singleton list which contains only one word.
+        list <string> words = splitstring( driver_filter_input_text, " " );
+        if( size( words ) >= 2 )
         { // If there are less than two words the following does not make sense.
           // Try to find the word which contains a model number.
           // This is usually the first word which contains a number.
           string model_number_word = "";
           foreach( string word,
-                   model_words,
+                   words,
                    { if( "" != filterchars( word, Printer::number_chars ) )
                      { model_number_word = word;
                        break;
