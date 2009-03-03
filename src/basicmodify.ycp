@@ -920,7 +920,11 @@ any BasicModifyDialog()
       boolean valid_driver_found = false;
       list driver_items = [];
       // Use the existing value of driver_filter_input_text
-      // which is usually set to nick_name and to model as fallback.
+      // which is usually set to nick_name and to model as fallback
+      // but it could be any string which was entered before by the user.
+      // The "more drivers" functionality must work based on the current search string
+      // and when nothing is found based on the current search string
+      // it falls back to show all drivers so that there is a valid result in any case.
       driver_filter_input_text = (string)UI::QueryWidget( `id(`driver_filter_input), `Value );
       y2milestone( "More drivers for '%1'", driver_filter_input_text );
       if( "" != driver_filter_input_text
@@ -929,8 +933,9 @@ any BasicModifyDialog()
       { // If the driver_filter_input_text string does not contain a space,
         // words is a singleton list which contains only one word.
         list <string> words = splitstring( driver_filter_input_text, " " );
-        if( size( words ) >= 2 )
-        { // If there are less than two words the following does not make sense.
+        if( size( words ) >= 1 )
+        { // Even if it is only one word, the following makes sense
+          // because the one word could already be the model_number_word.
           // Try to find the word which contains a model number.
           // This is usually the first word which contains a number.
           string model_number_word = "";
@@ -972,38 +977,22 @@ any BasicModifyDialog()
             }
           }
         }
-      }
-      // Use the manufacturer when the existing value of model cannot be used
-      // or when nothing was found above:
-      if( ! valid_driver_found )
-      { driver_filter_string = "";
-        string model = Printer::connections[Printer::selected_connections_index,"model"]:"";
-        if( "" != model
-            && "unknown" != tolower( model )
-          )
-        { // The first word in the driver_filter_string is usually the first word of the manufacturer name.
+        // Try to use the manufacturer when nothing was found above:
+        if( ! valid_driver_found )
+        { driver_filter_string = "";
+          // The first word in the driver_filter_input_text is usually the first word of the manufacturer name.
           // This fuzzy match is intended so that e.g. "Kyocera" and "Kyocera Mita" are the same.
-          string manufacturer = splitstring( model, " " )[0]:"";
+          string manufacturer = splitstring( driver_filter_input_text, " " )[0]:"";
           if( "" != manufacturer )
           { // Even more fuzziness for very ambiguous manufacturer names:
-            if( "hewlett" == substring( tolower( driver_filter_string ), 0, 7 ) )
+            if( "hewlett" == substring( tolower( driver_filter_input_text ), 0, 7 ) )
             { // Let "Hewlett-Packard", "Hewlett Packard", and "HP be the same:
               manufacturer = "HP";
             }
-            if( "oki" == substring( tolower( driver_filter_string ), 0, 3 ) )
+            if( "oki" == substring( tolower( driver_filter_input_text ), 0, 3 ) )
             { // Let "Oki", "Okidata", and "Okipage" be the same:
               manufacturer = "Oki";
             }
-            driver_filter_string = tolower( manufacturer );
-            // Match at the beginning only if the driver_filter_string is actually a known manufacturer:
-            foreach( string known_manufacturer,
-                     Printer::known_manufacturers,
-                     { if( driver_filter_string == tolower( known_manufacturer ) )
-                       { driver_filter_string = "^" + driver_filter_string;
-                         break;
-                       }
-                     }
-                   );
             // Provide visible feeback what is going on:
             UI::ReplaceWidget( `id(`driver_filter_input_replace_point),
                                `InputField
@@ -1014,21 +1003,33 @@ any BasicModifyDialog()
                                  manufacturer
                                )
                              );
-            driver_items = Printer::DriverItems( driver_filter_string, true );
-            // Printer::DriverItems may result a driver_items list with one single element
-            //   [ `item( `id( -1 ), _("No matching driver found.") ) ]
-            // to show at least a meaningful text as fallback entry to the user
-            // or Printer::DriverItems may result a driver_items list with the first item
-            //   [ `item( `id( -1 ), _("Select a driver.") ), ... ]
-            // when Printer::DriverItems could not preselect a driver item.
-            // If a valid driver was found (but perhaps none was preselected),
-            // there would be a non-negative id value of the first or second element
-            // which is driver_items[0,0,0] or driver_items[1,0,0]
-            // (id[0] is the value of the id, see the comment in Printer::DriverItems).
-            if( driver_items[0,0,0]:-1 >= 0
-                || driver_items[1,0,0]:-1 >= 0
-              )
-            { valid_driver_found = true;
+            driver_filter_string = filterchars( tolower( manufacturer ), Printer::lower_alnum_chars );
+            if( "" != driver_filter_string )
+            { // Match at the beginning only if the driver_filter_string is actually a known manufacturer:
+              foreach( string known_manufacturer,
+                       Printer::known_manufacturers,
+                       { if( driver_filter_string == tolower( known_manufacturer ) )
+                         { driver_filter_string = "^" + driver_filter_string;
+                           break;
+                         }
+                       }
+                     );
+              driver_items = Printer::DriverItems( driver_filter_string, true );
+              // Printer::DriverItems may result a driver_items list with one single element
+              //   [ `item( `id( -1 ), _("No matching driver found.") ) ]
+              // to show at least a meaningful text as fallback entry to the user
+              // or Printer::DriverItems may result a driver_items list with the first item
+              //   [ `item( `id( -1 ), _("Select a driver.") ), ... ]
+              // when Printer::DriverItems could not preselect a driver item.
+              // If a valid driver was found (but perhaps none was preselected),
+              // there would be a non-negative id value of the first or second element
+              // which is driver_items[0,0,0] or driver_items[1,0,0]
+              // (id[0] is the value of the id, see the comment in Printer::DriverItems).
+              if( driver_items[0,0,0]:-1 >= 0
+                  || driver_items[1,0,0]:-1 >= 0
+                )
+              { valid_driver_found = true;
+              }
             }
           }
         }
@@ -1049,17 +1050,18 @@ any BasicModifyDialog()
         driver_items = Printer::DriverItems( "", true );
       }
       UI::ReplaceWidget( `id(`driver_selection_replace_point),
-                         `SelectionBox( `id(`driver_selection),
-                                        // By default there is no UserInput()
-                                        // if only something was selected in the SelectionBox
-                                        // (without clicking additionally a button)
-                                        // but the notify option forces UserInput() in this case:
-                                        `opt(`notify),
-                                        "",
-                                        prepend( driver_items,
-                                                 current_driver
-                                               )
-                                      )
+                         `SelectionBox
+                         ( `id(`driver_selection),
+                           // By default there is no UserInput()
+                           // if only something was selected in the SelectionBox
+                           // (without clicking additionally a button)
+                           // but the notify option forces UserInput() in this case:
+                           `opt(`notify),
+                           "",
+                           prepend( driver_items,
+                                    current_driver
+                                  )
+                         )
                        );
       continue;
     }

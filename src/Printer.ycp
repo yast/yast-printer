@@ -1283,9 +1283,17 @@ global list DriverItems( string driver_filter_string, boolean preselection )
                }
                else
                { // If the driver_filter_string is a non-empty string,
-                 // test whether the nickname matches to the driver_filter_string:
-                 string unified_nickname = filterchars( tolower( nickname ), lower_alnum_chars );
-                 if( regexpmatch( unified_nickname, driver_filter_string ) )
+                 // test whether nickname or deviceID matches to the driver_filter_string.
+                 // Only the special character '+' is also taken into account because
+                 // this is sometimes also a meaningful character in the model name
+                 // for example the '+' at the end of a Kyocera model name
+                 // indicates that this model has a built-in PostScript interpreter
+                 // while the model without the '+' understands only PCL.
+                 string unified_nickname = filterchars( tolower( nickname ), lower_alnum_chars + "+" );
+                 string unified_deviceID = filterchars( tolower( deviceID ), lower_alnum_chars + "+" );
+                 if( regexpmatch( unified_nickname, driver_filter_string )
+                     || regexpmatch( unified_deviceID, driver_filter_string )
+                   )
                  { driver_items = add( driver_items, `item( `id( ppds_index ), driver_string ) );
                  }
                }
