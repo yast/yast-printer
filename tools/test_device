@@ -1,0 +1,29 @@
+#! /bin/bash
+# test_device sends a short message ($1) to device ($2).
+# Timeout is set to $3 sec.
+# Exits:   0 doesn't seem to have a problem
+#          1 operation has timed out
+#          2 problems while writing to $2
+#
+# Jan Holesovsky <kendy@suse.cz>, 2000
+# Johannes Meixner <jsmeix@suse.de>, 2008
+# $Id: test_device 2928 2002-06-27 08:53:17Z jsrain $
+
+#set -x
+
+export PATH="/sbin:/usr/sbin:/usr/bin:/bin"
+export LC_ALL="POSIX"
+export LANG="POSIX"
+umask 022
+
+EXITCODE=2
+trap "EXITCODE=0" 10
+
+[ "$2" != "/dev/null" ] && fuser -k $2  # kill all processes using the device
+
+( sleep $3 ) &
+SL=$!
+( echo -en "$1" > $2 && kill -10 $$ ; kill $SL ) &
+PR=$!
+wait $SL && kill $PR && exit 1    # It cannot finish, it has timed out
+exit $EXITCODE                    # How the prining finished?
