@@ -1,0 +1,114 @@
+#! /bin/bash
+#
+# Johannes Meixner <jsmeix@suse.de>, 2007, 2008
+
+#set -x
+
+export PATH="/sbin:/usr/sbin:/usr/bin:/bin"
+export LC_ALL="POSIX"
+export LANG="POSIX"
+umask 022
+
+# When 'localhost' or its IP-address is to be set,
+# it is unified so that only 'localhost' or '127.0.0.1' are set
+# (but not stuff like 'LocalHost' or '127.000.000.001').
+SERVERNAME="$( echo $1 | sed -e 's/localhost/localhost/i' -e 's/127\.0*0\.0*0\.0*1/127.0.0.1/' )"
+
+if test -n "$SERVERNAME"
+then # When a SERVERNAME is specified, set it in /etc/cups/client.conf
+     # if SERVERNAME is not the magic word 'none' which
+     # is used to only remove all active ServerName entries.
+     # Note that even 'localhost' or '127.0.0.1' is a valid entry there
+     # which is used to force client tools (e.g. lpadmin, lpinfo, lpstat)
+     # to ask the local cupsd via the IPP port on localhost (127.0.0.1:631)
+     # and not via the domain socket (/var/run/cups/cups.sock) because
+     # the latter failed in the past for certain third-party clients (e.g. Java).
+     # Note that (according to Michael Sweet) it is not a supported configuration
+     # when a cupsd listens only on the domain socket but not on localhost so that
+     # YaST can rely on that a local cupsd listens at least on localhost.
+     if test -w /etc/cups/client.conf
+     then # Remove all existing active ServerName entries with ignore case
+          # (usually there should be at most one active ServerName entry):
+          sed -i.yast2.save -e '/^ServerName/Id' /etc/cups/client.conf
+          # Append the new active ServerName entry if SERVERNAME is not 'none':
+          if test "none" != "$SERVERNAME"
+          then echo "ServerName $SERVERNAME" >>/etc/cups/client.conf
+          fi
+     else # Create a new /etc/cups/client.conf with the active ServerName entry if SERVERNAME is not 'none':
+          if test "none" != "$SERVERNAME" && echo "ServerName $SERVERNAME" >/etc/cups/client.conf
+          then exit 0
+          else echo "Failed to create /etc/cups/client.conf with 'ServerName $SERVERNAME' entry." 1>&2
+               exit 1
+          fi
+     fi
+fi
+
+# In any case report what there might be set in /etc/cups/client.conf.
+# If there is no active ServerName or when /etc/cups/client.conf does not exist,
+# the output is the empty string (i.e. nothing at all - not even a '\n' character).
+# The 'tr ... [:blank:]' makes sure that all active ServerName entries
+# are found if there is more than one which is a broken config.
+# Trailing spaces are removed and when 'localhost' or its IP-address is set,
+# it is unified so that YaST only needs to test for 'localhost' and '127.0.0.1'
+# (but not for stuff like 'LocalHost' or '127.000.000.001').
+SERVERNAME="$( grep -i '^ServerName ' /etc/cups/client.conf | tr -s '[:blank:]' ' ' | cut -s -d' ' -f2 | tr -s '\n' ' ' | sed -e 's/ *$//' -e 's/localhost/localhost/i' -e 's/127\.0*0\.0*0\.0*1/127.0.0.1/' )"
+echo -n "$SERVERNAME"
+# For a nicer output on a terminal where stdout and stderr is mixed up,
+# output a '\n' on stderr to get subsequent stuff (e.g. the shell prompt
+# or error messages because of failed tests below) on a new line:
+echo 1>&2
+
+# Test if the active ServerName is accessible, if such an entry exists.
+# If executables for the tests are missing, show an error message and skip the test.
+# If a test fails, show an error message and exit with non-zero exit code.
+if test -z "$SERVERNAME"
+then exit 0
+fi
+EXITCODE=0
+# First do the most meaningful test and exit successfully if this works:
+NETCAT="$( type -P netcat )"
+if test -x "$NETCAT"
+then # Test if the server is accessible via the default IPP port.
+     # It is possible to run the cupsd on another port and specify this
+     # via 'ServerName host:port' but currently this special case is ignored.
+     if $NETCAT -w 1 -z $SERVERNAME 631 &>/dev/null
+     then echo "The server '$SERVERNAME' is accessible via port 631 (IPP/CUPS)." 1>&2
+          exit 0
+     else echo "The server '$SERVERNAME' is not accessible via port 631 (IPP/CUPS)." 1>&2
+          EXITCODE=2
+     fi
+else echo "Cannot execute netcat" 1>&2
+fi
+# Only if the most meaningful test had failed (or cannot be executed), do a less meaningful test:
+PING="$( type -P ping )"
+if test -x "$PING"
+then # Test if the server responds to ping:
+     if $PING -w 1 -c 1 $SERVERNAME &>/dev/null
+     then echo "The server '$SERVERNAME' responds to a 'ping' in the network." 1>&2
+          # Exit unsuccessfully when the most meaningful test had failed
+          # but exit successfully when the most meaningful test could no be executed:
+          exit $EXITCODE
+     else echo "The server '$SERVERNAME' does not respond to a 'ping' in the network." 1>&2
+          EXITCODE=3
+     fi
+else echo "Cannot execute ping" 1>&2
+fi
+# Only if both tests above have failed (or cannot be executed), do a last test:
+HOST="$( type -P host )"
+if test -x "$HOST"
+then # Test if the server name is known by DNS:
+     if $HOST -W 1 $SERVERNAME &>/dev/null
+     then echo "The server '$SERVERNAME' is known by the DNS." 1>&2
+          # Exit unsuccessfully when the less meaningful test had failed
+          # or when the most meaningful test had failed and the less meaningful test could no be executed
+          # but exit successfully when both the above tests could no be executed:
+          exit $EXITCODE
+     else echo "The server '$SERVERNAME' is not known by the DNS." 1>&2
+          exit 4
+     fi
+else echo "Cannot execute host" 1>&2
+fi
+
+# Exit successfully as fallback (e.g. when netcat or ping or host cannot be executed):
+exit 0
+
