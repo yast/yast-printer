@@ -1,0 +1,1186 @@
+/* ------------------------------------------------------------------------------
+ * Copyright (c) 2006 Novell, Inc. All Rights Reserved.
+ *
+ *
+ * This program is free software; you can redistribute it and/or modify it under
+ * the terms of version 2 of the GNU General Public License as published by the
+ * Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+ * FOR A PARTICULAR PURPOSE.  See the GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License along with
+ * this program; if not, contact Novell, Inc.
+ *
+ * To contact Novell about this file by physical or electronic mail, you may find
+ * current contact information at www.novell.com.
+ * ------------------------------------------------------------------------------
+ */
+
+/**
+ * File:        include/printer/connectionwizard.ycp
+ * Package:     Configuration of printer
+ * Summary:     Connection Wizard
+ * Authors:     Michal Zugec <mzugec@suse.de>
+ *              Johannes Meixner <jsmeix@suse.de>
+ *
+ * $Id: connectionwizard.ycp 27914 2006-02-13 14:32:08Z locilka $
+ */
+
+{
+
+textdomain "printer";
+
+import "Label";
+import "Printer";
+import "Printerlib";
+import "Popup";
+import "Wizard";
+
+include "printer/helps.ycp";
+
+string connection_uri="";
+string connection_model="";
+list< string > known_manufacturers = [ "Generic",
+                                       "Alps",
+                                       "Anitech",
+                                       "Apollo",
+                                       "Apple",
+                                       "Brother",
+                                       "Canon",
+                                       "Citizen",
+                                       "CItoh",
+                                       "Compaq",
+                                       "DEC",
+                                       "Dell",
+                                       "Dymo",
+                                       "Epson",
+                                       "Fujifilm",
+                                       "Fujitsu",
+                                       "Gestetner",
+                                       "Heidelberg",
+                                       "Hitachi",
+                                       "HP",
+                                       "IBM",
+                                       "Infotec",
+                                       "Kodak",
+                                       "KS",
+                                       "Kyocera",
+                                       "Lanier",
+                                       "Lexmark",
+                                       "Minolta",
+                                       "Mitsubishi",
+                                       "NEC",
+                                       "NRG",
+                                       "Oce",
+                                       "Oki",
+                                       "Olivetti",
+                                       "Olympus",
+                                       "Panasonic",
+                                       "PCPI",
+                                       "QMS",
+                                       "Raven",
+                                       "Ricoh",
+                                       "Samsung",
+                                       "Savin",
+                                       "Seiko",
+                                       "Sharp",
+                                       "Shinko",
+                                       "Sony",
+                                       "Star",
+                                       "Tally",
+                                       "Tektronix",
+                                       "Toshiba",
+                                       "Xerox",
+                                       "Zebra"
+                                     ];
+list< string > manufacturers_for_using_driver = prepend( add( known_manufacturers, "Raw Queue" ), "" );
+list< string > manufacturers_for_raw_queue = prepend( known_manufacturers, "Raw Queue" );
+
+string getCurrentDeviceURI()
+{ if( "" != Printer::connections[Printer::selected_connections_index,"uri"]:"")
+  { return Printer::connections[Printer::selected_connections_index,"uri"]:"";
+  }
+  return Printer::queues[Printer::selected_queues_index,"uri"]:"";
+}
+
+term getContentFromCurrentModel()
+{ term content = nil;
+  string current_model_info = Printer::connections[Printer::selected_connections_index,"model"]:"";
+  if( "" == current_model_info
+      || "unknown" == tolower( current_model_info )
+    )
+  { current_model_info = Printer::queues[Printer::selected_queues_index,"description"]:"";
+    if( "" != current_model_info
+        && "unknown" != tolower( current_model_info )
+      )
+    { list <string> description_words = splitstring( current_model_info, " " );
+      if( size( description_words ) > 2 )
+      { current_model_info = description_words[0]:"" + " "
+                             + description_words[1]:"" + " "
+                             + description_words[2]:"";
+      }
+      if( size( description_words ) == 2 )
+      { current_model_info = description_words[0]:"" + " "
+                             + description_words[1]:"";
+      }
+      if( size( description_words ) == 1 )
+      { current_model_info = description_words[0]:"";
+      }
+    }
+  }
+  if( "" != current_model_info
+      && "unknown" != tolower( current_model_info )
+    )
+  { content = `Left
+              ( `ComboBox
+                ( `id("manufacturers_combo_box"),
+                  `opt(`editable),
+                  // Header for a ComboBox to keep the printer model or select another manufacturer:
+                  _("Keep the printer model or select another &manufacturer"),
+                  prepend( add( known_manufacturers, "Raw Queue" ), current_model_info )
+                )
+              );
+  }
+  else
+  { content = `Left
+              ( `ComboBox
+                ( `id("manufacturers_combo_box"),
+                  `opt(`editable),
+                  // Header for a ComboBox to select the printer manufacturer:
+                  _("Select the printer &manufacturer"),
+                  manufacturers_for_using_driver
+                )
+              );
+  }
+  return content;
+}
+
+term getContentFromBackend( string backend )
+{ list items = [];
+  backend = sformat( "%1:/", backend );
+  foreach( term row,
+           (list<term>)Printer::ConnectionItems( "" ),
+           { if( backend == substring( row[2]:"", 0, size(backend) ) )
+             { items = add( items, row );
+             }
+           }
+         );
+  term content = `VBox
+                 ( `Table
+                   ( `id(`connection_selection),
+                     // By default there is no UserInput()
+                     // if only something was selected in the Table
+                     // (without clicking additionally a button)
+                     // but the notify and immediate options
+                     // forces UserInput() in this case:
+                     `opt(`notify, `immediate, `keepSorting),
+                     // Headers of a Table with a list of printer connections:
+                     `header
+                     ( // Header of a Table column with a list of printer connections.
+                       // Printer model name:
+                       _("Model"),
+                       // Header of a Table column with a list of printer connections.
+                       // Connection of the printer (e.g. via USB or via parallel port):
+                       _("Connection"),
+                       // Header of a Table column with a list of printer connections.
+                       // Additional description of the printer or its particular connection:
+                       _("Description")
+                     ),
+                     items
+                   )
+                 );
+  return content;
+}
+
+term getNetworkContent( list<string>text )
+{ if( size(text) != 3 )
+  { y2error( "To create content for Network dialog it needs 3 strings : %1", text );
+    return nil;
+  }
+  term content = `VBox
+                 ( `Left
+                   ( `HBox
+                     ( `ComboBox
+                       ( `id(`hostname),
+                         `opt(`editable),
+                         // TRANSLATORS: Text entry to fill IP or hostname of remote server
+                         _("&IP Address or Host Name")
+                       ),
+                       `MenuButton
+                       ( // TRANSLATORS: Label for menu to search for remote servers
+                         _("Look Up"),
+                         [ `item( `id(`scan), text[0]:"" ),
+                           // TRANSLATORS: Button to search for remote servers
+                           `item( `id(`scan_all), _("Look Up for All Hosts") )
+                         ]
+                       )
+                     )
+                   ),
+                   `Left
+                   ( `InputField( `id(`port_or_queue), text[1]:"", text[2]:"" )
+                   ),
+                   `Left
+                   ( // TRANSLATORS: Button to test remote printer machine
+                     `PushButton( `id(`test), _("&Test Connection") )
+                   )
+                 );
+  return content;
+}
+
+void changeSettingsDialog( symbol selected )
+{ term content = nil;
+  term connection_content = nil;
+  term model_content = nil;
+  term model_for_using_driver_content = `Left
+                                        ( `ComboBox
+                                          ( `id("manufacturers_combo_box"),
+                                            `opt(`editable),
+                                            // Header for a ComboBox to select the printer manufacturer:
+                                            _("Select the printer &manufacturer"),
+                                            manufacturers_for_using_driver
+                                          )
+                                        );
+  term model_for_raw_queue_content = `Left
+                                     ( `ComboBox
+                                       ( `id("manufacturers_combo_box"),
+                                         `opt(`editable),
+                                         // Header for a ComboBox to optionally select the printer manufacturer.
+                                         // Do not change or translate "raw", it is a technical term
+                                         // when no driver is used for a print queue.
+                                         _("You may select a printer &manufacturer if no 'raw queue' should be set up"),
+                                         manufacturers_for_raw_queue
+                                       )
+                                     );
+  switch(selected)
+  { // directly connected
+    case(`parallel):
+          content = getContentFromBackend("parallel");
+          break;
+    case(`usb):
+          content = getContentFromBackend("usb");
+          break;
+    case(`serial):
+          content = getContentFromBackend("serial");
+          break;
+    case(`infra):
+          content = getContentFromBackend("infra");
+          break;
+    case(`bluetooth):
+          content = getContentFromBackend("bluetooth");
+          break;
+    case(`scsi):
+          content = getContentFromBackend("scsi");
+          break;
+    case(`hplip):
+          content = getContentFromBackend("hp");
+          break;
+    // network printer
+    case(`tcp):
+          connection_content = getNetworkContent( [ // TRANSLATORS: List of input field labels,
+                                                    // first for network scan button,
+                                                    // second for the TCP port number:
+                                                    _("Scan for Direct Socket Servers"),
+                                                    _("TCP Port Number"),
+                                                    "9100"
+                                                  ]
+                                                );
+          content = `VBox( connection_content, model_for_using_driver_content );
+          break;
+    case(`lpd):
+          connection_content = getNetworkContent( [ // TRANSLATORS: List of input field labels,
+                                                    // first for network scan button,
+                                                    // second for name of printer queue
+                                                    _("Scan for LPD Servers"),
+                                                    _("Queue Name (see the printer's manual)"),
+                                                    "LPT1"
+                                                  ]
+                                                );
+          content = `VBox( connection_content, model_for_using_driver_content );
+          break;
+    case(`ipp):
+          content = `VBox
+                    ( `Left
+                      ( `InputField
+                        ( `id(`uri),
+                          // TRANSLATORS: Input field label
+                          _("URI (see the printer's manual)"),
+                          "ipp://ip-address:port-number/resource"
+                        )
+                      ),
+                      model_for_using_driver_content
+                    );
+          break;
+    // print via
+    case(`smb):
+          content = `VBox
+                    ( `Left
+                      ( `HBox
+                        ( `ComboBox
+                          ( `id(`hostname),
+                            `opt(`editable),
+                            // TRANSLATORS: Text entry for remote server name
+                            _("Server (NetBIOS Host Name)")
+                          //),
+                          //`MenuButton
+                          //( // TRANSLATORS: Label for menu to search for remote servers
+                          //  _("Look Up"),
+                          //  [ `item( `id(`scan), _("Scan for samba printers") ),
+                          //    // TRANSLATORS: Buttonto search for remote servers
+                          //    `item( `id(`scan_all), _("Look Up for All Hosts") )
+                          //  ]
+                          )
+                        )
+                      ),
+                      `Left
+                      ( `InputField
+                        ( `id(`printer),
+                          // TRANSLATORS: Text entry for printer name
+                          _("Printer (Share Name)")
+                        )
+                      ),
+                      `Left
+                      ( `HBox
+                        ( `ComboBox
+                          ( `id(`domain),
+                            `opt(`editable),
+                            // TRANSLATORS: Text entry for samba domain
+                            _("Workgroup (Domain Name)")
+                          //),
+                          //PushButton
+                          //( `id(`scan_domain),
+                          //  _("Scan for Windows Share Domains")
+                          //)
+                          )
+                        )
+                      ),
+                      `Left
+                      ( `Frame
+                        ( // TRANSLATORS: Frame label for authentication
+                          _("Authenticate As"),
+                          `VBox
+                          ( `InputField
+                            ( `id(`user),
+                              // TRANSLATORS: Text entry for username (authentication)
+                              _("User")
+                            ),
+                            `Password
+                            ( `id(`pass),
+                              // TRANSLATORS: Text entry for password (authentication)
+                              _("&Password")
+                            )
+                          )
+                        )
+                      ),
+                      `Left
+                      ( `PushButton
+                        ( `id(`test),
+                          // TRANSLATORS: Button to test remote printer machine
+                          _("&Test Connection")
+                        )
+                      ),
+                      model_for_using_driver_content
+                    );
+          break;
+    case(`lpr):
+          connection_content = getNetworkContent( [ // TRANSLATORS: List of input field labels,
+                                                    // first for network scan button,
+                                                    // second for name of printer queue
+                                                    _("Scan for LPD Servers"),
+                                                    _("Queue Name"),
+                                                    ""
+                                                  ]
+                                                );
+          content = `VBox( connection_content, model_for_raw_queue_content );
+          break;
+    case(`cups):
+          content = `VBox
+                    ( `Left
+                      ( `HBox
+                        ( `ComboBox
+                          ( `id(`hostname),
+                            `opt(`editable),
+                            // TRANSLATORS: Text entry for IP or hostname of remote server
+                            _("IP Address or Host Name")
+                          ),
+                          `MenuButton
+                          ( // TRANSLATORS: Label for menu to search for remote servers
+                            _("Look Up"),
+                            [ `item( `id(`scan), _("Scan for IPP Servers") ),
+                              `item( `id(`scan_broadcast), _("Scan for IPP Broadcasts") ),
+                              `item( `id(`scan_all), _("Look Up for All Hosts") )
+                            ]
+                          )
+                        )
+                      ),
+                      `Left
+                      ( `InputField( `id(`queue), _("Queue Name") )
+                      ),
+                      `Left
+                      ( `PushButton
+                        ( `id(`test),
+                          // TRANSLATORS: Button to test remote printer machine
+                          _("&Test Connection")
+                        )
+                      ),
+                      model_for_raw_queue_content
+                    );
+          break;
+    case(`ipx):
+          content = `VBox
+                    ( `Left
+                      ( `InputField
+                        ( `id(`hostname),
+                          // TRANSLATORS: Text entry for IP or hostname of remote server
+                          _("IP Address or Host Name")
+                        )
+                      ),
+                      `Left
+                      ( `InputField
+                        ( `id(`queue),
+                          // TRANSLATORS: Text entry for name of remote printer queue
+                          _("Queue Name")
+                        )
+                      ),
+                      `Left
+                      ( `Frame
+                        ( // TRANSLATORS: Frame label for authentication
+                          _("Authenticate As"),
+                          `VBox
+                          ( `InputField
+                            ( `id(`user),
+                              // TRANSLATORS: Text entry for username (authentication)
+                              _("User")
+                            ),
+                            `Password
+                            ( `id(`pass),
+                              // TRANSLATORS: Text entry for password (authentication)
+                              _("&Password")
+                            )
+                          )
+                        )
+                      ),
+                      `Left
+                      ( `PushButton
+                        ( `id(`test),
+                          // TRANSLATORS: Button to test remote printer machine
+                          _("&Test Connection")
+                        )
+                      ),
+                      model_for_using_driver_content
+                    );
+          break;
+    // special
+    case(`uri):
+          model_content = getContentFromCurrentModel();
+          content = `VBox
+                    ( `Left
+                      ( `InputField
+                        ( `id(`uri),
+                          // TRANSLATORS: Text entry for URI (Uniform Resource Identifier)
+                          _("URI (Uniform Resource Identifier)"),
+                          getCurrentDeviceURI()
+                        )
+                      ),
+                      model_content
+                    );
+          break;
+    case(`pipe):
+          content = `VBox
+                    ( `Left
+                      ( `InputField
+                        ( `id(`program),
+                          // TRANSLATORS: Text entry for program name that will be called via pipe
+                          _("Program Name")
+                        )
+                      ),
+                      model_for_raw_queue_content
+                    );
+          break;
+    case(`beh):
+          model_content = getContentFromCurrentModel();
+          content = `VBox
+                    ( `Left
+                      ( `InputField
+                        ( `id(`queue),
+                          // TRANSLATORS: Text entry for device URI (Uniform Resource Identifier)
+                          _("Device URI (for which 'beh' should be applied)"),
+                          getCurrentDeviceURI()
+                        )
+                      ),
+                      `Left
+                      ( `CheckBox
+                        ( `id(`beh_do_not_disable),
+                          // TRANSLATORS: Check box
+                          _("Never Disable the Queue"),
+                          true
+                        )
+                      ),
+                      `Left
+                      ( `InputField
+                        ( `id(`beh_attempts),
+                          // TRANSLATORS: Text entry
+                          _("Number of Retries ('0' means infinite retries)"),
+                          "0"
+                        )
+                      ),
+                      `Left
+                      ( `InputField
+                        ( `id(`beh_delay),
+                          // TRANSLATORS: Text entry
+                          _("Delay in Seconds Between Two Retries"),
+                          "30"
+                        )
+                      ),
+                      model_content
+                    );
+          break;
+    case(`directly):
+    case(`network):
+    case(`server):
+    case(`special):
+          content = `VBox
+                    ( `Left
+                      ( `Label
+                        ( _("Select a specific connection type.") )
+                      )
+                    );
+          break;
+    default:
+          y2error( "Unknown selected item %1", selected );
+  }
+  UI::ReplaceWidget( `rp, content );
+}
+
+any ConnectionWizardDialog()
+{ term contents = `VBox
+                  ( `HBox
+                    ( `HWeight
+                      ( 1,
+                        `Tree
+                        ( `id(`tree_selection),
+                          `opt(`notify),
+                          // TRANSLATORS: Label for tree widget description
+                          _("&Connection Type"),
+                          [ `item
+                            ( `id(`directly),
+                              // TRANSLATORS: Tree widget item
+                              _("Directly Connected Device"),
+                              true,
+                              [ // TRANSLATORS: Tree widget item
+                                `item( `id(`parallel), _("Parallel Port") ),
+                                // TRANSLATORS: Tree widget item
+                                `item(`id(`usb), _("USB Port") ),
+                                // TRANSLATORS: Tree widget item
+                                `item( `id(`serial), _("Serial Port") ),
+                                // `item( `id(`infra), _("Infrared Port (IrDA)") ),
+                                // TRANSLATORS: Tree widget item
+                                `item( `id(`bluetooth), _("Bluetooth") ),
+                                // TRANSLATORS: Tree widget item
+                                `item( `id(`scsi), _("SCSI") ),
+                                // TRANSLATORS: Tree widget item
+                                `item( `id(`hplip), _("HP Devices (HPLIP)") )
+                              ]
+                            ),
+                            `item
+                            ( `id(`network),
+                              // TRANSLATORS: Tree widget item
+                              _("Access Network Printer or Printserver Box via"),
+                              true,
+                              [ // TRANSLATORS: Tree widget item
+                                `item( `id(`tcp), _("TCP Port (AppSocket/JetDirect)") ),
+                                // TRANSLATORS: Tree widget item
+                                `item( `id(`lpd), _("Line Printer Daemon (LPD) Protocol") ),
+                                // TRANSLATORS: Tree widget item
+                                `item( `id(`ipp), _("Internet Printing Protocol (IPP)") )
+                              ]
+                            ),
+                            `item
+                            ( `id(`server),
+                              // TRANSLATORS: Tree widget item
+                              _("Print Via Print Server Machine"),
+                              true,
+                              [ // TRANSLATORS: Tree widget item
+                                `item( `id(`smb), _("Microsoft Windows/SAMBA (SMB/CIFS)") ),
+                                // TRANSLATORS: Tree widget item
+                                `item( `id(`lpr), _("Traditional UNIX Server (LPR)") ),
+                                // `item( `id(`iprint), _("iPrint (Novell OES)") ),
+                                // TRANSLATORS: Tree widget item
+                                `item( `id(`cups), _("CUPS Server") ),
+                                // TRANSLATORS: Tree widget item
+                                `item( `id(`ipx), _("Novell Netware Print Server (IPX)") )
+                              ]
+                            ),
+                            `item
+                            ( `id(`special),
+                              // TRANSLATORS: Tree widget item
+                              _("Special"),
+                              true,
+                              [ // TRANSLATORS: Tree widget item
+                                `item( `id(`uri), _("Specify Arbitrary Device URI") ),
+                                // TRANSLATORS: Tree widget item
+                                `item( `id(`pipe), _("Send Print Data to Other Program (pipe)") ),
+                                // TRANSLATORS: Tree widget item
+                                `item( `id(`beh), _("Daisy-chain Backend Error Handler (beh)") )
+                              ]
+                            )
+                          ]
+                        )
+                      ),
+                      `HWeight
+                      ( 1,
+                        `VBox
+                        ( `VStretch(),
+                          `Frame
+                          ( // TRANSLATORS: Connection details widget
+                            _("Connection Settings"),
+                            `ReplacePoint( `id(`rp),
+                                           `VBox
+                                           ( `Left
+                                             ( `Label
+                                               ( _("Select a specific connection type.") )
+                                             )
+                                           )
+                                         )
+                          ),
+                          `VStretch()
+                        )
+                      )
+                    )
+                  );
+  // According to http://en.opensuse.org/YaST/Style_Guide#Single_Configuration.2FOverview.2FEdit_Dialog
+  // there is no longer a "abort" functionality which exits the whole module.
+  // Instead this button is now named "Cancel" and its functionality is
+  // to go back to the Overview dialog (i.e. what the "back" button would do)
+  // because it reads "Cancel - Closes the window and returns to the overview."
+  // In this case the "overview" is not the actual Overview dialog but the dialog
+  // from which this DriverOptionsDialog was called i.e. BasicModifyDialog.
+  // Therefore the button with the "abort" functionality is not shown at all
+  // and the button with the "back" functionality is named "Cancel".
+  // According to http://en.opensuse.org/YaST/Style_Guide#Single_Configuration.2FOverview.2FEdit_Dialog
+  // the "finish" button in a single (step) configuration dialog must now be named "OK".
+  Wizard::SetContentsButtons( // TRANSLATORS: Connection wizard header
+                              _("Connection Wizard"),
+                              contents,
+                              HELPS["connection_wizard_dialog"]:"",
+                              // Set a new label for the "back" button, see the comment above:
+                              Label::CancelButton(),
+                              // Set a new label for the "next" button, see the comment above:
+                              Label::OKButton()
+                            );
+  Wizard::HideAbortButton();
+
+boolean validateSettingsDialog( symbol type )
+{ boolean valid=false;
+  connection_uri="";
+  connection_model="";
+  switch(type)
+  { case(`parallel):
+    case(`usb):
+    case(`serial):
+    case(`infra):
+    case(`bluetooth):
+    case(`scsi):
+    case(`hplip):
+          integer selected_connection_index = (integer)UI::QueryWidget( `id(`connection_selection), `CurrentItem );
+          if( nil == selected_connection_index )
+          { Popup::AnyMessage( // Header of a Popup::AnyMessage when no connection was selected:
+                               _("No Connection Selected"),
+                               // Body of a Popup::AnyMessage when no connection was selected:
+                               _("Select a connection.")
+                             );
+            break;
+          }
+          connection_uri = Printer::connections[selected_connection_index,"uri"]:"";
+          connection_model = Printer::connections[selected_connection_index,"model"]:"Unknown";
+          if( "" != connection_uri )
+          { valid = true;
+          }
+          break;
+    case(`uri):
+          connection_uri = (string)UI::QueryWidget( `uri, `Value );
+          if( size( connection_uri ) > 0 )
+          { valid = true;
+          }
+          else
+          { Popup::Error( _("URI couldn't be empty!") );
+          }
+          if( valid )
+          { connection_model = (string)UI::QueryWidget( `id("manufacturers_combo_box"), `Value );
+            if( "" == connection_model )
+            { valid = false;
+              Popup::Error( _("Select a manufacturer!") );
+            }
+          }
+          break;
+    case(`ipp):
+          connection_uri = (string)UI::QueryWidget( `uri, `Value );
+          if( size( connection_uri ) > 0 )
+          { valid = true;
+          }
+          else
+          { Popup::Error( _("URI couldn't be empty!") );
+          }
+          if( valid )
+          { connection_model = (string)UI::QueryWidget( `id("manufacturers_combo_box"), `Value );
+            if( "" == connection_model )
+            { valid = false;
+              Popup::Error( _("Select a manufacturer!") );
+            }
+          }
+          break;
+    case(`smb):
+          map<string, any> smb = $[ "hostname" : UI::QueryWidget( `hostname, `Value ),
+                                    "printer" : UI::QueryWidget( `printer, `Value ),
+                                    "domain" : UI::QueryWidget( `domain, `Value ),
+                                    "user" : UI::QueryWidget( `user, `Value ),
+                                    "pass" : UI::QueryWidget( `pass, `Value )
+                                  ];
+          if( size( smb["hostname"]:"" ) == 0
+              || size( smb["printer"]:"" ) == 0
+            )
+          { Popup::Error( _("Servername and printer couldn't be empty!") );
+          }
+          else
+          { if( ( size( smb["user"]:"" ) > 0 && size( smb["pass"]:"" ) == 0 )
+                || ( size( smb["user"]:"" ) == 0 && size( smb["pass"]:"" ) > 0 )
+              )
+            { Popup::Error( _("Both user and password must be specified!") );
+            }
+            else
+            { connection_uri = "smb://";
+              if( size( smb["user"]:"" ) > 0
+                  && size( smb["pass"]:"" ) > 0
+                )
+              { connection_uri = sformat( "%1%2:%3@",
+                                          connection_uri,
+                                          smb["user"]:"",
+                                          smb["pass"]:""
+                                        );
+              }
+              if( size( smb["domain"]:"" ) > 0 )
+              { connection_uri = sformat( "%1%2/",
+                                          connection_uri,
+                                          smb["domain"]:""
+                                        );
+              }
+              connection_uri = sformat( "%1%2/%3",
+                                        connection_uri,
+                                        smb["hostname"]:"",
+                                        smb["printer"]:""
+                                      );
+              valid = true;
+            }
+          }
+          if( valid )
+          { connection_model = (string)UI::QueryWidget( `id("manufacturers_combo_box"), `Value );
+            if( "" == connection_model )
+            { valid = false;
+              Popup::Error( _("Select a manufacturer!") );
+            }
+          }
+          break;
+    case(`tcp):
+          map<string, any> tcp = $[ "hostname" : UI::QueryWidget( `hostname, `Value ),
+                                    "port" : UI::QueryWidget( `port_or_queue, `Value )
+                                  ];
+          if( size( tcp["hostname"]:"" ) > 0
+              && size( tcp["port"]:"" ) > 0
+            )
+          { connection_uri = sformat( "socket://%1:%2", tcp["hostname"]:"", tcp["port"]:"" );
+            valid = true;
+          }
+          else
+          { Popup::Error( _("Servername and port couldn't be empty!") );
+          }
+          if( valid )
+          { connection_model = (string)UI::QueryWidget( `id("manufacturers_combo_box"), `Value );
+            if( "" == connection_model )
+            { valid = false;
+              Popup::Error( _("Select a manufacturer!") );
+            }
+          }
+          break;
+    case(`lpd):
+          map<string, any> lpd = $[ "hostname" : UI::QueryWidget( `hostname, `Value ),
+                                    "queue" : UI::QueryWidget( `port_or_queue, `Value )
+                                  ];
+          if( size( lpd["hostname"]:"" ) > 0
+              && size( lpd["queue"]:"" ) > 0
+            )
+          { connection_uri = sformat( "lpd://%1/%2", lpd["hostname"]:"", lpd["queue"]:"" );
+            valid=true;
+          }
+          else
+          { Popup::Error( _("Servername and queue name couldn't be empty!") );
+          }
+          if( valid )
+          { connection_model = (string)UI::QueryWidget( `id("manufacturers_combo_box"), `Value );
+            if( "" == connection_model )
+            { valid = false;
+              Popup::Error( _("Select a manufacturer!") );
+            }
+          }
+          break;
+    case(`lpr):
+          map<string, any> lpr = $[ "hostname" : UI::QueryWidget( `hostname, `Value ),
+                                    "queue" : UI::QueryWidget( `port_or_queue, `Value )
+                                  ];
+          if( size( lpr["hostname"]:"" ) > 0
+              && size( lpr["queue"]:"" ) > 0
+            )
+          { connection_uri = sformat( "lpd://%1/%2", lpr["hostname"]:"", lpr["queue"]:"" );
+            valid=true;
+          }
+          else
+          { Popup::Error( _("Servername and queue name couldn't be empty!") );
+          }
+          if( valid )
+          { connection_model = (string)UI::QueryWidget( `id("manufacturers_combo_box"), `Value );
+            if( "" == connection_model )
+            { valid = false;
+              Popup::Error( _("Select a manufacturer!") );
+            }
+          }
+          break;
+    case(`cups):
+          map<string, any> cups = $[ "hostname" : UI::QueryWidget( `hostname, `Value ),
+                                     "queue" : UI::QueryWidget( `queue, `Value )
+                                   ];
+          if( size( cups["hostname"]:"" ) > 0
+              && size( cups["queue"]:"" ) > 0
+            )
+          { connection_uri = sformat( "ipp://%1/printers/%2", cups["hostname"]:"", cups["queue"]:"" );
+            valid=true;
+          }
+          else
+          { Popup::Error( _("Servername and queue name couldn't be empty!") );
+          }
+          if( valid )
+          { connection_model = (string)UI::QueryWidget( `id("manufacturers_combo_box"), `Value );
+            if( "" == connection_model )
+            { valid = false;
+              Popup::Error( _("Select a manufacturer!") );
+            }
+          }
+          break;
+    case(`ipx):
+          map<string, any> ipx = $[ "hostname" : UI::QueryWidget( `hostname, `Value ),
+                                    "queue" : UI::QueryWidget( `queue, `Value ),
+                                    "user" : UI::QueryWidget( `user, `Value ),
+                                    "pass" : UI::QueryWidget( `pass, `Value )
+                                  ];
+          y2internal( "novell ipx map %1", ipx );
+          if( size( ipx["hostname"]:"" ) == 0
+              || size( ipx["queue"]:"" ) == 0
+            )
+          { Popup::Error( _("Servername and queue name couldn't be empty!") );
+          }
+          else
+          { connection_uri = "novell://";
+            if( size( ipx["user"]:"" ) > 0
+                && size( ipx["pass"]:"" ) > 0
+              )
+            { connection_uri = sformat( "%1%2:%3@", connection_uri, ipx["user"]:"", ipx["pass"]:"" );
+            }
+            connection_uri = sformat("%1%2/%3", connection_uri, ipx["hostname"]:"", ipx["queue"]:"" );
+            valid=true;
+          }
+          if( valid )
+          { connection_model = (string)UI::QueryWidget( `id("manufacturers_combo_box"), `Value );
+            if( "" == connection_model )
+            { valid=false;
+              Popup::Error( _("Select a manufacturer!") );
+            }
+          }
+          break;
+    case(`beh):
+          map<string, any> beh = $[ "uri" : UI::QueryWidget( `queue, `Value ),
+                                    "do_not_disable" : UI::QueryWidget( `beh_do_not_disable, `Value ),
+                                    "attempts" : UI::QueryWidget( `beh_attempts, `Value ),
+                                    "delay" : UI::QueryWidget( `beh_delay, `Value )
+                                  ];
+          y2internal( "beh map %1", beh );
+          if( size( beh["uri"]:"") == 0
+              || size( beh["attempts"]:"" ) == 0
+              || size( beh["delay"]:"" ) == 0
+            )
+          { Popup::Error( _("Device URI, number of retries, and delay couldn't be empty!" ) );
+          }
+          else
+          { connection_uri = sformat( "beh:/%1/%2/%3/%4",
+                                      ( beh["dont_disable"]:false ? "1" : "0" ),
+                                      beh["attempts"]:"0",
+                                      beh["delay"]:"30",
+                                      beh["uri"]:""
+                                    );
+            valid = true;
+          }
+          if( valid )
+          { connection_model = (string)UI::QueryWidget( `id("manufacturers_combo_box"), `Value );
+            if( "" == connection_model )
+            { valid = false;
+              Popup::Error( _("Select a manufacturer!") );
+            }
+          }
+          break;
+    case(`pipe):
+          string pipe = (string)UI::QueryWidget( `program, `Value );
+          if( size( pipe ) > 0 )
+          { connection_uri = sformat( "pipe:/%1", pipe );
+            valid = true;
+          }
+          else
+          { Popup::Error( _("Couldn't be empty!") );
+          }
+          if( valid )
+          { connection_model = (string)UI::QueryWidget( `id("manufacturers_combo_box"), `Value );
+            if( "" == connection_model )
+            { valid = false;
+              Popup::Error( _("Select a manufacturer!") );
+            }
+          }
+          break;
+    default:
+          y2warning("Unknown type %1", type);
+          break;
+  }
+  if( ! valid )
+  { connection_uri="";
+    connection_model="";
+  }
+  return valid;
+}
+
+void scanForServers( symbol selected, boolean all )
+{ list<string> hosts = [];
+  if( all )
+  { hosts = (list<string>)SCR::Read(.net.hostnames);
+  }
+  else
+  { switch(selected)
+    { case(`tcp):
+            hosts = (list<string>)SCR::Read (.net.hostnames, 9100);
+            break;
+      case(`smb):
+            hosts = (list<string>)SCR::Read (.net.hostnames.samba);
+            break;
+      case(`lpr):
+      case(`lpd):
+            hosts = (list<string>)SCR::Read (.net.hostnames, 515);
+            break;
+      case(`cups):
+      case(`ipp):
+            hosts = (list<string>)SCR::Read (.net.hostnames, 631);
+/*
+            hosts = (list<string>)filter (string h, hosts, ``{
+                list queues = (list<string>)SCR::Read (.cups.remote, h);
+                return size (queues) > 0;
+            });
+*/
+            break;
+      default:
+            y2warning( "Unknown value: %1", selected );
+    }
+  }
+  UI::ChangeWidget( `hostname, `Items, hosts );
+  y2milestone( "scanForServers selected:%1", selected );
+  y2milestone( "hosts %1", hosts );
+}
+
+boolean testQueue( symbol selected )
+{ string test_command = "";
+  string timeout = "5";
+  string host = "";
+  string port = "";
+  string queue = "";
+  string workgroup = "";
+  string user = "";
+  string password = "";
+  switch(selected)
+  { case(`tcp):
+          host = (string)UI::QueryWidget( `hostname, `Value );
+          port = (string)UI::QueryWidget( `port_or_queue, `Value );
+          test_command = sformat( "%1test_remote_socket \"%2\" \"%3\" %4",
+                                  Printerlib::yast_bin_dir,
+                                  host,
+                                  port,
+                                  timeout
+                                );
+          if( ! Printerlib::ExecuteBashCommand( test_command) )
+          { Popup::ErrorDetails( sformat( // Message of a Popup::ErrorDetails
+                                          // where %1 will be replaced by the port number
+                                          // and %2 will be replaced by the host name:
+                                          _("Access test failed for port '%1' on host '%2'."),
+                                          port,
+                                          host
+                                        ),
+                                 Printerlib::result["stderr"]:"" + "\n" + Printerlib::result["stdout"]:""
+                               );
+            return false;
+          }
+          break;
+    case(`lpd):
+    case(`lpr):
+          host = (string)UI::QueryWidget( `hostname, `Value );
+          queue = (string)UI::QueryWidget( `port_or_queue, `Value );
+          port = "515";
+          test_command = sformat( "%1test_remote_lpd \"%2\" \"%3\" %4",
+                                  Printerlib::yast_bin_dir,
+                                  host,
+                                  queue,
+                                  timeout
+                                );
+          if( ! Printerlib::ExecuteBashCommand( test_command) )
+          { Popup::ErrorDetails( sformat( // Message of a Popup::ErrorDetails
+                                          // where %1 will be replaced by the queue name
+                                          // and %2 will be replaced by the host name:
+                                          _("Access test failed for queue '%1' on host '%2'."),
+                                          queue,
+                                          host
+                                        ),
+                                 Printerlib::result["stderr"]:"" + "\n" + Printerlib::result["stdout"]:""
+                               );
+            return false;
+          }
+          break;
+    case(`cups):
+          host = (string)UI::QueryWidget( `hostname, `Value );
+          queue = (string)UI::QueryWidget( `queue, `Value );
+          test_command = sformat( "%1test_remote_ipp \"%2\" \"%3\" %4",
+                                  Printerlib::yast_bin_dir,
+                                  host,
+                                  queue,
+                                  timeout
+                                );
+          if( ! Printerlib::ExecuteBashCommand( test_command) )
+          { Popup::ErrorDetails( sformat( // Message of a Popup::ErrorDetails
+                                          // where %1 will be replaced by the queue name
+                                          // and %2 will be replaced by the host name:
+                                          _("Access test failed for queue '%1' on host '%2'."),
+                                          queue,
+                                          host
+                                        ),
+                                 Printerlib::result["stderr"]:"" + "\n" + Printerlib::result["stdout"]:""
+                               );
+            return false;
+          }
+          break;
+    case(`smb):
+          host = (string)UI::QueryWidget( `hostname, `Value );
+          queue = (string)UI::QueryWidget( `printer, `Value );
+          workgroup = (string)UI::QueryWidget( `domain, `Value );
+          user = (string)UI::QueryWidget( `user, `Value );
+          password = (string)UI::QueryWidget( `pass, `Value );
+          test_command = sformat( "%1test_remote_smb \"%2\" \"%3\" \"%4\" \"%5\" \"%6\" %7",
+                                  Printerlib::yast_bin_dir,
+                                  workgroup,
+                                  host,
+                                  queue,
+                                  user,
+                                  password,
+                                  timeout
+                                );
+          if( ! Printerlib::ExecuteBashCommand( test_command) )
+          { Popup::ErrorDetails( sformat( // Message of a Popup::ErrorDetails
+                                          // where %1 will be replaced by the SMB share name
+                                          // and %2 will be replaced by the host name:
+                                          _("Access test failed for share '%1' on host '%2'."),
+                                          queue,
+                                          host
+                                        ),
+                                 Printerlib::result["stderr"]:"" + "\n" + Printerlib::result["stdout"]:""
+                               );
+            return false;
+          }
+          break;
+    case(`ipx):
+          host = (string)UI::QueryWidget( `hostname, `Value );
+          queue = (string)UI::QueryWidget( `queue, `Value );
+          user = (string)UI::QueryWidget( `user, `Value );
+          password = (string)UI::QueryWidget( `pass, `Value );
+          test_command = sformat( "%1test_remote_novell \"%2\" \"%3\" \"%4\" \"%5\" %6",
+                                  Printerlib::yast_bin_dir,
+                                  host,
+                                  queue,
+                                  user,
+                                  password,
+                                  timeout
+                                );
+          if( ! Printerlib::ExecuteBashCommand( test_command) )
+          { Popup::ErrorDetails( sformat( // Message of a Popup::ErrorDetails
+                                          // where %1 will be replaced by the queue name
+                                          // and %2 will be replaced by the host name:
+                                          _("Access test failed for queue '%1' on host '%2'."),
+                                          queue,
+                                          host
+                                        ),
+                                 Printerlib::result["stderr"]:"" + "\n" + Printerlib::result["stdout"]:""
+                               );
+            return false;
+          }
+          break;
+  }
+  Popup::Message( _("Test OK") );
+  return true;
+}
+
+boolean storeQueue( symbol selected )
+{ if( "" == connection_uri )
+  { return false;
+  }
+  string model = "Unknown";
+  if( "" != connection_model )
+  { model = connection_model;
+  }
+  y2internal( "Storing type '%1' with uri '%2' for model '%3'", selected, connection_uri, model );
+  Printer::connections = add( Printer::connections,
+                              $[ "uri" : connection_uri,
+                                 "model" : model,
+                                 "deviceID" : "",
+                                 "info" : "created by the connection wizard",
+                                 "class" : "ConnectionWizardDialog"
+                               ]
+                            );
+  return true;
+}
+
+//UI::OpenDialog(content);
+any ret = nil;
+while( ret != `back && ret != `next )
+{ ret = UI::UserInput();
+  symbol selected = (symbol)UI::QueryWidget( `tree_selection, `Value );
+  switch( (symbol)ret )
+  { case(`tree_selection):
+          changeSettingsDialog( selected );
+          break;
+    case(`next):
+          if( validateSettingsDialog( selected ) )
+          { y2milestone( "Writing settings" );
+            storeQueue( selected );
+          }
+          else
+          { y2error( "Couldn't validate %1", selected );
+            ret=nil;
+          }
+          break;
+    case(`scan_all):
+          scanForServers( selected, true );
+          break;
+    case(`scan):
+          scanForServers( selected, false );
+          break;
+    case(`test):
+          if( validateSettingsDialog( selected ) )
+          { testQueue( selected );
+          }
+          break;
+    y2internal( "ret %1", ret );
+  }
+}
+  return ret;
+//UI::CloseDialog();
+}
+}
+
