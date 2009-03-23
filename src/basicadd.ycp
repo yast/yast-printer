@@ -1,0 +1,429 @@
+/* ------------------------------------------------------------------------------
+ * Copyright (c) 2006 Novell, Inc. All Rights Reserved.
+ *
+ *
+ * This program is free software; you can redistribute it and/or modify it under
+ * the terms of version 2 of the GNU General Public License as published by the
+ * Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+ * FOR A PARTICULAR PURPOSE.  See the GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License along with
+ * this program; if not, contact Novell, Inc.
+ *
+ * To contact Novell about this file by physical or electronic mail, you may find
+ * current contact information at www.novell.com.
+ * ------------------------------------------------------------------------------
+ */
+
+/**
+ * File:        include/printer/basicadd.ycp
+ * Package:     Configuration of printer
+ * Summary:     Basic add dialog definition
+ * Authors:     Johannes Meixner <jsmeix@suse.de>
+ *
+ * $Id: basicadd.ycp 27914 2006-02-13 14:32:08Z locilka $
+ */
+
+{
+
+textdomain "printer";
+
+import "Label";
+import "Wizard";
+import "Printer";
+import "Printerlib";
+import "Popup";
+
+include "printer/helps.ycp";
+
+/**
+ * BasicAddDialog dialog
+ * @return dialog result
+ */
+any BasicAddDialog()
+{ y2milestone( "entering BasicAddDialog" );
+  // Caption for the "Add Printer" dialog (BasicAddDialog):
+  string caption = _("Add New Printer Configuration");
+  string driver_filter_string = "BasicAddDialog";
+  string driver_filter_input_text = "";
+  string queue_name_proposal = "";
+  string model = Printer::connections[Printer::selected_connections_index,"model"]:"";
+  if( "" != model
+      && "unknown" != tolower( model )
+    )
+  { queue_name_proposal = Printer::NewQueueName( tolower( model ) );
+    // Match only at the beginning of the NickName entry in the PPD:
+    driver_filter_string = "^" + filterchars( tolower( model ), Printer::lower_alnum_chars );
+    if( "^" != driver_filter_string )
+    { driver_filter_input_text = model;
+    }
+  }
+  term contents = `VBox
+                  ( `VBox
+                    ( `HBox
+                      ( `Label
+                        ( // Caption for a Table with a list of printer connections:
+                          _("Determine Connection")
+                        ),
+                        `HStretch(),
+                        `PushButton
+                        ( `id(`more_connections),
+                          // Label of a PushButton to show more available printer connections
+                          // in the Table with a list of printer connections:
+                          _("&More Connections")
+                        ),
+                        `PushButton
+                        ( `id(`connection_wizard),
+                          // Label of a PushButton to go to the "Connection Wizard"
+                          // to specify the printer connection individually:
+                          _("Connection &Wizard")
+                        )
+                      ),
+                      `ReplacePoint
+                      ( `id(`connection_selection_replace_point),
+                        `Table
+                        ( `id(`connection_selection),
+                          // By default there is no UserInput()
+                          // if only something was selected in the Table
+                          // (without clicking additionally a button)
+                          // but the notify and immediate options
+                          // forces UserInput() in this case:
+                          `opt(`notify, `immediate, `keepSorting),
+                          // Headers of a Table with a list of printer connections:
+                          `header
+                          ( // Header of a Table column with a list of printer connections.
+                            // Printer model name:
+                            _("Model"),
+                            // Header of a Table column with a list of printer connections.
+                            // Connection of the printer (e.g. via USB or via parallel port):
+                            _("Connection"),
+                            // Header of a Table column with a list of printer connections.
+                            // Additional description of the printer or its particular connection:
+                            _("Description")
+                          ),
+                          Printer::ConnectionItems( "BasicAddDialog" )
+                        )
+                      )
+                    ),
+                    `VStretch(),
+                    `VBox
+                    ( `HBox
+                      ( `ReplacePoint
+                        ( `id(`driver_filter_input_replace_point),
+                          `InputField
+                          ( `id(`driver_filter_input), `opt(`hstretch),
+                            // Caption for a printer driver selection:
+                            _("Search for &Drivers"),
+                            driver_filter_input_text
+                          )
+                        ),
+			`VBox
+                        ( `Label(""),
+                          `HBox
+                          ( `PushButton
+                            ( `id(`apply_driver_filter),
+                              // This button must be the default
+                              // (it is activated when the user pressed the Enter key)
+                              // because when the user has clicked into TextEntry to enter something
+                              // it is normal to finish entering by pressing the Enter key
+                              // but if the Enter key was linked to 'Next' or 'Back',
+                              // the user would get the wrong action.
+                              `opt(`default),
+                              // Label of a PushButton to search a list for a search string
+                              // and then show the search result:
+                              _("&Show Matching Drivers")
+                            ),
+                            `PushButton
+                            ( `id(`add_driver),
+                              // Label of a PushButton to go to the "Add Driver" dialog
+                              // to install a new driver (and perhaps download it before):
+                              _("&Add Driver")
+                            )
+                          )
+                        )
+                      ),
+                      `ReplacePoint
+                      ( `id(`driver_selection_replace_point),
+                        `SelectionBox
+                        ( `id(`driver_selection),
+                          // By default there is no UserInput()
+                          // if only something was selected in the SelectionBox
+                          // (without clicking additionally a button)
+                          // but the notify option forces UserInput() in this case:
+                          `opt(`notify),
+                          "",
+                          [ `item( `id( -1 ), _("Select a driver.") ) ]
+                        )
+                      )
+                    ),
+                    `VStretch(),
+                    `HBox
+                    ( `ReplacePoint
+                      ( `id(`queue_name_input_replace_point),
+                        `TextEntry
+                        ( `id(`queue_name_input),
+                          // Header of a TextEntry to enter the queue name:
+                          _("Set &Name"),
+                          queue_name_proposal
+                        )
+                      ),
+                      `HStretch()
+                    )
+                  );
+  // According to http://en.opensuse.org/YaST/Style_Guide#Single_Configuration.2FOverview.2FEdit_Dialog
+  // there is no longer a "abort" functionality which exits the whole module.
+  // Instead this button is now named "Cancel" and its functionality is
+  // to go back to the Overview dialog (i.e. what the "back" button would do)
+  // because it reads "Cancel - Closes the window and returns to the overview."
+  // Therefore the button with the "abort" functionality is not shown at all
+  // and the button with the "back" functionality is named "Cancel".
+  // According to http://en.opensuse.org/YaST/Style_Guide#Single_Configuration.2FOverview.2FEdit_Dialog
+  // the "finish" button in a single (step) configuration dialog must now be named "OK".
+  Wizard::SetContentsButtons( caption,
+                              contents,
+                              HELPS["basic_add_dialog"]:"",
+                              // Set a new label for the "back" button, see the comment above:
+                              Label::CancelButton(),
+                              // Set a new label for the "next" button, see the comment above:
+                              Label::OKButton()
+                            );
+  Wizard::HideAbortButton();
+  UI::FakeUserInput( `connection_selection );
+  any ret = nil;
+  while(true)
+  { ret = UI::UserInput();
+    if( ret == `abort || ret == `cancel || ret == `back ) break;
+    if( ret == `next )
+    { if( Printer::selected_connections_index < 0
+          && Printer::selected_ppds_index < 0
+        )
+      { Popup::AnyMessage( // Header of a Popup::AnyMessage when neither a connection
+                           // nor a driver was selected:
+                           _("Nothing Selected"),
+                           // Body of a Popup::AnyMessage when neither a connection
+                           // nor a driver was selected:
+                           _("Select a connection and then assign a driver.")
+                         );
+        continue;
+      }
+      if( Printer::selected_connections_index < 0 )
+      { Popup::AnyMessage( // Header of a Popup::AnyMessage when no connection was selected:
+                           _("No Connection Selected"),
+                           // Body of a Popup::AnyMessage when no connection was selected:
+                           _("Select a connection.")
+                         );
+        continue;
+      }
+      if( Printer::selected_ppds_index < 0 )
+      { Popup::AnyMessage( // Header of a Popup::AnyMessage when no driver was selected:
+                           _("No Driver Selected"),
+                           // Body of a Popup::AnyMessage when no driver was selected:
+                           _("Select a driver.")
+                         );
+        continue;
+      }
+      string queue_name = (string)UI::QueryWidget( `id(`queue_name_input), `Value );
+      if( "" == queue_name )
+      { Popup::AnyMessage( // Header of a Popup::AnyMessage when no queue name was entered:
+                           _("No Queue Name"),
+                           // Body of a Popup::AnyMessage when no queue name was entered:
+                           _("Enter a queue name.")
+                         );
+        continue;
+      }
+      if( "" != deletechars( queue_name, Printer::alnum_chars + "_" ) )
+      { Popup::AnyMessage( // Header of a Popup::AnyMessage when a wrong queue name was entered:
+                           _("Invalid Queue Name"),
+                           // Body of a Popup::AnyMessage when a wrong queue name was entered:
+                           _("Only letters [A-Za-z], numbers [0-9], and '_' are allowed for the queue name.")
+                         );
+        continue;
+      }
+      string validated_queue_name = Printer::NewQueueName( queue_name );
+      if( queue_name != validated_queue_name )
+      { if( ! Popup::ContinueCancelHeadline( // Header of a Popup::ContinueCancelHeadline
+                                             // when a queue name is changed to be valid:
+                                             _("Confirm Validated Queue Name"),
+                                             // Body of a Popup::ContinueCancelHeadline
+                                             // when a queue name was automatically changed to be valid
+                                             // where %1 will be replaced by the old invalid queue name
+                                             // and %2 will be replaced by a new valid queue name
+                                             sformat( _("'%1' is invalid or it exists already. Use '%2' instead?"), queue_name, validated_queue_name )
+                                           )
+          )
+        { // The user has decided not to accept the changed queue name:
+          continue;
+        }
+        queue_name = validated_queue_name;
+      }
+      Wizard::DisableBackButton();
+      Wizard::DisableNextButton();
+      // No error messages here because Printer::AddQueue already shows them:
+      Printer::AddQueue( queue_name );
+      // After a local queue was added, enforce to show also local queues
+      // in particular when no local queues were shown before:
+      Printer::queue_filter_show_local = true;
+      Wizard::EnableBackButton();
+      Wizard::EnableNextButton();
+      // Exit this dialog in any case:
+      break;
+    }
+    if( ret == `connection_wizard )
+    { // Exit this dialog and go to the ConnectionWizardDialog via the sequencer in wizards.ycp:
+      break;
+    }
+    if( ret == `add_driver )
+    { // Exit this dialog and go to the AddDriverDialog via the sequencer in wizards.ycp:
+      break;
+    }
+    if( ret == `more_connections )
+    { UI::ReplaceWidget( `id(`connection_selection_replace_point),
+                         `Table( `id(`connection_selection),
+                                 // By default there is no UserInput()
+                                 // if only something was selected in the Table
+                                 // (without clicking additionally a button)
+                                 // but the notify and immediate options
+                                 // forces UserInput() in this case:
+                                 `opt(`notify, `immediate, `keepSorting),
+                                 // Headers of a Table with a list of printer connections:
+                                 `header( // Header of a Table column with a list of printer connections.
+                                          // Printer model name:
+                                          _("Model"),
+                                          // Header of a Table column with a list of printer connections.
+                                          // Connection of the printer (e.g. via USB or via parallel port):
+                                          _("Connection"),
+                                          // Header of a Table column with a list of printer connections.
+                                          // Additional description of the printer or its particular connection:
+                                          _("Description")
+                                        ),
+                                 Printer::ConnectionItems( "MoreConnections" )
+                               )
+                       );
+      UI::FakeUserInput( `connection_selection );
+      continue;
+    }
+    if( ret == `connection_selection )
+    { integer selected_connection_index = (integer)UI::QueryWidget( `id(`connection_selection), `CurrentItem );
+      if( nil == selected_connection_index )
+      { Popup::AnyMessage( // Header of a Popup::AnyMessage when no connection was selected:
+                           _("No Connection Selected"),
+                           // Body of a Popup::AnyMessage when no connection was selected:
+                           _("Select a connection.")
+                         );
+        continue;
+      }
+      if( selected_connection_index != Printer::selected_connections_index )
+      { Printer::selected_connections_index = selected_connection_index;
+        y2milestone( "Selected connection is: %1", Printer::connections[selected_connection_index]:$[] );
+        // Invalidate any previously selected driver, if a connection is selected anew
+        // or if a previously selected connection had changed:
+        Printer::selected_ppds_index = -1;
+      }
+      driver_filter_string = "";
+      driver_filter_input_text = "";
+      queue_name_proposal = "";
+      model = Printer::connections[Printer::selected_connections_index,"model"]:"";
+      y2milestone( "Drivers for '%1'", model );
+      if( "" != model
+          && "unknown" != tolower( model )
+        )
+      { queue_name_proposal = Printer::NewQueueName( tolower( model ) );
+        driver_filter_input_text = model;
+        driver_filter_string = filterchars( tolower( model ), Printer::lower_alnum_chars );
+        // Match at the beginning also if the connection is from the connection wizard
+        // because here the model is only the manufacturer name (or "Generic" or "Raw Queue")
+        // so that match at the beginning is exactly right for connections from the connection wizard:
+        driver_filter_string = "^" + driver_filter_string;
+      }
+      if( "" == driver_filter_string )
+      { // Set a fallback driver_filter_string which does not match to anything
+        // to avoid that the full list of thousands of PPDs is shown automatically
+        // because it can take a very long time until the user can proceed:
+        driver_filter_input_text = _("Enter your printer model here.");
+        driver_filter_string = "qqqqqqqqqq";
+      }
+      UI::ReplaceWidget( `id(`driver_filter_input_replace_point),
+                          `InputField
+                          ( `id(`driver_filter_input), `opt(`hstretch),
+                            // Caption for a printer driver selection:
+                            _("Search for &Drivers"),
+                            driver_filter_input_text
+                          )
+                       );
+      UI::ReplaceWidget( `id(`driver_selection_replace_point),
+                         `SelectionBox( `id(`driver_selection),
+                                        // By default there is no UserInput()
+                                        // if only something was selected in the SelectionBox
+                                        // (without clicking additionally a button)
+                                        // but the notify option forces UserInput() in this case:
+                                        `opt(`notify),
+                                        "",
+                                        Printer::DriverItems( driver_filter_string, true )
+                                      )
+                       );
+      UI::ReplaceWidget( `id(`queue_name_input_replace_point),
+                         `TextEntry( `id(`queue_name_input),
+                                     // Header of a TextEntry to enter the queue name:
+                                     _("Set &Name"),
+                                     queue_name_proposal
+                                   )
+                       );
+      continue;
+    }
+    if( ret == `driver_selection )
+    { integer selected_ppd_index = (integer)UI::QueryWidget( `id(`driver_selection), `CurrentItem );
+      if( nil == selected_ppd_index )
+      { Popup::AnyMessage( // Header of a Popup::AnyMessage when no driver was selected:
+                           _("No Driver Selected"),
+                           // Body of a Popup::AnyMessage when no driver was selected:
+                           _("Select a driver.")
+                         );
+        continue;
+      }
+      if( selected_ppd_index != Printer::selected_ppds_index )
+      { Printer::selected_ppds_index = selected_ppd_index;
+        y2milestone( "Selected driver is: %1", Printer::ppds[selected_ppd_index]:$[] );
+      }
+      continue;
+    }
+    if( ret == `apply_driver_filter )
+    { driver_filter_input_text = (string)UI::QueryWidget( `id(`driver_filter_input), `Value );
+      y2milestone( "Drivers for '%1'", driver_filter_input_text );
+      // Match anywhere in the NickName entry in the PPD (i.e. without leading '^'):
+      driver_filter_string = filterchars( tolower( driver_filter_input_text ), Printer::lower_alnum_chars );
+      if( "" == driver_filter_string )
+      { driver_filter_input_text = _("any model");
+      }
+      UI::ReplaceWidget( `id(`driver_filter_input_replace_point),
+                          `InputField
+                          ( `id(`driver_filter_input), `opt(`hstretch),
+                            // Caption for a printer driver selection:
+                            _("Search for &Drivers"),
+                            driver_filter_input_text
+                          )
+                       );
+      UI::ReplaceWidget( `id(`driver_selection_replace_point),
+                         `SelectionBox( `id(`driver_selection),
+                                        // By default there is no UserInput()
+                                        // if only something was selected in the SelectionBox
+                                        // (without clicking additionally a button)
+                                        // but the notify option forces UserInput() in this case:
+                                        `opt(`notify),
+                                        "",
+                                        Printer::DriverItems( driver_filter_string, true )
+                                      )
+                       );
+      continue;
+    }
+    y2milestone( "Ignoring unexpected returncode in BasicAddDialog: %1", ret );
+    continue;
+  }
+  y2milestone( "leaving BasicAddDialog" );
+  return ret;
+}
+
+/* EOF */
+}

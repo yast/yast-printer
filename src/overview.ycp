@@ -1,0 +1,663 @@
+/* ------------------------------------------------------------------------------
+ * Copyright (c) 2006 Novell, Inc. All Rights Reserved.
+ *
+ *
+ * This program is free software; you can redistribute it and/or modify it under
+ * the terms of version 2 of the GNU General Public License as published by the
+ * Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+ * FOR A PARTICULAR PURPOSE.  See the GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License along with
+ * this program; if not, contact Novell, Inc.
+ *
+ * To contact Novell about this file by physical or electronic mail, you may find
+ * current contact information at www.novell.com.
+ * ------------------------------------------------------------------------------
+ */
+
+/**
+ * File:        include/printer/overview.ycp
+ * Package:     Configuration of printer
+ * Summary:     Overview dialog definition
+ * Authors:     Johannes Meixner <jsmeix@suse.de>
+ *
+ * $Id: overview.ycp 29363 2006-03-24 08:20:43Z mzugec $
+ */
+
+{
+
+textdomain "printer";
+
+import "Label";
+import "Popup";
+import "Printerlib";
+import "Printer";
+import "Wizard";
+
+include "printer/helps.ycp";
+
+term widgetOverview = `VBox
+                      ( `Left
+                        ( `HBox
+                          ( `Label
+                            ( // Label for CheckBoxes to select local and/or remote print queues to be listed:
+                              _("Show")
+                            ),
+                            `HSpacing( 2 ),
+                            `CheckBox
+                            ( `id(`local_content_checkbox),
+                              `opt(`notify),
+                              // CheckBox to select local print queues to be listed:
+                              _("&Local")
+                            ),
+                            `HSpacing( 2 ),
+                            `CheckBox
+                            ( `id(`remote_content_checkbox),
+                              `opt(`notify),
+                              // CheckBox to select remote print queues to be listed:
+                              _("&Remote")
+                            ),
+                            `HSpacing( 1 ),
+                            `Label
+                            ( `id(`client_only_server_name),
+                              // This spaces string is a workaround for a bug in the UI
+                              // to preallocate space on the screen when the spaces string
+                              // is replaced by a real string if it is a client-only config.
+                              // Otherwise the real string is cut to less than one character
+                              // (at least with openSUSE 11.0 and Qt):
+                              "                                        "
+                            )
+                          )
+                        ),
+                        `VWeight
+                        ( 2,
+                          `Table
+                          ( `id(`overview_table),
+                            `opt(`notify, `immediate, `keepSorting),
+                            `header
+                            ( // Header of a Table column with a list of print queues.
+                              // Where the queue configuration exists (local or remote):
+                              _("Configuration"),
+                              // Header of a Table column with a list of print queues.
+                              // Print queue name:
+                              _("Name"),
+                              // Header of a Table column with a list of print queues.
+                              // Print queue description (e.g. model or driver):
+                              _("Description"),
+                              // Header of a Table column with a list of print queues.
+                              // Location of the printer (e.g. second floor, room 2.3):
+                              _("Location"),
+                              // Header of a Table column with a list of print queues.
+                              // Whether or not is is the default queue:
+                              _("Default"),
+                              // Header of a Table column with a list of print queues.
+                              // Queue status (accepting/rejecting and enabled/disabled):
+                              _("Status")
+                            )
+                          )
+                        ),
+                        `HBox
+                        ( `PushButton( `id(`add),
+                                       Label::AddButton()
+                                     ),
+                          `PushButton( `id(`edit),
+                                       Label::EditButton()
+                                     ),
+                          `PushButton( `id(`delete),
+                                       Label::DeleteButton()
+                                     ),
+                          `HStretch(),
+                          `PushButton( `id(`refresh),
+                                       // PushButton label to refresh the list of print queues:
+                                       _("Re&fresh List")
+                                     ),
+                          `PushButton( `id(`test),
+                                       // PushButton label to print a test page:
+                                       _("Print &Test Page")
+                                     )
+                        )
+                      );
+
+void initOverview( string key )
+{ y2milestone( "entering initOverview with key '%1'", key );
+  // First of all the multi-line string because such strings cannot be indented:
+  string required_cupsd_not_accessible =
+  // Message of a Popup::ErrorDetails
+  // when a local cupsd is required but it is not accessible.
+  // YaST did already run 'lpstat -h localhost -r'
+  // to check whether or not a local cupsd is accessible.
+  // The command is shown here to the user (even if it is a bit technical)
+  // to have him informed what goes on here and what he can do on his own.
+_("A local running CUPS daemon is required but it seems to be not accessible.
+Check with 'lpstat -h localhost -r' whether a local cupsd is accessible.
+A non-accessible cupsd leads to an endless sequence of further failures.
+");
+  string cupsd_not_on_official_port =
+  // Message of a Popup::ErrorDetails
+  // when the local cupsd does not use the official IPP port (631).
+  // A rather technical text because this does not happen on normal systems
+  // By default the cupsd uses the official IPP port (631).
+  // If not, the user must have intentionally and manually changed
+  // the port setting for the cupsd in /etc/cups/cupsd.conf
+_("The CUPS daemon seems not to listen on the official IANA IPP port (631).
+Check with 'netstat -nap | grep cupsd' where the cupsd actually listens.
+This happens when there is a 'Listen ...:1234' or 'Port 1234' setting
+in /etc/cups/cupsd.conf (check also if there is 'BrowsePort 1234').
+The YaST printer modue does not support a non-official port.
+A non-official port leads to an endless sequence of further failures.
+If you really must use a non-official port, you cannot use
+the YaST printer modue to configure your printers.
+");
+  Wizard::SetDesktopIcon("printer");
+  // The button with "back/cancel" functionality is removed here
+  // only because here it happens faster than only in the handleOverview function
+  // to avoid that the button is visible for some time until it is actually removed.
+  // See the handleOverview function for details why this button is removed.
+  Wizard::HideBackButton();
+  boolean local_content_selected = Printer::queue_filter_show_local;
+  boolean remote_content_selected = Printer::queue_filter_show_remote;
+  boolean local_cupsd_required = true;
+  // Determine whether or not it is currently a real client-only config
+  // (i.e. a ServerName != "localhost/127.0.0.1" in /etc/cups/client.conf)
+  // and ignore when it fails (i.e. use the fallback value silently):
+  Printerlib::DetermineClientOnly();
+  if( Printerlib::client_only )
+  { local_cupsd_required = false;
+    local_content_selected = false;
+    remote_content_selected = true;
+    UI::ChangeWidget( `client_only_server_name,
+                      `Value,
+                      sformat( // Show the CUPS server name if it is a client-only config
+                               // where %1 will be replaced by the CUPS server name.
+                               _("CUPS Server %1"),
+                               Printerlib::client_conf_server_name
+                             )
+                    );
+    // In case of a client-only config it does not work to show local queues:
+    UI::ChangeWidget( `local_content_checkbox, `Enabled, false );
+  }
+  // Determine whether or not a local cupsd is accessible:
+  if( local_cupsd_required && ! Printerlib::GetAndSetCupsdStatus( "" ) )
+  { // Printerlib::GetAndSetCupsdStatus results also false when
+    // a local running cupsd does not listen on the official IPP port.
+    // Therefore, to be on the safe side, do a restart here.
+    // Printerlib::GetAndSetCupsdStatus already shows a confirmation popup:
+    Printerlib::GetAndSetCupsdStatus( "restart" );
+    // Check again whether a required local cupsd is actually accessible
+    // because the user may have rejected to start it in the above call or
+    // the user may have aborted the Popup::TimedMessage from the above call
+    // which would wait until a started cupsd becomes actually accessible.
+    if( ! Printerlib::GetAndSetCupsdStatus( "" ) )
+    { Popup::ErrorDetails( required_cupsd_not_accessible,
+                           Printerlib::result["stderr"]:"" + "\n" + Printerlib::result["stdout"]:""
+                         );
+      // A special case is when the cupsd does not listen on the official IANA IPP port (631).
+      // Then "lpstat -h localhost -r" also fails ("-h localhost:port" would have to be used).
+      // When there is a process which runs the command "cupsd"
+      // check if something is accessible on port 631.
+      // Do this test only here (and not in Printerlib::GetAndSetCupsdStatus)
+      // because the Overview is the initial dialog which is shown to the user
+      // when the YaST printer module started and if the cupsd does not listen
+      // on the official IPP port, a single error popup when the Overview dialog
+      // is launched is sufficient.
+      // The YaST printer modue does not support when the cupsd listens
+      // on a non-official port e.g. via "Listen *:1234" and/or "Port 1234"
+      // and/or "BrowsePort 1234" settings in /etc/cups/cupsd.conf.
+      // Skip this test (and hope for the best) when netcat is not available
+      // because in yast2-printer.spec there can be only "Recommends: netcat".
+      // There have been user complaints who insist not to have netcat installed
+      // because they insist that "netcat is a hacker intrusion tool" and thorough
+      // explanations of the difference between netcat and e.g. nmap did not help.
+      if( Printerlib::ExecuteBashCommand( "ps -C cupsd" )
+          && Printerlib::ExecuteBashCommand( "type -P netcat" )
+        )
+      { if( ! Printerlib::ExecuteBashCommand( "netcat -v -w 1 -z localhost 631" ) )
+        { Popup::ErrorDetails( cupsd_not_on_official_port,
+                               Printerlib::result["stderr"]:"" + "\n" + Printerlib::result["stdout"]:""
+                             );
+        }
+      }
+    }
+  }
+  UI::ChangeWidget( `local_content_checkbox, `Value, local_content_selected );
+  UI::ChangeWidget( `remote_content_checkbox, `Value, remote_content_selected );
+  UI::ChangeWidget( `overview_table, `Items,
+                    Printer::QueueItems( Printer::queue_filter_show_local, Printer::queue_filter_show_remote )
+                  );
+  y2milestone( "leaving initOverview" );
+}
+
+/**
+ * handle function
+ * for add, edit and delete buttons,
+ * local and remote checkboxes,
+ * test button and refresh overview
+ */
+symbol handleOverview( string key, map event )
+{ y2milestone( "entering handleOverview with key '%1'\nand event '%2'", key, event );
+  // In the Overview dialog it does not make sense to have a button with "back" functionality
+  // which is named "Cancel" according to the new YaST style guide at
+  // http://en.opensuse.org/YaST/Style_Guide#Single_Configuration.2FOverview.2FEdit_Dialog
+  // because there is nothing to "cancel" in the Overview dialog because it
+  // only shows information about the current state of the configuration
+  // but the Overview dialog itself does not do any change of the configuration.
+  // The Overview dialog has actually the same meaning for the user
+  // as a plain notification popup which has only a "OK" button.
+  // If the user does not agree to what is shown in the Overview dialog
+  // he must launch a configuration sub-dialog to change the configuration.
+  // If the user accepted in such a configuration sub-dialog what he changed
+  // via the "OK" button there, the change is applied and the Overview dialog
+  // shows the new current state of the configuration, see
+  // http://en.opensuse.org/YaST/Development/Printer_Enhancement#Basic_Implementation_Principles:
+  // so that it is not possible to "cancel" the change in the Overview dialog.
+  // Any change of the configuration is done in sub-dialogs which are called
+  // from the Overview dialog (even the "Confirm Deletion" popup is such a sub-dialog)
+  // and in all those sub-dialogs there is a button with "cancel" functionality.
+  // Note that all the different dialogs in the DialogTree (see dialogs.ycp) are
+  // for the Wizard only different tabs of one same dialog (see "overview" in wizards.ycp)
+  // so that the button with "back/cancel" functionality must be carefully re-enabled
+  // whenever the Overview dialog is replaced by another dialog tab in the DialogTree
+  // so that the other dialogs in the DialogTree have a button with "cancel" functionality.
+  // In graphical mode:
+  // When the Overview dialog is to be replaced by another dialog tab in the DialogTree
+  // the event has the form e.g.: $["EventSerialNo":2, "EventType":"MenuEvent", "ID":"network"]
+  // i.e. the EventType is "MenuEvent" so that testing only this general condition
+  // (without a specific match if "ID" is one of "network","sharing","policies","autoconfig")
+  // should be sufficiently safe to get the button with "back/cancel" functionality restored.
+  // In ncurses mode:
+  // When the Overview dialog is to be replaced by another dialog tab in the DialogTree
+  // the event has the form e.g.: $["EventReason":"Activated", "EventSerialNo":0, "EventType":"WidgetEvent",
+  //                                "ID":`wizardTree, "WidgetClass":`Tree, "WidgetID":`wizardTree]
+  // The EventType "WidgetEvent" cannot be used here because it is too unspecific
+  // because "WidgetEvent" type events are all kind of clicked buttons so that
+  // for ncurses mode the ID is used as test if the Overview dialog is to be
+  // replaced by another dialog tab in the DialogTree.
+  // This strange testing method works at least for openSUSE 11.0 and openSUSE 11.1.
+  Wizard::HideBackButton();
+  if( "MenuEvent" == event["EventType"]:""
+      || `wizardTree == event["ID"]:nil
+    )
+  { Wizard::RestoreBackButton();
+    // The above RestoreBackButton restores also its label to the default "Back"
+    // but according to the new YaST style guide at
+    // http://en.opensuse.org/YaST/Style_Guide#Single_Configuration.2FOverview.2FEdit_Dialog
+    // this button is now named "Cancel":
+    Wizard::SetBackButton( `back, Label::CancelButton() );
+  }
+
+  if( ( `remote_content_checkbox == event["ID"]:nil
+        || `local_content_checkbox == event["ID"]:nil
+      ) && "ValueChanged" == event["EventReason"]:""
+    )
+  { y2milestone( "Refreshing overview items" );
+    Printer::queue_filter_show_local = (boolean)UI::QueryWidget( `local_content_checkbox, `Value );
+    Printer::queue_filter_show_remote = (boolean)UI::QueryWidget( `remote_content_checkbox, `Value );
+    UI::ChangeWidget( `overview_table, `Items,
+                      Printer::QueueItems( Printer::queue_filter_show_local, Printer::queue_filter_show_remote )
+                    );
+  }
+
+  if( `refresh == event["ID"]:nil && "Activated" == event["EventReason"]:"" )
+  { // The refresh functionality is useful after switching the Browsing mode.
+    // For example when a client-only config is switched to a "get Browsing info" config
+    // the BrowseInterval in cupsd.conf on remote CUPS servers is by default 30 seconds
+    // so that it takes by default up to 31 seconds before the Overview dialog can show
+    // all remote queues or any time longer depending on the BrowseInterval setting
+    // on the remote CUPS servers which necessitates an explicite [Refresh] button.
+    // Or the other way round when a "Get browsing info" config with a local cupsd
+    // was switched to a "No browsing info" config with a local running cupsd.
+    // The default BrowseTimeout value for the local cupsd is 5 minutes.
+    // Therefore it takes by default 5 minutes until printer information
+    // that was previously received by Browsing is removed (via timeout)
+    // from the local cupsd's list so that such kind of outdated remote queues
+    // are no longer shown in the Overview dialog.
+    UI::ChangeWidget( `overview_table, `Items,
+                      Printer::QueueItems( Printer::queue_filter_show_local, Printer::queue_filter_show_remote )
+                    );
+  }
+
+  // After the above changes of the list of queues, determine which queue is currently selected
+  // (because this might change via automated preselection when the table was made anew)
+  // and enable or disable the "Edit", "Delete", and "Test" buttons accordingly.
+  // "Edit" and "Delete" are only possible for local queues, "Test" is also possible for remote queues.
+  // "Test" is disabled when there is no queue selected or no queue in the table
+  // and when the queue state is not "ready" (i.e. when jobs are rejected and/or when printing is disabled).
+  integer selected_queue_index = (integer)UI::QueryWidget( `id(`overview_table), `CurrentItem );
+  if( selected_queue_index == nil || selected_queue_index < 0 )
+  { // To be safe invalidate Printer::selected_queues_index when no queue exists:
+    Printer::selected_queues_index = -1;
+    UI::ChangeWidget( `test, `Enabled, false );
+  }
+  else
+  { if( "yes" == Printer::queues[selected_queue_index,"rejecting"]:""
+        || "yes" == Printer::queues[selected_queue_index,"disabled"]:""
+      )
+    { UI::ChangeWidget( `test, `Enabled, false );
+    }
+    else
+    { UI::ChangeWidget( `test, `Enabled, true );
+    }
+    // To be safe enable the modify and delete buttons only when it is explicitely verified
+    // that the "config" is "local", otherwise have those buttons disabled by fallback:
+    if( Printer::queues[selected_queue_index,"config"]:"remote" == "local" )
+    { Printer::selected_queues_index = selected_queue_index;
+    }
+    else
+    { // To be safe invalidate Printer::selected_queues_index when a remote queue is selected:
+      Printer::selected_queues_index = -1;
+      // Disable the modify and delete buttons when a remote queue is selected and by fallback:
+    }
+  }
+  UI::ChangeWidget( `edit, `Enabled, Printer::selected_queues_index >= 0 );
+  UI::ChangeWidget( `delete, `Enabled, Printer::selected_queues_index >= 0 );
+
+  if( `delete == event["ID"]:nil && "Activated" == event["EventReason"]:"" )
+  { // Delete ' characters because they are used for quoting in the bash commandlines below:
+    string queue_name = deletechars( Printer::queues[selected_queue_index,"name"]:"", "'" );
+    if( "" == queue_name )
+    { Popup::AnyMessage( // Header of a Popup::AnyMessage when no queue was selected from the list:
+                         _("Nothing Selected"),
+                         // Body of a Popup::AnyMessage when no queue was selected from the list:
+                         _("Select an entry.")
+                       );
+      return nil;
+    }
+    if( "local" != Printer::queues[selected_queue_index,"config"]:"remote" )
+    { Popup::AnyMessage( // Header of a Popup::AnyMessage when a remote queue was selected to be deleted:
+                         _("Cannot Delete"),
+                         // Body of a Popup::AnyMessage when a remote queue was selected to be deleted:
+                         _("This is a remote configuration. Only local configurations can be deleted.")
+                       );
+      return nil;
+    }
+    if( ! Popup::AnyQuestion( // Header of a confirmation popup before a queue will be deleted:
+                              _("Confirm Deletion"),
+                              // Body of a confirmation popup before a queue will be deleted:
+                              _("The selected configuration would be deleted immediately and cannot be restored."),
+                              // 'Yes' button label of a confirmation popup before a queue will be deleted:
+                              sformat( _("Delete configuration %1"), queue_name ),
+                              // 'No' button label of a confirmation popup before a queue will be deleted:
+                              _("Do not delete it"),
+                              `focus_no
+                            )
+      )
+    { return nil;
+    }
+    // To be safe invalidate Printer::selected_queues_index in any case:
+    Printer::selected_queues_index = -1;
+    y2milestone( "To be deleted:'%1', selected_queue_index = %2", queue_name, selected_queue_index );
+    // No error messages here because Printer::DeleteQueue already shows them:
+    Printer::DeleteQueue( queue_name );
+    // Re-run the OverviewDialog (with a re-created list of queues) via the sequencer:
+    return `delete;
+  }
+
+  if( `test == event["ID"]:nil && "Activated" == event["EventReason"]:"" )
+  { y2milestone( "printing test page" );
+    // Delete ' characters because they are used for quoting in the bash commandlines below:
+    string queue_name = deletechars( Printer::queues[selected_queue_index,"name"]:"", "'" );
+    // The URI scheme is the first word up to the ':' character in the URI:
+    string uri_scheme = splitstring( Printer::queues[selected_queue_index,"uri"]:"", ":" )[0]:"";
+    if( "" == queue_name )
+    { Popup::AnyMessage( // Header of a Popup::AnyMessage when no queue was selected from the list:
+                         _("Nothing Selected"),
+                         // Body of a Popup::AnyMessage when no queue was selected from the list:
+                         _("Select an entry.")
+                       );
+      return nil;
+    }
+    if( "yes" == Printer::queues[selected_queue_index,"rejecting"]:"no" )
+    { Popup::AnyMessage( // Header of a Popup::AnyMessage when the queue rejects print jobs:
+                         _("Rejecting Print Jobs"),
+                         // Body of a Popup::AnyMessage when the queue rejects print jobs:
+                         _("The testpage cannot be printed because print jobs are rejected.")
+                       );
+      return nil;
+    }
+    if( "yes" == Printer::queues[selected_queue_index,"disabled"]:"no" )
+    { Popup::AnyMessage( // Header of a Popup::AnyMessage when printing is disabled for the queue:
+                         _("Printout Disabled"),
+                         // Body of a Popup::AnyMessage when printing is disabled for the queue:
+                         _("The testpage cannot be printed because printout is disabled.")
+                       );
+      return nil;
+    }
+    if( "local" == Printer::queues[selected_queue_index,"config"]:"remote" )
+    { // When it is a local queue, remember it as the currently selected queue
+      // so that the user can just click the button with "modify" functionality
+      // if he likes to change the configuration when the testprint is not o.k.
+      Printer::selected_queues_index = selected_queue_index;
+      // Test whether there are already pending jobs in a local queue.
+      // If yes, the queue is usually currently actively printing because
+      // the test above makes sure that the queue has printing enabled.
+      // When this command fails for whatever reason, it is a safe fallback
+      // to assume that there are no pending jobs in the queue:
+      if( Printerlib::ExecuteBashCommand( "/usr/bin/lpstat -h localhost -o '"
+                                          + queue_name
+                                          + "' | egrep -q '^"
+                                          + queue_name
+                                          + "-[0-9]+'"
+                                        )
+        )
+      { if( Popup::AnyQuestion( // Header of a confirmation popup before all pending jobs in a queue will be deleted:
+                                _("Delete Pending Print Jobs"),
+                                // Body of a confirmation popup before a queue will be deleted:
+                                _("There are pending print jobs which might be deleted before the testpage is printed."),
+                                // 'Yes' button label of a confirmation popup
+                                // before all pending jobs in a queue will be deleted:
+                                sformat( _("Delete all pending jobs for %1"), queue_name ),
+                                // 'No' button label of a confirmation popup
+                                // before all pending jobs in a queue will be deleted:
+                                _("Print the testpage after the other jobs"),
+                                `focus_no
+                              )
+          )
+        { if( ! Printerlib::ExecuteBashCommand( "/usr/bin/cancel -a -h localhost '" + queue_name + "'" ) )
+          { Popup::ErrorDetails( sformat( // Message of a Popup::ErrorDetails
+                                          // where %1 will be replaced by the queue name.
+                                          // Only a simple message because this error does not happen on a normal system.
+                                          _("Failed to delete all pending jobs for %1."),
+                                          queue_name
+                                        ),
+                                 Printerlib::result["stderr"]:""
+                               );
+          }
+        }
+      }
+    }
+    string testprint_job_title = "YaST2testprint_" + queue_name;
+    // Do not enforce to talk to the cupsd on localhost when submiting the testpage
+    // because testpage printing must also work for a "client-only" config:
+    if( ! Printerlib::ExecuteBashCommand( "/usr/bin/lp -d '"
+                                          + queue_name
+                                          + "' -t '"
+                                          + testprint_job_title
+                                          + "' -o page-label=\""
+                                          + queue_name
+                                          + ":YaST2testprint@$(hostname)\" /usr/share/cups/data/testprint.ps"
+                                        )
+      )
+    { Popup::ErrorDetails( sformat( // Message of a Popup::ErrorDetails
+                                    // where %1 will be replaced by the queue name.
+                                    // Only a simple message because this error does not happen on a normal system.
+                                    _("Failed to print testpage for %1."),
+                                    queue_name
+                                  ),
+                           Printerlib::result["stderr"]:""
+                         );
+      return nil;
+    }
+    Popup::TimedAnyQuestion( // Popup::TimedAnyQuestion header:
+                             _("Wait Until Testprint Finished"),
+                             // Popup::TimedAnyQuestion message
+                             // where %1 will be replaced by the queue name.
+                             sformat( _("Sent testpage to %1. It should start to print soon."), queue_name ),
+                             // Popup::TimedAnyQuestion 'Yes' button label:
+                             Label::StopButton(),
+                             // Popup::TimedAnyQuestion 'No' button label:
+                             Label::OKButton(),
+                             `focus_yes,
+                             120
+                           );
+    if( "local" == Printer::queues[selected_queue_index,"config"]:"remote" )
+    { // When it is a local queue and there are still pending jobs in the queue,
+      // it seems something went wrong with the testpage printing
+      // so that the user can delete all pending jobs now.
+      // Via the "cancel" command the cupsd sends termination signals
+      // to running filter processes for the queue so that the filters
+      // (in particular the printer driver) could do whatever is needed
+      // to switch an actively printing printer device into a clean state
+      // (e.g. exit its graphics printing mode and switch back to normal mode).
+      // The backend process terminates when the filters have finished.
+      // This helps in usual cases (in particular when a good driver is used)
+      // if something had messed up for an actively printing job but
+      // unfortunately there is no option for the "cancel" command
+      // which lets the cupsd kill the backend process as emergency brake
+      // when something is really wrong e.g. a wrong driver lets the printer
+      // spit out zillions of sheets with nonsense characters.
+      // When this command fails for whatever reason, it is a safe fallback
+      // to assume that there are no pending jobs in the queue:
+      if( Printerlib::ExecuteBashCommand( "/usr/bin/lpstat -h localhost -o '"
+                                          + queue_name
+                                          + "' | egrep -q '^"
+                                          + queue_name
+                                          + "-[0-9]+'"
+                                        )
+        )
+      { if( Popup::AnyQuestion( // Header of a confirmation popup before all pending jobs in a queue will be deleted:
+                                _("Delete Pending Print Jobs"),
+                                // Body of a confirmation popup before a queue will be deleted:
+                                _("There are pending print jobs which might be deleted now."),
+                                // 'Yes' button label of a confirmation popup
+                                // before all pending jobs in a queue will be deleted:
+                                sformat( _("Delete all pending jobs for %1"), queue_name ),
+                                // 'No' button label of a confirmation popup
+                                // before all pending jobs in a queue will be deleted:
+                                _("Do not delete them"),
+                                `focus_no
+                              )
+          )
+        { if( ! Printerlib::ExecuteBashCommand( "/usr/bin/cancel -a -h localhost '" + queue_name + "'" ) )
+          { Popup::ErrorDetails( sformat( // Message of a Popup::ErrorDetails
+                                          // where %1 will be replaced by the queue name.
+                                          // Only a simple message because this error does not happen on a normal system.
+                                          _("Failed to delete all pending jobs for %1."),
+                                          queue_name
+                                        ),
+                                 Printerlib::result["stderr"]:""
+                               );
+          }
+          // Deal with the backend process regardless whether or not
+          // the above cancel command was successful because
+          // killing the backend process is an emergency brake
+          // when something is really wrong:
+          string backend_is_running_commandline = "ps -C '"
+                                                  + uri_scheme
+                                                  + "' -o pid=,args= | grep '"
+                                                  + testprint_job_title
+                                                  + "'";
+          // Do nothing to be on the safe side if the next command fails for whatever reason:
+          if( Printerlib::ExecuteBashCommand( backend_is_running_commandline ) )
+          { // A matching backend process is running.
+            // Sleep 10 seconds to let the backend process terminate orderly
+            // when the filters have finished because of the above cancel command.
+            // There is no user feedback while waiting here because I assume that
+            // the user expects that it takes a bit of time to delete all pending jobs.
+            sleep( 10000 );
+            if( Printerlib::ExecuteBashCommand( backend_is_running_commandline ) )
+            { // A matching backend process is still running.
+              y2milestone( "Still running backend process to be killed: '%1'", Printerlib::result["stdout"]:"" );
+              // Kill the backend process:
+              Printerlib::ExecuteBashCommand( backend_is_running_commandline
+                                              + " | cut -s -d ' ' -f1 | head -n 1 | tr -d -c '[:digit:]'"
+                                            );
+              string backend_pid = Printerlib::result["stdout"]:"";
+              if( "" != backend_pid )
+              { Printerlib::ExecuteBashCommand( "kill -9 '" + backend_pid + "'" );
+              }
+            }
+          }
+        }
+      }
+    }
+    return nil;
+  }
+
+  if( `add == event["ID"]:nil && "Activated" == event["EventReason"]:"" )
+  { // Determine whether or not it is a real client_only config
+    // (i.e. a ServerName != "localhost/127.0.0.1" in /etc/cups/client.conf).
+    // There is no new Printerlib::DetermineClientOnly() here because
+    // it was run in initOverview() and the client_only state cannot be
+    // changed in YaST while the Overview dialog runs:
+    if( Printerlib::client_only )
+    { if( ! Popup::YesNoHeadline( // PopupYesNoHeadline headline
+                                  // where %1 will be replaced by the server name:
+                                  sformat( _("Disable remote CUPS server '%1'"), Printerlib::client_conf_server_name ),
+                                  // PopupYesNoHeadline body:
+                                  _("A remote CUPS server setting conflicts with adding a configuration.")
+                                )
+        )
+      { return nil;
+      }
+      // Remove the 'ServerName' entry in /etc/cups/client.conf:
+      if( ! Printerlib::ExecuteBashCommand( Printerlib::yast_bin_dir + "cups_client_only none" ) )
+      { Popup::ErrorDetails( // Popup::ErrorDetails message.
+                             // Only a simple message because this error does not happen on a normal system
+                             // (i.e. a system which is not totally broken or totally messed up).
+                             _("Failed to remove the 'ServerName' entry in /etc/cups/client.conf"),
+                             Printerlib::result["stderr"]:""
+                     );
+        return nil;
+      }
+    }
+    if( ! Printerlib::GetAndSetCupsdStatus( "" ) )
+    { // No local running cupsd is accessible.
+      // Do a restart to be safe.
+      // Printerlib::GetAndSetCupsdStatus already shows a confirmation popup:
+      if( ! Printerlib::GetAndSetCupsdStatus( "restart" ) )
+      { return nil;
+      }
+    }
+    // To be safe autodetect the queues again.
+    // When there was a switch from "client only" to a local running cupsd
+    // existing local queues are not yet know so that the NewQueueName function
+    // may not notice when a queue name proposal for a new (i.e. added) queue
+    // already exists as local queue:
+    Printer::AutodetectQueues();
+    return `add;
+  }
+
+  if( `edit == event["ID"]:nil && event["EventReason"]:"" == "Activated" )
+  { // Delete ' characters because they are used for quoting in the bash commandlines below:
+    string queue_name = deletechars( Printer::queues[selected_queue_index,"name"]:"", "'" );
+    if( "" == queue_name )
+    { Popup::AnyMessage( // Header of a Popup::AnyMessage when no queue was selected from the list:
+                         _("Nothing Selected"),
+                         // Body of a Popup::AnyMessage when no queue was selected from the list:
+                         _("Select an entry.")
+                       );
+      return nil;
+    }
+    if( "local" != Printer::queues[selected_queue_index,"config"]:"remote" )
+    { Popup::AnyMessage( // Header of a Popup::AnyMessage when a remote queue was selected to be modified:
+                         _("Cannot Modify"),
+                         // Body of a Popup::AnyMessage when a remote queue was selected to be modified:
+                         _("This is a remote configuration. Only local configurations can be modified.")
+                       );
+      return nil;
+    }
+    Printer::selected_queues_index = selected_queue_index;
+    y2milestone( "To be modified: '%1', selected_queues_index = %2", queue_name, Printer::selected_queues_index );
+    return `modify;
+  }
+
+  // Default and fallback return value:
+  return nil;
+}
+
+/* EOF */
+}
+
