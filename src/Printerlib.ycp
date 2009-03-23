@@ -1,0 +1,530 @@
+/* ------------------------------------------------------------------------------
+ * Copyright (c) 2006 Novell, Inc. All Rights Reserved.
+ *
+ *
+ * This program is free software; you can redistribute it and/or modify it under
+ * the terms of version 2 of the GNU General Public License as published by the
+ * Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+ * FOR A PARTICULAR PURPOSE.  See the GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License along with
+ * this program; if not, contact Novell, Inc.
+ *
+ * To contact Novell about this file by physical or electronic mail, you may find
+ * current contact information at www.novell.com.
+ * ------------------------------------------------------------------------------
+ */
+
+/**
+ * File:        include/printer/Printerlib.ycp
+ * Package:     Configuration of printer
+ * Summary:     Common functionality
+ * Authors:     Michal Zugec <mzugec@suse.cz>
+ *              Johannes Meixner <jsmeix@suse.de>
+ *
+ * $Id: Printerlib.ycp 27914 2006-02-13 14:32:08Z locilka $
+ */
+
+{
+
+module "Printerlib";
+textdomain "printer";
+
+import "Package";
+import "Popup";
+import "Service";
+import "Map";
+// Fortunately the tools are for all architectures always
+// installed in /usr/lib/YaST2/bin/ (i.e. no "lib64").
+// I tested this on Thu Aug 28 2008 using the command
+// rpm -qlp /work/CDs/all/full-sle10-sp2*/suse/*/yast2-printer.rpm | grep '/YaST2/bin/' | grep -v '/usr/lib/YaST2/bin/'
+global string yast_bin_dir = "/usr/lib/YaST2/bin/";
+
+// The result map is used as a simple common local store for whatever additional results
+// (in particular commandline exit code, stdout, stderr, and whatever messages)
+// so that the local functions in this module can be of easy-to-use boolean type.
+// The following keys are used:
+// result["exit"]:<integer> for exit codes
+// result["stdout"]:<string> for stdout and whatever non-error-messages
+// result["stderr"]:<string> for stderr and whatever error-messages
+global map result = $[ "exit":0,
+                       "stdout":"",
+                       "stderr":""
+                     ];
+
+/**
+ * Wrapper for SCR::Execute to execute a bash command to increase verbosity via y2milestone.
+ * It reports the command via y2milestone in any case and it reports exit code, stdout
+ * and stderr via y2milestone in case of non-zero exit code.
+ * @param bash_commandline string of the bash command to be executed
+ * @return true on success
+ */
+global boolean ExecuteBashCommand( string bash_commandline )
+{ y2milestone( "Executing bash commandline: %1", bash_commandline );
+  // Enforce a hopefully sane environment before running the actual command:
+  bash_commandline = "export PATH='/sbin:/usr/sbin:/usr/bin:/bin' ; export LC_ALL='POSIX' ; export LANG='POSIX' ; umask 022 ; " + bash_commandline;
+  result = (map)SCR::Execute( .target.bash_output, bash_commandline );
+  if( result["exit"]:9999 != 0 )
+  { y2warning( "'%1' exit code is: %2", bash_commandline, result["exit"]:9999 );
+    y2warning( "'%1' stdout is: %2", bash_commandline, result["stdout"]:"" );
+    y2warning( "'%1' stderr is: %2", bash_commandline, result["stderr"]:"" );
+    return false;
+  }
+  return true;
+}
+
+/**
+ * Test whether the package is installed (calls 'rpm -q package_name') or
+ * test whether the package is available to be installed (Package::Available)
+ * and if yes then install it (Package::Install) if it is not yet installed or
+ * remove the package (Package::Remove) if it is installed.
+ * @param package_name string of the package name
+ * @param action string of the action to be done (installed or install or remove).
+ * @return true on success
+ */
+global boolean TestAndInstallPackage( string package_name, string action )
+{ y2milestone( "TestAndInstallPackage '%1' with action '%2'", package_name, action );
+  // Intentionally Package::Installed(package_name) is not used here
+  // because it does 'rpm -q' and if this fails it does 'rpm -q --whatprovides'
+  // but I am only interested in the result for the real package name here
+  // because alternatives would be handled in the upper-level functions
+  // (e.g. in the user dialogs) which call TestAndInstallPackage:
+  if( "installed" == action )
+  { if( ExecuteBashCommand( "rpm -q '" + package_name + "'" ) )
+    { y2milestone( "TestAndInstallPackage: package '%1' is installed", result["stdout"]:package_name );
+      return true;
+    }
+    // The "%1" makes the YCP Parser happy, otherwise it shows the warning
+    // "Format string is not constant, no parameter checking possible".
+    y2milestone( "TestAndInstallPackage: %1", result["stdout"]:"package is not installed" );
+    return false;
+  }
+  if( "install" == action )
+  { if( ExecuteBashCommand( "rpm -q '" + package_name + "'" ) )
+    { y2milestone( "TestAndInstallPackage: package '%1' is already installed", result["stdout"]:package_name );
+      return true;
+    }
+    // Is the package available to be installed?
+    // Package::Available returns nil if no package source is available.
+    boolean package_available = Package::Available( package_name );
+    if( nil == package_available )
+    { y2milestone( "TestAndInstallPackage: Required package %1 is not installed and there is no package repository available.", package_name );
+      Popup::Error( sformat( // Message of a Popup::Error where %1 will be replaced by the package name:
+                             _("Required package %1 is not installed and there is no package repository available."),
+                             package_name
+                           )
+                  );
+      return false;
+    }
+    if( ! package_available )
+    { y2milestone( "TestAndInstallPackage: Required package %1 is not installed and not available in the repository.", package_name );
+      Popup::Error( sformat( // Message of a Popup::Error where %1 will be replaced by the package name:
+                             _("Required package %1 is not installed and not available in the repository."),
+                             package_name
+                           )
+                  );
+      return false;
+    }
+    // Package::Install(package_name) has unexpected side-effects
+    // because it does additionally remove whatever other packages
+    // for example to "automatically solve" existing package conflicts
+    // without any dialog where the user could accept or reject additional removals
+    // (the user may have intentionally accepted whatever package conflict).
+    // I am only interested to install exactly the one package which was specified
+    // and all what this one package requires but I am not interested to get whatever
+    // other packages removed but I do not know a function which does this.
+    // Therefore I use Package::Install(package_name) because it is most important
+    // to get all installed what is required by the package which was specified.
+    if( ! Package::Install( package_name ) )
+    { y2milestone( "TestAndInstallPackage: Failed to install required package %1.", package_name );
+      Popup::Error( // Message of a Popup::Error where %1 will be replaced by the package name.
+                    // Only a simple message because:
+                    // Either the user has explicitely rejected to install the package,
+                    // or this error does not happen on a normal system
+                    // (i.e. a system which is not totally broken or totally messed up).
+                    sformat( _("Failed to install required package %1."),
+                             package_name
+                           )
+                  );
+      return false;
+    }
+  }
+  if( "remove" == action )
+  { if( ! ExecuteBashCommand( "rpm -q '" + package_name + "'" ) )
+    { y2milestone( "TestAndInstallPackage: skip remove because %1", result["stdout"]:"package is not installed" );
+      return true;
+    }
+    else
+    { if( ! Popup::ContinueCancel( sformat( // Body of a Popup::ContinueCancel
+                                            // where %1 will be replaced by the package name
+                                            // when removing package %1 would break dependencies.
+                                            _("Remove package %1?"),
+                                            package_name
+                                          )
+                                 )
+        )
+      { // The user has decided not to continue.
+        // Therefore we exit here but with "false" because
+        // the request to remove the package was not done.
+        return false;
+      }
+    }
+    // Intentionally Package::Remove(package_name) is not used here
+    // because it does additionally remove whatever other packages
+    // for example to "automatically solve" existing package conflicts
+    // without any dialog where the user could accept or reject additional removals
+    // (the user may have intentionally accepted whatever package conflict).
+    // Furthermore Package::Remove(package_name) does additionally install
+    // whatever other packages for example to "automatically solve" whatever
+    // kind of soft requirements (Recommends) for other packages.
+    // I am only interested to remove exactly the one package which was specified and
+    // I am not interested to get whatever replacement package installed automatically
+    // because alternatives and/or substitutes would be handled in the upper-level functions
+    // (e.g. in the user dialogs) which call TestAndInstallPackage.
+    // Usually (i.e. in a openSUSE standard system) the packages which are removed here
+    // do not have dependencies or the calling function removes dependant packages
+    // in the right order (e.g. first hplip and then hplip-hpijs, see driveradd.ycp)
+    // but the user might have installed whatever third-party packages
+    // which could have dependencies to the package which should be removed here.
+    // Therefore there is a test if the removal would break RPM dependencies
+    // but intentionally it is not tested whether the removal
+    // would "break" whatever kind of soft requirements (Recommends).
+    if( ! ExecuteBashCommand( "rpm -e --test '" + package_name + "'" )   )
+    { // There is no Popup::ContinueCancelHeadlineDetails available.
+      // Therefore the exact RPM message is shown via a separated Popup::ErrorDetails.
+      Popup::ErrorDetails( sformat( // Message of a Popup::ErrorDetails
+                                    // where %1 will be replaced by the package name.
+                                    _("Removing package %1 would break dependencies."),
+                                    package_name
+                                  ),
+                           result["stderr"]:""
+                         );
+      if( ! Popup::ContinueCancelHeadline( sformat( // Header of a Popup::ContinueCancelHeadline
+                                                    // where %1 will be replaced by the package name
+                                                    // when removing package %1 would break dependencies.
+                                                    _("Remove %1 regardless of breaking dependencies?"),
+                                                    package_name
+                                                  ),
+                                           // Body of a Popup::ContinueCancelHeadline
+                                           // when removing package %1 would break dependencies.
+                                           _("Breaking dependencies leads to arbitrary failures elsewhere.")
+                                         )
+        )
+      { // The user has decided not to continue which is the right decission.
+        // Therefore we exit here but with "false" because removing the package failed.
+        return false;
+      }
+    }
+    if( ! ExecuteBashCommand( "rpm -e --nodeps '" + package_name + "'" ) )
+    { y2milestone( "TestAndInstallPackage: Failed to remove package %1.", package_name );
+      Popup::ErrorDetails( sformat( // Message of a Popup::ErrorDetails
+                                    // where %1 will be replaced by the package name.
+                                    // Only a simple message because this error does not happen on a normal system.
+                                    _("Failed to remove package %1."),
+                                    package_name
+                                  ),
+                           result["stderr"]:""
+                         );
+      return false;
+    }
+  }
+  return true;
+}
+
+// By default there is a local running cupsd.
+// But to be on the safe side, assume it is not:
+global boolean local_cupsd_accessible = false;
+
+global boolean GetAndSetCupsdStatus( string new_status )
+{ // Determine whether or not a local cupsd is accessible.
+  // The value 'false' is also the right one when the command itself fails
+  // (e.g. when there is no /usr/bin/lpstat binary or whatever broken stuff):
+  string local_cupsd_accessible_commandline = "/usr/bin/lpstat -h localhost -r";
+  local_cupsd_accessible = ExecuteBashCommand( local_cupsd_accessible_commandline );
+  // Start cupsd:
+  if( "start" == new_status )
+  { if( local_cupsd_accessible )
+    { // Do not start an already running (i.e. accessible) cupsd:
+      return true;
+    }
+    // Enforce user confirmation before a new service is started
+    // to be on the safe side that the user knows about it:
+    if( ! Popup::YesNoHeadline( // PopupYesNoHeadline headline:
+                                _("Start local running CUPS daemon"),
+                                // PopupYesNoHeadline body:
+                                _("A local running CUPS daemon is needed.")
+                               )
+      )
+    { return false;
+    }
+    if( ! Service::Start( "cups" ) )
+    { Popup::ErrorDetails( // Popup::ErrorDetails message:
+                           _("Failed to start the CUPS daemon"),
+                           Service::Error()
+                         );
+      return false;
+    }
+    // Sleep one second in any case so that the new started cupsd can become ready to operate:
+    sleep( 1000 );
+    // Wait half a minute for a new started cupsd is necessary because
+    // when a client-only config is switched to a "get Browsing info" config
+    // the BrowseInterval in cupsd.conf on remote CUPS servers is by default 30 seconds
+    // so that the local cupsd should listen at least 31 seconds to get Browsing info
+    // before e.g. the Overview dialog can be shown with the right current queues.
+    Popup::TimedMessage( _("Started the CUPS daemon.\nWaiting half a minute so that it is ready to operate..."),
+                         30
+                       );
+    local_cupsd_accessible = ExecuteBashCommand( local_cupsd_accessible_commandline );
+    if( ! local_cupsd_accessible )
+    { // It can take up to a few minutes when a cupsd is started
+      // for the very first time (e.g. on a new installed system)
+      // until the cupsd is actually ready to operate.
+      // E.g. because parsing of thousands of PPDs may need much time.
+      // Therefore enforce waiting one minute now.
+      // (Plain busy message without title.)
+      Popup::ShowFeedback( "", _("The CUPS daemon in not yet accessible.\nWaiting one minute so that it is ready to operate...") );
+      sleep( 60000 );
+      Popup::ClearFeedback();
+    }
+    local_cupsd_accessible = ExecuteBashCommand( local_cupsd_accessible_commandline );
+    if( ! local_cupsd_accessible )
+    { Popup::Error( // Popup::Error message:
+                    _("No local running CUPS daemon is accessible.")
+                  );
+      return false;
+    }
+    if( ! Service::Enable( "cups" ) )
+    { Popup::ErrorDetails( // Popup::ErrorDetails message:
+                           _("Failed to enable starting of the CUPS daemon during system boot"),
+                           Service::Error()
+                         );
+      // This is not a fatal error, therefore return "successfully" nevertheless.
+    }
+    return true;
+  }
+  // Restart cupsd:
+  if( "restart" == new_status )
+  { // Enforce user confirmation before the cupsd is restarted
+    // to be on the safe side regarding complaints in an enterprise environment
+    // because a restart disrupts all currently actively printing jobs:
+    if( ! Popup::YesNoHeadline( // PopupYesNoHeadline headline:
+                                _("Restart local running CUPS daemon"),
+                                // PopupYesNoHeadline body:
+                                _("A restart disrupts all currently actively printing jobs.")
+                              )
+      )
+    { return false;
+    }
+    if( ! Service::Restart( "cups" ) )
+    { Popup::ErrorDetails( // Popup::ErrorDetails message:
+                           _("Failed to restart the CUPS daemon"),
+                           Service::Error()
+                         );
+      return false;
+    }
+    // Sleep two seconds in any case so that the re-started cupsd can become ready to operate.
+    // It may need one second for some cleanup before finishing
+    // and one second to become ready to operate after starting.
+    sleep( 2000 );
+    // Wait half a minute for a restarted cupsd is necessary because
+    // when a "no Browsing info" config is switched to a "get Browsing info" config
+    // the BrowseInterval in cupsd.conf on remote CUPS servers is by default 30 seconds
+    // so that the local cupsd should listen at least 31 seconds to get Browsing info
+    // before e.g. the Overview dialog can be shown with the right current queues.
+    Popup::TimedMessage( _("Restarted the CUPS daemon.\nWaiting half a minute so that it is ready to operate..."),
+                         30
+                       );
+    local_cupsd_accessible = ExecuteBashCommand( local_cupsd_accessible_commandline );
+    if( ! local_cupsd_accessible )
+    { Popup::Error( // Popup::Error message:
+                    _("No local running CUPS daemon is accessible.")
+                  );
+      return false;
+    }
+    // To be on the safe side, ask the user to enable the cupsd
+    // to be started during boot if it is not yet enabled:
+    if( ! Service::Enabled( "cups" ) )
+    { if( Popup::YesNoHeadline( // PopupYesNoHeadline headline:
+                                _("Enable starting of the CUPS daemon during system boot"),
+                                // PopupYesNoHeadline body:
+                                _("Currently the CUPS daemon is not started during system boot.")
+                              )
+        )
+      { if( ! Service::Enable( "cups" ) )
+        { Popup::ErrorDetails( // Popup::ErrorDetails message:
+                               _("Failed to enable starting of the CUPS daemon during system boot"),
+                               Service::Error()
+                             );
+          // This is not a fatal error, therefore return "successfully" nevertheless.
+        }
+      }
+    }
+    return true;
+  }
+  // Stop cupsd:
+  if( "stop" == new_status )
+  { // Enforce user confirmation before the cupsd is stopped
+    // to be on the safe side regarding complaints in an enterprise environment
+    // because a stop disrupts all currently actively printing jobs:
+    if( ! Popup::YesNoHeadline( // PopupYesNoHeadline headline:
+                                _("Stop local running CUPS daemon"),
+                                // PopupYesNoHeadline body:
+                                _("A stop disrupts all currently actively printing jobs.")
+                              )
+      )
+    { return false;
+    }
+    // To be on the safe side try to stop and disable the cupsd
+    // regardless if it is accessible or not and/or disabled or not
+    // and ignore possible errors from Service::Stop and Service::Disable
+    // (the local_cupsd_accessible test below should be sufficient):
+    Service::Stop( "cups" );
+    Service::Disable( "cups" );
+    // Wait one second to make sure that cupsd has really finished (it may do some cleanup):
+    sleep( 1000 );
+    local_cupsd_accessible = ExecuteBashCommand( local_cupsd_accessible_commandline );
+    if( local_cupsd_accessible )
+    { Popup::Error( // Popup::Error message:
+                    _("A local running CUPS daemon is still accessible.")
+                  );
+      return false;
+    }
+    return true;
+  }
+  // If new_status is neither "start" nor "restart" nor "stop",
+  // return whether or not the local cupsd is accessible:
+  return local_cupsd_accessible;
+}
+
+// By default there is no active "ServerName" entry in /etc/cups/client.conf:
+global string client_conf_server_name = "";
+global boolean client_only = false;
+
+global boolean DetermineClientOnly()
+{ // Determine the 'ServerName' value in /etc/cups/client.conf:
+  if( ExecuteBashCommand( yast_bin_dir + "cups_client_only" ) )
+  { client_conf_server_name = result["stdout"]:"";
+    if( "" != client_conf_server_name
+        && "localhost" != client_conf_server_name
+        && "127.0.0.1" != client_conf_server_name
+      )
+    { // Note that even 'localhost' or '127.0.0.1' is a valid ServerName value
+      // which is used to force client tools (e.g. lpadmin, lpinfo, lpstat)
+      // to ask the local cupsd via the IPP port on localhost (127.0.0.1:631)
+      // and not via the domain socket (/var/run/cups/cups.sock) because
+      // the latter failed in the past for certain third-party clients (e.g. Java).
+      // If the ServerName value in /etc/cups/client.conf is 'localhost'
+      // it is actually no client-only config because the local cupsd is used.
+      client_only = true;
+      return true;
+    }
+    client_only = false;
+    return true;
+  }
+  // The cups_client_only tool failed:
+  client_conf_server_name = result["stdout"]:"";
+  if( "" != client_conf_server_name
+      && "localhost" != client_conf_server_name
+      && "127.0.0.1" != client_conf_server_name
+    )
+  { // When there is a non-empty client_conf_server_name,
+    // cups_client_only fails when the client-only server is not accessible:
+    Popup::ErrorDetails( // Popup::ErrorDetails message
+                         // where %1 will be replaced by the server name.
+                         sformat( _("The CUPS server '%1' is not accessible"), client_conf_server_name ),
+                         result["stderr"]:""
+                       );
+    client_only = true;
+    return false;
+  }
+  if( "localhost" == client_conf_server_name
+      || "127.0.0.1" == client_conf_server_name
+    )
+  { client_only = false;
+    if( ! GetAndSetCupsdStatus( "" ) )
+    { if( ! GetAndSetCupsdStatus( "start" ) )
+      { return false;
+      }
+    }
+    return true;
+  }
+  // The cups_client_only tool failed for whatever reason.
+  // Use fallback values:
+  client_conf_server_name = "";
+  client_only = false;
+  return true;
+}
+
+// By default there is "Browsing On" in /etc/cups/cupsd.conf
+// which is even the fallback if there is no "Browsing" entry at all
+// or when the "Browsing" entry is deactivated by a leading '#' character.
+// Therefore browsing_on is only false if "Browsing Off" or "Browsing No"
+// is explicitely set in /etc/cups/cupsd.conf.
+global boolean cupsd_conf_browsing_on = true;
+
+global boolean DetermineBrowsing()
+{ // Determine the 'Browsing [ On | Off ]' value in /etc/cups/cupsd.conf:
+  if( ExecuteBashCommand( yast_bin_dir + "modify_cupsd_conf Browsing" ) )
+  { string browsing = tolower( result["stdout"]:"On" );
+    if( "off" == browsing || "no" == browsing )
+    { cupsd_conf_browsing_on = false;
+    }
+    else
+    { cupsd_conf_browsing_on = true;
+    }
+  }
+  else
+  { // Use fallback value when the command above failed:
+    cupsd_conf_browsing_on = true;
+    return false;
+  }
+  return true;
+}
+
+// By default there is "BrowseAllow all" in /etc/cups/cupsd.conf
+// which is even the fallback if there is no "BrowseAllow" entry at all
+// or when the "BrowseAllow" entries are deactivated by a leading '#' character.
+// Multiple BrowseAllow lines are allowed, e.g.:
+//   BrowseAllow from @LOCAL
+//   BrowseAllow from 192.168.200.1
+//   BrowseAllow from 192.168.100.0/255.255.255.0
+// so that each BrowseAllow line value is stored as one string
+// in the cupsd_conf_browse_allow list of strings:
+global list< string > cupsd_conf_browse_allow = [ "all" ];
+
+global boolean DetermineBrowseAllow()
+{ // Determine the 'BrowseAllow [ all | none | @LOCAL | IP-address[/netmask] ]' values in /etc/cups/cupsd.conf:
+  if( ExecuteBashCommand( yast_bin_dir + "modify_cupsd_conf BrowseAllow" ) )
+  { // The command outputs a line where multiple BrowseAllow values are separated by space
+    // but possible duplicate BrowseAllow values are not removed in the command output:
+    cupsd_conf_browse_allow = toset( splitstring( Printerlib::result["stdout"]:"all", " " ) );
+  }
+  else
+  { // Use fallback value when the command above failed:
+    cupsd_conf_browse_allow = [ "all" ];
+    return false;
+  }
+  return true;
+}
+
+global boolean WriteCupsSettings(map ay){
+ string cups_file="/etc/cups/cupsd.conf";
+ y2milestone("Create backup of %1 file:%2", cups_file, SCR::Execute(.target.bash, sformat("mv %1 %1.$(date -I)", cups_file)));
+ SCR::Write(.cups.server, ay);
+ return true;
+}
+
+
+global boolean WriteClientSettings(map ay){
+ string cups_file="/etc/cups/client.conf";
+ y2milestone("Create backup of %1 file:%2", cups_file, SCR::Execute(.target.bash, sformat("mv %1 %1.$(date -I)", cups_file)));
+ SCR::Write(.cups.client, ay);
+ return true;
+}
+
+
+}
+
