@@ -117,18 +117,6 @@ any AddDriverDialog()
                             "ghostscript-&omni : " + _("The Omni Printer Driver (Unmaintained)"),
                             ghostscript_omni_installed
                           )
-                        ),
-                        `Left
-                        ( `CheckBox
-                          ( `id("filters"),
-                            // CheckBox to select or un-select the printer driver package filters
-                            // which provides some makeshift drivers only for a few of the
-                            // non-standard printers (the so called "GDI printers").
-                            // There is no need to have the package name "filters" in this text
-                            // because it is shown in a separated column to the left of this text.
-                            "&filters : " + _("Makeshift Drivers for a Few Non-Standard (GDI) Printers"),
-                            filters_installed
-                          )
                         )
                       )
                     ),
@@ -208,7 +196,6 @@ any AddDriverDialog()
       boolean hplip_install = (boolean)UI::QueryWidget( `id("hplip"), `Value );
       boolean manufacturer_PPDs_install = (boolean)UI::QueryWidget( `id("manufacturer-PPDs"), `Value );
       boolean ghostscript_omni_install = (boolean)UI::QueryWidget( `id("ghostscript-omni"), `Value );
-      boolean filters_install = (boolean)UI::QueryWidget( `id("filters"), `Value );
       string ppd_path_input_value = (string)UI::QueryWidget( `id("ppd_path_input"), `Value );
       // Ignore an effectively empty ppd_path_input_value:
       if( cups_drivers_install == cups_drivers_installed
@@ -216,7 +203,6 @@ any AddDriverDialog()
           && hplip_install == hplip_installed
           && manufacturer_PPDs_install == manufacturer_PPDs_installed
           && ghostscript_omni_install == ghostscript_omni_installed
-          && filters_install == filters_installed
           && "" == filterchars( ppd_path_input_value, Printer::alnum_chars )
         )
       { y2milestone( "Nothing changed in AddDriverDialog." );
@@ -242,7 +228,7 @@ any AddDriverDialog()
       // when I would let the package manager install several packages at once
       // but one package is not avaialble in the repository to be installed.
       // For example on a host without Internet access when whatever rarely used
-      // drivers (e.g. ghostscript-omni or filters) or too-big drivers (e.g. hplip)
+      // drivers (e.g. ghostscript-omni) or too-big drivers (e.g. hplip)
       // are not provided on whatever media for whatever product
       // (e.g. our Live CD or a stripped DVD/CD in whatever magazine).
       boolean package_changed = false;
@@ -368,18 +354,6 @@ any AddDriverDialog()
         }
         else
         { if( Printerlib::TestAndInstallPackage( "ghostscript-omni", "remove" ) )
-          { package_changed = true;
-          }
-        }
-      }
-      if( filters_install != filters_installed )
-      { if( filters_install )
-        { if( Printerlib::TestAndInstallPackage( "filters", "install" ) )
-          { package_changed = true;
-          }
-        }
-        else
-        { if( Printerlib::TestAndInstallPackage( "filters", "remove" ) )
           { package_changed = true;
           }
         }
