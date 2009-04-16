@@ -470,25 +470,14 @@ symbol handleOverview( string key, map event )
     }
     string testprint_job_title = "YaST2testprint_" + queue_name;
     // Do not enforce to talk to the cupsd on localhost when submiting the testpage
-    // because testpage printing must also work for a "client-only" config.
-    // Use "-o document-format=application/vnd.cups-postscript" to be prepared
-    // for the upcomming PDF workflow.
-    // In the PDF workflow everything is converted to PDF before further processing so that
-    // PostScript programs like the CUPS test page are executed by Ghostscript when it is called by pstopdf.
-    // The option "-o document-format=application/vnd.cups-postscript" overrides the PDF workflow so that
-    // PostScript programs are executed by the PostScript printer or the rasterizing instance of Ghostscript.
-    // A consequence is that then pstops is not run so that -o page-label="queue_name:YaST2testprint@hostname"
-    // does no longer work which is now implemented via a sed magic which is fail-safe because
-    // sed would output the unchanged CUPS test page if it cannot do the substitution.
-    // The output of $(hostname) is also safe for the PostScript code "(string) show" because
-    // a hostname contains up to 24 ASCII characters A-Z a-z 0-9 and the hyphen (see RFC 952):
-    if( ! Printerlib::ExecuteBashCommand( "sed -e \"s/Printer Test Page/$(hostname || echo 'YaST') : "
-                                          + queue_name
-                                          + "/\" /usr/share/cups/data/testprint.ps | /usr/bin/lp -d '"
+    // because testpage printing must also work for a "client-only" config:
+    if( ! Printerlib::ExecuteBashCommand( "/usr/bin/lp -d '"
                                           + queue_name
                                           + "' -t '"
                                           + testprint_job_title
-                                          + "' -o document-format=application/vnd.cups-postscript"
+                                          + "' -o page-label=\""
+                                          + queue_name
+                                          + ":YaST2testprint@$(hostname)\" /usr/share/cups/data/testprint.ps"
                                         )
       )
     { Popup::ErrorDetails( sformat( // Message of a Popup::ErrorDetails
