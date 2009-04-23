@@ -208,20 +208,274 @@ void changeSettingsDialog( symbol selected )
     case(`usb):
           content = getContentFromBackend("usb");
           break;
-    case(`serial):
-          content = getContentFromBackend("serial");
-          break;
-    case(`infra):
-          content = getContentFromBackend("infra");
-          break;
-    case(`bluetooth):
-          content = getContentFromBackend("bluetooth");
-          break;
-    case(`scsi):
-          content = getContentFromBackend("scsi");
-          break;
     case(`hplip):
           content = getContentFromBackend("hp");
+          break;
+    case(`serial):
+          content = `VBox
+                    ( `Left
+                      ( `ComboBox
+                        ( `id(`serial_device_node),
+                          // This ComboBox is editable because there could be
+                          // any kind of serial device node name "/dev/whatever":
+                          `opt(`editable),
+                          // Label for an editable ComboBox where
+                          // a serial device node (e.g. /dev/ttyS0 or /dev/ttyS1)
+                          // can be selected or entered:
+                          _("&Serial device"),
+                          [ // Have nothing preselected to be on the safe side because
+                            // the CUPS serial backend may blindly write to the device,
+                            // (see backend/serial.c in the CUPS 1.3.9 sources):
+                            `item( `id(""), "", true ),
+                            `item( `id("/dev/ttyS0"), "/dev/ttyS0" ),
+                            `item( `id("/dev/ttyS1"), "/dev/ttyS1" ),
+                            `item( `id("/dev/ttyS2"), "/dev/ttyS2" ),
+                            `item( `id("/dev/ttyS3"), "/dev/ttyS3" ),
+                            `item( `id("/dev/ttyS4"), "/dev/ttyS4" ),
+                            `item( `id("/dev/ttyS5"), "/dev/ttyS5" ),
+                            `item( `id("/dev/ttyS6"), "/dev/ttyS6" ),
+                            `item( `id("/dev/ttyS7"), "/dev/ttyS7" )
+                          ]
+                        )
+                      ),
+                      `Left
+                      ( `ComboBox
+                        ( `id(`serial_baud_rate),
+                          // The backend/serial.c in the CUPS 1.3.9 sources
+                          // supports only the preset values below.
+                          // Nevertheless this ComboBox is editable to be future-proof:
+                          `opt(`editable),
+                          // Label for an editable ComboBox where
+                          // the baud rate for a serial device
+                          // can be selected or entered:
+                          _("&Baud rate"),
+                          // The preset values are from backend/serial.c
+                          // in the CUPS 1.3.9 sources:
+                          [ // Have nothing preselected to be on the safe side because the baud rate
+                            // may have to be exactly what is set in the printer (e.g. via DIP switches):
+                            `item( `id(""), "", true ),
+                            `item( `id("1200"), "1200" ),
+                            `item( `id("2400"), "2400" ),
+                            `item( `id("4800"), "4800" ),
+                            `item( `id("9600"), "9600" ),
+                            `item( `id("19200"), "19200" ),
+                            `item( `id("38400"), "38400" ),
+                            `item( `id("57600"), "57600" ),
+                            `item( `id("115200"), "115200" ),
+                            `item( `id("230400"), "230400" )
+                          ]
+                        )
+                      ),
+                      `Left
+                      ( `ComboBox
+                        ( `id(`serial_data_bits),
+                          // The backend/serial.c in the CUPS 1.3.9 sources
+                          // supports only the preset values below (7 and 8).
+                          // Nevertheless this ComboBox is editable to be future-proof
+                          // because according to http://en.wikipedia.org/wiki/Serial_port
+                          // a serial port might also have 5, 6, or 9 data bits.
+                          `opt(`editable),
+                          // Label for an editable ComboBox where
+                          // the number of data bits for a serial device
+                          // can be selected or entered:
+                          _("&Data bits"),
+                          // The preset values are from backend/serial.c
+                          // in the CUPS 1.3.9 sources:
+                          [ `item( `id(""), "", true ),
+                            `item( `id("7"), "7" ),
+                            `item( `id("8"), "8" )
+                          ]
+                        )
+                      ),
+                      `Left
+                      ( `ComboBox
+                        ( `id(`serial_parity),
+                          // The backend/serial.c in the CUPS 1.3.9 sources
+                          // supports only the preset values below.
+                          // Nevertheless this ComboBox is editable to be future-proof:
+                          `opt(`editable),
+                          // Label for an editable ComboBox where
+                          // the parity checking for a serial device
+                          // can be selected or entered:
+                          _("&Parity checking"),
+                          // The preset values are from backend/serial.c
+                          // in the CUPS 1.3.9 sources:
+                          [ `item( `id(""), "", true ),
+                            `item( `id("even"), "even" ),
+                            `item( `id("odd"), "odd" ),
+                            `item( `id("none"), "none" ),
+                            `item( `id("space"), "space" ),
+                            `item( `id("mark"), "mark" )
+                          ]
+                        )
+                      ),
+                      `Left
+                      ( `ComboBox
+                        ( `id(`serial_flow_control),
+                          // The backend/serial.c in the CUPS 1.3.9 sources
+                          // supports only the preset values below.
+                          // Nevertheless this ComboBox is editable to be future-proof
+                          // because according to http://en.wikipedia.org/wiki/Flow_control
+                          // a serial port might also have another kind of flow control.
+                          `opt(`editable),
+                          // Label for an editable ComboBox where
+                          // the flow control for a serial device
+                          // can be selected or entered:
+                          _("&Flow control"),
+                          // The preset values are from backend/serial.c
+                          // in the CUPS 1.3.9 sources:
+                          [ `item( `id(""), "", true ),
+                            `item( `id("soft"), "soft" ),
+                            `item( `id("hard"), "hard" ),
+                            `item( `id("none"), "none" ),
+                            `item( `id("rtscts"), "rtscts" ),
+                            `item( `id("dtrdsr"), "dtrdsr" )
+                          ]
+                        )
+                      ),
+                      `Left
+                      ( `ComboBox
+                        ( `id(`serial_stop_bits),
+                          // The backend/serial.c in the CUPS 1.3.9 sources
+                          // supports only the preset values below.
+                          // Nevertheless this ComboBox is editable to be future-proof:
+                          `opt(`editable),
+                          // Label for an editable ComboBox where
+                          // the number of stop bits for a serial device
+                          // can be selected or entered:
+                          _("S&top bits"),
+                          // The preset values are from backend/serial.c
+                          // in the CUPS 1.3.9 sources:
+                          [ `item( `id(""), "", true ),
+                            `item( `id("1"), "1" ),
+                            `item( `id("2"), "2" )
+                          ]
+                        )
+                      ),
+                      model_for_using_driver_content
+                    );
+          break;
+    case(`bluetooth):
+          // Fallback message what the user may run manually when it fails
+          // to generate a valid list of bluetooth device IDs:
+          string  bluetooth_device_list = _("Run 'hcitool scan' to get a list of bluetooth device IDs.");
+          Popup::ShowFeedback( // No title for a simple busy message:
+                               "",
+                               // Busy message:
+                               // Body of a Popup::ShowFeedback:
+                               _("Retrieving bluetooth device IDs...")
+                             );
+          // The command "hcitool scan" might need very much time or hang up.
+          // To kill exactly hcitool there is the workaround via the temporary file because
+          // hcitool scan | grep '...' & sleep 10 ; kill -9 $!
+          // would kill only grep and
+          // ( hcitool scan | grep '...' ) & sleep 10 ; kill -9 $!
+          // would kill only the sub shell.
+          if( ! Printerlib::ExecuteBashCommand( "hcitool scan >/tmp/hcitool_scan.out & sleep 10 ; kill -9 $! ; grep '..:..:..:..:..:..' /tmp/hcitool_scan.out | tr -s ' ' ; rm -f /tmp/hcitool_scan.out" ) )
+          { // Will probably never fail because the final "rm -f ..." should exit successfully in any case:
+            Popup::ErrorDetails( // Popup::ErrorDetails message:
+                                 _("Failed to get a list of bluetooth device IDs."),
+                                 "hcitool scan" + "\n" + Printerlib::result["stderr"]:""
+                               );
+          }
+          else
+          { if( "" != Printerlib::result["stdout"]:"" )
+            { bluetooth_device_list = Printerlib::result["stdout"]:"";
+            }
+          }
+          Popup::ClearFeedback();
+          y2milestone( "bluetooth_device_list '%1'", bluetooth_device_list );
+          // Have an empty string preselected to be on the safe side because
+          // the bluetooth backend may blindly write to the device:
+          list <term> bluetooth_device_id_items = [ `item( `id(""), "", true ) ];
+          foreach( string word,
+                   splitstring( bluetooth_device_list, " " ),
+                   { if( regexpmatch( word, "..:..:..:..:..:..") )
+                     { // A bluetooth device ID has the form 1A:2B:3C:4D:5E:6F
+                       // but the bluetooth backend needs it without the colons ':'
+                       // in its DeviceURI which has the form bluetooth://1A2B3C4D5E6F
+                       string hexnumber = filterchars( word, "0123456789ABCDEFabcdef" );
+                       if( "" != hexnumber )
+                       { bluetooth_device_id_items = add( bluetooth_device_id_items, `item( `id( hexnumber ), hexnumber ) );
+                       }
+                     }
+                   }
+                 );
+          content = `VBox
+                    ( `Left
+                      ( `ComboBox
+                        ( `id(`bluetooth_device_id),
+                          `opt(`editable),
+                          // Label for an editable ComboBox where
+                          // a bluetooth device ID
+                          // can be selected or entered:
+                          _("&Bluetooth device ID"),
+                          bluetooth_device_id_items
+                        )
+                      ),
+                      `Left
+                      ( `Frame
+                        ( // TRANSLATORS: Frame label for a list of bluetooth device IDs:
+                          _("Currently available bluetooth device IDs"),
+                          // The RichText widget is required here to get scroll bars if needed
+                          // (a Label cuts the content because it does not provide scroll bars):
+                          `RichText( "<pre>" + bluetooth_device_list + "</pre>" )
+                        )
+                      ),
+                      model_for_using_driver_content
+                    );
+          break;
+    case(`scsi):
+          // Fallback message what the user may run manually when it fails
+          // to generate the current list of SCSI generic device nodes:
+          string scsi_device_list = _("Run 'lsscsi -g' to get a list of SCSI generic devices (/dev/sg...).");
+          if( ! Printerlib::ExecuteBashCommand( "lsscsi -g | tr -s ' ' | cut -s -d ' ' -f 3- | grep '/dev/sg'" ) )
+          { Popup::ErrorDetails( // Popup::ErrorDetails message:
+                                 _("Failed to get a list of SCSI generic devices."),
+                                 "lsscsi -g" + "\n" + Printerlib::result["stderr"]:""
+                               );
+          }
+          else
+          { if( "" != Printerlib::result["stdout"]:"" )
+            { scsi_device_list = Printerlib::result["stdout"]:"";
+            }
+          }
+          y2milestone( "scsi_device_list '%1'", scsi_device_list );
+          content = `VBox
+                    ( `Left
+                      ( `ComboBox
+                        ( `id(`scsi_device_node),
+                          `opt(`editable),
+                          // Label for an editable ComboBox where
+                          // a SCSI generic device node (e.g. /dev/sg0 or /dev/sg1)
+                          // can be selected or entered:
+                          _("&SCSI generic device"),
+                          [ // Have nothing preselected to be on the safe side because
+                            // the CUPS scsi backend may blindly write to the device,
+                            // (see backend/scsi-linux.c in the CUPS 1.3.9 sources):
+                            `item( `id(""), "", true ),
+                            `item( `id("/dev/sg0"), "/dev/sg0" ),
+                            `item( `id("/dev/sg1"), "/dev/sg1" ),
+                            `item( `id("/dev/sg2"), "/dev/sg2" ),
+                            `item( `id("/dev/sg3"), "/dev/sg3" ),
+                            `item( `id("/dev/sg4"), "/dev/sg4" ),
+                            `item( `id("/dev/sg5"), "/dev/sg5" ),
+                            `item( `id("/dev/sg6"), "/dev/sg6" ),
+                            `item( `id("/dev/sg7"), "/dev/sg7" )
+                          ]
+                        )
+                      ),
+                      `Left
+                      ( `Frame
+                        ( // TRANSLATORS: Frame label for a list of SCSI generic devices:
+                          _("Currently available SCSI generic devices"),
+                          // The RichText widget is required here to get scroll bars if needed
+                          // (a Label cuts the content because it does not provide scroll bars):
+                          `RichText( "<pre>" + scsi_device_list + "</pre>" )
+                        )
+                      ),
+                      model_for_using_driver_content
+                    );
           break;
     // network printer
     case(`tcp):
@@ -497,7 +751,7 @@ void changeSettingsDialog( symbol selected )
     default:
           y2error( "Unknown selected item %1", selected );
   }
-  UI::ReplaceWidget( `rp, content );
+  UI::ReplaceWidget( `connection_settings_replace_point, content );
 }
 
 any ConnectionWizardDialog()
@@ -520,14 +774,13 @@ any ConnectionWizardDialog()
                                 // TRANSLATORS: Tree widget item
                                 `item(`id(`usb), _("USB Port") ),
                                 // TRANSLATORS: Tree widget item
+                                `item( `id(`hplip), _("HP Devices (HPLIP)") ),
+                                // TRANSLATORS: Tree widget item
                                 `item( `id(`serial), _("Serial Port") ),
-                                // `item( `id(`infra), _("Infrared Port (IrDA)") ),
                                 // TRANSLATORS: Tree widget item
                                 `item( `id(`bluetooth), _("Bluetooth") ),
                                 // TRANSLATORS: Tree widget item
-                                `item( `id(`scsi), _("SCSI") ),
-                                // TRANSLATORS: Tree widget item
-                                `item( `id(`hplip), _("HP Devices (HPLIP)") )
+                                `item( `id(`scsi), _("SCSI") )
                               ]
                             ),
                             `item
@@ -582,7 +835,7 @@ any ConnectionWizardDialog()
                           `Frame
                           ( // TRANSLATORS: Connection details widget
                             _("Connection Settings"),
-                            `ReplacePoint( `id(`rp),
+                            `ReplacePoint( `id(`connection_settings_replace_point),
                                            `VBox
                                            ( `Left
                                              ( `Label
@@ -625,10 +878,6 @@ boolean validateSettingsDialog( symbol type )
   switch(type)
   { case(`parallel):
     case(`usb):
-    case(`serial):
-    case(`infra):
-    case(`bluetooth):
-    case(`scsi):
     case(`hplip):
           integer selected_connection_index = (integer)UI::QueryWidget( `id(`connection_selection), `CurrentItem );
           if( nil == selected_connection_index )
@@ -645,19 +894,99 @@ boolean validateSettingsDialog( symbol type )
           { valid = true;
           }
           break;
+    case(`serial):
+          string serial_device_node = (string)UI::QueryWidget( `serial_device_node, `Value );
+          string serial_baud_rate = (string)UI::QueryWidget( `serial_baud_rate, `Value );
+          string serial_data_bits = (string)UI::QueryWidget( `serial_data_bits, `Value );
+          string serial_parity = (string)UI::QueryWidget( `serial_parity, `Value );
+          string serial_flow_control = (string)UI::QueryWidget( `serial_flow_control, `Value );
+          string serial_stop_bits = (string)UI::QueryWidget( `serial_stop_bits, `Value );
+          if( size( serial_device_node ) == 0
+              || size( serial_baud_rate ) == 0
+            )
+          { Popup::Error( _("Serial device and baud rate could not be empty.") );
+          }
+          else
+          { if( "space" == serial_parity && "7" != serial_data_bits )
+            { Popup::Error( _("The 'space' parity checking is only supported with 7 data bits.") );
+            }
+            else
+            { if( "mark" == serial_parity && "7" != serial_data_bits )
+              { Popup::Error( _("The 'mark' parity checking is only supported with 7 data bits.") );
+              }
+              else
+              { connection_uri = "serial:" + serial_device_node + "?baud=" + serial_baud_rate;
+                if( size( serial_data_bits ) > 0 )
+                { connection_uri = connection_uri + "+bits=" + serial_data_bits;
+                }
+                if( size( serial_parity ) > 0 )
+                { connection_uri = connection_uri + "+parity=" + serial_parity;
+                }
+                if( size( serial_flow_control ) > 0 )
+                { connection_uri = connection_uri + "+flow=" + serial_flow_control;
+                }
+                if( size( serial_stop_bits ) > 0 )
+                { connection_uri = connection_uri + "+stop=" + serial_stop_bits;
+                }
+                valid = true;
+              }
+            }
+          }
+          if( valid )
+          { connection_model = (string)UI::QueryWidget( `id("manufacturers_combo_box"), `Value );
+            if( "" == connection_model )
+            { valid = false;
+              Popup::Error( _("Select a manufacturer.") );
+            }
+          }
+          break;
+    case(`bluetooth):
+          string bluetooth_device_id = (string)UI::QueryWidget( `bluetooth_device_id, `Value );
+          if( size( bluetooth_device_id ) == 0 )
+          { Popup::Error( _("Bluetooth device ID could not be empty.") );
+          }
+          else
+          { connection_uri = "bluetooth://" + bluetooth_device_id;
+            valid = true;
+          }
+          if( valid )
+          { connection_model = (string)UI::QueryWidget( `id("manufacturers_combo_box"), `Value );
+            if( "" == connection_model )
+            { valid = false;
+              Popup::Error( _("Select a manufacturer.") );
+            }
+          }
+          break;
+    case(`scsi):
+          string scsi_device_node = (string)UI::QueryWidget( `scsi_device_node, `Value );
+          if( size( scsi_device_node ) == 0 )
+          { Popup::Error( _("SCSI generic device could not be empty.") );
+          }
+          else
+          { connection_uri = "scsi:" + scsi_device_node;
+            valid = true;
+          }
+          if( valid )
+          { connection_model = (string)UI::QueryWidget( `id("manufacturers_combo_box"), `Value );
+            if( "" == connection_model )
+            { valid = false;
+              Popup::Error( _("Select a manufacturer.") );
+            }
+          }
+          break;
     case(`uri):
           connection_uri = (string)UI::QueryWidget( `uri, `Value );
           if( size( connection_uri ) > 0 )
           { valid = true;
           }
           else
-          { Popup::Error( _("URI couldn't be empty!") );
+          { Popup::Error( _("URI could not be empty.") );
           }
           if( valid )
           { connection_model = (string)UI::QueryWidget( `id("manufacturers_combo_box"), `Value );
             if( "" == connection_model )
             { valid = false;
-              Popup::Error( _("Select a manufacturer!") );
+              Popup::Error( _("Select a manufacturer.") );
             }
           }
           break;
@@ -667,13 +996,13 @@ boolean validateSettingsDialog( symbol type )
           { valid = true;
           }
           else
-          { Popup::Error( _("URI couldn't be empty!") );
+          { Popup::Error( _("URI could not be empty.") );
           }
           if( valid )
           { connection_model = (string)UI::QueryWidget( `id("manufacturers_combo_box"), `Value );
             if( "" == connection_model )
             { valid = false;
-              Popup::Error( _("Select a manufacturer!") );
+              Popup::Error( _("Select a manufacturer.") );
             }
           }
           break;
@@ -687,13 +1016,13 @@ boolean validateSettingsDialog( symbol type )
           if( size( smb["hostname"]:"" ) == 0
               || size( smb["printer"]:"" ) == 0
             )
-          { Popup::Error( _("Servername and printer couldn't be empty!") );
+          { Popup::Error( _("Servername and printer could not be empty.") );
           }
           else
           { if( ( size( smb["user"]:"" ) > 0 && size( smb["pass"]:"" ) == 0 )
                 || ( size( smb["user"]:"" ) == 0 && size( smb["pass"]:"" ) > 0 )
               )
-            { Popup::Error( _("Both user and password must be specified!") );
+            { Popup::Error( _("Both user and password must be specified.") );
             }
             else
             { connection_uri = "smb://";
@@ -724,7 +1053,7 @@ boolean validateSettingsDialog( symbol type )
           { connection_model = (string)UI::QueryWidget( `id("manufacturers_combo_box"), `Value );
             if( "" == connection_model )
             { valid = false;
-              Popup::Error( _("Select a manufacturer!") );
+              Popup::Error( _("Select a manufacturer.") );
             }
           }
           break;
@@ -739,13 +1068,13 @@ boolean validateSettingsDialog( symbol type )
             valid = true;
           }
           else
-          { Popup::Error( _("Servername and port couldn't be empty!") );
+          { Popup::Error( _("Servername and port could not be empty.") );
           }
           if( valid )
           { connection_model = (string)UI::QueryWidget( `id("manufacturers_combo_box"), `Value );
             if( "" == connection_model )
             { valid = false;
-              Popup::Error( _("Select a manufacturer!") );
+              Popup::Error( _("Select a manufacturer.") );
             }
           }
           break;
@@ -760,13 +1089,13 @@ boolean validateSettingsDialog( symbol type )
             valid=true;
           }
           else
-          { Popup::Error( _("Servername and queue name couldn't be empty!") );
+          { Popup::Error( _("Servername and queue name could not be empty.") );
           }
           if( valid )
           { connection_model = (string)UI::QueryWidget( `id("manufacturers_combo_box"), `Value );
             if( "" == connection_model )
             { valid = false;
-              Popup::Error( _("Select a manufacturer!") );
+              Popup::Error( _("Select a manufacturer.") );
             }
           }
           break;
@@ -781,13 +1110,13 @@ boolean validateSettingsDialog( symbol type )
             valid=true;
           }
           else
-          { Popup::Error( _("Servername and queue name couldn't be empty!") );
+          { Popup::Error( _("Servername and queue name could not be empty.") );
           }
           if( valid )
           { connection_model = (string)UI::QueryWidget( `id("manufacturers_combo_box"), `Value );
             if( "" == connection_model )
             { valid = false;
-              Popup::Error( _("Select a manufacturer!") );
+              Popup::Error( _("Select a manufacturer.") );
             }
           }
           break;
@@ -802,13 +1131,13 @@ boolean validateSettingsDialog( symbol type )
             valid=true;
           }
           else
-          { Popup::Error( _("Servername and queue name couldn't be empty!") );
+          { Popup::Error( _("Servername and queue name could not be empty.") );
           }
           if( valid )
           { connection_model = (string)UI::QueryWidget( `id("manufacturers_combo_box"), `Value );
             if( "" == connection_model )
             { valid = false;
-              Popup::Error( _("Select a manufacturer!") );
+              Popup::Error( _("Select a manufacturer.") );
             }
           }
           break;
@@ -822,7 +1151,7 @@ boolean validateSettingsDialog( symbol type )
           if( size( ipx["hostname"]:"" ) == 0
               || size( ipx["queue"]:"" ) == 0
             )
-          { Popup::Error( _("Servername and queue name couldn't be empty!") );
+          { Popup::Error( _("Servername and queue name could not be empty.") );
           }
           else
           { connection_uri = "novell://";
@@ -838,7 +1167,7 @@ boolean validateSettingsDialog( symbol type )
           { connection_model = (string)UI::QueryWidget( `id("manufacturers_combo_box"), `Value );
             if( "" == connection_model )
             { valid=false;
-              Popup::Error( _("Select a manufacturer!") );
+              Popup::Error( _("Select a manufacturer.") );
             }
           }
           break;
@@ -853,7 +1182,7 @@ boolean validateSettingsDialog( symbol type )
               || size( beh["attempts"]:"" ) == 0
               || size( beh["delay"]:"" ) == 0
             )
-          { Popup::Error( _("Device URI, number of retries, and delay couldn't be empty!" ) );
+          { Popup::Error( _("Device URI, number of retries, and delay could not be empty." ) );
           }
           else
           { connection_uri = sformat( "beh:/%1/%2/%3/%4",
@@ -868,7 +1197,7 @@ boolean validateSettingsDialog( symbol type )
           { connection_model = (string)UI::QueryWidget( `id("manufacturers_combo_box"), `Value );
             if( "" == connection_model )
             { valid = false;
-              Popup::Error( _("Select a manufacturer!") );
+              Popup::Error( _("Select a manufacturer.") );
             }
           }
           break;
@@ -879,13 +1208,13 @@ boolean validateSettingsDialog( symbol type )
             valid = true;
           }
           else
-          { Popup::Error( _("Couldn't be empty!") );
+          { Popup::Error( _("Could not be empty.") );
           }
           if( valid )
           { connection_model = (string)UI::QueryWidget( `id("manufacturers_combo_box"), `Value );
             if( "" == connection_model )
             { valid = false;
-              Popup::Error( _("Select a manufacturer!") );
+              Popup::Error( _("Select a manufacturer.") );
             }
           }
           break;
@@ -1108,7 +1437,7 @@ while( ret != `back && ret != `next )
             storeQueue( selected );
           }
           else
-          { y2error( "Couldn't validate %1", selected );
+          { y2error( "Could not validate %1", selected );
             ret=nil;
           }
           break;

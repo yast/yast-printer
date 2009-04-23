@@ -442,18 +442,31 @@ symbol handleOverview( string key, map event )
                                           + "-[0-9]+'"
                                         )
         )
-      { if( Popup::AnyQuestion( // Header of a confirmation popup before all pending jobs in a queue will be deleted:
-                                _("Delete Pending Print Jobs"),
-                                // Body of a confirmation popup before a queue will be deleted:
-                                _("There are pending print jobs which might be deleted before the testpage is printed."),
-                                // 'Yes' button label of a confirmation popup
-                                // before all pending jobs in a queue will be deleted:
-                                sformat( _("Delete all pending jobs for %1"), queue_name ),
-                                // 'No' button label of a confirmation popup
-                                // before all pending jobs in a queue will be deleted:
-                                _("Print the testpage after the other jobs"),
-                                `focus_no
-                              )
+      { // Fallback body of a confirmation popup before pending print jobs will be deleted:
+        string pending_job_info = _("There are pending print jobs which might be deleted before the testpage is printed.");
+        if( Printerlib::ExecuteBashCommand( "/usr/bin/lpstat -h localhost -o '"
+                                            + queue_name
+                                            + "' -p '"
+                                            + queue_name
+                                            + "'"
+                                          )
+          )
+        { pending_job_info = Printerlib::result["stdout"]:"";
+        }
+        if( Popup::AnyQuestionRichText( // Header of a confirmation popup before pending print jobs will be deleted
+                                        // where %1 will be replaced by the queue name.
+                                        sformat( _("Delete Pending Print Jobs For %1"), queue_name ),
+                                        "<pre>" + pending_job_info + "</pre>",
+                                        70,
+                                        20,
+                                        // 'Yes' button label of a confirmation popup
+                                        // before all pending jobs in a queue will be deleted:
+                                        _("Delete them before printing testpage"),
+                                        // 'No' button label of a confirmation popup
+                                        // before all pending jobs in a queue will be deleted:
+                                        _("Print testpage after the other jobs"),
+                                        `focus_no
+                                      )
           )
         { if( ! Printerlib::ExecuteBashCommand( "/usr/bin/cancel -a -h localhost '" + queue_name + "'" ) )
           { Popup::ErrorDetails( sformat( // Message of a Popup::ErrorDetails
@@ -527,18 +540,31 @@ symbol handleOverview( string key, map event )
                                           + "-[0-9]+'"
                                         )
         )
-      { if( Popup::AnyQuestion( // Header of a confirmation popup before all pending jobs in a queue will be deleted:
-                                _("Delete Pending Print Jobs"),
-                                // Body of a confirmation popup before a queue will be deleted:
-                                _("There are pending print jobs which might be deleted now."),
-                                // 'Yes' button label of a confirmation popup
-                                // before all pending jobs in a queue will be deleted:
-                                sformat( _("Delete all pending jobs for %1"), queue_name ),
-                                // 'No' button label of a confirmation popup
-                                // before all pending jobs in a queue will be deleted:
-                                _("Do not delete them"),
-                                `focus_no
-                              )
+      { // Fallback body of a confirmation popup before pending print jobs will be deleted:
+        string pending_job_info = _("There are pending print jobs which might be deleted now.");
+        if( Printerlib::ExecuteBashCommand( "/usr/bin/lpstat -h localhost -o '"
+                                            + queue_name
+                                            + "' -p '"
+                                            + queue_name
+                                            + "'"
+                                          )
+          )
+        { pending_job_info = Printerlib::result["stdout"]:"";
+        }
+        if( Popup::AnyQuestionRichText( // Header of a confirmation popup before pending print jobs will be deleted
+                                        // where %1 will be replaced by the queue name.
+                                        sformat( _("Delete Pending Print Jobs For %1"), queue_name ),
+                                        "<pre>" + pending_job_info + "</pre>",
+                                        70,
+                                        20,
+                                        // 'Yes' button label of a confirmation popup
+                                        // before all pending jobs in a queue will be deleted:
+                                        _("Delete all pending jobs"),
+                                        // 'No' button label of a confirmation popup
+                                        // before all pending jobs in a queue will be deleted:
+                                        _("Do not delete them"),
+                                        `focus_no
+                                      )
           )
         { if( ! Printerlib::ExecuteBashCommand( "/usr/bin/cancel -a -h localhost '" + queue_name + "'" ) )
           { Popup::ErrorDetails( sformat( // Message of a Popup::ErrorDetails
@@ -553,7 +579,9 @@ symbol handleOverview( string key, map event )
           // Deal with the backend process regardless whether or not
           // the above cancel command was successful because
           // killing the backend process is an emergency brake
-          // when something is really wrong:
+          // when something is really wrong.
+          // Sleep 1 second in any case to let the backend process terminate orderly:
+          sleep( 1000 );
           string backend_is_running_commandline = "ps -C '"
                                                   + uri_scheme
                                                   + "' -o pid=,args= | grep '"
@@ -562,8 +590,8 @@ symbol handleOverview( string key, map event )
           // Do nothing to be on the safe side if the next command fails for whatever reason:
           if( Printerlib::ExecuteBashCommand( backend_is_running_commandline ) )
           { // A matching backend process is running.
-            // Sleep 10 seconds to let the backend process terminate orderly
-            // when the filters have finished because of the above cancel command.
+            // Sleep 10 seconds to give the backend process more time to terminate orderly
+            // which may still wait for the filters to finish because of the above cancel command.
             // There is no user feedback while waiting here because I assume that
             // the user expects that it takes a bit of time to delete all pending jobs.
             sleep( 10000 );
