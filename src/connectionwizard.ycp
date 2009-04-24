@@ -209,6 +209,26 @@ void changeSettingsDialog( symbol selected )
           content = getContentFromBackend("usb");
           break;
     case(`hplip):
+          if( ! Printerlib::TestAndInstallPackage( "hplip", "installed" ) )
+          // Only a notification but no installation of HPLIP in the Connection Wizard.
+          // Installing the package hplip can pull in tons of required packages
+          // because the hplip package does not only provide the 'hp' backend but is a
+          // full featured multifunction solution with GUI for HP printers and all-in-one devices.
+          // HPLIP supports printing, scanning, faxing, photo card access, and device management.
+          // Additionally installing hplip can become very complicated (see driveradd.ycp).
+          // Therefore the Connection Wizard is not bloated with installing HPLIP.
+          { Popup::Message( // Popup::Message when the user had selected "HP Devices (HPLIP)"
+                            // in the Connection Wizard but the RPM package hplip is not installed:
+                            _("To access a HP device via the 'hp' backend,\nthe RPM package hplip must be installed.")
+                          );
+            content = `VBox
+                      ( `Left
+                        ( `Label
+                          ( _("The RPM package hplip is not installed.") )
+                        )
+                      );
+            break;
+          }
           content = getContentFromBackend("hp");
           break;
     case(`serial):
@@ -325,11 +345,10 @@ void changeSettingsDialog( symbol selected )
                           // The preset values are from backend/serial.c
                           // in the CUPS 1.3.9 sources:
                           [ `item( `id(""), "", true ),
-                            `item( `id("soft"), "soft" ),
-                            `item( `id("hard"), "hard" ),
                             `item( `id("none"), "none" ),
-                            `item( `id("rtscts"), "rtscts" ),
-                            `item( `id("dtrdsr"), "dtrdsr" )
+                            `item( `id("soft"), "XON/XOFF (software)" ),
+                            `item( `id("hard"), "RTS/CTS (hardware)" ),
+                            `item( `id("dtrdsr"), "DTR/DSR (hardware)" )
                           ]
                         )
                       ),
@@ -356,9 +375,26 @@ void changeSettingsDialog( symbol selected )
                     );
           break;
     case(`bluetooth):
+          if( ! Printerlib::TestAndInstallPackage( "bluez-cups", "installed" ) )
+          { if( Popup::ContinueCancel( _("To access a bluetooth printer, the RPM package bluez-cups must be installed.") ) )
+            { Printerlib::TestAndInstallPackage( "bluez-cups", "install" );
+            }
+            // The user can also decide during the actual installation not to install it
+            // or the installation may have failed for whatever reason
+            // so that we test again whether or not it is now actually installed:
+            if( ! Printerlib::TestAndInstallPackage( "bluez-cups", "installed" ) )
+            { content = `VBox
+                        ( `Left
+                          ( `Label
+                            ( _("The RPM package bluez-cups is not installed.") )
+                          )
+                        );
+              break;
+            }
+          }
           // Fallback message what the user may run manually when it fails
           // to generate a valid list of bluetooth device IDs:
-          string  bluetooth_device_list = _("Run 'hcitool scan' to get a list of bluetooth device IDs.");
+          string  bluetooth_device_list = _("It seems there are no bluetooth device IDs.\nRun 'hcitool scan' to get the bluetooth device IDs.\nEnter the ID without colons like '1A2B3C4D5E6F'.");
           Popup::ShowFeedback( // No title for a simple busy message:
                                "",
                                // Busy message:
@@ -428,9 +464,10 @@ void changeSettingsDialog( symbol selected )
     case(`scsi):
           // Fallback message what the user may run manually when it fails
           // to generate the current list of SCSI generic device nodes:
-          string scsi_device_list = _("Run 'lsscsi -g' to get a list of SCSI generic devices (/dev/sg...).");
-          if( ! Printerlib::ExecuteBashCommand( "lsscsi -g | tr -s ' ' | cut -s -d ' ' -f 3- | grep '/dev/sg'" ) )
-          { Popup::ErrorDetails( // Popup::ErrorDetails message:
+          string scsi_device_list = _("It seems there are no SCSI generic devices (/dev/sg...).\nRun 'lsscsi -g' to get a list of SCSI generic devices.");
+          if( ! Printerlib::ExecuteBashCommand( "lsscsi -g | tr -s ' ' | cut -s -d ' ' -f 3- | grep '/dev/sg' || echo 'no SCSI generic device found' 1>&2" ) )
+          { // Will probably never fail because the final "echo" should exit successfully in any case:
+            Popup::ErrorDetails( // Popup::ErrorDetails message:
                                  _("Failed to get a list of SCSI generic devices."),
                                  "lsscsi -g" + "\n" + Printerlib::result["stderr"]:""
                                );
@@ -515,6 +552,23 @@ void changeSettingsDialog( symbol selected )
           break;
     // print via
     case(`smb):
+          if( ! Printerlib::TestAndInstallPackage( "samba-client", "installed" ) )
+          { if( Popup::ContinueCancel( _("To access a SMB printer share, the RPM package samba-client must be installed.") ) )
+            { Printerlib::TestAndInstallPackage( "samba-client", "install" );
+            }
+            // The user can also decide during the actual installation not to install it
+            // or the installation may have failed for whatever reason
+            // so that we test again whether or not it is now actually installed:
+            if( ! Printerlib::TestAndInstallPackage( "samba-client", "installed" ) )
+            { content = `VBox
+                        ( `Left
+                          ( `Label
+                            ( _("The RPM package samba-client is not installed.") )
+                          )
+                        );
+              break;
+            }
+          }
           content = `VBox
                     ( `Left
                       ( `HBox
@@ -629,6 +683,23 @@ void changeSettingsDialog( symbol selected )
                     );
           break;
     case(`ipx):
+          if( ! Printerlib::TestAndInstallPackage( "ncpfs", "installed" ) )
+          { if( Popup::ContinueCancel( _("To access an IPX print queue, the RPM package ncpfs must be installed.") ) )
+            { Printerlib::TestAndInstallPackage( "ncpfs", "install" );
+            }
+            // The user can also decide during the actual installation not to install it
+            // or the installation may have failed for whatever reason
+            // so that we test again whether or not it is now actually installed:
+            if( ! Printerlib::TestAndInstallPackage( "ncpfs", "installed" ) )
+            { content = `VBox
+                        ( `Left
+                          ( `Label
+                            ( _("The RPM package ncpfs is not installed.") )
+                          )
+                        );
+              break;
+            }
+          }
           content = `VBox
                     ( `Left
                       ( `InputField
@@ -688,6 +759,23 @@ void changeSettingsDialog( symbol selected )
                     );
           break;
     case(`pipe):
+          if( ! Printerlib::TestAndInstallPackage( "cups-backends", "installed" ) )
+          { if( Popup::ContinueCancel( _("To print via 'pipe', the RPM package cups-backends must be installed.") ) )
+            { Printerlib::TestAndInstallPackage( "cups-backends", "install" );
+            }
+            // The user can also decide during the actual installation not to install it
+            // or the installation may have failed for whatever reason
+            // so that we test again whether or not it is now actually installed:
+            if( ! Printerlib::TestAndInstallPackage( "cups-backends", "installed" ) )
+            { content = `VBox
+                        ( `Left
+                          ( `Label
+                            ( _("The RPM package cups-backends is not installed.") )
+                          )
+                        );
+              break;
+            }
+          }
           content = `VBox
                     ( `Left
                       ( `InputField
@@ -700,6 +788,23 @@ void changeSettingsDialog( symbol selected )
                     );
           break;
     case(`beh):
+          if( ! Printerlib::TestAndInstallPackage( "cups-backends", "installed" ) )
+          { if( Popup::ContinueCancel( _("To use 'beh', the RPM package cups-backends must be installed.") ) )
+            { Printerlib::TestAndInstallPackage( "cups-backends", "install" );
+            }
+            // The user can also decide during the actual installation not to install it
+            // or the installation may have failed for whatever reason
+            // so that we test again whether or not it is now actually installed:
+            if( ! Printerlib::TestAndInstallPackage( "cups-backends", "installed" ) )
+            { content = `VBox
+                        ( `Left
+                          ( `Label
+                            ( _("The RPM package cups-backends is not installed.") )
+                          )
+                        );
+              break;
+            }
+          }
           model_content = getContentFromCurrentModel();
           content = `VBox
                     ( `Left
@@ -911,8 +1016,8 @@ boolean validateSettingsDialog( symbol type )
             { Popup::Error( _("The 'space' parity checking is only supported with 7 data bits.") );
             }
             else
-            { if( "mark" == serial_parity && "7" != serial_data_bits )
-              { Popup::Error( _("The 'mark' parity checking is only supported with 7 data bits.") );
+            { if( "mark" == serial_parity && "7" != serial_data_bits && "1" != serial_stop_bits )
+              { Popup::Error( _("The 'mark' parity checking is only supported with 7 data bits and 1 stop bit.") );
               }
               else
               { connection_uri = "serial:" + serial_device_node + "?baud=" + serial_baud_rate;
