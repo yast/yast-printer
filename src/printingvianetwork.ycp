@@ -45,16 +45,16 @@ string initial_server_name_input_value = "";
 // An entry for a ComboBox from which the user can select
 // that printer information is accepted from
 // all remote CUPS servers:
-string browse_allow_all_string = _("all hosts");
+string browse_allow_all_string = _("accept from anywhere");
 // An entry for a ComboBox from which the user can select
 // that printer information is accepted from
 // remote CUPS servers in the local network:
-string browse_allow_local_string = _("hosts in the local network");
+string browse_allow_local_string = _("accept from all hosts in the local network");
 // An entry for a ComboBox from which the user can select
 // that printer information is accepted only from
 // remote CUPS servers with specific addresses
 // where the specific addresses are specified in a TextEntry below:
-string browse_allow_specific_string = _("only specific addresses");
+string browse_allow_specific_string = _("accept only from the specific addresses below");
 
 term widgetNetworkPrinting = `VBox
                              ( `VStretch(),
@@ -69,7 +69,7 @@ term widgetNetworkPrinting = `VBox
                                        ( `id(`browsing_off_radio_button),
                                          `opt(`notify),
                                          // A RadioButton to not receive printer information from remote CUPS servers:
-                                         _("&Do not Receive Printer Information from Remote CUPS servers")
+                                         _("&Do Not Accept Printer Information from Remote CUPS Servers")
                                        )
                                      ),
                                      `Left
@@ -77,31 +77,23 @@ term widgetNetworkPrinting = `VBox
                                        ( `id(`browsing_on_radio_button),
                                          `opt(`notify),
                                          // A RadioButton to receive printer information from remote CUPS servers:
-                                         _("Receive Printer &Information from Remote CUPS servers")
+                                         _("Accept Printer &Information from the Following Servers")
                                        )
                                      ),
                                      `HBox
                                      ( `HSpacing( 4 ),
                                        `VBox
                                        ( `Left
-                                         ( `Label
-                                           ( `id(`browse_allow_label),
-                                             // A header for a section to set up from which remote CUPS servers
-                                             // printer information is accepted:
-                                             _("Accept Information from the Following Servers")
-                                           )
-                                         ),
-                                         `Left
                                          ( `ComboBox
                                            ( `id(`browse_allow_combo_box),
                                              `opt(`notify),
                                              // A header for a ComboBox from which the user can select
                                              // a usual general setting from which remote CUPS servers
                                              // printer information is accepted:
-                                             _("Usual &General Setting"),
+                                             _("&General Setting"),
 				             [ `item( `id(`browse_allow_all), browse_allow_all_string ),
                                                `item( `id(`browse_allow_local), browse_allow_local_string ),
-                                               `item( `id(`browse_allow_specific), browse_allow_specific_string ),
+                                               `item( `id(`browse_allow_specific), browse_allow_specific_string )
                                              ]
                                            )
                                          ),
@@ -698,7 +690,6 @@ void initNetworkPrinting( string key )
   // but nevertheless fill in the values of the current settings in the system:
   UI::ChangeWidget( `id(`browsing_off_radio_button), `Value, false );
   UI::ChangeWidget( `id(`browsing_on_radio_button), `Value, false );
-  UI::ChangeWidget( `id(`browse_allow_label), `Enabled, false );
   UI::ChangeWidget( `id(`browse_allow_combo_box), `Enabled, false );
   UI::ChangeWidget( `id(`firewall_label), `Enabled, false );
   // When by accident "all" and "@LOCAL" were set as BrowseAllow values,
@@ -772,7 +763,6 @@ void initNetworkPrinting( string key )
       )
     { initial_radio_button = `browsing_on_radio_button;
       UI::ChangeWidget( `id(`browsing_on_radio_button), `Value, true );
-      UI::ChangeWidget( `id(`browse_allow_label), `Enabled, true );
       UI::ChangeWidget( `id(`browse_allow_combo_box), `Enabled, true );
       UI::ChangeWidget( `id(`firewall_label), `Enabled, true );
       // If browsing info is accepted from all hosts,
@@ -793,8 +783,7 @@ symbol handleNetworkPrinting( string key, map event )
 { y2milestone( "entering handleNetworkPrinting with key '%1'\nand event '%2'", key, event );
   if( "ValueChanged" == event["EventReason"]:"" )
   { if( `browsing_off_radio_button == event["ID"]:nil )
-    { UI::ChangeWidget( `id(`browse_allow_label), `Enabled, false );
-      UI::ChangeWidget( `id(`browse_allow_combo_box), `Enabled, false );
+    { UI::ChangeWidget( `id(`browse_allow_combo_box), `Enabled, false );
       UI::ChangeWidget( `id(`browse_allow_input), `Enabled, false );
       UI::ChangeWidget( `id(`firewall_label), `Enabled, false );
       UI::ChangeWidget( `id(`client_conf_server_name_input), `Enabled, false );
@@ -807,8 +796,7 @@ symbol handleNetworkPrinting( string key, map event )
       }
     }
     if( `browsing_on_radio_button == event["ID"]:nil )
-    { UI::ChangeWidget( `id(`browse_allow_label), `Enabled, true );
-      UI::ChangeWidget( `id(`browse_allow_combo_box), `Enabled, true );
+    { UI::ChangeWidget( `id(`browse_allow_combo_box), `Enabled, true );
       UI::ChangeWidget( `id(`browse_allow_input), `Enabled, true );
       UI::ChangeWidget( `id(`firewall_label), `Enabled, true );
       UI::ChangeWidget( `id(`client_conf_server_name_input), `Enabled, false );
@@ -831,8 +819,7 @@ symbol handleNetworkPrinting( string key, map event )
       }
     }
     if( `client_only_radio_button == event["ID"]:nil )
-    { UI::ChangeWidget( `id(`browse_allow_label), `Enabled, false );
-      UI::ChangeWidget( `id(`browse_allow_combo_box), `Enabled, false );
+    { UI::ChangeWidget( `id(`browse_allow_combo_box), `Enabled, false );
       UI::ChangeWidget( `id(`browse_allow_input), `Enabled, false );
       UI::ChangeWidget( `id(`firewall_label), `Enabled, false );
       UI::ChangeWidget( `id(`client_conf_server_name_input), `Enabled, true );
