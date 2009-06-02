@@ -81,14 +81,24 @@ fi
 
 # Process the data:
 
-# Extract what is needed, quotation marks " are replaced by ' :
-tr '"' "'" <$TMP_DATA_RAW_V >$TMP_DATA
+# Extract only real queues (i.e. suppress instances of the form queue_name/instance)
+# and replace quotation marks " by ' because " is needed as YCP string delimiter:
+grep -v '^device for [^:]*/[^:]*:' $TMP_DATA_RAW_V | tr '"' "'" >$TMP_DATA
 
 # Change "^device for" to "queue"
-# and convert only the first colon after the queue name to "\nuri"
-# so that the DeviceURI is on a seperated line:
+# and convert only the first colon (i.e. the colon after the queue name) to "\nuri"
+# to get the DeviceURI is on a separated line so that the content has the form
+#   queue first_queue
+#   uri backend1:/this
+#   queue second_queue
+#   uri backend2:/that
+# To be on the safe side match to ': ' so that a colon inside a queue name does not match
+# because a space character is not allowed inside a queue name,
+# see http://www.cups.org/documentation.php/doc-1.1/sam.html which reads
+# "... the printer name must start with any printable character except " ", "/", and "@".
+#  It can contain up to 127 letters, numbers, and the underscore (_). Case is not significant ..."
 sed -i -e 's/^device for/queue/' \
-       -e 's/:/\nuri/' $TMP_DATA
+       -e 's/: /\nuri /' $TMP_DATA
 
 # Condense multiple spaces, convert tabs to blanks, and remove leading and trailing spaces:
 sed -i -e 's/[[:space:]][[:space:]]*/ /g' \
