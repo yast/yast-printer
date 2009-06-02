@@ -50,10 +50,13 @@ fi
 # Get the raw data:
 # Continue even after timeout because then an empty YCP map is output
 # which indicates that there are no driver options.
-# Simply delete unusual (in particular all non-ASCII) characters
-# but keep the delimiters / * and newline:
 MAXIMUM_WAIT="10"
-$LPOPTIONS -h localhost -p $QUEUE -l | tr -c -d '[:alnum:] <>/:\*\n' >$TMP_DATA &
+# The Adobe PPD specification reads that main keywords can contain
+# any printable ASCII character within the range of
+# decimal 33 (\041) to decimal 126 (\176) inclusive.
+# Also keep newline and space but exclude " (\042) which
+# is needed as YCP string delimiter:
+$LPOPTIONS -h localhost -p $QUEUE -l | tr -c -d '\n \041\043-\176' >$TMP_DATA &
 lpoptionsPID=$!
 # Timeout stuff:
 for i in $( seq $MAXIMUM_WAIT )
