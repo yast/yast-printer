@@ -483,14 +483,29 @@ symbol handleOverview( string key, map event )
     }
     string testprint_job_title = "YaST2testprint_" + queue_name;
     // Do not enforce to talk to the cupsd on localhost when submiting the testpage
-    // because testpage printing must also work for a "client-only" config:
+    // because testpage printing must also work for a "client-only" config.
+    // Since CUPS 1.4 there is no longer a readymade PostScript testpage in CUPS, see
+    // https://bugzilla.novell.com/show_bug.cgi?id=520617
+    // Therefore a slightly modified CUPS 1.3.10 testprint.ps was added
+    // to yast2-printer as /usr/share/YaST2/data/testprint.ps
+    // The following modifications
+    //   --- cups-1.3.10/data/testprint.ps  2009-01-13 18:27:16.000000000 +0100
+    //   +++ data/testprint.ps              2009-07-09 15:25:26.000000000 +0200
+    //   @@ -564 +564 @@
+    //   -  (Printer Test Page) CENTER           % Show text centered
+    //   +  (CUPS Printer Test Page) CENTER      % Show text centered
+    //   @@ -570 +570 @@
+    //   -  (Printed with CUPS v1.3.x) show
+    //   +  (Printed with CUPS) show
+    // make it obvious that it is not a YaST testpage but a CUPS testpage
+    // and it is now independent of the CUPS version.
     if( ! Printerlib::ExecuteBashCommand( "/usr/bin/lp -d '"
                                           + queue_name
                                           + "' -t '"
                                           + testprint_job_title
                                           + "' -o page-label=\""
                                           + queue_name
-                                          + ":YaST2testprint@$(hostname)\" /usr/share/cups/data/testprint.ps"
+                                          + ":YaST2testprint@$(hostname)\" /usr/share/YaST2/data/testprint.ps"
                                         )
       )
     { Popup::ErrorDetails( sformat( // Message of a Popup::ErrorDetails
