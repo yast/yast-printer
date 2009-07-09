@@ -241,8 +241,10 @@ global boolean local_cupsd_accessible = false;
 global boolean GetAndSetCupsdStatus( string new_status )
 { // Determine whether or not a local cupsd is accessible.
   // The value 'false' is also the right one when the command itself fails
-  // (e.g. when there is no /usr/bin/lpstat binary or whatever broken stuff):
-  string local_cupsd_accessible_commandline = "/usr/bin/lpstat -h localhost -r";
+  // (e.g. when there is no /usr/bin/lpstat binary or whatever broken stuff).
+  // Since CUPS 1.4 'lpstat -r' results true even when scheduler is not running.
+  // Therefore we must now grep in its output:
+  string local_cupsd_accessible_commandline = "/usr/bin/lpstat -h localhost -r | grep -q 'scheduler is running'";
   local_cupsd_accessible = ExecuteBashCommand( local_cupsd_accessible_commandline );
   // Start cupsd:
   if( "start" == new_status )

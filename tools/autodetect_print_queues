@@ -38,7 +38,9 @@ SERVERNAME="$( grep -i '^ServerName ' /etc/cups/client.conf | tr -s '[:space:]' 
 if test -z "$SERVERNAME"
 then SERVERNAME="localhost"
 fi
-if ! $LPSTAT -h $SERVERNAME -r &>/dev/null
+# Since CUPS 1.4 'lpstat -r' results true even when scheduler is not running.
+# Therefore we must now grep in its output:
+if $LPSTAT -h $SERVERNAME -r | grep -q 'scheduler is not running'
 then echo "Cannot access cupsd on '$SERVERNAME'" 1>&2
      exit 2
 fi
