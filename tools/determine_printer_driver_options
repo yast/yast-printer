@@ -34,7 +34,9 @@ fi
 # Only on localhost print queue settings should be changed.
 # CUPS supports to modify even remote queues but this is not supported by YaST.
 # Therefore explicitely the cupsd on localhost is asked for printer driver options.
-if ! $LPSTAT -h localhost -r &>/dev/null
+# Since CUPS 1.4 'lpstat -r' results true even when scheduler is not running.
+# Therefore we must now grep in its output:
+if $LPSTAT -h localhost -r | grep -q 'scheduler is not running'
 then echo "Cannot access cupsd on localhost" 1>&2
      exit 2
 fi
