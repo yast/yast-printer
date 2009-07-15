@@ -40,6 +40,9 @@ then echo "Read and write $CUPSDCONF (but does not restart cupsd)." 1>&2
      echo "      (The policy-name must exist as a '<Policy policy-name>' section)" 1>&2
      echo "ErrorPolicy [ stop-printer | retry-job | abort-job ]" 1>&2
      echo "      (if ErrorPolicy is not set, stop-printer is the CUPS default)" 1>&2
+     echo "DirtyCleanInterval [ seconds ] (since CUPS 1.4)" 1>&2
+     echo "e.g.: DirtyCleanInterval 30 (default 30 seconds delay until cupsd writes config files)" 1>&2
+     echo "      DirtyCleanInterval 0 (update config files like printers.conf almost immediately)" 1>&2
      echo "For the syntax for keywords and values see 'man cupsd.conf'" 1>&2
      echo "and http://www.cups.org/documentation.php/ref-cupsd-conf.html" 1>&2
      echo "In case of ambiguity use the syntax which is described above." 1>&2
@@ -83,15 +86,22 @@ Browsing()
   then # Try to substitute an existing active Browsing line (ignore case).
        # (If there is more than one active Browsing line it is a broken config file):
        sed -i -e "s/^[[:space:]]*$KEY.*/$KEY $VALUE/i" $CUPSDCONF
-       # There may exist no Browsing line:
+       # There may exist no Browsing line or the above substitute may have failed
+       # (therefore it tests not only for "^$KEY" but for "^$KEY $VALUE$"):
        if ! grep -q "^$KEY $VALUE$" $CUPSDCONF
        then # Append a Browsing line below the last active 'Brows' line (ignore case)
             # to have the new Browsing line at the matching place
-            # but if no 'Brows' line exists, append at the end of the file:
+            # but if no 'Brows' line exists, append below the first empty line
+            # which is usually the line after the initial comment block
+            # and if even no empty line exists, append at the end of the file:
             LAST_BROWSE_LINE_NUMBER="$( sed -n -e '/^[^#]*Brows/I=' $CUPSDCONF | tail -n 1 )"
             if test -n "$LAST_BROWSE_LINE_NUMBER"
             then sed -i -e "${LAST_BROWSE_LINE_NUMBER}a$KEY $VALUE" $CUPSDCONF
-            else echo -en "\n$KEY $VALUE\n\n" >>$CUPSDCONF
+            else FIRST_EMPTY_LINE_NUMBER="$( sed -n -e '/^[[:space:]]*$/=' $CUPSDCONF | head -n 1 )"
+                 if test -n "$FIRST_EMPTY_LINE_NUMBER"
+                 then sed -i -e "${FIRST_EMPTY_LINE_NUMBER}a$KEY $VALUE\n" $CUPSDCONF
+                 else echo -en "\n$KEY $VALUE\n\n" >>$CUPSDCONF
+                 fi
             fi
        fi
   fi
@@ -123,11 +133,17 @@ BrowseAllow()
        sed -i -e '/^[[:space:]]*BrowseOrder.*/Id' $CUPSDCONF
        # Append the new BrowseOrder line below the last active 'Brows' line (ignore case)
        # to have the new BrowseOrder line at the matching place
-       # but if no 'Brows' line exists, append at the end of the file:
+       # but if no 'Brows' line exists, append below the first empty line
+       # which is usually the line after the initial comment block
+       # and if even no empty line exists, append at the end of the file:
        LAST_BROWSE_LINE_NUMBER="$( sed -n -e '/^[^#]*Brows/I=' $CUPSDCONF | tail -n 1 )"
        if test -n "$LAST_BROWSE_LINE_NUMBER" 
        then sed -i -e "${LAST_BROWSE_LINE_NUMBER}aBrowseOrder allow,deny" $CUPSDCONF
-       else echo -en "\nBrowseOrder allow,deny\n\n" >>$CUPSDCONF
+       else FIRST_EMPTY_LINE_NUMBER="$( sed -n -e '/^[[:space:]]*$/=' $CUPSDCONF | head -n 1 )"
+            if test -n "$FIRST_EMPTY_LINE_NUMBER"
+            then sed -i -e "${FIRST_EMPTY_LINE_NUMBER}aBrowseOrder allow,deny\n" $CUPSDCONF
+            else echo -en "\nBrowseOrder allow,deny\n\n" >>$CUPSDCONF
+            fi
        fi
        # All existing active BrowseAllow lines are removed (ignore case).
        # Those lines can be removed because YaST supports BrowseAllow lines
@@ -188,10 +204,16 @@ Listen()
        # Insert the mandatory 'Listen localhost' line (see http://www.cups.org/str.php?L2834
        # "What is *not* supported is a configuration where only a domain socket is enabled")
        # to have the new Listen line where the first active Listen line was
-       # but if no 'Listen' line exists, append at the end of the file:
+       # but if no 'Listen' line exists, append below the first empty line
+       # which is usually the line after the initial comment block
+       # and if even no empty line exists, append at the end of the file:
        if test -n "$FIRST_LISTEN_LINE_NUMBER"
        then sed -i -e "${FIRST_LISTEN_LINE_NUMBER}iListen localhost:631" $CUPSDCONF
-       else echo -en "\nListen localhost:631\n\n" >>$CUPSDCONF
+       else FIRST_EMPTY_LINE_NUMBER="$( sed -n -e '/^[[:space:]]*$/=' $CUPSDCONF | head -n 1 )"
+            if test -n "$FIRST_EMPTY_LINE_NUMBER"
+            then sed -i -e "${FIRST_EMPTY_LINE_NUMBER}iListen localhost:631\n" $CUPSDCONF
+            else echo -en "\nListen localhost:631\n\n" >>$CUPSDCONF
+            fi
        fi
        # Append a Listen line for the domain socket (if such a line was there):
        if test -n "$LISTEN_DOMAIN_SOCKET_LINE_CONTENT"
@@ -254,10 +276,16 @@ Allow()
        # Set 'Order allow,deny' in the root location to deny packets by default
        # and then allow them from certain sources via Allow entries
        # and finally deny from certain sources via Deny entries.
-       # but if no root location was there, append at the end of the file:
+       # If no root location was there, append it below the first empty line
+       # which is usually the line after the initial comment block
+       # and if even no empty line exists, append at the end of the file:
        if test -n "$ROOT_LOCATION_LINE_NUMBER"
        then sed -i -e "${ROOT_LOCATION_LINE_NUMBER}i<Location />\nOrder allow,deny\nAllow 127.0.0.2\n</Location>" $CUPSDCONF
-       else echo -en "\n<Location />\nOrder allow,deny\nAllow 127.0.0.2\n</Location>\n\n" >>$CUPSDCONF
+       else FIRST_EMPTY_LINE_NUMBER="$( sed -n -e '/^[[:space:]]*$/=' $CUPSDCONF | head -n 1 )"
+            if test -n "$FIRST_EMPTY_LINE_NUMBER"
+            then sed -i -e "${FIRST_EMPTY_LINE_NUMBER}a<Location />\nOrder allow,deny\nAllow 127.0.0.2\n</Location>\n" $CUPSDCONF
+            else echo -en "\n<Location />\nOrder allow,deny\nAllow 127.0.0.2\n</Location>\n\n" >>$CUPSDCONF
+            fi
        fi
        # Determine (again) where the new root location starts (exact match):
        ROOT_LOCATION_LINE_NUMBER="$( sed -n -e '/<Location \/>/=' $CUPSDCONF | head -n 1 )"
@@ -314,13 +342,23 @@ BrowseAddress()
        if ! test "none" = "$VALUE"
        then # Append the new BrowseAddress lines below the last active 'Brows' line (ignore case)
             # to have the new BrowseAddress lines at the matching place
-            # but if no 'Brows' line exists, append at the end of the file.
+            # but if no 'Brows' line exists, append below the first empty line
+            # which is usually the line after the initial comment block
+            # and if even no empty line exists, append at the end of the file.
             # Invert the ordering of the values to get the lines
             # in the original ordering of the values (needed for the test below):
             LAST_BROWSE_LINE_NUMBER="$( sed -n -e '/^[^#]*Brows/I=' $CUPSDCONF | tail -n 1 )"
+            FIRST_EMPTY_LINE_NUMBER="$( sed -n -e '/^[[:space:]]*$/=' $CUPSDCONF | head -n 1 )"
+            APPEND_LINE_NUMBER=""
+            if test -n "$LAST_BROWSE_LINE_NUMBER"
+            then APPEND_LINE_NUMBER="$LAST_BROWSE_LINE_NUMBER"
+            fi
+            if test -n "$FIRST_EMPTY_LINE_NUMBER"
+            then APPEND_LINE_NUMBER="$FIRST_EMPTY_LINE_NUMBER"
+            fi
             for V in $( echo "$VALUE" | tac -s ' ' )
-            do if test -n "$LAST_BROWSE_LINE_NUMBER"
-               then test -n "$V" && sed -i -e "${LAST_BROWSE_LINE_NUMBER}a$KEY $V" $CUPSDCONF
+            do if test -n "$APPEND_LINE_NUMBER"
+               then test -n "$V" && sed -i -e "${APPEND_LINE_NUMBER}a$KEY $V" $CUPSDCONF
                else test -n "$V" && echo -en "\n$KEY $V\n" >>$CUPSDCONF
                fi
             done
@@ -368,16 +406,23 @@ DefaultPolicy()
   then # Try to substitute an existing active DefaultPolicy line (ignore case).
        # (If there is more than one active DefaultPolicy line it is a broken config file):
        sed -i -e "s/^[[:space:]]*$KEY.*/$KEY $VALUE/i" $CUPSDCONF
-       # There may exist no DefaultPolicy line:
+       # There may exist no DefaultPolicy line or the above substitute may have failed
+       # (therefore it tests not only for "^$KEY" but for "^$KEY $VALUE$"):
        if ! grep -q "^$KEY $VALUE$" $CUPSDCONF
        then # Append a DefaultPolicy line below the last active 'Policy' line
             # which is usually a '</Policy>' or a 'ErrorPolicy' line (ignore case)
             # to have the new DefaultPolicy line at the matching place
-            # but if no 'Policy' line exists, append at the end of the file:
+            # but if no 'Policy' line exists, append below the first empty line
+            # which is usually the line after the initial comment block
+            # and if even no empty line exists, append at the end of the file:
             LAST_POLICY_LINE_NUMBER="$( sed -n -e '/^[^#]*Policy/I=' $CUPSDCONF | tail -n 1 )"
             if test -n "$LAST_POLICY_LINE_NUMBER"
             then sed -i -e "${LAST_POLICY_LINE_NUMBER}a$KEY $VALUE" $CUPSDCONF
-            else echo -en "\n$KEY $VALUE\n\n" >>$CUPSDCONF
+            else FIRST_EMPTY_LINE_NUMBER="$( sed -n -e '/^[[:space:]]*$/=' $CUPSDCONF | head -n 1 )"
+                 if test -n "$FIRST_EMPTY_LINE_NUMBER"
+                 then sed -i -e "${FIRST_EMPTY_LINE_NUMBER}a$KEY $VALUE\n" $CUPSDCONF
+                 else echo -en "\n$KEY $VALUE\n\n" >>$CUPSDCONF
+                 fi
             fi
        fi
   fi
@@ -405,16 +450,23 @@ ErrorPolicy()
   then # Try to substitute an existing active ErrorPolicy line (ignore case).
        # (If there is more than one active ErrorPolicy line it is a broken config file):
        sed -i -e "s/^[[:space:]]*$KEY.*/$KEY $VALUE/i" $CUPSDCONF
-       # There may exist no ErrorPolicy line:
+       # There may exist no ErrorPolicy line or the above substitute may have failed
+       # (therefore it tests not only for "^$KEY" but for "^$KEY $VALUE$"):
        if ! grep -q "^$KEY $VALUE$" $CUPSDCONF
        then # Append a ErrorPolicy line below the last active 'Policy' line
             # which is usually a '</Policy>' or a 'DefaultPolicy' line (ignore case)
             # to have the new ErrorPolicy line at the matching place
-            # but if no 'Policy' line exists, append at the end of the file:
+            # but if no 'Policy' line exists, append below the first empty line
+            # which is usually the line after the initial comment block
+            # and if even no empty line exists, append at the end of the file:
             LAST_POLICY_LINE_NUMBER="$( sed -n -e '/^[^#]*Policy/I=' $CUPSDCONF | tail -n 1 )"
             if test -n "$LAST_POLICY_LINE_NUMBER"
             then sed -i -e "${LAST_POLICY_LINE_NUMBER}a$KEY $VALUE" $CUPSDCONF
-            else echo -en "\n$KEY $VALUE\n\n" >>$CUPSDCONF
+            else FIRST_EMPTY_LINE_NUMBER="$( sed -n -e '/^[[:space:]]*$/=' $CUPSDCONF | head -n 1 )"
+                 if test -n "$FIRST_EMPTY_LINE_NUMBER"
+                 then sed -i -e "${FIRST_EMPTY_LINE_NUMBER}a$KEY $VALUE\n" $CUPSDCONF
+                 else echo -en "\n$KEY $VALUE\n\n" >>$CUPSDCONF
+                 fi
             fi
        fi
   fi
@@ -436,6 +488,43 @@ ErrorPolicy()
   fi
 }
 
+# Function to deal with 'DirtyCleanInterval [ seconds ]'
+DirtyCleanInterval()
+{ if test -n "$VALUE"
+  then # Try to substitute an existing active DirtyCleanInterval line (ignore case).
+       # (If there is more than one active DirtyCleanInterval line it is a broken config file):
+       sed -i -e "s/^[[:space:]]*$KEY.*/$KEY $VALUE/i" $CUPSDCONF
+       # There may exist no DirtyCleanInterval line or the above substitute may have failed
+       # (therefore it tests not only for "^$KEY" but for "^$KEY $VALUE$"):
+       if ! grep -q "^$KEY $VALUE$" $CUPSDCONF
+       then # Append a DirtyCleanInterval line below the first empty line
+            # which is usually the line after the initial comment block
+            # but if no empty line exists, append at the end of the file:
+            FIRST_EMPTY_LINE_NUMBER="$( sed -n -e '/^[[:space:]]*$/=' $CUPSDCONF | head -n 1 )"
+            if test -n "$FIRST_EMPTY_LINE_NUMBER"
+            then sed -i -e "${FIRST_EMPTY_LINE_NUMBER}a$KEY $VALUE\n" $CUPSDCONF
+            else echo -en "\n$KEY $VALUE\n\n" >>$CUPSDCONF
+            fi
+       fi
+  fi
+  # Report the resulting setting in any case:
+  # The 'tr ... [:blank:]' makes sure that all active DirtyCleanInterval entries
+  # are found if there is more than one which is a broken config.
+  # Remove leading spaces (to cut the right part).
+  # Remove trailing spaces (needed for the test below).
+  RESULT="$( grep -i "^[[:space:]]*$KEY[[:space:]]" $CUPSDCONF | tr -s '[:blank:]' ' ' | sed -e 's/^ *//' | cut -s -d ' ' -f2 | tr -s '\n' ' ' | sed -e 's/ *$//' )"
+  echo -n "$RESULT"
+  # For a nicer output on a terminal where stdout and stderr is mixed up,
+  # output a '\n' on stderr to get subsequent stuff (e.g. the shell prompt
+  # or an error message because of a failed test below) on a new line:
+  echo 1>&2
+  # Test if the result is the expected one if a value was specified:
+  if test -n "$VALUE" -a "$RESULT" != "$VALUE"
+  then echo "Failed to set '$KEY $VALUE' in $CUPSDCONF." 1>&2
+       exit 5
+  fi
+}
+
 case "$KEY" in
      Browsing) Browsing;;
      BrowseAllow) BrowseAllow;;
@@ -445,6 +534,7 @@ case "$KEY" in
      Policies) Policies;;
      DefaultPolicy) DefaultPolicy;;
      ErrorPolicy) ErrorPolicy;;
+     DirtyCleanInterval) DirtyCleanInterval;;
      *) echo "Ignoring keyword '$KEY'" 1>&2
         exit 4 ;;
 esac

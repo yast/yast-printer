@@ -604,6 +604,35 @@ any BasicModifyDialog()
             }
           }
         }
+        // Up to CUPS 1.3 cupsd writes changes to config files immediately so that the updated files
+        // will be available after the corresponding command, function call, or IPP operation is completed.
+        // Since CUPS 1.4 the new DirtyCleanInterval directive controls the delay when cupsd updates config files,
+        // which defaults to 30 seconds. Setting it to 0 will have it write the changes on the next pass through
+        // the main run loop - less immediate than before, but still should be within a few milliseconds.
+        // To be on the safe side regarding "within a few milliseconds" (which could become much more
+        // depending on which processes the scheduler lets run - in particular cupsd versus yast2-printer)
+        // autodetect_print_queues sleeps in any case at least one second before it reads printers.conf
+        // but any value greater than 0 requires to wait here too:
+        Printerlib::DetermineDirtyCleanInterval();
+        y2milestone( "Waiting DirtyCleanInterval='%1' seconds in 'Modify' dialog.",
+                     Printerlib::cupsd_conf_dirty_clean_interval
+                   );
+        if( Printerlib::cupsd_conf_dirty_clean_interval > 0 )
+        { Popup::ShowFeedback( _("Modified Printer Setup"),
+                               _("It needs up to half a minute for the modified configuration to become usable...")
+                             );
+          if( Printerlib::cupsd_conf_dirty_clean_interval <= 30 )
+          { sleep( 1000 * Printerlib::cupsd_conf_dirty_clean_interval );
+            Popup::ClearFeedback();
+          }
+          else
+          { sleep( 30000 );
+            Popup::ClearFeedback();
+            Popup::TimedMessage( _("Must wait some more time until the modified printer configuration is usable..."),
+                                 Printerlib::cupsd_conf_dirty_clean_interval - 30
+                               );
+          }
+        }
         Wizard::EnableBackButton();
         Wizard::EnableNextButton();
       }
