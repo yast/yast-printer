@@ -36,7 +36,7 @@ textdomain "printer";
 import "Package";
 import "Popup";
 import "Service";
-import "Map";
+
 // Fortunately the tools are for all architectures always
 // installed in /usr/lib/YaST2/bin/ (i.e. no "lib64").
 // I tested this on Thu Aug 28 2008 using the command
@@ -512,13 +512,41 @@ global boolean DetermineBrowseAllow()
   return true;
 }
 
+// By default there is no DirtyCleanInterval entry in /etc/cups/cupsd.conf
+// and then the default delay until cupsd writes config files like printers.conf
+// is 30 seconds which is also used here as fallback.
+global integer cupsd_conf_dirty_clean_interval = 30;
+
+global boolean DetermineDirtyCleanInterval()
+{ // Determine the DirtyCleanInterval value in /etc/cups/cupsd.conf:
+  if( ExecuteBashCommand( yast_bin_dir + "modify_cupsd_conf DirtyCleanInterval" ) )
+  { string dirty_clean_interval_string = filterchars( result["stdout"]:"30", "0123456789" );
+    if( "" != dirty_clean_interval_string
+        && nil != tointeger( dirty_clean_interval_string )
+      )
+    { cupsd_conf_dirty_clean_interval = tointeger( dirty_clean_interval_string );
+    }
+    else
+    { // Use fallback value when there is no DirtyCleanInterval entry or
+      // when the DirtyCleanInterval value cannot be converted to an integer:
+      cupsd_conf_dirty_clean_interval = 30;
+    }
+  }
+  else
+  { // Use fallback value when the command above failed:
+    cupsd_conf_dirty_clean_interval = 30;
+    return false;
+  }
+  return true;
+}
+
+
 global boolean WriteCupsSettings(map ay){
  string cups_file="/etc/cups/cupsd.conf";
  y2milestone("Create backup of %1 file:%2", cups_file, SCR::Execute(.target.bash, sformat("mv %1 %1.$(date -I)", cups_file)));
  SCR::Write(.cups.server, ay);
  return true;
 }
-
 
 global boolean WriteClientSettings(map ay){
  string cups_file="/etc/cups/client.conf";
