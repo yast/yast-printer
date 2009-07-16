@@ -512,29 +512,77 @@ global boolean DetermineBrowseAllow()
   return true;
 }
 
-// By default there is no DirtyCleanInterval entry in /etc/cups/cupsd.conf
-// and then the default delay until cupsd writes config files like printers.conf
-// is 30 seconds which is also used here as fallback.
-global integer cupsd_conf_dirty_clean_interval = 30;
-
-global boolean DetermineDirtyCleanInterval()
-{ // Determine the DirtyCleanInterval value in /etc/cups/cupsd.conf:
+// Up to CUPS 1.3 cupsd writes changes to config files immediately so that the updated files
+// will be available after the corresponding command, function call, or IPP operation is completed.
+// Since CUPS 1.4 the new DirtyCleanInterval directive controls the delay when cupsd updates config files,
+// which defaults to 30 seconds. Setting it to 0 will have it write the changes on the next pass through
+// the main run loop - less immediate than before, but still should be within a few milliseconds.
+// To be on the safe side regarding "within a few milliseconds" (which could become much more
+// depending on which processes the scheduler lets run - in particular cupsd versus yast2-printer)
+// it sleeps in any case at least one second:
+global boolean WaitForUpdatedConfigFiles( string popupheader )
+{ // By default there is no DirtyCleanInterval entry in /etc/cups/cupsd.conf
+  // and then the default delay until cupsd writes config files like printers.conf
+  // is 30 seconds which is also used here as fallback.
+  integer dirty_clean_interval = 30;
+  // Determine the DirtyCleanInterval value in /etc/cups/cupsd.conf:
   if( ExecuteBashCommand( yast_bin_dir + "modify_cupsd_conf DirtyCleanInterval" ) )
-  { string dirty_clean_interval_string = filterchars( result["stdout"]:"30", "0123456789" );
+  { // I must use "0123456789" here instead of Printer::number_chars because
+    // the latter would require 'import "Printer"' but Printer does already 'import "Printerlib"'
+    // and a cyclic import drives the YaST machinery mad (it collapses with "too many open files"):
+    string dirty_clean_interval_string = filterchars( result["stdout"]:"30", "0123456789" );
     if( "" != dirty_clean_interval_string
         && nil != tointeger( dirty_clean_interval_string )
       )
-    { cupsd_conf_dirty_clean_interval = tointeger( dirty_clean_interval_string );
+    { dirty_clean_interval = tointeger( dirty_clean_interval_string );
     }
-    else
-    { // Use fallback value when there is no DirtyCleanInterval entry or
-      // when the DirtyCleanInterval value cannot be converted to an integer:
-      cupsd_conf_dirty_clean_interval = 30;
-    }
+    // Use fallback value when there is no DirtyCleanInterval entry or
+    // when the DirtyCleanInterval value cannot be converted to an integer.
   }
-  else
-  { // Use fallback value when the command above failed:
-    cupsd_conf_dirty_clean_interval = 30;
+  // Use fallback cupsd_conf_dirty_clean_interval value when the command above failed.
+  y2milestone( "Waiting DirtyCleanInterval='%1'+1 seconds for updated config files.", dirty_clean_interval );
+  if( dirty_clean_interval < 1 )
+  { // Even in case if "immediate" update of the config files
+    // be on the safe side and sleep one second but without user notification:
+    sleep( 1000 );
+    return true;
+  }
+  if( dirty_clean_interval < 31 )
+  { // If 1 <= dirty_clean_interval <= 30 (30 is the default and fallback value)
+    // do not let the user interrupt the waiting for updated config files.
+    // To be on the safe side sleep one second longer than the dirty_clean_interval:
+    Popup::ShowFeedback( popupheader,
+                         sformat( // Message of a Popup::ShowFeedback where %1 will be replaced
+                                  // by the number of seconds how long it takes.
+                                  // The number of seconds is always greater or equal than 2
+                                  // so that it is always the plural "seconds" here:
+                                  _("It takes %1 seconds until the config files are updated..."),
+                                  dirty_clean_interval + 1
+                                )
+                       );
+    sleep( ( 1000 * dirty_clean_interval ) + 1000 );
+    Popup::ClearFeedback();
+    return true;
+  }
+  // If dirty_clean_interval > 30 let the user interrupt the waiting for updated config files
+  // and return true if the user did not interrupt the waiting for updated config files
+  // but return false if the user interrupted the waiting for updated config files.
+  // To be on the safe side sleep one second longer than the dirty_clean_interval.
+  // Only Popup::TimedAnyQuestion and Popup::TimedOKCancel return a non-void value
+  // but neither of them return false if the user interrupted the waiting
+  // because both of them return true if the user interrupted via the 'Yes' or 'OK' button
+  // so that both are useless to determine if the user interrupted the waiting
+  // and therefore I return depending on calculating the waiting time directly
+  // by calling time() which returns the number of seconds since 1.1.1970:
+  integer time_before = time();
+  Popup::TimedMessage( // Message of a Popup::TimedMessage:
+                       popupheader + "\n\n" + _("Waiting until the config files are updated..."),
+                       dirty_clean_interval + 1
+                     );
+  integer waiting_time = time() - time_before;
+  if( waiting_time < dirty_clean_interval )
+  { // To avoid needless error popups be on the safe side and return false only
+    // when the waiting_time is strictly less than the dirty_clean_interval:
     return false;
   }
   return true;
