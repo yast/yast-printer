@@ -1735,7 +1735,14 @@ global boolean AddQueue( string queue_name, string default_paper_size )
   // see https://bugzilla.novell.com/show_bug.cgi?id=395760
   // and http://www.cups.org/str.php?L2848
   if( "" != default_paper_size )
-  { // The following command fails intentionally if the queue has no PPD file - i.e. when it is a "raw" queue
+  { // Since CUPS 1.4 there is a weird timing-effect regarding which defaults 'lpoptions -l' reports
+    // after the defaults have been changed directly after a new queue was set up
+    // see https://bugzilla.novell.com/show_bug.cgi?id=520642
+    // and http://www.cups.org/str.php?L3264
+    // Regardless of the DirtyCleanInterval setting it works when there is one second delay
+    // between a new queue was set up and before its defaults were changed:
+    sleep( 1000 );
+    // The following command fails intentionally if the queue has no PPD file - i.e. when it is a "raw" queue
     // (a queue with a "System V style interface script" cannot be set up with YaST).
     // '\>' is used to find an available choice also when it is the last value on the line.
     // Note the YCP quoting: \\< becomes \< and \\> becomes \> in the commandline.
