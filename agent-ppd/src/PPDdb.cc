@@ -1755,6 +1755,7 @@ bool PPD::cleanupLists () {
 		{ // no more existing file
 		    y2debug ("Erasing file %s", driver_name.c_str());
 		    (*it2).second.drivers.erase (filename);
+		    break;
 		}
 		else if (it4->second.dir_newer || it4->second.file_newer)
 		{ // parent dir changed or file changed,
