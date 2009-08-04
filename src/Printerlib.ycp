@@ -547,8 +547,8 @@ global boolean WaitForUpdatedConfigFiles( string popupheader )
     sleep( 1000 );
     return true;
   }
-  if( dirty_clean_interval < 31 )
-  { // If 1 <= dirty_clean_interval <= 30 (30 is the default and fallback value)
+  if( dirty_clean_interval < 29 )
+  { // If 1 <= dirty_clean_interval <= 28
     // do not let the user interrupt the waiting for updated config files.
     // To be on the safe side sleep one second longer than the dirty_clean_interval:
     Popup::ShowFeedback( popupheader,
@@ -559,6 +559,18 @@ global boolean WaitForUpdatedConfigFiles( string popupheader )
                                   _("It takes %1 seconds until the config files are updated..."),
                                   dirty_clean_interval + 1
                                 )
+                       );
+    sleep( ( 1000 * dirty_clean_interval ) + 1000 );
+    Popup::ClearFeedback();
+    return true;
+  }
+  if( dirty_clean_interval < 31 )
+  { // If 29 <= dirty_clean_interval <= 30 (30 is the default and fallback value)
+    // do not let the user interrupt the waiting for updated config files.
+    // To be on the safe side sleep one second longer than the dirty_clean_interval:
+    Popup::ShowFeedback( popupheader,
+                         // Message of a Popup::ShowFeedback.
+                         _("It takes half a minute until the config files are updated...")
                        );
     sleep( ( 1000 * dirty_clean_interval ) + 1000 );
     Popup::ClearFeedback();
