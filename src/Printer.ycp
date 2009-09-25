@@ -39,7 +39,6 @@ import "Progress";
 import "Summary";
 import "Popup";
 import "Printerlib";
-import "SuSEFirewall";
 
 /**
  * Prototypes
@@ -107,6 +106,67 @@ global string lower_chars = "abcdefghijklmnopqrstuvwxyz";
 global string letter_chars = upper_chars + lower_chars;
 global string alnum_chars = number_chars + letter_chars;
 global string lower_alnum_chars = number_chars + lower_chars;
+
+/**
+ * Explicite listing of all known manufacturers in a standard installation
+ * which one gets as output from the command
+ * lpinfo -l -m | grep make-and-model | cut -s -d '=' -f 2 | cut -s -d ' ' -f 2 | sort -f -u
+ * and then a bit changing it (in particular removing duplicates and nonsense entries).
+ * The current list was made on openSUSE 11.0.
+ */
+global list< string > known_manufacturers = [ "Generic",
+                                              "Alps",
+                                              "Anitech",
+                                              "Apollo",
+                                              "Apple",
+                                              "Brother",
+                                              "Canon",
+                                              "Citizen",
+                                              "CItoh",
+                                              "Compaq",
+                                              "DEC",
+                                              "Dell",
+                                              "Dymo",
+                                              "Epson",
+                                              "Fujifilm",
+                                              "Fujitsu",
+                                              "Gestetner",
+                                              "Heidelberg",
+                                              "Hitachi",
+                                              "HP",
+                                              "IBM",
+                                              "Infotec",
+                                              "Kodak",
+                                              "KS",
+                                              "Kyocera",
+                                              "Lanier",
+                                              "Lexmark",
+                                              "Minolta",
+                                              "Mitsubishi",
+                                              "NEC",
+                                              "NRG",
+                                              "Oce",
+                                              "Oki",
+                                              "Olivetti",
+                                              "Olympus",
+                                              "Panasonic",
+                                              "PCPI",
+                                              "QMS",
+                                              "Raven",
+                                              "Ricoh",
+                                              "Samsung",
+                                              "Savin",
+                                              "Seiko",
+                                              "Sharp",
+                                              "Shinko",
+                                              "Sony",
+                                              "Star",
+                                              "Tally",
+                                              "Tektronix",
+                                              "Toshiba",
+                                              "Xerox",
+                                              "Zebra"
+                                            ];
 
 /**
  * PPD database:
@@ -218,32 +278,6 @@ global boolean queue_filter_show_remote = true;
  *  ]
  */
 global list< map< string, any > > driver_options = [];
-
-/**
- * Firewall configuration:
- * Determined and set at runtime in the "Print via Network" and "Sharing" dialogs
- * by calling Printer::FirewallConfig("read") and Printer::FirewallConfig("write")
- * which calls SuSEFirewall functions to fill in the map @ref firewall_config
- * except "ui_browsing_from_int", "ui_access_from_int", and "ui_deny_from_ext"
- * which are the user settings in the dialog or change the SuSEFirewall settings
- * according to "ui_browsing_from_int", "ui_access_from_int", and "ui_deny_from_ext".
- * The entries are such that "true" is the default, reasonable and intended setting.
- * In particular it is reasonable to deny CUPS Browsing packages (port 631 UDP) from the EXT zone
- * to avoid "print job phishing" by announcing local queue names from a malicious external host,
- * see http://www.cups.org/newsgroups.php?gcups.general+T+Q"print+job+phishing"
- * @struct firewall_config
- * $[ "suse_firewall_used":"true if Suse Firewall and no other firewall is used",
- *    "firewall_active":"true if Suse Firewall is actually running",
- *    "no_firewall_for_int":"true if Suse Firewall does not potect the INT zone",
- *    "browsing_from_int":"true if Suse Firewall does not deny CUPS Browsing (port 631 UDP) from the INT zone",
- *    "ui_browsing_from_int":"true if user has set in dialog not to deny CUPS Browsing from the INT zone",
- *    "access_from_int":"true if Suse Firewall does not deny CUPS access (port 631 TCP) from the INT zone",
- *    "ui_access_from_int":"true if user has set in dialog not to deny CUPS access from the INT zone",
- *    "deny_from_ext":"true if any CUPS access (port 631 UDP and TCP) is denied from the EXT zone",
- *    "ui_deny_from_ext":"true if user has set in dialog to deny any CUPS access from the EXT zone"
- *  ]
- */
-global map< string, boolean > firewall_config = $[];
 
 /*
  * Local variables:
@@ -1249,9 +1283,17 @@ global list DriverItems( string driver_filter_string, boolean preselection )
                }
                else
                { // If the driver_filter_string is a non-empty string,
-                 // test whether the nickname matches to the driver_filter_string:
-                 string unified_nickname = filterchars( tolower( nickname ), lower_alnum_chars );
-                 if( regexpmatch( unified_nickname, driver_filter_string ) )
+                 // test whether nickname or deviceID matches to the driver_filter_string.
+                 // Only the special character '+' is also taken into account because
+                 // this is sometimes also a meaningful character in the model name
+                 // for example the '+' at the end of a Kyocera model name
+                 // indicates that this model has a built-in PostScript interpreter
+                 // while the model without the '+' understands only PCL.
+                 string unified_nickname = filterchars( tolower( nickname ), lower_alnum_chars + "+" );
+                 string unified_deviceID = filterchars( tolower( deviceID ), lower_alnum_chars + "+" );
+                 if( regexpmatch( unified_nickname, driver_filter_string )
+                     || regexpmatch( unified_deviceID, driver_filter_string )
+                   )
                  { driver_items = add( driver_items, `item( `id( ppds_index ), driver_string ) );
                  }
                }
@@ -1260,8 +1302,8 @@ global list DriverItems( string driver_filter_string, boolean preselection )
          );
   if( size( driver_items ) == 0 )
   { // If the driver_items list is empty (e.g. because of a too restrictive driver_filter_string),
-    // show a meaningful text as fallback entry.
-    driver_string = _("No matching driver found.");
+    // show a meaningful text as fallback entry ('More Drivers' is a button label).
+    driver_string = _("No matching driver found. Change the search string or try 'More Drivers'.");
     driver_items =  [ `item( `id( -1 ), driver_string ) ];
     // Invalidate selected_ppds_index to be on the safe side.
     // Otherwise it is possible to set up a queue with a previously selected driver
@@ -1643,7 +1685,7 @@ global list DriverItems( string driver_filter_string, boolean preselection )
  * Add new queue or overwrite existing queue
  * @return true on success
  */
-global boolean AddQueue( string queue_name )
+global boolean AddQueue( string queue_name, string default_paper_size )
 { // Delete ' characters because they are used for quoting in the bash commandline below:
   queue_name = deletechars( queue_name, "'" );
   string uri = deletechars( connections[selected_connections_index,"uri"]:"", "'" );
@@ -1685,6 +1727,25 @@ global boolean AddQueue( string queue_name )
     // but ignore any possible errors here (e.g. when the queue does not exist).
     Printerlib::ExecuteBashCommand( "/usr/sbin/lpadmin -h localhost -x '" + queue_name + "'" );
     return false;
+  }
+  // Try to set the requested default_paper_size if it is an available choice for this queue.
+  // If no default_paper_size is requested, the CUPS default is used.
+  // For the CUPS 1.3 default see http://www.cups.org/str.php?L2846
+  // For CUPS 1.4 the default depends on the "DefaultPaperSize" setting in cupsd.conf
+  // see https://bugzilla.novell.com/show_bug.cgi?id=395760
+  // and http://www.cups.org/str.php?L2848
+  if( "" != default_paper_size )
+  { // The following command fails intentionally if the queue has no PPD file - i.e. when it is a "raw" queue
+    // (a queue with a "System V style interface script" cannot be set up with YaST).
+    // '\>' is used to find an available choice also when it is the last value on the line.
+    // Note the YCP quoting: \\< becomes \< and \\> becomes \> in the commandline.
+    commandline = "lpoptions -h localhost -p '" + queue_name + "' -l | grep '^PageSize.*\\<" + default_paper_size + "\\>'";
+    if( Printerlib::ExecuteBashCommand( commandline ) )
+    { commandline = "/usr/sbin/lpadmin -h localhost -p '" + queue_name + "' -o 'PageSize=" + default_paper_size + "'";
+      // Do not care if it fails to set the default_paper_size (i.e. show no error message to the user)
+      // because the default_paper_size setting is nice to have but not mandatoty for a working queue:
+      Printerlib::ExecuteBashCommand( commandline );
+    }
   }
   return true;
 }
@@ -1865,205 +1926,14 @@ global list DriverOptionItems( string selected_keyword, string selected_value )
 }
 
 /**
- * Determined and set at runtime in the "Print via Network" and "Sharing" dialogs
- * by calling Printer::FirewallConfig("read") and Printer::FirewallConfig("write")
- * @param "read" to fill in the firewall_config map
- *        "write" change the SuSEFirewall settings according to the firewall_config map
- * @return true on success
- */
-global boolean FirewallConfig( string action )
-{ if( "read" == action )
-  { // SuSEFirewall::Read shows a Progress.
-    // Save previous Progress state and disable showing Progress:
-    boolean progress_previous_state = Progress::set( false );
-    if( ! SuSEFirewall::Read() )
-    { // If firewall_config is the empty map, the user
-      // cannot change a firewall setting in the "Print via Network" and "Sharing" dialogs
-      // so that noting will be committed regarding the Suse Firewall.
-      y2milestone( "SuSEFirewall::Read failed." );
-      firewall_config = $[];
-      // Restore previous Progress state:
-      Progress::set( progress_previous_state );
-      return true;
-    }
-    // Restore previous Progress state:
-    Progress::set( progress_previous_state );
-    // Preset the firewall_config map with the defaults after a default system installation
-    // to have a reasonable fallback if the actual values cannot be determined:
-    firewall_config = $[ "suse_firewall_used":true,
-                         "firewall_active":true,
-                         "no_firewall_for_int":true,
-                         "browsing_from_int":true,
-                         "ui_browsing_from_int":true,
-                         "access_from_int":true,
-                         "ui_access_from_int":true,
-                         "deny_from_ext":true,
-                         "ui_deny_from_ext":true
-                       ];
-    // Determine whether the Suse Firewall is used:
-    if( SuSEFirewall::IsOtherFirewallRunning() )
-    { // If not the Suse Firewall is used, the dialogs will not show
-      // any firewall settings and therefore the user cannot change them.
-      firewall_config["suse_firewall_used"] = false;
-      y2milestone( "Not the Suse Firewall is used, i.e. another firewall is running." );
-      return true;
-    }
-    // Determine whether the Suse Firewall is active:
-    if( ! SuSEFirewall::IsStarted()
-        || ! SuSEFirewall::GetStartService()
-      )
-    { // If the Suse Firewall is not active, the dialogs will not show
-      // any firewall settings because it is useless and confusing
-      // to let the user change firewall settings
-      // when the user had decided to have no firewall currently running
-      // or if the firewall would not be started in SuSEFirewall::Write()
-      firewall_config["firewall_active"] = false;
-      y2milestone( "The Suse Firewall is not active or would not be started in SuSEFirewall::Write." );
-      return true;
-    }
-    // Determine the actual settings regarding IPP (port 631 UDB and TCP)
-    // and preset the user interface settings with the actual settings:
-    if( SuSEFirewall::GetProtectFromInternalZone() )
-    { firewall_config["no_firewall_for_int"] = false;
-      if( ! SuSEFirewall::HaveService( "631", "UDP", "INT" ) )
-      { firewall_config["browsing_from_int"] = false;
-        firewall_config["ui_browsing_from_int"] = false;
-      }
-      if( ! SuSEFirewall::HaveService( "631", "TCP", "INT" ) )
-      { firewall_config["access_from_int"] = false;
-        firewall_config["ui_access_from_int"] = false;
-      }
-    }
-    if( SuSEFirewall::HaveService( "631", "TCP", "EXT" )
-        || SuSEFirewall::HaveService( "631", "UDP", "EXT" )
-      )
-    { firewall_config["deny_from_ext"] = false;
-      firewall_config["ui_deny_from_ext"] = false;
-    }
-    y2milestone( "FirewallConfig read result: %1", firewall_config );
-  }
-  if( "write" == action )
-  { y2milestone( "FirewallConfig write using: %1", firewall_config );
-    // If the Suse Firewall is used and
-    // if the Suse Firewall is active and
-    // if firewall settings have been changed by the user,
-    // then set and commit the new firewall settings.
-    // Use safe fallback values (i.e. deny access as fallback).
-    // Those fallback values makes the code look confusing
-    // for example in conditions like if(firewall_config["..."]:false)
-    // because the actual value is often the opposite of the fallback value.
-    if( firewall_config["suse_firewall_used"]:false
-        && firewall_config["firewall_active"]:false
-        && ( firewall_config["ui_browsing_from_int"]:false != firewall_config["browsing_from_int"]:true
-             || firewall_config["ui_access_from_int"]:false != firewall_config["access_from_int"]:true
-             || firewall_config["ui_deny_from_ext"]:false != firewall_config["deny_from_ext"]:true
-           )
-      )
-    { // Set new firewall settings in SuSEFirewall:
-      boolean write_firewall_settings_failed = false;
-      y2milestone( "FirewallConfig commit new firewall config: %1", firewall_config );
-      if( firewall_config["ui_browsing_from_int"]:false != firewall_config["browsing_from_int"]:true )
-      { if( firewall_config["ui_browsing_from_int"]:false )
-        { // The user has set in dialog not to deny CUPS Browsing from the INT zone:
-          if( ! firewall_config["no_firewall_for_int"]:true )
-          { // The Suse Firewall does potect the INT zone:
-            if( ! SuSEFirewall::AddService( "631", "UDP", "INT" ) )
-            { y2milestone( "FirewallConfig: SuSEFirewall::AddService(631,UDP,INT) failed." );
-              write_firewall_settings_failed = true;
-            }
-          }
-        }
-        else
-        { // The user has set in dialog to deny CUPS Browsing from the INT zone:
-          if( ! firewall_config["no_firewall_for_int"]:true )
-          { // The Suse Firewall does potect the INT zone:
-            if( ! SuSEFirewall::RemoveService( "631", "UDP", "INT" ) )
-            { y2milestone( "FirewallConfig: SuSEFirewall::RemoveService(631,UDP,INT) failed." );
-              write_firewall_settings_failed = true;
-            }
-          }
-          else
-          { // The Suse Firewall does not potect the INT zone:
-            y2milestone( "FirewallConfig: Cannot deny CUPS Browsing from the INT zone because the Suse Firewall does not potect the INT zone." );
-            write_firewall_settings_failed = true;
-          }
-        }
-      }
-      if( firewall_config["ui_access_from_int"]:false != firewall_config["access_from_int"]:true )
-      { if( firewall_config["ui_access_from_int"]:false )
-        { // The user has set in dialog not to deny CUPS access from the INT zone:
-          if( ! firewall_config["no_firewall_for_int"]:true )
-          { // The Suse Firewall does potect the INT zone:
-            if( ! SuSEFirewall::AddService( "631", "TCP", "INT" ) )
-            { y2milestone( "FirewallConfig: SuSEFirewall::AddService(631,TCP,INT) failed." );
-              write_firewall_settings_failed = true;
-            }
-          }
-        }
-        else
-        { // The user has set in dialog to deny CUPS access from the INT zone:
-          if( ! firewall_config["no_firewall_for_int"]:true )
-          { // The Suse Firewall does potect the INT zone:
-            if( ! SuSEFirewall::RemoveService( "631", "TCP", "INT" ) )
-            { y2milestone( "FirewallConfig: SuSEFirewall::RemoveService(631,TCP,INT) failed." );
-              write_firewall_settings_failed = true;
-            }
-          }
-          else
-          { // The Suse Firewall does not potect the INT zone:
-            y2milestone( "FirewallConfig: Cannot deny CUPS access from the INT zone because the Suse Firewall does not potect the INT zone." );
-            write_firewall_settings_failed = true;
-          }
-        }
-      }
-      if( firewall_config["ui_deny_from_ext"]:false != firewall_config["deny_from_ext"]:true )
-      { if( firewall_config["ui_deny_from_ext"]:false )
-        { // The user has set in dialog to deny any CUPS access from the EXT zone:
-          if( ! SuSEFirewall::RemoveService( "631", "TCP", "EXT" ) )
-          { y2milestone( "FirewallConfig: SuSEFirewall::RemoveService(631,TCP,EXT) failed." );
-            write_firewall_settings_failed = true;
-          }
-          if( ! SuSEFirewall::RemoveService( "631", "UDP", "EXT" ) )
-          { y2milestone( "FirewallConfig: SuSEFirewall::RemoveService(631,UDP,EXT) failed." );
-            write_firewall_settings_failed = true;
-          }
-        }
-        else
-        { // The user has set in dialog not to deny deny any CUPS access from the EXT zone:
-          y2milestone( "FirewallConfig: Ignored to allow CUPS access from the EXT zone because it is insecure." );
-          write_firewall_settings_failed = true;
-        }
-      }
-      // Commit the new firewall settings:
-      // SuSEFirewall::Write shows a Progress.
-      // Save previous Progress state and disable showing Progress:
-      boolean progress_previous_state = Progress::set( false );
-      if( ! SuSEFirewall::Write() )
-      { y2milestone( "FirewallConfig: SuSEFirewall::Write failed to commit firewall settings." );
-        write_firewall_settings_failed = true;
-      }
-      // Restore previous Progress state:
-      Progress::set( progress_previous_state );
-      if( write_firewall_settings_failed )
-      { Popup::Error( // Message of a Popup::Error.
-                      // Only a simple message because this error does not happen on a normal system.
-                      _("Failed to set up the firewall settings.\nUse the specific YaST Firewall module.")
-                    );
-        return false;
-      }
-    }
-  }
-  return true;
-}
-
-/**
  * Get all printer settings from the first parameter
  * (For use by autoinstallation.)
  * @param settings The YCP structure to be imported.
  * @return boolean True on success
  */
 global boolean Import (map settings) {
-    // TODO FIXME: your code here (fill the above mentioned variables)...
+        Printerlib::WriteClientSettings(settings["cups_remote_server"]:$[]);
+	Printerlib::WriteCupsSettings(settings["server_settings"]:$[]);
     return true;
 }
 
@@ -2073,8 +1943,17 @@ global boolean Import (map settings) {
  * @return map Dumped settings (later acceptable by Import ())
  */
 global map Export () {
-    // TODO FIXME: your code here (return the above mentioned variables)...
-    return $[];
+    Printerlib::DetermineClientOnly();
+    Printer::AutodetectQueues();
+    list <map> p_queues = filter(map queue, Printer::queues, { return (queue["config"]:""=="local"); });
+    map exp = $[
+//	"queues" : p_queues,
+//	"filters" : Printerlib::ExportFilters( p_queues ),
+	"server_settings" : (map)SCR::Read(.cups.server),
+	"cups_remote_server" : (map)SCR::Read(.cups.client)
+	];
+//y2internal("export %1", exp);
+   return exp;
 }
 
 /**
