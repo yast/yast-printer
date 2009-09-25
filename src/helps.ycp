@@ -62,9 +62,7 @@ device.<br>
 It is possible to have several different print queues for the same printer
 device.
 For example a second queue with a monochrome-only driver for a color device
-or a PostScript queue and a queue with a PCL driver for a PostScript+PCL
-printer or a queue to print on one side only of a sheet of paper and one for two sided
-printing.
+or a PostScript queue and a queue with a PCL driver for a PostScript+PCL printer.
 </p>") +
 // Overview dialog help 2/7:
 _("<p>
@@ -149,7 +147,48 @@ _("<p>
 The <b>driver</b> determines that the right data is produced for the
 specific printer model.<br>
 If a wrong driver is assigned, wrong data is sent to the printer
-which results bad looking printout, chaotic printout, or no printout at all.
+which results bad looking printout, chaotic printout, or no printout at all.<br>
+Initially the input field for the driver search string is preset
+with the autodetected model name of the currently selected connection
+and those drivers where the driver description matches to the model name
+are shown by default.<br>
+If driver descriptions match to the autodetected model name
+and if all matching driver descriptions seem to belong to the same model,
+the driver descriptions are sorted so that the most reasonable driver
+should be listed topmost and this one is automatically preselected.
+If no driver is automatically preselected, you must manually
+find and select an appropriate driver.<br>
+On the other hand if a driver was automatically preselected,
+it does not necessarily mean that this driver is
+a reasonable driver for your particular needs.
+Strictly speaking an automatically preselected driver
+may not work at all for your particular printer model.
+The reason is that the automated driver selection
+can only work based upon comparison of strings
+(the autodetected model name and the driver descriptions)
+so that the result can be only a best-guess proposal
+how to set up your particular printer model.<br>
+Therefore check if the currently preselected values make sense
+and feel free to play around and modify the settings
+to what you know what works best for your printer.<br>
+If no driver description matches to the autodetected model name,
+it does not necessarily mean that there is no driver available for the model.
+Often only the model name in the driver descriptions
+is different from the autodetected model name.
+Therefore you can enter whatever you like as driver search string
+and search through all available driver descriptions.<br>
+Usually the default driver option settings should be reasonable
+so that the driver works for your particular printer model.
+Some driver option settings must match to your particular printer.
+In particular the default paper size setting of the driver
+must match to the paper which is actually loaded in your printer.
+You can either explicitely select A4 or Letter as default paper size
+or select nothing to use the built-in default paper size of the driver
+which is also the fallback if the driver neither supports A4 nor Letter
+(for example a driver for a small-format photo printer).
+If you like to adjust other driver options except A4 or Letter,
+you must first set up the queue and then in a second step
+you can adjust all driver options in the 'Edit/Modify' dialog.
 </p>") +
 // BasicAddDialog help 5/5:
 _("<p>
@@ -177,7 +216,34 @@ and the 'hp:/...' connection.
 The latter is provided by the HP driver package 'hplip'.
 For plain printing both kind of connections should work but for anything else
 (e.g. device status via 'hp-toolbox', or scanning with a HP all-in-one device)
-the 'hp:/...' connection must be used.
+the 'hp:/...' connection must be used.<br>
+When you exchange the currently used connection by another one,
+the input field for the driver search string is preset
+with the autodetected model name of the new selected connection
+and those drivers where the driver description matches to the model name
+are shown by default.<br>
+If driver descriptions match to the autodetected model name
+and if all matching driver descriptions seem to belong to the same model,
+the driver descriptions are sorted so that the most reasonable driver
+should be listed topmost (but still below the currently used driver).
+On the other hand, it does not necessarily mean that this driver is
+a reasonable driver for your particular needs.
+Strictly speaking the topmost listed driver
+may not work at all for your particular printer model.
+The reason is that the automated driver selection
+can only work based upon comparison of strings
+(the autodetected model name and the driver descriptions)
+so that the result can be only a best-guess proposal
+how to set up your particular printer model.<br>
+Therefore check if the currently preselected values make sense
+and feel free to play around and modify the settings
+to what you know what works best for your printer.<br>
+If no driver description matches to the autodetected model name,
+it does not necessarily mean that there is no driver available for the model.
+Often only the model name in the driver descriptions
+is different from the autodetected model name.
+Therefore you can enter whatever you like as driver search string
+and search through all available driver descriptions.
 </p>") +
 // BasicModifyDialog help 3/4:
 _("<p>
@@ -195,7 +261,21 @@ For example any choice of the available printing resolutions
 should work for the particular driver.
 Nevertheless it may happen that your particular printer fails to print
 with high resolution. For example when you have a laser printer
-which has insufficient built-in memory to process high resolution pages.
+which has insufficient built-in memory to process high resolution pages.<br>
+When you exchange the currently used driver by another one,
+you must first apply this change to the print queue
+so that the new driver is used for the queue
+(i.e. you must finish this dialog as a first step)
+and then in a second step you can adjust all driver options
+by using this dialog again.<br>
+Initially the input field for the driver search string is preset
+with the description of the currently used driver when the connection was not changed.
+This results usually only one single driver which matches
+so that you would have to enter a less specific driver search string
+to get also other drivers or you use the 'More Drivers' button.
+If no driver matches, it does not mean that there is no driver available.
+Therefore you can enter whatever you like as driver search string
+and search through all available driver descriptions.
 </p>") +
 // BasicModifyDialog help 4/4:
 _("<p>
@@ -300,9 +380,9 @@ After the scheme there are more or less additional parts
 (separated by slash '/' characters) which specify the details
 for this kind of data-transfer.<br>
 Finally there could be optional parameters (separated by a question mark '?')
-of the form option1=value1&option2=value2&option3=value3 so that
+of the form option1=value1&amp;option2=value2&amp;option3=value3 so that
 a full device URI could be for example:<br>
-ipp://server.domain:631/printers/queuename?waitjob=false&waitprinter=false<br>
+ipp://server.domain:631/printers/queuename?waitjob=false&amp;waitprinter=false<br>
 Special characters must be percent-encoded (also known as URL encoding).
 For example a space character ' ' must be written as '%20'
 and a plus sign '+' must be written as '%2B'.<br>
@@ -463,7 +543,22 @@ to make printers available via network.<br>
 In this case remote CUPS servers must publish their printers via network
 and accordingly on your host the CUPS daemon process (cupsd) must run
 which is listening for incomming information about published printers.<br>
-CUPS Browsing information is recieved via UDP port 631.
+CUPS Browsing information is recieved via UDP port 631.<br>
+Regarding firewall:<br>
+Check if a firewall is active for a network zone
+in which printers are published via network.
+By default the SuSEfirewall allows any incomming information
+via a network interface which belongs to the 'internal zone'
+because this zone is trusted by default.
+If the remote CUPS servers and your system are in an internal network
+and when you trust all what there is in your internal network,
+your network interface must be set to be in the 'internal zone'.
+It does not make sense to have a network setup in a trusted internal network
+with a network interface which belongs to the untrusted 'external zone'
+which is the default setting for network interfaces to be safe.
+Do not disable firewall protection for CUPS
+(i.e. for IPP which uses TCP port 631 and UDP port 631)
+for the untrusted 'external zone'.
 </p>") +
 // PrintingViaNetworkDialog help 2/3:
 _("<p>
@@ -481,7 +576,7 @@ on your host.
 </p>"),
 
 "sharing_dialog" :
-// SharingDialog help 1/2:
+// SharingDialog help 1/3:
 _("<p>
 <b><big>Sharing Print Queues and Publish Them Via Network</big></b><br>
 Usually CUPS (Common Unix Printing System) should be set up to use
@@ -491,7 +586,7 @@ and accordingly on CUPS client systems the CUPS daemon process (cupsd) must run
 which is listening for incomming information about published printers.<br>
 CUPS Browsing information is recieved via UDP port 631.
 </p>") +
-// SharingDialog help 2/2:
+// SharingDialog help 2/3:
 _("<p>
 First of all CUPS client systems must be allowed to access the CUPS server.
 Then specify whether or not printers should be published to the clients.
@@ -499,6 +594,24 @@ It is not required to publish printers in any case.
 If you have only one single CUPS server, there is no need to use CUPS Browsing.
 Instead it is simpler to specify the CUPS server on the client systems
 (via 'Printing Via Network') so that the clients access the server directly.
+</p>") +
+// SharingDialog help 3/3:
+_("<p>
+Regarding firewall:<br>
+Check if a firewall is active for a network zone in which printers
+are made available via network to be used by trusted users
+(nobody lets arbitrary users print on his printer).
+By default the SuSEfirewall allows any access via a network interface
+which belongs to the 'internal zone' because this zone is trusted by default.
+If the CUPS server and the client systems are in an internal network
+and when you trust all what there is in your internal network,
+your network interface must be set to be in the 'internal zone'.
+It does not make sense to have a network setup in a trusted internal network
+with a network interface which belongs to the untrusted 'external zone'
+which is the default setting for network interfaces to be safe.
+Do not disable firewall protection for CUPS
+(i.e. for IPP which uses TCP port 631 and UDP port 631)
+for the untrusted 'external zone'.
 </p>"),
 
 "policies" :

@@ -36,7 +36,7 @@ textdomain "printer";
 import "Package";
 import "Popup";
 import "Service";
-
+import "Map";
 // Fortunately the tools are for all architectures always
 // installed in /usr/lib/YaST2/bin/ (i.e. no "lib64").
 // I tested this on Thu Aug 28 2008 using the command
@@ -509,6 +509,22 @@ global boolean DetermineBrowseAllow()
   }
   return true;
 }
+
+global boolean WriteCupsSettings(map ay){
+ string cups_file="/etc/cups/cupsd.conf";
+ y2milestone("Create backup of %1 file:%2", cups_file, SCR::Execute(.target.bash, sformat("mv %1 %1.$(date -I)", cups_file)));
+ SCR::Write(.cups.server, ay);
+ return true;
+}
+
+
+global boolean WriteClientSettings(map ay){
+ string cups_file="/etc/cups/client.conf";
+ y2milestone("Create backup of %1 file:%2", cups_file, SCR::Execute(.target.bash, sformat("mv %1 %1.$(date -I)", cups_file)));
+ SCR::Write(.cups.client, ay);
+ return true;
+}
+
 
 }
 
