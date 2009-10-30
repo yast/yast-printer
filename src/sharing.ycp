@@ -49,6 +49,7 @@ boolean initial_publish_to_local_network = false;
 list< term > initial_interface_table_items = [];
 string initial_allow_input_value = "";
 string initial_browse_address_input_value = "";
+boolean share_printers_firewall_popup_was_shown = false;
 
 term widgetSharing = `VBox
                      ( `RadioButtonGroup
@@ -179,14 +180,6 @@ term widgetSharing = `VBox
                                  )
                                )
                              )
-                           ),
-                           `Left
-                           ( `Label
-                             ( `id(`firewall_label),
-                               // A notification to make the user aware of possible Firewall restrictions
-                               // regarding remote access to CUPS via the IPP protocol (TCP/UDP port 631):
-                               _("If a firewall is used, check that remote access to CUPS is allowed via IPP on port 631.")
-                             )
                            )
                          )
                        )
@@ -236,6 +229,18 @@ map< string, string > showInterfacePopup( string interface_name, boolean is_publ
   }
   UI::CloseDialog();
   return interface_map;
+}
+
+boolean ShowSharePrintersFirewallPopup()
+{ if( Printerlib::FirewallSeemsToBeActive() )
+  { Popup::MessageDetails( // Popup::MessageDetails message:
+                           _("Check that your firewall allows remote access to CUPS via IPP on port 631."),
+                           // Popup::MessageDetails information regarding details:
+                           _("For details regarding firewall see the help text of this dialog.")
+                         );
+    return true;
+  }
+  return false;
 }
 
 boolean ApplySharingSettings()
@@ -411,6 +416,16 @@ boolean ApplySharingSettings()
   }
   // When allow_values is empty, it is a deny_remote_access case, see above.
   // Therefore allow_values is non-empty here:
+  if( ! issubstring( tolower( allow_values ), "none") )
+  { // When something (except 'none') regarding "Allow remote access" is set
+    // test whether or not a firewall seems to be active and
+    // if yes show a popup regarding firewall if it was not yet shown:
+    if( ! share_printers_firewall_popup_was_shown )
+    { if( ShowSharePrintersFirewallPopup() )
+      { share_printers_firewall_popup_was_shown = true;
+      }
+    }
+  }
   if( ! Printerlib::ExecuteBashCommand( Printerlib::yast_bin_dir
                                         + "modify_cupsd_conf Allow '"
                                         + allow_values
@@ -565,7 +580,6 @@ void initSharing( string key )
     UI::ChangeWidget( `specific_addresses_label, `Enabled, false );
     UI::ChangeWidget( `allow_input, `Enabled, false );
     UI::ChangeWidget( `browse_address_input, `Enabled, false );
-    UI::ChangeWidget( `firewall_label, `Enabled, false );
   }
   // Regardless whether or not the "Share Printers" dialog is useless,
   // fill in the values of the current settings in the system:
@@ -731,6 +745,24 @@ void initSharing( string key )
     initial_deny_remote_access = false;
     UI::ChangeWidget( `allow_remote_access_radio_button, `Value, true );
     initial_allow_remote_access = true;
+    // When something (except 'none') regarding "Allow remote access" is set
+    // test whether or not a firewall seems to be active and
+    // if yes show a popup regarding firewall if it was not yet shown:
+    if( ! share_printers_firewall_popup_was_shown )
+    { if( ShowSharePrintersFirewallPopup() )
+      { share_printers_firewall_popup_was_shown = true;
+      }
+    }
+  }
+  else
+  { // The value of share_printers_firewall_popup_was_shown is kept as long as the
+    // whole yast2-printer module runs so that the user could launch this dialog
+    // several times in one module run and switch between "Deny remote access"
+    // and "Allow remote access" several times in one run of the yast2-printer module.
+    // When in the previous run of this dialog "Deny remote access" has become true
+    // but in the current run of this dialog it was switched back to "Allow remote access"
+    // make sure to show in the current run of this dialog the popup regarding firewall again:
+    share_printers_firewall_popup_was_shown = false;
   }
   foreach( string browse_address_value,
            browse_address_values,
@@ -954,7 +986,6 @@ symbol handleSharing( string key, map event )
     UI::ChangeWidget( `specific_addresses_label, `Enabled, remote_access );
     UI::ChangeWidget( `allow_input, `Enabled, remote_access );
     UI::ChangeWidget( `browse_address_input, `Enabled, remote_access );
-    UI::ChangeWidget( `firewall_label, `Enabled, remote_access );
     if( remote_access )
     { boolean interface_modify_buttons = true;
       if( 0 == size((list)UI::QueryWidget(`interface_table, `Items)) ) interface_modify_buttons = false;
