@@ -42,6 +42,7 @@ any initial_radio_button = nil;
 any initial_browse_allow = nil;
 string initial_browse_allow_input_value = "";
 string initial_server_name_input_value = "";
+boolean browsing_firewall_popup_was_shown = false;
 // An entry for a ComboBox from which the user can select
 // that printer information is accepted from
 // all remote CUPS servers:
@@ -104,14 +105,6 @@ term widgetNetworkPrinting = `VBox
                                              // enter specific IP addresses and/or network/netmask
                                              // from where remote printer information is accepted:
                                              _("Optional Specific IP Addresses or &Network/Netmask (separated by space)")
-                                           )
-                                         ),
-                                         `Left
-                                         ( `Label
-                                           ( `id(`firewall_label),
-                                             // A notification to make the user aware of possible Firewall restrictions
-                                             // regarding allow incomming printer information from remote CUPS servers:
-                                             _("If a firewall is used, check that incomming packages on UDP port 631 are allowed.")
                                            )
                                          )
                                        )
@@ -326,6 +319,18 @@ boolean TestClientOnlyServer( string server_name )
   return false;
 }
 
+boolean ShowBrowsingFirewallPopup()
+{ if( Printerlib::FirewallSeemsToBeActive() )
+  { Popup::MessageDetails( // Popup::MessageDetails message:
+                           _("Check that your firewall allows incomming printer information on UDP port 631."),
+                           // Popup::MessageDetails information regarding details:
+                           _("For details regarding firewall see the help text of this dialog.")
+                         );
+    return true;
+  }
+  return false;
+}
+
 boolean ApplyNetworkPrintingSettings()
 { printing_via_network_has_changed = false;
   // Get the actual settings and values from the dialog:
@@ -519,7 +524,15 @@ boolean ApplyNetworkPrintingSettings()
       browse_allow_value = "none";
     }
     if( browse_allow_value != "none" )
-    { // Only a not-"none" browse_allow_value requires "Browsing On" in cupsd.conf.
+    { // When something (except 'none') regarding "Accept Printer Information" is set
+      // test whether or not a firewall seems to be active and
+      // if yes show a popup regarding firewall if it was not yet shown:
+      if( ! browsing_firewall_popup_was_shown )
+      { if( ShowBrowsingFirewallPopup() )
+        { browsing_firewall_popup_was_shown = true;
+        }
+      }
+      // Only a not-"none" browse_allow_value requires "Browsing On" in cupsd.conf.
       // Otherwise leave the "Browsing" entry in cupsd.conf unchanged.
       if( ! Printerlib::ExecuteBashCommand( Printerlib::yast_bin_dir + "modify_cupsd_conf Browsing On" ) )
       { Popup::ErrorDetails( // Popup::ErrorDetails message:
@@ -691,7 +704,6 @@ void initNetworkPrinting( string key )
   UI::ChangeWidget( `id(`browsing_off_radio_button), `Value, false );
   UI::ChangeWidget( `id(`browsing_on_radio_button), `Value, false );
   UI::ChangeWidget( `id(`browse_allow_combo_box), `Enabled, false );
-  UI::ChangeWidget( `id(`firewall_label), `Enabled, false );
   // When by accident "all" and "@LOCAL" were set as BrowseAllow values,
   // the "@LOCAL" entry is preselected in browse_allow_combo_box
   // because this is the more secure setting:
@@ -764,16 +776,31 @@ void initNetworkPrinting( string key )
     { initial_radio_button = `browsing_on_radio_button;
       UI::ChangeWidget( `id(`browsing_on_radio_button), `Value, true );
       UI::ChangeWidget( `id(`browse_allow_combo_box), `Enabled, true );
-      UI::ChangeWidget( `id(`firewall_label), `Enabled, true );
       // If browsing info is accepted from all hosts,
       // it is useless to additionally accept it from specific IPs or networks:
       if( ! contains( Printerlib::cupsd_conf_browse_allow, "all" ) )
       { UI::ChangeWidget( `id(`browse_allow_input), `Enabled, true );
       }
+      // When something (except 'none') regarding "Accept Printer Information" is set
+      // test whether or not a firewall seems to be active and
+      // if yes show a popup regarding firewall if it was not yet shown:
+      if( ! browsing_firewall_popup_was_shown )
+      { if( ShowBrowsingFirewallPopup() )
+        { browsing_firewall_popup_was_shown = true;
+        }
+      }
     }
     else
     { initial_radio_button = `browsing_off_radio_button;
       UI::ChangeWidget( `id(`browsing_off_radio_button), `Value, true );
+      // The value of browsing_firewall_popup_was_shown is kept as long as the
+      // whole yast2-printer module runs so that the user could launch this dialog
+      // several times in one module run and switch between "Do Not Accept Printer Information"
+      // and "Accept Printer Information" several times in one run of the yast2-printer module.
+      // When in the previous run of this dialog "Do Not Accept Printer Information" has become true
+      // but in the current run of this dialog it was switched back to "Accept Printer Information"
+      // make sure to show in the current run of this dialog the popup regarding firewall again:
+      browsing_firewall_popup_was_shown = false;
     }
   }
   y2milestone( "leaving initNetworkPrinting with\ninitial_radio_button = '%1'\ninitial_browse_allow = '%2'\ninitial_browse_allow_input_value = '%3'\ninitial_server_name_input_value = '%4'", initial_radio_button, initial_browse_allow, initial_browse_allow_input_value, initial_server_name_input_value );
@@ -785,7 +812,6 @@ symbol handleNetworkPrinting( string key, map event )
   { if( `browsing_off_radio_button == event["ID"]:nil )
     { UI::ChangeWidget( `id(`browse_allow_combo_box), `Enabled, false );
       UI::ChangeWidget( `id(`browse_allow_input), `Enabled, false );
-      UI::ChangeWidget( `id(`firewall_label), `Enabled, false );
       UI::ChangeWidget( `id(`client_conf_server_name_input), `Enabled, false );
       UI::ChangeWidget( `id(`test_client_conf_server), `Enabled, false );
       if( ! Printerlib::client_only )
@@ -798,7 +824,6 @@ symbol handleNetworkPrinting( string key, map event )
     if( `browsing_on_radio_button == event["ID"]:nil )
     { UI::ChangeWidget( `id(`browse_allow_combo_box), `Enabled, true );
       UI::ChangeWidget( `id(`browse_allow_input), `Enabled, true );
-      UI::ChangeWidget( `id(`firewall_label), `Enabled, true );
       UI::ChangeWidget( `id(`client_conf_server_name_input), `Enabled, false );
       UI::ChangeWidget( `id(`test_client_conf_server), `Enabled, false );
       if( ! Printerlib::client_only )
@@ -821,7 +846,6 @@ symbol handleNetworkPrinting( string key, map event )
     if( `client_only_radio_button == event["ID"]:nil )
     { UI::ChangeWidget( `id(`browse_allow_combo_box), `Enabled, false );
       UI::ChangeWidget( `id(`browse_allow_input), `Enabled, false );
-      UI::ChangeWidget( `id(`firewall_label), `Enabled, false );
       UI::ChangeWidget( `id(`client_conf_server_name_input), `Enabled, true );
       UI::ChangeWidget( `id(`test_client_conf_server), `Enabled, true );
       UI::ChangeWidget( `id(`connection_wizard), `Enabled, false );

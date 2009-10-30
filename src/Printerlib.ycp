@@ -609,6 +609,28 @@ global boolean WaitForUpdatedConfigFiles( string popupheader )
   return true;
 }
 
+// Determine if any kind of firewall seems to be active by calling
+// "iptables -n -L | egrep -q 'DROP|REJECT'"
+// to find out if there are currently dropping or rejecting packet filter rules.
+// One might use a more specific test via
+// "iptables -n -L | grep -v '^LOG' | egrep -q '^DROP|^REJECT'"
+// to match only for DROP and REJECT targets and exclude LOG targets
+// but it does not cause real problems when there is a false positive result here
+// because all what happens it that then a needless firewall info popup would be shown.
+global boolean FirewallSeemsToBeActive()
+{ // Note the '-n' (only numeric output) option to avoid long reverse DNS lookups:
+  if( ExecuteBashCommand( "iptables -n -L | egrep -q 'DROP|REJECT'" ) )
+  { y2milestone("A firewall seems to be active.");
+    return true;
+  }
+  // Return 'false' also as fallback value when the above command fails
+  // because of whatever reason because this fallback value is safe
+  // because it only results that no firewall info popup is shown
+  // the "Print via Network" and/or "Share Printers" dialogs
+  // but also the help text of those dialogs explains firewall stuff
+  // so that sufficient information is available in any case:
+  return false;
+}
 
 global boolean WriteCupsSettings(map ay){
  string cups_file="/etc/cups/cupsd.conf";
