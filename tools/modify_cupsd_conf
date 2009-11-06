@@ -24,6 +24,9 @@ then echo "Read and write $CUPSDCONF (but does not restart cupsd)." 1>&2
      echo "BrowseAllow [ all | @LOCAL | host-address | network-address/netmask ] | BrowseAllow none" 1>&2
      echo "e.g.: BrowseAllow '@LOCAL 192.168.100.1 192.168.200.0/255.255.255.0'" 1>&2
      echo "      BrowseAllow none (to deny all incomming browse packets)" 1>&2
+     echo "BrowsePoll [ host-address ] | BrowsePoll none" 1>&2
+     echo "e.g.: BrowsePoll '192.168.100.1 192.168.200.1'" 1>&2
+     echo "      BrowsePoll none (to poll not at all, i.e. no BrowsePoll line)" 1>&2
      echo "Listen [ all | network-address ] | Listen localhost" 1>&2
      echo "e.g.: Listen '192.168.100.0 192.168.200.0' (localhost is added automatically)" 1>&2
      echo "      Listen localhost (to have only 'Listen 127.0.0.1:631')" 1>&2
@@ -183,6 +186,61 @@ BrowseAllow()
   if test -n "$VALUE" -a "$RESULT" != "$VALUE"
   then echo "Failed to set '$KEY $VALUE' in $CUPSDCONF." 1>&2
        exit 5
+  fi
+}
+
+# Function to deal with 'BrowsePoll [ host-address ] | BrowsePoll none'
+BrowsePoll()
+{ if test -n "$VALUE"
+  then # All existing active BrowsePoll lines are removed (ignore case).
+       # Those lines can be removed because YaST supports BrowsePoll lines
+       # (YaST shows BrowsePoll entries in the "printing via network" dialog):
+       sed -i -e '/^[[:space:]]*BrowsePoll.*/Id' $CUPSDCONF
+       if ! test "none" = "$VALUE"
+       then # Append the new BrowsePoll lines below the last active 'Brows' line (ignore case)
+            # to have the new BrowsePoll lines at the matching place
+            # but if no 'Brows' line exists, append below the first empty line
+            # which is usually the line after the initial comment block
+            # and if even no empty line exists, append at the end of the file.
+            # Invert the ordering of the values to get the lines
+            # in the original ordering of the values (needed for the test below):
+            LAST_BROWSE_LINE_NUMBER="$( sed -n -e '/^[^#]*Brows/I=' $CUPSDCONF | tail -n 1 )"
+            FIRST_EMPTY_LINE_NUMBER="$( sed -n -e '/^[[:space:]]*$/=' $CUPSDCONF | head -n 1 )"
+            APPEND_LINE_NUMBER=""
+            if test -n "$LAST_BROWSE_LINE_NUMBER"
+            then APPEND_LINE_NUMBER="$LAST_BROWSE_LINE_NUMBER"
+            fi
+            if test -n "$FIRST_EMPTY_LINE_NUMBER"
+            then APPEND_LINE_NUMBER="$FIRST_EMPTY_LINE_NUMBER"
+            fi
+            for V in $( echo "$VALUE" | tac -s ' ' )
+            do if test -n "$APPEND_LINE_NUMBER"
+               then test -n "$V" && sed -i -e "${APPEND_LINE_NUMBER}a$KEY $V" $CUPSDCONF
+               else test -n "$V" && echo -en "\n$KEY $V\n" >>$CUPSDCONF
+               fi
+            done
+       fi
+  fi
+  # Report the resulting setting in any case:
+  # The 'tr ... [:blank:]' makes sure that all active BrowsePoll entries
+  # are found if there is more than one which is allowed.
+  # Remove leading spaces (to cut the right part).
+  # Remove trailing spaces (needed for the test below).
+  RESULT="$( grep -i "^[[:space:]]*$KEY[[:space:]]" $CUPSDCONF | tr -s '[:blank:]' ' ' | sed -e 's/^ *//' | cut -s -d ' ' -f2 | tr -s '\n' ' ' | sed -e 's/ *$//' )"
+  echo -n "$RESULT"
+  # For a nicer output on a terminal where stdout and stderr is mixed up,
+  # output a '\n' on stderr to get subsequent stuff (e.g. the shell prompt
+  # or an error message because of a failed test below) on a new line:
+  echo 1>&2
+  # Test if the result is the expected one if a value was specified:
+  if test -n "$VALUE"
+  then if test "none" = "$VALUE"
+       then RESULT="$( grep -q -i '^[[:space:]]BrowsePoll' $CUPSDCONF || echo -n 'none' )"
+       fi
+       if test "$RESULT" != "$VALUE"
+       then echo "Failed to set '$KEY $VALUE' in $CUPSDCONF." 1>&2
+            exit 5
+       fi
   fi
 }
 
@@ -528,6 +586,7 @@ DirtyCleanInterval()
 case "$KEY" in
      Browsing) Browsing;;
      BrowseAllow) BrowseAllow;;
+     BrowsePoll) BrowsePoll;;
      Listen) Listen;;
      Allow) Allow;;
      BrowseAddress) BrowseAddress;;

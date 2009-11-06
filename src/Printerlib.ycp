@@ -502,11 +502,34 @@ global boolean DetermineBrowseAllow()
   if( ExecuteBashCommand( yast_bin_dir + "modify_cupsd_conf BrowseAllow" ) )
   { // The command outputs a line where multiple BrowseAllow values are separated by space
     // but possible duplicate BrowseAllow values are not removed in the command output:
-    cupsd_conf_browse_allow = toset( splitstring( Printerlib::result["stdout"]:"all", " " ) );
+    cupsd_conf_browse_allow = toset( splitstring( result["stdout"]:"all", " " ) );
   }
   else
   { // Use fallback value when the command above failed:
     cupsd_conf_browse_allow = [ "all" ];
+    return false;
+  }
+  return true;
+}
+
+// By default there is no "BrowsePoll" entry in /etc/cups/cupsd.conf
+// Multiple BrowsePoll lines are allowed, e.g.:
+//   BrowsePoll 192.168.100.1
+//   BrowsePoll 192.168.200.2
+// so that each BrowsePoll line value is stored as one string
+// in the cupsd_conf_browse_poll list of strings:
+global list< string > cupsd_conf_browse_poll = [ "" ];
+
+global boolean DetermineBrowsePoll()
+{ // Determine the 'BrowsePoll [IP-address]' values in /etc/cups/cupsd.conf:
+  if( ExecuteBashCommand( yast_bin_dir + "modify_cupsd_conf BrowsePoll" ) )
+  { // The command outputs a line where multiple BrowsePoll values are separated by space
+    // but possible duplicate BrowsePoll values are not removed in the command output:
+    cupsd_conf_browse_poll = toset( splitstring( result["stdout"]:"", " " ) );
+  }
+  else
+  { // Use fallback value when the command above failed:
+    cupsd_conf_browse_poll = [ "" ];
     return false;
   }
   return true;

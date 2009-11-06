@@ -38,15 +38,21 @@ import "Popup";
 include "printer/helps.ycp";
 
 boolean printing_via_network_has_changed = false;
-any initial_radio_button = nil;
+boolean initial_browsing = false;
 any initial_browse_allow = nil;
 string initial_browse_allow_input_value = "";
-string initial_server_name_input_value = "";
+boolean initial_browse_poll = false;
+string initial_browse_poll_input_value = "";
+boolean initial_client_only = false;
+string initial_client_conf_input_value = "";
 boolean browsing_firewall_popup_was_shown = false;
+// An entry for a ComboBox from which the user can select
+// that printer information is not accepted from any remote CUPS servers:
+string browse_allow_none_string = _("do not accept any printer announcement");
 // An entry for a ComboBox from which the user can select
 // that printer information is accepted from
 // all remote CUPS servers:
-string browse_allow_all_string = _("accept from anywhere");
+string browse_allow_all_string = _("accept all announcements from anywhere");
 // An entry for a ComboBox from which the user can select
 // that printer information is accepted from
 // remote CUPS servers in the local network:
@@ -62,26 +68,18 @@ term widgetNetworkPrinting = `VBox
                                `Frame
                                ( // A caption for a Frame to set up to use CUPS to print via network:
                                  _("Use CUPS to Print Via Network"),
-                                 `RadioButtonGroup
-                                 ( `id(`browsing_or_client_only_check_boxes),
-                                   `VBox
-                                   ( `Left
-                                     ( `RadioButton
-                                       ( `id(`browsing_off_radio_button),
-                                         `opt(`notify),
-                                         // A RadioButton to not receive printer information from remote CUPS servers:
-                                         _("&Do Not Accept Printer Information from Remote CUPS Servers")
-                                       )
-                                     ),
-                                     `Left
-                                     ( `RadioButton
-                                       ( `id(`browsing_on_radio_button),
-                                         `opt(`notify),
-                                         // A RadioButton to receive printer information from remote CUPS servers:
-                                         _("Accept Printer &Information from the Following Servers")
-                                       )
-                                     ),
-                                     `HBox
+                                 `VBox
+                                 ( `Left
+                                   ( `CheckBox
+                                     ( `id(`browsing_check_box),
+                                       `opt(`notify),
+                                       // A CheckBox to accept printer information from remote CUPS servers:
+                                       _("&Accept Printer Announcements from CUPS Servers"),
+                                       true
+                                     )
+                                   ),
+                                   `Left
+                                   ( `HBox
                                      ( `HSpacing( 4 ),
                                        `VBox
                                        ( `Left
@@ -92,7 +90,8 @@ term widgetNetworkPrinting = `VBox
                                              // a usual general setting from which remote CUPS servers
                                              // printer information is accepted:
                                              _("&General Setting"),
-				             [ `item( `id(`browse_allow_all), browse_allow_all_string ),
+				             [ `item( `id(`browse_allow_none), browse_allow_none_string, true ),
+                                               `item( `id(`browse_allow_all), browse_allow_all_string ),
                                                `item( `id(`browse_allow_local), browse_allow_local_string ),
                                                `item( `id(`browse_allow_specific), browse_allow_specific_string )
                                              ]
@@ -101,31 +100,55 @@ term widgetNetworkPrinting = `VBox
                                          `Left
                                          ( `TextEntry
                                            ( `id(`browse_allow_input),
-                                             // A header for a TextEntry where the user can optionally
+                                             // A header for a TextEntry where the user can additionally
                                              // enter specific IP addresses and/or network/netmask
                                              // from where remote printer information is accepted:
-                                             _("Optional Specific IP Addresses or &Network/Netmask (separated by space)")
+                                             _("Additional IP Addresses or &Network/Netmask (separated by space)")
                                            )
                                          )
                                        )
-                                     ),
-                                     `Left
-                                     ( `RadioButton
-                                       ( `id(`client_only_radio_button),
-                                         `opt(`notify),
-                                         // A RadioButton to do all printing tasks directly
-                                         // only via one single remote CUPS server:
-                                         _("Do All Your Printing Directly via &One Remote CUPS Server")
-                                       )
-                                     ),
-                                     `HBox
+                                     )
+                                   ),
+                                   `Left
+                                   ( `CheckBox
+                                     ( `id(`browse_poll_check_box),
+                                       `opt(`notify),
+                                       // A CheckBox to poll printer information from remote CUPS servers:
+                                       _("&Request Printer Information from CUPS Servers"),
+                                       false
+                                     )
+                                   ),
+                                  `Left
+                                   ( `HBox
                                      ( `HSpacing( 4 ),
-                                         `TextEntry
-                                         ( `id(`client_conf_server_name_input),
-                                           // A header for a TextEntry where the user can enter
-                                           // the one single remote CUPS server which is used
-                                           // to do all his printing tasks:
-                                           _("&CUPS server name / IP Address")
+                                       `TextEntry
+                                       ( `id(`browse_poll_input),
+                                         // A header for a TextEntry where the user can enter
+                                         // CUPS server names and/or IP addresses
+                                         // from where remote printer information is polled:
+                                         _("Polled CUPS server names or &IP Addresses (separated by space)")
+                                       )
+                                     )
+                                   ),
+                                   `Left
+                                   ( `CheckBox
+                                     ( `id(`client_only_check_box),
+                                       `opt(`notify),
+                                       // A CheckBox to do all printing tasks directly
+                                       // only via one single remote CUPS server:
+                                       _("&Do All Printing Directly via One Single CUPS Server"),
+                                       false
+                                     )
+                                   ),
+                                   `Left
+                                   ( `HBox
+                                     ( `HSpacing( 4 ),
+                                       `TextEntry
+                                       ( `id(`client_conf_input),
+                                         // A header for a TextEntry where the user can enter
+                                         // the one single remote CUPS server which is used
+                                         // to do all his printing tasks:
+                                         _("&One single CUPS server name or IP Address")
                                        ),
 				       `VBox
                                        ( `Label(""),
@@ -211,7 +234,7 @@ boolean TestClientOnlyServer( string server_name )
   }
   // Test for "localhost" or "127.0.0.1" and make a local cupsd accessible
   // because a local cupsd is needed if the server name is "localhost" or "127.0.0.1":
-  if( "localhost" == server_name
+  if( "localhost" == tolower( server_name )
       || "127.0" == substring( server_name, 0, 5 )
     )
   { // The user has entered "localhost" or "127.0.0.1" as server name
@@ -332,356 +355,409 @@ boolean ShowBrowsingFirewallPopup()
 }
 
 boolean ApplyNetworkPrintingSettings()
-{ printing_via_network_has_changed = false;
-  // Get the actual settings and values from the dialog:
-  any current_radio_button = UI::QueryWidget( `id(`browsing_or_client_only_check_boxes), `CurrentButton );
+{ // Get the actual settings and values from the dialog:
+  boolean current_browsing = (boolean)UI::QueryWidget( `id(`browsing_check_box), `Value );
   any current_browse_allow = UI::QueryWidget( `id(`browse_allow_combo_box), `Value );
   string current_browse_allow_input_value = (string)UI::QueryWidget( `id(`browse_allow_input), `Value );
-  string current_server_name_input_value = (string)UI::QueryWidget( `id(`client_conf_server_name_input), `Value );
-  y2milestone( "ApplyNetworkPrintingSettings with\ncurrent_radio_button = '%1'\ncurrent_browse_allow = '%2'\ncurrent_browse_allow_input_value = '%3'\ncurrent_server_name_input_value = '%4'", current_radio_button, current_browse_allow, current_browse_allow_input_value, current_server_name_input_value );
-  // Do not accept Browsing information:
-  if( `browsing_off_radio_button == current_radio_button )
-  { if( `browsing_off_radio_button == initial_radio_button )
-    { // Nothing has changed:
-      return true;
-    }
-    if( `browsing_on_radio_button == initial_radio_button )
-    { // It was initially a "Get browsing info" config,
-      // but now the user has activated the "No browsing info" radio button:
-      printing_via_network_has_changed = true;
-      // Do not change the global "Browsing On/Off" entry in cupsd.conf
-      // because "Browsing Off" disables also sharing of local printers
-      // which might be needed by the "Share Printers" dialog.
-      // Instead set only "BrowseAllow none" in cupsd.conf:
-      if( ! Printerlib::ExecuteBashCommand( Printerlib::yast_bin_dir + "modify_cupsd_conf BrowseAllow none" ) )
-      { Popup::ErrorDetails( // Popup::ErrorDetails message:
-                             _("Failed to set 'BrowseAllow none' in /etc/cups/cupsd.conf"),
-                             Printerlib::result["stderr"]:""
-                           );
-        return false;
-      }
-      // If a local cupsd is accessible, restart it, otherwise start it:
-      if( Printerlib::GetAndSetCupsdStatus( "" ) )
-      { if( ! Printerlib::GetAndSetCupsdStatus( "restart" ) )
-        { return false;
-        }
-        // A "Get browsing info" config with a local cupsd was switched
-        // to a "No browsing info" config with a local running cupsd.
-        // The Printerlib::GetAndSetCupsdStatus("restart") function
-        // already waits 40 seconds but the default BrowseTimeout value
-        // for the local cupsd is 5 minutes.
-        // Therefore it takes by default 5 minutes until printer information
-        // that was previously received by Browsing is removed (via timeout)
-        // from the local cupsd's list.
-        // I assume most users do not like to wait 5 minutes which is no problem
-        // because they can just click the [OK] button to continue but then
-        // they are at least informend why there may be still remote queues:
-        Popup::TimedMessage( // Popup message:
-                             _("When switching from 'receive information' to 'do not receive information'\nit takes usually 5 minutes until already received information faded away..."),
-                             300
-                           );
-      }
-      else
-      { if( ! Printerlib::GetAndSetCupsdStatus( "start" ) )
-        { return false;
-        }
-      }
-      return true;
-    }
-    if( `client_only_radio_button == initial_radio_button )
-    { // Note that initial_client_only_radio_button is only true for a real client-only config
-      // but not when the server name value for client-only is "localhost" or "127.0.0.1",
-      // see Printerlib::DetermineClientOnly() and the initNetworkPrinting function below.
-      // If it is actually a client-only config,
-      // the user may have only activated the "No browsing info" radio button
-      // but left the server name value for client-only unchanged:
-      if( current_server_name_input_value != initial_server_name_input_value )
-      { printing_via_network_has_changed = true;
-        // The user has changed the server name value for client-only
-        // and afterwards he activated the "No browsing info" radio button.
-        // This should result a client-only setup with the new server name
-        // if the new server name is a non-empty string which is also not 'none':
-        string server_name = deletechars( tolower( current_server_name_input_value ), " " );
-        if( "" != server_name
-            && "none" != server_name
-          )
-        { if( ! Printerlib::ExecuteBashCommand( Printerlib::yast_bin_dir + "cups_client_only " + server_name ) )
-          { Popup::ErrorDetails( // Popup::ErrorDetails message
-                                 // where %1 will be replaced by the server name.
-                                 sformat( _("Failed to set 'ServerName %1' in /etc/cups/client.conf"), server_name ),
-                                 Printerlib::result["stderr"]:""
-                               );
-            return false;
-          }
-        }
-        else
-        { // The client-only server name was changed to the empty string or to 'none'
-          // and afterwards the "No browsing info" radio button was activated.
-          // This should disable the client-only setup but not start the local cupsd:
-          if( ! Printerlib::ExecuteBashCommand( Printerlib::yast_bin_dir + "cups_client_only none" ) )
-          { Popup::ErrorDetails( // Popup::ErrorDetails message:
-                                 _("Failed to remove the 'ServerName' entry in /etc/cups/client.conf"),
-                                 Printerlib::result["stderr"]:""
-                               );
-            return false;
-          }
-        }
-      }
-    }
-    // Exit successfully by default and as fallback:
-    // The above change to the client-only setup was successful or
-    // the user has not changed the server name value for client-only
-    // and afterwards he activated the "No browsing info" radio button.
-    // The latter case should also leave the current client-only setup as is:
+  boolean current_browse_poll = (boolean)UI::QueryWidget( `id(`browse_poll_check_box), `Value );
+  string current_browse_poll_input_value = (string)UI::QueryWidget( `id(`browse_poll_input), `Value );
+  boolean current_client_only = (boolean)UI::QueryWidget( `id(`client_only_check_box), `Value );
+  string current_client_conf_input_value = (string)UI::QueryWidget( `id(`client_conf_input), `Value );
+  y2milestone( "ApplyNetworkPrintingSettings with\ncurrent_browsing = '%1'\ncurrent_browse_allow = '%2'\ncurrent_browse_allow_input_value = '%3'\ncurrent_browse_poll = '%4'\ncurrent_browse_poll_input_value = '%5'\ncurrent_client_only = '%6'\ncurrent_client_conf_input_value = '%7'", current_browsing, current_browse_allow, current_browse_allow_input_value, current_browse_poll, current_browse_poll_input_value, current_client_only, current_client_conf_input_value );
+  // Sanitise the BrowseAllow and BrowsePoll values.
+  // Changes in the ordering (e.g. from 'host2 host1' to 'host1 host2')
+  // are ignored because toset() sorts the list and removes duplicates.
+  // Changes in the case (e.g. from 'host' to 'Host') are not ignored because
+  // the user may like to have it exactly in cupsd.conf (even if actually case may not matter):
+  string initial_browse_allow_value = mergestring( toset( splitstring( initial_browse_allow_input_value, " " ) ), " " );
+  string current_browse_allow_value = mergestring( toset( splitstring( current_browse_allow_input_value, " " ) ), " " );
+  string initial_browse_poll_value = mergestring( toset( splitstring( initial_browse_poll_input_value, " " ) ), " " );
+  string current_browse_poll_value = mergestring( toset( splitstring( current_browse_poll_input_value, " " ) ), " " );
+  // Sanitise the "client only" value.
+  // Keep only the first server name if there is more than one server name:
+  string initial_client_conf_value = toset( splitstring( initial_client_conf_input_value, " " ) )[0]:"";
+  string current_client_conf_value = toset( splitstring( current_client_conf_input_value, " " ) )[0]:"";
+  y2milestone( "ApplyNetworkPrintingSettings with sanitised values:\ninitial_browse_allow_value = '%1'\ncurrent_browse_allow_value = '%2'\ninitial_browse_poll_value = '%3'\ncurrent_browse_poll_value = '%4'\ninitial_client_conf_value = '%5'\ncurrent_client_conf_value = '%6'", initial_browse_allow_value, current_browse_allow_value, initial_browse_poll_value, current_browse_poll_value, initial_client_conf_value, current_client_conf_value );
+  // Test if something meaningful has changed.
+  // It is meaningful if an item (BrowseAllow, BrowsePoll or "client only")
+  // was activated which was initially deactivated or vice versa.
+  // It is meaningful if a value for an activated item was changed.
+  // But it is meaningless if a value for a deactivated item was changed.
+  // I.e. if a value for BrowseAllow, BrowsePoll or the client only server name was changed
+  // but then the whole item was deactivated via its check box
+  // the change of the value is meaningless and the changed value will not be written.
+  if( ( current_browsing != initial_browsing )
+      || ( current_browse_poll != initial_browse_poll )
+      || ( current_client_only != initial_client_only )
+      || ( current_browsing && current_browse_allow != initial_browse_allow )
+      || ( current_browsing && current_browse_allow_value != initial_browse_allow_value )
+      || ( current_browse_poll && current_browse_poll_value != initial_browse_poll_value )
+      || ( current_client_only && current_client_conf_value != initial_client_conf_value )
+    )
+  { printing_via_network_has_changed = true;
+  }
+  else
+  { printing_via_network_has_changed = false;
+    // Nothing has changed:
     return true;
   }
-  // Accept Browsing information:
-  if( `browsing_on_radio_button == current_radio_button )
-  { if( `browsing_off_radio_button == initial_radio_button )
-    { // It was initially a "No browsing info" config,
-      // but now the user has activated the "Get browsing info" radio button:
-      printing_via_network_has_changed = true;
-    }
-    if( `browsing_on_radio_button == initial_radio_button )
-    { // It was initially a "Get browsing info" config,
-      // but now the user may have changed from which hosts browsing info is accepted:
-      if( current_browse_allow != initial_browse_allow )
-      { printing_via_network_has_changed = true;
-      }
-      // Check if there are real changes in the values in browse_allow_input.
-      // Do not ignore changes in the case (e.g. from 'host.domain.com' to 'Host.Domain.com')
-      // because the user may like to have it exactly in cupsd.conf (even if actually case may not matter):
-      list< string > initial_browse_allow_input_set = toset( splitstring( initial_browse_allow_input_value, " " ) );
-      list< string > current_browse_allow_input_set = toset( splitstring( current_browse_allow_input_value, " " ) );
-      if( mergestring( current_browse_allow_input_set, "" ) != mergestring( initial_browse_allow_input_set, "" ) )
-      { printing_via_network_has_changed = true;
-      }
-    }
-    if( `client_only_radio_button == initial_radio_button )
-    { // It was initially a client-only config,
-      // but now the user has activated the "Get browsing info" radio button.
-      // "Get browsing info" means "no longer client-only" regardless
-      // if the browse_allow_value string is effectively empty or it contains "none"
-      // so that the client-only config is to be disabled in any case:
-      if( ! Popup::YesNoHeadline( // PopupYesNoHeadline headline
-                                  // where %1 will be replaced by the server name:
-                                  sformat( _("Disable remote CUPS server '%1'"), Printerlib::client_conf_server_name ),
-                                  // PopupYesNoHeadline body:
-                                  _("A remote CUPS server setting conflicts with receiving printer information.")
-                                )
-        )
-      { return false;
-      }
-      // Remove the 'ServerName' entry in /etc/cups/client.conf:
-      if( ! Printerlib::ExecuteBashCommand( Printerlib::yast_bin_dir + "cups_client_only none" ) )
-      { Popup::ErrorDetails( // Popup::ErrorDetails message:
-                             _("Failed to remove the 'ServerName' entry in /etc/cups/client.conf"),
-                             Printerlib::result["stderr"]:""
-                           );
+  // First of all handle the client-only config
+  // when the client-only item is enabled and exit this function
+  // when there is an effectively non-empty server name value
+  // because anything else (BrowseAllow, BrowsePoll) is meningless because
+  // those items are automatically disabled when client-only is enabled.
+  // When a real client-only config (when the server name is not "localhost" or "127.0.0.1")
+  // is set up, the local cupsd is stopped so that any BrowseAllow and BrowsePoll stuff
+  // becomes effectively disabled (during shutdown cupsd also stops cups-polld processes).
+  // Is is not posible to change BrowseAllow and/or BrowsePoll values
+  // in the dialog first and then switch to a client-only config but
+  // get the changed BrowseAllow and/or BrowsePoll values written nevertheless.
+  // A switch to a client-only config leaves the existing BrowseAllow
+  // and/or BrowsePoll values in /etc/cups/cupsd.conf unchanged.
+  // This behaviour is more reasonable than the other one
+  // because the other behaviour seems oversophisticated because
+  // a switch to client-only grays out the BrowseAllow and/or BrowsePoll widgets
+  // which should have the meaning that the matching values are now out of scope.
+  if( ( current_client_only && ! initial_client_only )
+      || ( current_client_only && current_client_conf_value != initial_client_conf_value )
+    )
+  { // It was initially no client-only config but now it is a client-only config
+    // or it was initially a client-only config but its server name value changed:
+    if( "" == current_client_conf_value
+        || "none" == tolower( current_client_conf_value )
+      )
+    { if( ! initial_client_only )
+      { // It was initially no client-only config and the user has switched
+        // to a client-only config but with an effectively empty server name.
+        // Such a client-only config does not make sense:
+        Popup::Error( // Popup::Error message:
+                      _("A valid CUPS server name must be entered.")
+                    );
         return false;
       }
-      printing_via_network_has_changed = true;
+      // It was initially a client-only config but the user has
+      // changed the server name value to be effectively empty.
+      // This is the same as to turn off the client-only config
+      // so that the "turn off client-only" case below is triggered here:
+      initial_client_only = true;
+      current_client_only = false;
     }
-    if( ! printing_via_network_has_changed )
-    { // Nothing has changed:
-      return true;
-    }
-    string browse_allow_value = current_browse_allow_input_value;
-    if( `browse_allow_all == current_browse_allow )
-    { // If browsing info is accepted from all hosts, it is actually useless
-      // to additionally accept it from specific IPs or networks
-      // but nevertheless the specific addresses are also set in cupsd.conf
-      // because I do not want to ignore what the user has entered.
-      // E.g. the user may like to accept browsing info from some specific addresses
-      // while he plays around with the predefined settings from the combo box:
-      browse_allow_value = browse_allow_value + " all";
-    }
-    if( `browse_allow_local == current_browse_allow )
-    { browse_allow_value = browse_allow_value + " @LOCAL";
-    }
-    if( "" == filterchars( browse_allow_value, Printer::alnum_chars )
-        || issubstring( browse_allow_value, "none" )
-      )
-    { // The browse_allow_value string is effectively empty or it contains "none".
-      // (The issubstring match is o.k. because only IP-addresses are supported
-      // so that even for a hostname "none.nowhere" the IP-address would not match.)
-      // This case happens when browse_allow_specific is selected in the combo box
-      // but no address or only "none" was entered for browse_allow_input.
-      // This case has the same meaning as a "No browsing info" config.
-      if( `browsing_off_radio_button == initial_radio_button )
-      { // It was initially a "No browsing info" config,
-        // and now the user has activated the "Get browsing info" radio button
-        // but with effectively an empty or "none" browse_allow_value string
-        // so that it is still a "No browsing info" config:
-        printing_via_network_has_changed = false;
-        return true;
+    else
+    { boolean enforce_client_only_server_setting = false;
+      // A non-accessible client-only server leads to an endless sequence of weird further behaviour
+      // of the module so that a non-accessible server is not accepted.
+      // This means that it is not possible to set up a client-only config first
+      // and then make the client-only server accessible (e.g. boot the client-only server,
+      // open ports in firewall, set up the network connection, whatever else).
+      // This would be a problem when a workstation is set up by an admin in the IP department
+      // for a client-only config but the workstation is currently not connected to the network
+      // where the client-only server is (e.g. in the department for which the workstation is set up).
+      // Therefore the admin can force YaST to proceed here.
+      // Do not show additional error messages here because TestClientOnlyServer()
+      // shows sufficient popups to the user:
+      if( ! TestClientOnlyServer( current_client_conf_value ) )
+      { if( ! Popup::ContinueCancelHeadline( sformat( // Header of a Popup::ContinueCancelHeadline
+                                                      // when a client-only server is not accessible
+                                                      // where %1 will be replaced by the server name:
+                                                      _("Continue regardless that '%1' is not accessible?"),
+                                                      current_client_conf_value
+                                                    ),
+                                             // Body of a Popup::ContinueCancelHeadline
+                                             // when a client-only server is not accessible:
+                                             _("A non-accessible server leads to an endless sequence of failures.")
+                                           )
+          )
+        { // The user has decided not to continue:
+          return false;
+        }
+        // The user has decided to continue regardless that the client-only server is not accessible:
+        enforce_client_only_server_setting = true;
       }
-      // Set the browse_allow_value explicitely to "none".
-      // This removes intentionally any additional stuff in this value
-      // if "none" was only persent as a real substring.
-      // The reasoning is that "none" should have the highest priority
-      // because this is the most secure setting.
-      browse_allow_value = "none";
-    }
-    if( browse_allow_value != "none" )
-    { // When something (except 'none') regarding "Accept Printer Information" is set
-      // test whether or not a firewall seems to be active and
-      // if yes show a popup regarding firewall if it was not yet shown:
-      if( ! browsing_firewall_popup_was_shown )
-      { if( ShowBrowsingFirewallPopup() )
-        { browsing_firewall_popup_was_shown = true;
+      if( ! initial_client_only )
+      { // It was initially not a "client-only" config,
+        // but now the user has switched to "client-only".
+        // If the server name is not "localhost" and not "127.0.0.1"
+        // a real client-only config is to be set up and then
+        // a possibly running local cupsd will be stopped.
+        if( "localhost" != tolower( current_client_conf_value )
+            && "127.0" != substring( current_client_conf_value, 0, 5 )
+          )
+        { if( Printerlib::GetAndSetCupsdStatus( "" ) )
+          { if( ! Printerlib::GetAndSetCupsdStatus( "stop" ) )
+            { return false;
+            }
+          }
         }
       }
-      // Only a not-"none" browse_allow_value requires "Browsing On" in cupsd.conf.
-      // Otherwise leave the "Browsing" entry in cupsd.conf unchanged.
-      if( ! Printerlib::ExecuteBashCommand( Printerlib::yast_bin_dir + "modify_cupsd_conf Browsing On" ) )
-      { Popup::ErrorDetails( // Popup::ErrorDetails message:
-                             _("Failed to set 'Browsing On' in /etc/cups/cupsd.conf"),
+      if( ! Printerlib::ExecuteBashCommand( Printerlib::yast_bin_dir + "cups_client_only " + current_client_conf_value ) )
+      { if( enforce_client_only_server_setting )
+        { // The user has decided to continue regardless that the client-only server is not accessible.
+          // In this case the cups_client_only tool fails in any case because it also tests accessibility.
+          // But the cups_client_only tool might have failed for whatever other reason.
+          // Therefore a Popup::MessageDetails is shown to inform about the actual result:
+          Popup::MessageDetails( // Popup::MessageDetails message
+                                 // where %1 will be replaced by the server name.
+                                 sformat( _("Tried to set 'ServerName %1' in /etc/cups/client.conf"),
+                                          current_client_conf_value
+                                        ),
+                                 Printerlib::result["stderr"]:""
+                               );
+          // Exit successfully in this special case regardless of whatever failures:
+          return true;
+        }
+        Popup::ErrorDetails( // Popup::ErrorDetails message
+                             // where %1 will be replaced by the server name.
+                             sformat( _("Failed to set 'ServerName %1' in /etc/cups/client.conf"),
+                                      current_client_conf_value
+                                    ),
                              Printerlib::result["stderr"]:""
                            );
         return false;
       }
+      // Exit successfully by default and as fallback:
+      return true;
     }
-    if( ! Printerlib::ExecuteBashCommand( Printerlib::yast_bin_dir
-                                          + "modify_cupsd_conf BrowseAllow '"
-                                          + browse_allow_value
-                                          + "'"
-                                        )
+    // A client-only config with effectively empty server name value continues here
+    // and triggers the following "turn off client-only" case:
+  }
+  // Before handling BrowseAllow and/or BrowsePoll
+  // turn off the client-only config
+  // if the user had disabled the client-only item:
+  if( initial_client_only && ! current_client_only )
+  { // It was initially a client-only config,
+    // but now the user has deactivated it
+    // so that the client-only config should be disabled:
+    if( ! Popup::YesNoHeadline( // PopupYesNoHeadline headline
+                                // where %1 will be replaced by the server name:
+                                sformat( _("Disable remote CUPS server '%1'"), Printerlib::client_conf_server_name ),
+                                // PopupYesNoHeadline body:
+                                _("The checkbox to do all printing via one CUPS server was disabled.")
+                              )
       )
-    { Popup::ErrorDetails( // Popup::ErrorDetails message
-                           // where %1 will be replaced by the values for BrowseAllow.
-                           sformat( _("Failed to set BrowseAllow value(s) '%1' in /etc/cups/cupsd.conf"),
-                                    browse_allow_value
-                                  ),
+    { return false;
+    }
+    // Remove the 'ServerName' entry in /etc/cups/client.conf:
+    if( ! Printerlib::ExecuteBashCommand( Printerlib::yast_bin_dir + "cups_client_only none" ) )
+    { Popup::ErrorDetails( // Popup::ErrorDetails message:
+                           _("Failed to remove the 'ServerName' entry in /etc/cups/client.conf"),
                            Printerlib::result["stderr"]:""
                          );
       return false;
     }
-    // If a local cupsd is accessible, restart it, otherwise start it if needed:
+    // The local cupsd is not started here because it is not clear at this point
+    // if a local running cupsd is really needed. E.g. when both Browsing and BrowsePoll
+    // are also disabled, there is no need to start the local cupsd in this dialog.
+    // Other dialogs are on their own to start the local cupsd if needed,
+    // see the "Different Workflow What Actually Happens" section at
+    // http://en.opensuse.org/YaST/Development/Printer_Enhancement
+  }
+  // When handling both BrowseAllow and BrowsePoll
+  // the cupsd may need to be started or restarted in both cases.
+  // But actually the cupsd should be at most once started or restarted
+  // for both BrowseAllow and BrowsePoll at the very end:
+  boolean printing_via_network_restart_running_cupsd = false;
+  boolean printing_via_network_needs_running_cupsd = false;
+  // Handle BrowseAllow:
+  if( ( current_browsing && ! initial_browsing )
+      || ( current_browsing && current_browse_allow != initial_browse_allow )
+      || ( current_browsing && current_browse_allow_value != initial_browse_allow_value )
+    )
+  { // It was initially no BrowseAllow but now it is a BrowseAllow config
+    // or it was initially a BrowseAllow config but its values changed:
+    if( `browse_allow_none == current_browse_allow )
+    { // It is a BrowseAllow config but without accepting any printer announcements.
+      // This is the same as to disable the BrowseAllow config
+      // so that the "BrowseAllow config should be disabled" case below is triggered here:
+      initial_browsing = true;
+      current_browsing = false;
+    }
+    else
+    { if( `browse_allow_all == current_browse_allow )
+      { current_browse_allow_value = "all";
+      }
+      if( `browse_allow_local == current_browse_allow )
+      { if( "" != filterchars( current_browse_allow_value, Printer::alnum_chars ) )
+        { current_browse_allow_value = current_browse_allow_value + " @LOCAL";
+        }
+        else
+        { current_browse_allow_value = "@LOCAL";
+        }
+      }
+      // Write to cupsd.conf only if the current_browse_allow_value is effectively non-empty:
+      if( "" != filterchars( current_browse_allow_value, Printer::alnum_chars ) )
+      { // When current_browse_allow_value is effectively non-empty
+        // test whether or not a firewall seems to be active and
+        // if yes show a popup regarding firewall if it was not yet shown:
+        if( ! browsing_firewall_popup_was_shown )
+        { if( ShowBrowsingFirewallPopup() )
+          { browsing_firewall_popup_was_shown = true;
+          }
+        }
+        // An effectively non-empty current_browse_allow_value requires "Browsing On" in cupsd.conf:
+        if( ! Printerlib::ExecuteBashCommand( Printerlib::yast_bin_dir + "modify_cupsd_conf Browsing On" ) )
+        { Popup::ErrorDetails( // Popup::ErrorDetails message:
+                               _("Failed to set 'Browsing On' in /etc/cups/cupsd.conf"),
+                               Printerlib::result["stderr"]:""
+                             );
+          return false;
+        }
+        // Write the BrowseAllow values to cupsd.conf:
+        if( ! Printerlib::ExecuteBashCommand( Printerlib::yast_bin_dir
+                                              + "modify_cupsd_conf BrowseAllow '"
+                                              + current_browse_allow_value
+                                              + "'"
+                                            )
+          )
+        { Popup::ErrorDetails( // Popup::ErrorDetails message
+                               // where %1 will be replaced by the values for BrowseAllow.
+                               sformat( _("Failed to set BrowseAllow value(s) '%1' in /etc/cups/cupsd.conf"),
+                                        current_browse_allow_value
+                                      ),
+                               Printerlib::result["stderr"]:""
+                             );
+          return false;
+        }
+        // An effectively non-empty current_browse_allow_value requires a local running cupsd:
+        printing_via_network_needs_running_cupsd = true;
+      }
+    }
+  }
+  if( initial_browsing && ! current_browsing )
+  { // It was initially a BrowseAllow config,
+    // but now the user has deactivated it
+    // so that the BrowseAllow config should be disabled.
+    // Do not change the global "Browsing On/Off" entry in cupsd.conf
+    // because "Browsing Off" disables also sharing of local printers
+    // which might be needed by the "Share Printers" dialog.
+    // Instead set only "BrowseAllow none" in cupsd.conf:
+    if( ! Printerlib::ExecuteBashCommand( Printerlib::yast_bin_dir + "modify_cupsd_conf BrowseAllow none" ) )
+    { Popup::ErrorDetails( // Popup::ErrorDetails message:
+                           _("Failed to set 'BrowseAllow none' in /etc/cups/cupsd.conf"),
+                           Printerlib::result["stderr"]:""
+                         );
+      return false;
+    }
+    printing_via_network_restart_running_cupsd = true;
+  }
+  // Handle BrowsePoll:
+  if( ( current_browse_poll && ! initial_browse_poll )
+      || ( current_browse_poll && current_browse_poll_value != initial_browse_poll_value )
+    )
+  { // It was initially no BrowsePoll config but now it is a BrowsePoll config
+    // or it was initially a BrowsePoll config but its server name values changed:
+    if( "" == current_browse_poll_value
+        || "none" == tolower( current_browse_poll_value )
+      )
+    { if( ! initial_browse_poll )
+      { // It was initially no BrowsePoll config and the user has enabled
+        // a BrowsePoll config but with effectively empty server names.
+        // Such a BrowsePoll config does not make sense:
+        Popup::Error( // Popup::Error message:
+                      _("At least one valid CUPS server name must be entered.")
+                    );
+        return false;
+      }
+      // It was initially a BrowsePoll config but the user has
+      // changed the server name values to be effectively empty.
+      // This is the same as to turn off the BrowsePoll config so that
+      // the "BrowsePoll config should be disabled" case below is triggered here:
+      initial_browse_poll = true;
+      current_browse_poll = false;
+    }
+    else
+    { // Write to cupsd.conf only if the current_browse_allow_value is effectively non-empty:
+      if( "" != filterchars( current_browse_poll_value, Printer::alnum_chars ) )
+      { // An effectively non-empty current_browse_poll_value requires "Browsing On" in cupsd.conf:
+        if( ! Printerlib::ExecuteBashCommand( Printerlib::yast_bin_dir + "modify_cupsd_conf Browsing On" ) )
+        { Popup::ErrorDetails( // Popup::ErrorDetails message:
+                               _("Failed to set 'Browsing On' in /etc/cups/cupsd.conf"),
+                               Printerlib::result["stderr"]:""
+                             );
+          return false;
+        }
+        // Write the BrowsePoll values to cupsd.conf:
+        if( ! Printerlib::ExecuteBashCommand( Printerlib::yast_bin_dir
+                                              + "modify_cupsd_conf BrowsePoll '"
+                                              + current_browse_poll_value
+                                              + "'"
+                                            )
+          )
+        { Popup::ErrorDetails( // Popup::ErrorDetails message
+                               // where %1 will be replaced by the values for BrowsePoll.
+                               sformat( _("Failed to set BrowsePoll value(s) '%1' in /etc/cups/cupsd.conf"),
+                                        current_browse_poll_value
+                                      ),
+                               Printerlib::result["stderr"]:""
+                             );
+          return false;
+        }
+        // An effectively non-empty current_browse_poll_value requires a local running cupsd:
+        printing_via_network_needs_running_cupsd = true;
+      }
+    }
+  }
+  if( initial_browse_poll && ! current_browse_poll )
+  { // It was initially a BrowsePoll config,
+    // but now the user has deactivated it
+    // so that the BrowsePoll config should be disabled:
+    // Set only "BrowsePoll none" in cupsd.conf:
+    if( ! Printerlib::ExecuteBashCommand( Printerlib::yast_bin_dir + "modify_cupsd_conf BrowsePoll none" ) )
+    { Popup::ErrorDetails( // Popup::ErrorDetails message:
+                           _("Failed to set 'BrowsePoll none' in /etc/cups/cupsd.conf"),
+                           Printerlib::result["stderr"]:""
+                         );
+      return false;
+    }
+    printing_via_network_restart_running_cupsd = true;
+  }
+  // Make sure cupsd is running:
+  if( printing_via_network_needs_running_cupsd )
+  { // If a local cupsd is accessible, restart it, otherwise start it:
     if( Printerlib::GetAndSetCupsdStatus( "" ) )
     { if( ! Printerlib::GetAndSetCupsdStatus( "restart" ) )
       { return false;
       }
     }
     else
-    { if( "none" != browse_allow_value )
-      { // Only a not-"none" browse_allow_value requires the local cupsd
-        // to be started when it is not yet running.
-        // Otherwise leave the cupsd as is.
-        if( ! Printerlib::GetAndSetCupsdStatus( "start" ) )
-        { return false;
-        }
+    { if( ! Printerlib::GetAndSetCupsdStatus( "start" ) )
+      { return false;
       }
     }
     // Exit successfully by default and as fallback:
     return true;
   }
-  // Client-only:
-  if( `client_only_radio_button == current_radio_button )
-  { string server_name = deletechars( tolower( current_server_name_input_value ), " " );
-    boolean enforce_client_only_server_setting = false;
-    if( "" == server_name
-        || "none" == server_name
-      )
-    { printing_via_network_has_changed = true;
-      // The client-only server name is the empty string or to 'none'.
-      // This should disable the client-only setup in any case
-      // but no local cupsd is started here because the selected config
-      // is still a "client-only" config (but an already running local cupsd
-      // is also not stopped):
-      if( ! Printerlib::ExecuteBashCommand( Printerlib::yast_bin_dir + "cups_client_only none" ) )
-      { Popup::ErrorDetails( // Popup::ErrorDetails message:
-                             _("Failed to remove the 'ServerName' entry in /etc/cups/client.conf"),
-                             Printerlib::result["stderr"]:""
-                           );
-        return false;
+  // Restart cupsd only when it is already running:
+  if( printing_via_network_restart_running_cupsd )
+  { // If a local cupsd is accessible, restart it,
+    // otherwise do nothing (i.e. leave it stopped) because
+    // disabling of a BrowseAllow or BrowsePoll config
+    // does not require a running cupsd.
+    // Other dialogs are on their own to start the local cupsd if needed,
+    // see the "Different Workflow What Actually Happens" section at
+    // http://en.opensuse.org/YaST/Development/Printer_Enhancement
+    if( Printerlib::GetAndSetCupsdStatus( "" ) )
+    { if( ! Printerlib::GetAndSetCupsdStatus( "restart" ) )
+      { return false;
       }
-      return true;
-    }
-    // A non-accessible client-only server leads to an endless sequence of weird further behaviour
-    // of the module so that a non-accessible server is not accepted.
-    // This means that it is not possible to set up a client-only config first
-    // and then make the client-only server accessible (e.g. boot the client-only server,
-    // open ports in firewall, set up the network connection, whatever else).
-    // This would be a problem when a workstation is set up by an admin in the IP department
-    // for a client-only config but the workstation is currently not connected to the network
-    // where the client-only server is (e.g. in the department for which the workstation is set up).
-    // Therefore the admin can force YaST to proceed here.
-    // Do not show additional error messages here because TestClientOnlyServer()
-    // shows sufficient popups to the user:
-    if( ! TestClientOnlyServer( server_name ) )
-    { if( ! Popup::ContinueCancelHeadline( sformat( // Header of a Popup::ContinueCancelHeadline
-                                                    // when a client-only server is not accessible
-                                                    // where %1 will be replaced by the server name:
-                                                    _("Continue regardless that '%1' is not accessible?"),
-                                                    server_name
-                                                  ),
-                                           // Body of a Popup::ContinueCancelHeadline
-                                           // when a client-only server is not accessible:
-                                           _("A non-accessible server leads to an endless sequence of further failures.")
-                                         )
-        )
-      { // The user has decided not to continue:
-        return false;
-      }
-      // The user has decided to continue regardless that the client-only server is not accessible:
-      enforce_client_only_server_setting = true;
-    }
-    if( `browsing_off_radio_button == initial_radio_button
-        || `browsing_on_radio_button == initial_radio_button
-      )
-    { // It was initially a "No browsing info" config or a "Get browsing info" config,
-      // but now the user has activated the "client-only" radio button.
-      // If the server name is not "localhost" and not "127.0.0.1",
-      // a real client-only config is to be set up and then
-      // a possibly running local cupsd will be stopped.
-      printing_via_network_has_changed = true;
-      if( server_name != "localhost"
-          && substring( server_name, 0, 5 ) != "127.0"
-        )
-      { if( Printerlib::GetAndSetCupsdStatus( "" ) )
-        { if( ! Printerlib::GetAndSetCupsdStatus( "stop" ) )
-          { return false;
-          }
-        }
-      }
-    }
-    if( `client_only_radio_button == initial_radio_button )
-    { // It was initially a client-only config.
-      // Note that initial_client_only_radio_button is only true for a real client-only config
-      // but not when the server name value for client-only is "localhost" or "127.0.0.1",
-      // see Printerlib::DetermineClientOnly() and the initNetworkPrinting function below.
-      // If it was initially a real client-only config,
-      // the user may have now entered "localhost" or "127.0.0.1"
-      // which makes it effectively a config with a local running cupsd.
-      if( current_server_name_input_value != initial_server_name_input_value )
-      { printing_via_network_has_changed = true;
-      }
-    }
-    if( ! printing_via_network_has_changed )
-    { // Nothing has changed:
-      return true;
-    }
-    if( ! Printerlib::ExecuteBashCommand( Printerlib::yast_bin_dir + "cups_client_only " + server_name ) )
-    { if( enforce_client_only_server_setting )
-      { // The user has decided to continue regardless that the client-only server is not accessible.
-        // In this case the cups_client_only tool fails in any case because it also tests accessibility.
-        // But cups_client_only might have failed for whatever other reason.
-        // Therefore a Popup::MessageDetails is shown to inform about the actual result:
-        Popup::MessageDetails( // Popup::MessageDetails message
-                               // where %1 will be replaced by the server name.
-                               sformat( _("Tried to set 'ServerName %1' in /etc/cups/client.conf"), server_name ),
-                               Printerlib::result["stderr"]:""
-                             );
-        // Exit successfully in this special case regardless of whatever failures:
-        return true;
-      }
-      Popup::ErrorDetails( // Popup::ErrorDetails message
-                           // where %1 will be replaced by the server name.
-                           sformat( _("Failed to set 'ServerName %1' in /etc/cups/client.conf"), server_name ),
-                           Printerlib::result["stderr"]:""
+      // A "accept browsing info" config with a local running cupsd
+      // was switched to a "not accept browsing info" config or
+      // a BrowsePoll config with a local running cupsd was disabled.
+      // A cups-polld polls remote servers for a list of available printer queues.
+      // Those information is then broadcast to the localhost interface (127.0.0.1)
+      // on the specified browse port for reception by the local cupsd.
+      // Theerfore for the cupsd BrowsePoll information is the same
+      // as the usual Browsing information via BrowseAllow.
+      // The default BrowseTimeout value for the local cupsd is 5 minutes.
+      // Therefore it takes by default 5 minutes until printer information
+      // that was previously received by Browsing is removed (via timeout)
+      // from the local cupsd's list.
+      // I assume most users do not like to wait 5 minutes which is no problem
+      // because they can just click the [OK] button to continue but then
+      // they are at least informend why there may be still remote queues:
+      Popup::TimedMessage( // Popup message:
+                           _("When switching from 'accept printer announcements' to 'not accept announcements'\nor after 'request printer information from CUPS servers' was disabled\nit takes usually 5 minutes until already received information faded away..."),
+                           300
                          );
-      return false;
     }
   }
   // Exit successfully by default and as fallback:
@@ -696,33 +772,105 @@ void initNetworkPrinting( string key )
   // Determine the 'BrowseAllow [ all | none | @LOCAL | IP-address[/netmask] ]'
   // values in /etc/cups/cupsd.conf and ignore when it fails (i.e. use the fallback value silently):
   Printerlib::DetermineBrowseAllow();
+  // Determine the 'BrowsePoll [IP-address]' values in /etc/cups/cupsd.conf
+  // and ignore when it fails (i.e. use the fallback value silently):
+  Printerlib::DetermineBrowsePoll();
   // Determine the 'ServerName' value in /etc/cups/client.conf
   // and ignore when it fails (i.e. use the fallback value silently):
   Printerlib::DetermineClientOnly();
-  // Have all widgets disabled initially
-  // but nevertheless fill in the values of the current settings in the system:
-  UI::ChangeWidget( `id(`browsing_off_radio_button), `Value, false );
-  UI::ChangeWidget( `id(`browsing_on_radio_button), `Value, false );
+  y2milestone( "system values in initNetworkPrinting:\ncupsd_conf_browsing_on = '%1'\ncupsd_conf_browse_allow = '%2'\ncupsd_conf_browse_poll = '%3'\nclient_only = '%4'\nclient_conf_server_name = '%5'", Printerlib::cupsd_conf_browsing_on, Printerlib::cupsd_conf_browse_allow, Printerlib::cupsd_conf_browse_poll, Printerlib::client_only, Printerlib::client_conf_server_name );
+  // Have all widgets disabled initially and preset them with fallback values here
+  // but nevertheless fill in the values of the current settings in the system later
+  // regardless if a widget is disabled or not, see "Make the actual ... settings" below:
+  UI::ChangeWidget( `id(`browsing_check_box), `Value, false );
+  initial_browsing = false;
   UI::ChangeWidget( `id(`browse_allow_combo_box), `Enabled, false );
+  UI::ChangeWidget( `id(`browse_allow_combo_box), `Value, `id(`browse_allow_specific) );
+  initial_browse_allow = `browse_allow_specific;
+  UI::ChangeWidget( `id(`browse_allow_input), `Enabled, false );
+  UI::ChangeWidget( `id(`browse_allow_input), `Value, "" );
+  initial_browse_allow_input_value = "";
+  UI::ChangeWidget( `id(`browse_poll_check_box), `Value, false );
+  initial_browse_poll = false;
+  UI::ChangeWidget( `id(`browse_poll_input), `Enabled, false );
+  UI::ChangeWidget( `id(`browse_poll_input), `Value, "" );
+  initial_browse_poll_input_value = "";
+  UI::ChangeWidget( `id(`client_only_check_box), `Value, false );
+  initial_client_only = false;
+  UI::ChangeWidget( `id(`client_conf_input), `Enabled, false );
+  UI::ChangeWidget( `id(`client_conf_input), `Value, "" );
+  initial_client_conf_input_value = "";
+  UI::ChangeWidget( `id(`test_client_conf_server), `Enabled, false );
+  // Only the "Connection Wizard" button is enabled by default
+  // and disabled in case of "client_only", see "Client only settings" below:
+  UI::ChangeWidget( `id(`connection_wizard), `Enabled, true );
+  // Make the actual Browsing settings:
+  // If "none" is present as a BrowseAllow value it is actually no Browsing config.
+  // If the BrowseAllow values are effectively empty it is also no Browsing config.
+  // If  there is an active ServerName (!="localhost") in /etc/cups/client.conf
+  // it is actually a client-only config and therefore also actually no Browsing config:
+  if( Printerlib::cupsd_conf_browsing_on
+      && ! contains( Printerlib::cupsd_conf_browse_allow, "none" )
+      && "" != filterchars( mergestring( Printerlib::cupsd_conf_browse_allow, "" ), Printer::alnum_chars )
+      && ! Printerlib::client_only
+    )
+  { UI::ChangeWidget( `id(`browsing_check_box), `Value, true );
+    initial_browsing = true;
+    UI::ChangeWidget( `id(`browse_allow_combo_box), `Enabled, true );
+    // When it is actually a Browsing config
+    // test whether or not a firewall seems to be active and
+    // if yes show a popup regarding firewall if it was not yet shown:
+    if( ! browsing_firewall_popup_was_shown )
+    { if( ShowBrowsingFirewallPopup() )
+      { browsing_firewall_popup_was_shown = true;
+      }
+    }
+  }
+  else
+  { // When it is no Browsing config have a reasonable default preselected
+    // for the browse_allow_combo_box so that the user can easily switch
+    // only via the browsing_check_box to a reasonable Browsing config
+    // without the need for further adjustments in the browse_allow_combo_box:
+    UI::ChangeWidget( `id(`browse_allow_combo_box), `Value, `id(`browse_allow_local) );
+    initial_browse_allow = `browse_allow_local;
+    // The value of browsing_firewall_popup_was_shown is kept as long as the
+    // whole yast2-printer module runs so that the user could launch this dialog
+    // several times in one module run and switch between a Browsing config
+    // and no Browsing config several times in one run of the yast2-printer module.
+    // When in the previous run of this dialog a no Browsing config was set up
+    // but in the current run of this dialog it was switched back to a Browsing config
+    // make sure in the current run of this dialog the popup regarding firewall
+    // is shown again during ApplyNetworkPrintingSettings():
+    browsing_firewall_popup_was_shown = false;
+  }
+  // Fill in the Browsing values of the current settings in the system
+  // regardless if it is actually a Browsing config or not (see above).
   // When by accident "all" and "@LOCAL" were set as BrowseAllow values,
   // the "@LOCAL" entry is preselected in browse_allow_combo_box
-  // because this is the more secure setting:
-  initial_browse_allow = `browse_allow_specific;
-  UI::ChangeWidget( `id(`browse_allow_combo_box), `Value, `id(`browse_allow_specific) );
+  // because this is the more secure setting.
+  // When "none" is one of the BrowseAllow values,
+  // the "none" entry is preselected in browse_allow_combo_box
+  // because this is the most secure setting.
   if( contains( Printerlib::cupsd_conf_browse_allow, "all" ) )
-  { initial_browse_allow = `browse_allow_all;
-    UI::ChangeWidget( `id(`browse_allow_combo_box), `Value, `id(`browse_allow_all) );
+  { UI::ChangeWidget( `id(`browse_allow_combo_box), `Value, `id(`browse_allow_all) );
+    initial_browse_allow = `browse_allow_all;
+    // If browsing info is accepted from "all" hosts
+    // it would be useless to additionally accept it from specific IPs or networks.
   }
   if( contains( Printerlib::cupsd_conf_browse_allow, "@LOCAL" ) )
-  { initial_browse_allow = `browse_allow_local;
-    UI::ChangeWidget( `id(`browse_allow_combo_box), `Value, `id(`browse_allow_local) );
+  { UI::ChangeWidget( `id(`browse_allow_combo_box), `Value, `id(`browse_allow_local) );
+    initial_browse_allow = `browse_allow_local;
+    UI::ChangeWidget( `id(`browse_allow_input), `Enabled, true );
   }
-  UI::ChangeWidget( `id(`browse_allow_input), `Enabled, false );
-  // The preset entry in browse_allow_input field
-  // should not contain "all" or "@LOCAL" because those are
-  // already selectable via browse_allow_combo_box
-  // and it should also not contain "none" because this setting
-  // is implicitely done via browsing_off_radio_button:
+  if( contains( Printerlib::cupsd_conf_browse_allow, "none" ) )
+  { UI::ChangeWidget( `id(`browse_allow_combo_box), `Value, `id(`browse_allow_none) );
+    initial_browse_allow = `browse_allow_none;
+    // If browsing info is accepted from "none" hosts
+    // it would be contradicting to additionally accept it from specific IPs or networks.
+  }
+  // The preset entry in the browse_allow_input field
+  // should not contain "all" or "@LOCAL" or "none"
+  // because those are selectable via browse_allow_combo_box:
   string browse_allow_input_value =  mergestring( filter( string value,
                                                           Printerlib::cupsd_conf_browse_allow,
                                                           { value = tolower( value );
@@ -734,26 +882,45 @@ void initNetworkPrinting( string key )
                                                         ),
                                                   " "
                                                 );
-  // Have a trailing space character so that the user can easily add something:
-  browse_allow_input_value = browse_allow_input_value + " ";
-  initial_browse_allow_input_value = browse_allow_input_value;
-  UI::ChangeWidget( `id(`browse_allow_input), `Value, browse_allow_input_value );
-  UI::ChangeWidget( `id(`client_only_radio_button), `Value, false );
-  UI::ChangeWidget( `id(`client_conf_server_name_input), `Enabled, false );
-  initial_server_name_input_value = Printerlib::client_conf_server_name;
-  UI::ChangeWidget( `id(`client_conf_server_name_input), `Value, Printerlib::client_conf_server_name );
-  UI::ChangeWidget( `id(`test_client_conf_server), `Enabled, false );
-  // The "Connection Wizard" button is enabled by default
-  // and disabled in case of "client_only", see below:
-  UI::ChangeWidget( `id(`connection_wizard), `Enabled, true );
-  // Enable those widgets which match to the current settings in the system:
-  // If there is 'Browsing On' in /etc/cups/cupsd.conf
-  // but there is also an active ServerName (!="localhost") in /etc/cups/client.conf
-  // have only the client-only widgets avtivated because client-only has topmost priority:
+  if( "" != filterchars( browse_allow_input_value, Printer::alnum_chars ) )
+  { // Have a trailing space character so that the user can easily add something:
+    browse_allow_input_value = browse_allow_input_value + " ";
+    UI::ChangeWidget( `id(`browse_allow_input), `Enabled, true );
+    UI::ChangeWidget( `id(`browse_allow_input), `Value, browse_allow_input_value );
+    initial_browse_allow_input_value = browse_allow_input_value;
+    if( initial_browse_allow != `browse_allow_none
+        && initial_browse_allow != `browse_allow_all
+      )
+    { // If browsing info is not accepted from any host,
+      // it would be contradicting to accept it from specific IPs or networks
+      // and if browsing info is accepted from all hosts,
+      // it is useless to additionally accept it from specific IPs or networks:
+      UI::ChangeWidget( `id(`browse_allow_input), `Enabled, true );
+    }
+  }
+  // Make the actual BrowsePoll settings:
+  string browse_poll_input_value =  mergestring( Printerlib::cupsd_conf_browse_poll, " " );
+  if( "" != filterchars( browse_poll_input_value, Printer::alnum_chars ) )
+  { // If the BrowsePoll values are effectively empty, it is no BrowsePoll config.
+    if( ! Printerlib::client_only )
+    { // If  there is an active ServerName (!="localhost") in /etc/cups/client.conf
+      // it is actually a client-only config and therefore also actually no Browsing config.
+      UI::ChangeWidget( `id(`browse_poll_check_box), `Value, true );
+      initial_browse_poll = true;
+      UI::ChangeWidget( `id(`browse_poll_input), `Enabled, true );
+    }
+    // Have a trailing space character so that the user can easily add something:
+    browse_poll_input_value = browse_poll_input_value + " ";
+    // Fill in the BrowsePoll values of the current settings in the system
+    // regardless if it is actually a BrowsePoll config or not (see above):
+    UI::ChangeWidget( `id(`browse_poll_input), `Value, browse_poll_input_value );
+    initial_browse_poll_input_value = browse_poll_input_value;
+  }
+  // Make the actual client-only settings:
   if( Printerlib::client_only )
-  { initial_radio_button = `client_only_radio_button;
-    UI::ChangeWidget( `id(`client_only_radio_button), `Value, true );
-    UI::ChangeWidget( `id(`client_conf_server_name_input), `Enabled, true );
+  { UI::ChangeWidget( `id(`client_only_check_box), `Value, true );
+    initial_client_only = true;
+    UI::ChangeWidget( `id(`client_conf_input), `Enabled, true );
     UI::ChangeWidget( `id(`test_client_conf_server), `Enabled, true );
     // The "Connection Wizard" button is disabled in case of "client_only".
     // In this case it is never again enabled as long as the dialog runs
@@ -767,88 +934,105 @@ void initNetworkPrinting( string key )
     // and close the dialog to apply this change and re-launch the dialog afterwards.
     UI::ChangeWidget( `id(`connection_wizard), `Enabled, false );
   }
-  else
-  { // If "none" is present as a BrowseAllow value, no 'Browsing On' widget is enabled
-    // but the 'Browsing Off' widget is enabled instead:
-    if( Printerlib::cupsd_conf_browsing_on
-        && ! contains( Printerlib::cupsd_conf_browse_allow, "none" )
-      )
-    { initial_radio_button = `browsing_on_radio_button;
-      UI::ChangeWidget( `id(`browsing_on_radio_button), `Value, true );
-      UI::ChangeWidget( `id(`browse_allow_combo_box), `Enabled, true );
-      // If browsing info is accepted from all hosts,
-      // it is useless to additionally accept it from specific IPs or networks:
-      if( ! contains( Printerlib::cupsd_conf_browse_allow, "all" ) )
-      { UI::ChangeWidget( `id(`browse_allow_input), `Enabled, true );
-      }
-      // When something (except 'none') regarding "Accept Printer Information" is set
-      // test whether or not a firewall seems to be active and
-      // if yes show a popup regarding firewall if it was not yet shown:
-      if( ! browsing_firewall_popup_was_shown )
-      { if( ShowBrowsingFirewallPopup() )
-        { browsing_firewall_popup_was_shown = true;
-        }
-      }
-    }
-    else
-    { initial_radio_button = `browsing_off_radio_button;
-      UI::ChangeWidget( `id(`browsing_off_radio_button), `Value, true );
-      // The value of browsing_firewall_popup_was_shown is kept as long as the
-      // whole yast2-printer module runs so that the user could launch this dialog
-      // several times in one module run and switch between "Do Not Accept Printer Information"
-      // and "Accept Printer Information" several times in one run of the yast2-printer module.
-      // When in the previous run of this dialog "Do Not Accept Printer Information" has become true
-      // but in the current run of this dialog it was switched back to "Accept Printer Information"
-      // make sure to show in the current run of this dialog the popup regarding firewall again:
-      browsing_firewall_popup_was_shown = false;
-    }
-  }
-  y2milestone( "leaving initNetworkPrinting with\ninitial_radio_button = '%1'\ninitial_browse_allow = '%2'\ninitial_browse_allow_input_value = '%3'\ninitial_server_name_input_value = '%4'", initial_radio_button, initial_browse_allow, initial_browse_allow_input_value, initial_server_name_input_value );
+  // Fill in the client-only values of the current settings in the system
+  // regardless if it is actually a client-only config or not (see above):
+  UI::ChangeWidget( `id(`client_conf_input), `Value, Printerlib::client_conf_server_name );
+  initial_client_conf_input_value = Printerlib::client_conf_server_name;
+  y2milestone( "leaving initNetworkPrinting with\ninitial_browsing = '%1'\ninitial_browse_allow = '%2'\ninitial_browse_allow_input_value = '%3'\ninitial_browse_poll = '%4'\ninitial_browse_poll_input_value = '%5'\ninitial_client_only = '%6'\ninitial_client_conf_input_value = '%7'", initial_browsing, initial_browse_allow, initial_browse_allow_input_value, initial_browse_poll, initial_browse_poll_input_value, initial_client_only, initial_client_conf_input_value );
 }
 
 symbol handleNetworkPrinting( string key, map event )
 { y2milestone( "entering handleNetworkPrinting with key '%1'\nand event '%2'", key, event );
   if( "ValueChanged" == event["EventReason"]:"" )
-  { if( `browsing_off_radio_button == event["ID"]:nil )
-    { UI::ChangeWidget( `id(`browse_allow_combo_box), `Enabled, false );
-      UI::ChangeWidget( `id(`browse_allow_input), `Enabled, false );
-      UI::ChangeWidget( `id(`client_conf_server_name_input), `Enabled, false );
-      UI::ChangeWidget( `id(`test_client_conf_server), `Enabled, false );
-      if( ! Printerlib::client_only )
-      { // The "Connection Wizard" button is enabled by default
-        // and disabled if currently a "client_only" config is active.
-        // In this case it is never again enabled as long as the dialog runs, see above:
-        UI::ChangeWidget( `id(`connection_wizard), `Enabled, true );
+  { if( `browsing_check_box == event["ID"]:nil )
+    { if( (boolean)UI::QueryWidget( `browsing_check_box, `Value ) )
+      { UI::ChangeWidget( `id(`browse_allow_combo_box), `Enabled, true );
+        if( `browse_allow_none == UI::QueryWidget( `id(`browse_allow_combo_box), `Value )
+            || `browse_allow_all == UI::QueryWidget( `id(`browse_allow_combo_box), `Value )
+          )
+        { // If browsing info is not accepted from any host,
+          // it would be contradicting to accept it from specific IPs or networks
+          // or if browsing info is accepted from all hosts,
+          // it is useless to additionally accept it from specific IPs or networks:
+          UI::ChangeWidget( `id(`browse_allow_input), `Enabled, false );
+        }
+        else
+        { UI::ChangeWidget( `id(`browse_allow_input), `Enabled, true );
+        }
+        UI::ChangeWidget( `id(`client_only_check_box), `Value, false );
+        UI::ChangeWidget( `id(`client_conf_input), `Enabled, false );
+        UI::ChangeWidget( `id(`test_client_conf_server), `Enabled, false );
+      }
+      else
+      { UI::ChangeWidget( `id(`browse_allow_combo_box), `Enabled, false );
+        UI::ChangeWidget( `id(`browse_allow_input), `Enabled, false );
       }
     }
-    if( `browsing_on_radio_button == event["ID"]:nil )
-    { UI::ChangeWidget( `id(`browse_allow_combo_box), `Enabled, true );
-      UI::ChangeWidget( `id(`browse_allow_input), `Enabled, true );
-      UI::ChangeWidget( `id(`client_conf_server_name_input), `Enabled, false );
-      UI::ChangeWidget( `id(`test_client_conf_server), `Enabled, false );
-      if( ! Printerlib::client_only )
-      { // The "Connection Wizard" button is enabled by default
-        // and disabled if currently a "client_only" config is active.
-        // In this case it is never again enabled as long as the dialog runs, see above:
-        UI::ChangeWidget( `id(`connection_wizard), `Enabled, true );
+    if( `browse_poll_check_box == event["ID"]:nil )
+    { if( (boolean)UI::QueryWidget( `browse_poll_check_box, `Value ) )
+      { UI::ChangeWidget( `id(`browse_poll_input), `Enabled, true );
+        UI::ChangeWidget( `id(`client_only_check_box), `Value, false );
+        UI::ChangeWidget( `id(`client_conf_input), `Enabled, false );
+        UI::ChangeWidget( `id(`test_client_conf_server), `Enabled, false );
+      }
+      else
+      { UI::ChangeWidget( `id(`browse_poll_input), `Enabled, false );
+      }
+    }
+    if( `client_only_check_box == event["ID"]:nil )
+    { if( (boolean)UI::QueryWidget( `client_only_check_box, `Value ) )
+      { UI::ChangeWidget( `id(`browsing_check_box), `Value, false );
+        UI::ChangeWidget( `id(`browse_allow_combo_box), `Enabled, false );
+        UI::ChangeWidget( `id(`browse_allow_input), `Enabled, false );
+        UI::ChangeWidget( `id(`browse_poll_check_box), `Value, false );
+        UI::ChangeWidget( `id(`browse_poll_input), `Enabled, false );
+        UI::ChangeWidget( `id(`client_conf_input), `Enabled, true );
+        UI::ChangeWidget( `id(`test_client_conf_server), `Enabled, true );
+        UI::ChangeWidget( `id(`connection_wizard), `Enabled, false );
+      }
+      else
+      { if( (boolean)UI::QueryWidget( `browsing_check_box, `Value ) )
+        { UI::ChangeWidget( `id(`browse_allow_combo_box), `Enabled, true );
+          UI::ChangeWidget( `id(`browse_allow_input), `Enabled, true );
+        }
+        if( (boolean)UI::QueryWidget( `browse_poll_check_box, `Value ) )
+        { UI::ChangeWidget( `id(`browse_poll_input), `Enabled, true );
+        }
+        UI::ChangeWidget( `id(`client_conf_input), `Enabled, false );
+        UI::ChangeWidget( `id(`test_client_conf_server), `Enabled, false );
+        if( ! Printerlib::client_only )
+        { // The "Connection Wizard" button is enabled by default
+          // and disabled if currently a "client_only" config is active.
+          // In this case it is never again enabled as long as the dialog runs, see above:
+          UI::ChangeWidget( `id(`connection_wizard), `Enabled, true );
+        }
       }
     }
     if( `browse_allow_combo_box == event["ID"]:nil )
-    { if( `browse_allow_all == UI::QueryWidget( `id(`browse_allow_combo_box), `Value ) )
+    { any current_browse_allow = UI::QueryWidget( `id(`browse_allow_combo_box), `Value );
+      if( `browse_allow_none == current_browse_allow )
+      { // If browsing info is not accepted from any host,
+        // it would be contradicting to accept it from specific IPs or networks:
+        UI::ChangeWidget( `id(`browse_allow_input), `Enabled, false );
+        // Furthermore the check box to accept printer information is un-checked:
+        UI::ChangeWidget( `id(`browsing_check_box), `Value, false );
+      }
+      if( `browse_allow_all == current_browse_allow )
       { // If browsing info is accepted from all hosts,
         // it is useless to additionally accept it from specific IPs or networks:
         UI::ChangeWidget( `id(`browse_allow_input), `Enabled, false );
+        // Furthermore the check box to accept printer information is checked:
+        UI::ChangeWidget( `id(`browsing_check_box), `Value, true );
       }
-      else
-      { UI::ChangeWidget( `id(`browse_allow_input), `Enabled, true );
+      if( `browse_allow_local == current_browse_allow
+          || `browse_allow_specific == current_browse_allow
+        )
+      { // Also in case of "browse_allow_local" it is possible
+        // to additionally accept from specific IPs or networks:
+        UI::ChangeWidget( `id(`browse_allow_input), `Enabled, true );
+        // Furthermore the check box to accept printer information is checked:
+        UI::ChangeWidget( `id(`browsing_check_box), `Value, true );
       }
-    }
-    if( `client_only_radio_button == event["ID"]:nil )
-    { UI::ChangeWidget( `id(`browse_allow_combo_box), `Enabled, false );
-      UI::ChangeWidget( `id(`browse_allow_input), `Enabled, false );
-      UI::ChangeWidget( `id(`client_conf_server_name_input), `Enabled, true );
-      UI::ChangeWidget( `id(`test_client_conf_server), `Enabled, true );
-      UI::ChangeWidget( `id(`connection_wizard), `Enabled, false );
     }
   }
   if( "Activated" == event["EventReason"]:"" )
@@ -860,6 +1044,11 @@ symbol handleNetworkPrinting( string key, map event )
       { Popup::Error( // Popup::Error message:
                       _("Failed to apply the settings to the system.")
                     );
+        // In case of an error stay on the "Print via Network" dialog
+        // so that the user can either change his settings until it works
+        // or he can use the [Cancel] button to return to the Overview dialog:
+        //Does not work:
+        //return nil;
       }
       if( ! printing_via_network_has_changed )
       { y2milestone( "Nothing changed in 'Printing via Network' dialog." );
@@ -877,9 +1066,9 @@ symbol handleNetworkPrinting( string key, map event )
     { return `printing_via_network_connection_wizard;
     }
     if( `test_client_conf_server == event["ID"]:nil )
-    { string current_server_name_input_value = (string)UI::QueryWidget( `id(`client_conf_server_name_input), `Value );
+    { string current_client_conf_input_value = (string)UI::QueryWidget( `id(`client_conf_input), `Value );
       // Ignore what TestClientOnlyServer() returns, it shows sufficient popups to the user:
-      TestClientOnlyServer( deletechars( tolower( current_server_name_input_value ), " " ) );
+      TestClientOnlyServer( deletechars( tolower( current_client_conf_input_value ), " " ) );
     }
   }
   return nil;

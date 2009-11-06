@@ -152,8 +152,8 @@ do case "$KEY" in
                [ "${PPD##*.}" != "ppd" ] && PPD=""
                DISABLED=$( grep -q "^printer $QUEUE disabled" $TMP_DATA_RAW_L && echo "yes" || echo "no" )
                REJECTING=$( grep -q "^$QUEUE not accepting" $TMP_DATA_RAW_A && echo "yes" || echo "no" )
-               DEFAULT=$( grep -q "^<DefaultPrinter $QUEUE>" /etc/cups/printers.conf && echo "yes" || echo "" )
-               CONFIG=$( grep -q "^<.*Printer $QUEUE>" /etc/cups/printers.conf && echo "local" || echo "remote" )
+               DEFAULT=$( if grep -q "^<DefaultPrinter $QUEUE>" /etc/cups/printers.conf ; then echo "yes" ; elif grep -q "^<DefaultClass $QUEUE>" /etc/cups/classes.conf ; then echo "yes" ; else echo "" ; fi )
+               CONFIG=$( if grep -q "^<.*Printer $QUEUE>" /etc/cups/printers.conf ; then echo "local" ; elif grep -q "^<.*Class $QUEUE>" /etc/cups/classes.conf ; then echo "class" ; else echo "remote" ; fi )
                URI="" ;;
         uri) URI="$VALUE"
              [ -z "${URI%%/*}" ] && URI="file:$VALUE" ;;
