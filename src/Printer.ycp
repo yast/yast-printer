@@ -238,7 +238,7 @@ global integer selected_connections_index = -1;
  *    "default":"'yes' if it is a DefaultPrinter in /etc/cups/printers.conf, otherwise the empty string",
  *    "disabled":"'yes' if printing is disabled, otherwise 'no'",
  *    "rejecting":"'yes' if print job are rejected, otherwise 'no'",
- *    "config":"either 'local' if the queue exists in /etc/cups/printers.conf, otherwise 'remote' (required)"
+ *    "config":"'local' if the queue exists in /etc/cups/printers.conf, 'class' if the class exists in /etc/cups/classes.conf, otherwise 'remote' (required)"
  *  ]
  */
 global list< map< string, string > > queues = [];
@@ -831,12 +831,16 @@ global list QueueItems( boolean local, boolean remote )
              string is_disabled = queue["disabled"]:"yes";
              string is_rejecting = queue["rejecting"]:"yes";
              if( name != "" && uri != "" )
-             { if( (config=="local" && local) || (config=="remote" && remote))
+             { if( (config=="local" && local) || (config=="class" && local) || (config=="remote" && remote) )
                { if( "local" == config )
                  { // When the queue configuration exists on the local host:
                    config = _("Local");
                  }
-                 else
+                 if( "class" == config )
+                 { // When the class configuration exists on the local host:
+                   config = _("Class");
+                 }
+                 if( "remote" == config )
                  { // When the queue configuration exists on a remote machine:
                    config = _("Remote");
                  }
@@ -876,11 +880,11 @@ global list QueueItems( boolean local, boolean remote )
              }
            }
           );
-  // Show a fallback text if there are no local queues:
+  // Show a fallback text if there are no queues:
   if( size( queue_items ) < 1 )
   { queue_items = add( queue_items, `item( `id( -1 ),
                                            "", "",
-                                           // Show a fallback text if there are no local queues:
+                                           // Show a fallback text if there are no queues:
                                            _("There is no print queue."),
                                            "", "", ""
                                          )
@@ -1764,8 +1768,10 @@ global boolean AddQueue( string queue_name, string default_paper_size )
 global boolean DeleteQueue( string queue_name )
 { if( "" == queue_name )
   { queue_name = queues[selected_queues_index,"name"]:"";
-    if( "local" != queues[selected_queues_index,"config"]:"remote" )
-    { y2milestone( "Cannot delete queue '%1' because it is no local queue", queue_name );
+    if( "local" != queues[selected_queues_index,"config"]:"remote"
+        && "class" != queues[selected_queues_index,"config"]:"remote"
+      )
+    { y2milestone( "Cannot delete '%1' because it is no local configuration", queue_name );
       return false;
     }
   }

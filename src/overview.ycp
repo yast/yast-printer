@@ -342,7 +342,7 @@ symbol handleOverview( string key, map event )
     }
     // To be safe enable the modify and delete buttons only when it is explicitely verified
     // that the "config" is "local", otherwise have those buttons disabled by fallback:
-    if( Printer::queues[selected_queue_index,"config"]:"remote" == "local" )
+    if( "local" == Printer::queues[selected_queue_index,"config"]:"remote" )
     { Printer::selected_queues_index = selected_queue_index;
     }
     else
@@ -352,7 +352,15 @@ symbol handleOverview( string key, map event )
     }
   }
   UI::ChangeWidget( `edit, `Enabled, Printer::selected_queues_index >= 0 );
-  UI::ChangeWidget( `delete, `Enabled, Printer::selected_queues_index >= 0 );
+  // Allow to delete local queues and also local classes:
+  if( "local" == Printer::queues[selected_queue_index,"config"]:"remote"
+      || "class" == Printer::queues[selected_queue_index,"config"]:"remote"
+    )
+  { UI::ChangeWidget( `delete, `Enabled, true );
+  }
+  else
+  { UI::ChangeWidget( `delete, `Enabled, false );
+  }
 
   if( `delete == event["ID"]:nil && "Activated" == event["EventReason"]:"" )
   { // Delete ' characters because they are used for quoting in the bash commandlines below:
@@ -365,7 +373,9 @@ symbol handleOverview( string key, map event )
                        );
       return nil;
     }
-    if( "local" != Printer::queues[selected_queue_index,"config"]:"remote" )
+    if( "local" != Printer::queues[selected_queue_index,"config"]:"remote"
+        && "class" != Printer::queues[selected_queue_index,"config"]:"remote"
+      )
     { Popup::AnyMessage( // Header of a Popup::AnyMessage when a remote queue was selected to be deleted:
                          _("Cannot Delete"),
                          // Body of a Popup::AnyMessage when a remote queue was selected to be deleted:
@@ -385,6 +395,24 @@ symbol handleOverview( string key, map event )
                             )
       )
     { return nil;
+    }
+    if( "class" == Printer::queues[selected_queue_index,"config"]:"remote" )
+    { // One more confirmation popup to alert the user before a class is deleted
+      // because a class cannot be re-created with the YaST printer module because
+      // the YaST printer module has no support to add or edit classes
+      // because classes are only useful in bigger printing environments
+      // which is out of the scope of the use cases of the YaST printer module.
+      // Nevertheless it is possible to delete a class with the YaST printer module
+      // so that the user can get rid of a class which may have been created by accident
+      // with whatever other setup tool:
+      if( ! Popup::ContinueCancelHeadline( // Header of a confirmation popup before a class will be deleted:
+                                           _("Confirm Deletion of a Class"),
+                                           // Body of a confirmation popup before a class will be deleted:
+                                           _("A deleted class cannot be re-created with this tool.")
+                                         )
+        )
+      { return nil;
+      }
     }
     // To be safe invalidate Printer::selected_queues_index in any case:
     Printer::selected_queues_index = -1;
