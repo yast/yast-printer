@@ -7,13 +7,15 @@
 #
 # Exits:   0 doesn't seem to have a problem
 #          1 remote host $1 or queue $2 not set
-#          2 the remote host $1 is unreachable
-#          3 no connection possible to port 515 on host $1 (no lpd running ?)
-#          4 queue does not accept a print job (queue does not exist or queueing disabled ?)
+#          2 the remote host $1 is unreachable (network issue or firewall active?)
+#          3 no connection possible to port 515 on host $1 (no lpd running there or firewall active there?)
+#          4 queue does not accept a print job (queue may not exist or queueing disabled?)
 #         10 ping not executable (no iputils RPM installed?)
 #         11 netcat not executable (no netcat RPM installed?)
 #         12 fuser not executable (no psmisc RPM installed?)
-#         13 mktemp not executable (no mktemp RPM installed?)
+#         13 mktemp not executable (no mktemp RPM or coreutils RPM installed?)
+#            up to Suse Linux 10.3 and up to SLE10 /bin/mktemp was in the mktemp RPM
+#            since Suse Linux 11.0 /bin/mktemp is in the coreutils RPM which is required by YaST
 # The programs head, mkfifo, sleep, tr, rm are in the coreutils RPM and therefore assumed to exist.
 #
 # Johannes Meixner <jsmeix@suse.de>, 2000, 2002, 2007, 2008, 2009
@@ -31,13 +33,13 @@ umask 022
 
 # Use the binaries of the operating system (no aliases, functions, /usr/local/):
 export PING=$( type -ap ping | head -n 1 )
-[ -z "$PING" ] && { echo -en "\nping not executable\n" 1>&2 ; exit 10 ; }
+[ -z "$PING" ] && { echo -en "\nping not executable (no iputils RPM installed?)\n" 1>&2 ; exit 10 ; }
 export NETCAT=$( type -ap netcat | head -n 1 )
-[ -z "$NETCAT" ] && { echo -en "\nnetcat not executable\n" 1>&2 ; exit 11 ; }
+[ -z "$NETCAT" ] && { echo -en "\nnetcat not executable (no netcat RPM installed?)\n" 1>&2 ; exit 11 ; }
 export FUSER=$( type -ap fuser | head -n 1 )
-[ -z "$FUSER" ] && { echo -en "\nfuser not executable\n" 1>&2 ; exit 12 ; }
+[ -z "$FUSER" ] && { echo -en "\nfuser not executable (no psmisc RPM installed?)\n" 1>&2 ; exit 12 ; }
 export MKTEMP=$( type -ap mktemp | head -n 1 )
-[ -z "$MKTEMP" ] && { echo -en "\nmktemp not executable\n" 1>&2 ; exit 13 ; }
+[ -z "$MKTEMP" ] && { echo -en "\nmktemp not executable (no mktemp RPM or coreutils RPM installed?)\n" 1>&2 ; exit 13 ; }
 
 MY_NAME=${0##*/}
 HOST="$1"
@@ -47,10 +49,10 @@ TIMEOUT="$3"
 [ -z "$TIMEOUT" ] && TIMEOUT=10
 
 # test whether the remote host is accessible
-$PING -c 1 -w $TIMEOUT $HOST || { echo -en "\nHost $HOST unreachable\n" ; exit 2 ; }
+$PING -c 1 -w $TIMEOUT $HOST || { echo -en "\nHost $HOST unreachable (network issue or firewall active?)\n" ; exit 2 ; }
 
 # test whether connection is possible to port 515 (lpd) on the remote host
-$NETCAT -w $TIMEOUT -z $HOST 515 || { echo -en "\nNo connection possible to port 515 (lpd)\n" ; exit 3 ; }
+$NETCAT -w $TIMEOUT -z $HOST 515 || { echo -en "\nNo connection possible to LPD port 515 on host $HOST (no lpd running there or firewall active there?)\n" ; exit 3 ; }
 
 # Find an available local port for connecting
 PORT=$(for I in 721 722 723 724 725 726 727 728 729 730 731
@@ -88,7 +90,7 @@ rm $TMP_OUT
 
 [ "$RESULT" = "0" ] && { echo -en "\nQueue $QUEUE on host $HOST accepts print jobs\n" ; exit 0 ; }
 
-echo -en "\nQueue $QUEUE on host $HOST does not accept print jobs\n"
+echo -en "\nQueue $QUEUE on host $HOST does not accept print jobs (queue may not exist or queueing disabled?)\n"
 
 # If $QUEUE does not accept jobs, print $QUEUE status in long format.
 # "\004$QUEUE\n" is a request to receive $QUEUE status (very long output in case of LPRng).

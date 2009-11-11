@@ -4,9 +4,9 @@
 #
 # Exits:   0 doesn't seem to have a problem
 #          1 remote host $1 not set
-#          2 the remote host $1 is unreachable
-#          3 no connection possible to port 9100 or port $2 on host $1
-#          4 port 9100 or port $2 on host $1 does not accept data
+#          2 the remote host $1 is unreachable (network issue or firewall active?)
+#          3 no connection possible to port 9100 or port $2 on host $1 (wrong port or firewall active there?)
+#          4 port 9100 or port $2 on host $1 does not accept data (wrong port or firewall active there?)
 #         10 ping not executable (no iputils RPM installed?)
 #         11 netcat not executable (no netcat RPM installed?)
 # The program head is in the coreutils RPM and therefore assumed to exist.
@@ -25,9 +25,9 @@ umask 022
 
 # Use the binaries of the operating system (no aliases, functions, /usr/local/):
 export PING=$( type -ap ping | head -n 1 )
-[ -z "$PING" ] && { echo -en "\nping not executable\n" 1>&2 ; exit 10 ; }
+[ -z "$PING" ] && { echo -en "\nping not executable (no iputils RPM installed?)\n" 1>&2 ; exit 10 ; }
 export NETCAT=$( type -ap netcat | head -n 1 )
-[ -z "$NETCAT" ] && { echo -en "\nnetcat not executable\n" 1>&2 ; exit 11 ; }
+[ -z "$NETCAT" ] && { echo -en "\nnetcat not executable (no netcat RPM installed?)\n" 1>&2 ; exit 11 ; }
 
 MY_NAME=${0##*/}
 HOST="$1"
@@ -38,14 +38,14 @@ TIMEOUT="$3"
 [ -z "$TIMEOUT" ] && TIMEOUT=10
 
 # test whether the remote host is accessible
-$PING -c 1 -w $TIMEOUT $HOST || { echo -en "\nHost $HOST unreachable\n" ; exit 2 ; }
+$PING -c 1 -w $TIMEOUT $HOST || { echo -en "\nHost $HOST unreachable (network issue or firewall active?)\n" ; exit 2 ; }
 
 # test whether connection is possible to $PORT on the remote host
-$NETCAT -w $TIMEOUT -z $HOST $PORT || { echo -en "\nNo connection possible to port $PORT\n" ; exit 3 ; }
+$NETCAT -w $TIMEOUT -z $HOST $PORT || { echo -en "\nNo connection possible to port $PORT on host $HOST (wrong port or firewall active there?)\n" ; exit 3 ; }
 
 # test whether $PORT on the remote host accepts data
 echo -en "\r" | $NETCAT -w $TIMEOUT $HOST $PORT 2>&1
 [ "$?" = "0" ] && { echo -en "\nPort $PORT on host $HOST accepts data\n" ; exit 0 ; }
-echo -en "\nPort $PORT on host $HOST does not accept data\n"
+echo -en "\nPort $PORT on host $HOST does not accept data (wrong port or firewall active there?)\n"
 exit 4
 

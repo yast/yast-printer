@@ -4,8 +4,8 @@
 #
 # Exits:   0 doesn't seem to have a problem
 #          1 remote host $1 or queue $2 not set
-#          2 the remote host $1 is unreachable
-#          4 queue does not accept a print job (queue does not exist or queueing disabled ?)
+#          2 the remote host $1 is unreachable (network issue or firewall active?)
+#          4 queue does not accept a print job (queue may not exist or queueing disabled?)
 #         10 ping not executable (no iputils RPM installed?)
 #         (11=netcat,12=fuser,13=mktemp,14=sed,15=lp: see test_remote_ipp)
 #         16 smbclient not executable (no samba-client RPM installed?)
@@ -26,9 +26,9 @@ umask 022
 
 # Use the binaries of the operating system (no aliases, functions, /usr/local/):
 export PING=$( type -ap ping | head -n 1 )
-[ -z "$PING" ] && { echo -en "\nping not executable\n" 1>&2 ; exit 10 ; }
+[ -z "$PING" ] && { echo -en "\nping not executable (no iputils RPM installed?)\n" 1>&2 ; exit 10 ; }
 export SMBCLIENT=$( type -ap smbclient | head -n 1 )
-[ -z "$SMBCLIENT" ] && { echo -en "\nsmbclient not executable\n" 1>&2 ; exit 16 ; }
+[ -z "$SMBCLIENT" ] && { echo -en "\nsmbclient not executable (no samba-client RPM installed?)\n" 1>&2 ; exit 16 ; }
 
 MY_NAME=${0##*/}
 WORKGROUP=$1
@@ -42,13 +42,13 @@ TIMEOUT="$6"
 [ -z "$TIMEOUT" ] && TIMEOUT=10
 
 # test whether the remote host is accessible
-$PING -c 1 -w $TIMEOUT $HOST || { echo -en "\nHost $HOST unreachable\n" ; exit 2 ; }
+$PING -c 1 -w $TIMEOUT $HOST || { echo -en "\nHost $HOST unreachable (network issue or firewall active?)\n" ; exit 2 ; }
 
 # test whether the queue on the server accepts print jobs
 echo -e "\nTesting $QUEUE on $WORKGROUP/$HOST:"
 test -z $PASSWORD && PASSWORD="-N"
 echo -en "\r" | $SMBCLIENT "//$HOST/$QUEUE" "$PASSWORD" -c "print -" -U "$USER" -W "$WORKGROUP"
 [ "$?" = "0" ] && { echo -en "\nShare $QUEUE on $WORKGROUP/$HOST accepts print jobs\n" ; exit 0 ; }
-echo -en "\nShare $QUEUE on $WORKGROUP/$HOST does not accept print jobs\n"
+echo -en "\nShare $QUEUE on $WORKGROUP/$HOST does not accept print jobs (queue may not exist or queueing disabled?)\n"
 exit 4
 
