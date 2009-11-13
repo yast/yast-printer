@@ -579,37 +579,10 @@ global boolean WaitForUpdatedConfigFiles( string popupheader )
     sleep( 1000 );
     return true;
   }
-  if( dirty_clean_interval < 29 )
-  { // If 1 <= dirty_clean_interval <= 28
-    // do not let the user interrupt the waiting for updated config files.
-    // To be on the safe side sleep one second longer than the dirty_clean_interval:
-    Popup::ShowFeedback( popupheader,
-                         sformat( // Message of a Popup::ShowFeedback where %1 will be replaced
-                                  // by the number of seconds how long it takes.
-                                  // The number of seconds is always greater or equal than 2
-                                  // so that it is always the plural "seconds" here:
-                                  _("It takes %1 seconds until the config files are updated..."),
-                                  dirty_clean_interval + 1
-                                )
-                       );
-    sleep( ( 1000 * dirty_clean_interval ) + 1000 );
-    Popup::ClearFeedback();
-    return true;
-  }
-  if( dirty_clean_interval < 31 )
-  { // If 29 <= dirty_clean_interval <= 30 (30 is the default and fallback value)
-    // do not let the user interrupt the waiting for updated config files.
-    // To be on the safe side sleep one second longer than the dirty_clean_interval:
-    Popup::ShowFeedback( popupheader,
-                         // Message of a Popup::ShowFeedback.
-                         _("It takes half a minute until the config files are updated...")
-                       );
-    sleep( ( 1000 * dirty_clean_interval ) + 1000 );
-    Popup::ClearFeedback();
-    return true;
-  }
-  // If dirty_clean_interval > 30 let the user interrupt the waiting for updated config files
-  // and return true if the user did not interrupt the waiting for updated config files
+  // Let impatient users interrupt the waiting for updated config files.
+  // E.g. when several queues should be added or modified there is no need
+  // to annoy the user with enforced waiting again and again for each queue.
+  // Return true if the user did not interrupt the waiting for updated config files
   // but return false if the user interrupted the waiting for updated config files.
   // To be on the safe side sleep one second longer than the dirty_clean_interval.
   // Only Popup::TimedAnyQuestion and Popup::TimedOKCancel return a non-void value
@@ -626,7 +599,9 @@ global boolean WaitForUpdatedConfigFiles( string popupheader )
   integer waiting_time = time() - time_before;
   if( waiting_time < dirty_clean_interval )
   { // To avoid needless error popups be on the safe side and return false only
-    // when the waiting_time is strictly less than the dirty_clean_interval:
+    // when the waiting_time is strictly less than the dirty_clean_interval.
+    // Don't show a warning popup here.
+    // A specific warning popup is shown by the caller in basicadd.ycp and basicmodify.ycp.
     return false;
   }
   return true;
