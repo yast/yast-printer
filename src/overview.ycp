@@ -227,6 +227,14 @@ the YaST printer module to configure your printers.
   UI::ChangeWidget( `overview_table, `Items,
                     Printer::QueueItems( Printer::queue_filter_show_local, Printer::queue_filter_show_remote )
                   );
+  // Try to preselect the current_queue_name if it exists in the overview_table:
+  if( Printer::selected_queues_index >= 0 )
+  { // An item which matches to Printer::selected_queues_index exists in the overview_table
+    // because the Printer::QueueItems function sets Printer::selected_queues_index != -1
+    // only if such an item exists in the overview_table so that this item can be preselected:
+    y2milestone( "Preselected queue: '%1'", Printer::queues[Printer::selected_queues_index]:$[] );
+    UI::ChangeWidget( `overview_table, `CurrentItem, `id(Printer::selected_queues_index) );
+  }
   y2milestone( "leaving initOverview" );
 }
 
@@ -298,6 +306,14 @@ symbol handleOverview( string key, map event )
     UI::ChangeWidget( `overview_table, `Items,
                       Printer::QueueItems( Printer::queue_filter_show_local, Printer::queue_filter_show_remote )
                     );
+    // Try to preselect again the current_queue_name if it still exists in the overview_table:
+    if( Printer::selected_queues_index >= 0 )
+    { // An item which matches to Printer::selected_queues_index exists in the overview_table
+      // because the Printer::QueueItems function sets Printer::selected_queues_index != -1
+      // only if such an item exists in the overview_table so that this item can be preselected:
+      y2milestone( "Preselected queue: '%1'", Printer::queues[Printer::selected_queues_index]:$[] );
+      UI::ChangeWidget( `overview_table, `CurrentItem, `id(Printer::selected_queues_index) );
+    }
   }
 
   if( `refresh == event["ID"]:nil && "Activated" == event["EventReason"]:"" )
@@ -317,22 +333,64 @@ symbol handleOverview( string key, map event )
     UI::ChangeWidget( `overview_table, `Items,
                       Printer::QueueItems( Printer::queue_filter_show_local, Printer::queue_filter_show_remote )
                     );
+    // Try to preselect again the current_queue_name if it still exists in the overview_table:
+    if( Printer::selected_queues_index >= 0 )
+    { // An item which matches to Printer::selected_queues_index exists in the overview_table
+      // because the Printer::QueueItems function sets Printer::selected_queues_index != -1
+      // only if such an item exists in the overview_table so that this item can be preselected:
+      y2milestone( "Preselected queue: '%1'", Printer::queues[Printer::selected_queues_index]:$[] );
+      UI::ChangeWidget( `overview_table, `CurrentItem, `id(Printer::selected_queues_index) );
+    }
   }
 
   // After the above changes of the list of queues, determine which queue is currently selected
-  // (because this might change via automated preselection when the table was made anew)
+  // (because this might change via automated preselection when the table was made anew
+  // in particular if the Printer::QueueItems function invalidated Printer::selected_queues_index)
   // and enable or disable the "Edit", "Delete", and "Test" buttons accordingly.
   // "Edit" and "Delete" are only possible for local queues, "Test" is also possible for remote queues.
   // "Test" is disabled when there is no queue selected or no queue in the table
   // and when the queue state is not "ready" (i.e. when jobs are rejected and/or when printing is disabled).
   integer selected_queue_index = (integer)UI::QueryWidget( `id(`overview_table), `CurrentItem );
+  // To be safe invalidate Printer::selected_queues_index, Printer::current_queue_name,
+  // and Printer::current_device_uri in any case by default and as fallback.
+  // The index of the currently selected queue is stored in selected_queue_index
+  // which is used to re-enable those values later if appropriate conditions are met:
+  Printer::selected_queues_index = -1;
+  Printer::current_queue_name = "";
+  Printer::current_device_uri = "";
   if( selected_queue_index == nil || selected_queue_index < 0 )
-  { // To be safe invalidate Printer::selected_queues_index when no queue exists:
-    Printer::selected_queues_index = -1;
+  { // When no valid queue was selected, nothing can be tested or edited or deleted:
     UI::ChangeWidget( `test, `Enabled, false );
+    UI::ChangeWidget( `edit, `Enabled, false );
+    UI::ChangeWidget( `delete, `Enabled, false );
   }
   else
-  { if( "yes" == Printer::queues[selected_queue_index,"rejecting"]:""
+  { // It is a valid queue with a non-negative selected_queue_index:
+    if( "local" == Printer::queues[selected_queue_index,"config"]:"remote"
+        || "class" == Printer::queues[selected_queue_index,"config"]:"remote"
+      )
+    { // Only when it is a local queue or local class Printer::selected_queues_index,
+      // Printer::current_queue_name, and Printer::current_device_uri are re-enabled:
+      Printer::selected_queues_index = selected_queue_index;
+      Printer::current_queue_name = Printer::queues[selected_queue_index,"name"]:"";
+      Printer::current_device_uri = Printer::queues[selected_queue_index,"uri"]:"";
+      // Only local queues or local classes can be deleted:
+      UI::ChangeWidget( `delete, `Enabled, true );
+      // But only a local queue can be edited:
+      if( "local" == Printer::queues[selected_queue_index,"config"]:"remote" )
+      { UI::ChangeWidget( `edit, `Enabled, true );
+      }
+      else
+      { UI::ChangeWidget( `edit, `Enabled, false );
+      }
+    }
+    else
+    { // It is neither a local queue nor a local class:
+      UI::ChangeWidget( `edit, `Enabled, false );
+      UI::ChangeWidget( `delete, `Enabled, false );
+    }
+    // Any queue or class can be tested if it is in "ready" state:
+    if( "yes" == Printer::queues[selected_queue_index,"rejecting"]:""
         || "yes" == Printer::queues[selected_queue_index,"disabled"]:""
       )
     { UI::ChangeWidget( `test, `Enabled, false );
@@ -340,26 +398,6 @@ symbol handleOverview( string key, map event )
     else
     { UI::ChangeWidget( `test, `Enabled, true );
     }
-    // To be safe enable the modify and delete buttons only when it is explicitely verified
-    // that the "config" is "local", otherwise have those buttons disabled by fallback:
-    if( "local" == Printer::queues[selected_queue_index,"config"]:"remote" )
-    { Printer::selected_queues_index = selected_queue_index;
-    }
-    else
-    { // To be safe invalidate Printer::selected_queues_index when a remote queue is selected:
-      Printer::selected_queues_index = -1;
-      // Disable the modify and delete buttons when a remote queue is selected and by fallback:
-    }
-  }
-  UI::ChangeWidget( `edit, `Enabled, Printer::selected_queues_index >= 0 );
-  // Allow to delete local queues and also local classes:
-  if( "local" == Printer::queues[selected_queue_index,"config"]:"remote"
-      || "class" == Printer::queues[selected_queue_index,"config"]:"remote"
-    )
-  { UI::ChangeWidget( `delete, `Enabled, true );
-  }
-  else
-  { UI::ChangeWidget( `delete, `Enabled, false );
   }
 
   if( `delete == event["ID"]:nil && "Activated" == event["EventReason"]:"" )
@@ -416,7 +454,7 @@ symbol handleOverview( string key, map event )
     }
     // To be safe invalidate Printer::selected_queues_index in any case:
     Printer::selected_queues_index = -1;
-    y2milestone( "To be deleted:'%1', selected_queue_index = %2", queue_name, selected_queue_index );
+    y2milestone( "Queue '%1' to be deleted: '%2'", queue_name, Printer::queues[selected_queue_index]:$[] );
     // No error messages here because Printer::DeleteQueue already shows them:
     Printer::DeleteQueue( queue_name );
     // Re-run the OverviewDialog (with a re-created list of queues) via the sequencer:
@@ -698,6 +736,11 @@ symbol handleOverview( string key, map event )
     // may not notice when a queue name proposal for a new (i.e. added) queue
     // already exists as local queue:
     Printer::AutodetectQueues();
+    // Invalidate Printer::current_device_uri so that the Printer::ConnectionItems function
+    // does not set a valid Printer::selected_connections_index so that the BasicAddDialog
+    // does not preselect a connection so that the first connection in the list is preselected
+    // (via Table widget fallback) which is still better than an arbitrary preselected entry:
+    Printer::current_device_uri = "";
     return `add;
   }
 
@@ -721,7 +764,12 @@ symbol handleOverview( string key, map event )
       return nil;
     }
     Printer::selected_queues_index = selected_queue_index;
-    y2milestone( "To be modified: '%1', selected_queues_index = %2", queue_name, Printer::selected_queues_index );
+    // Invalidate Printer::current_device_uri so that the Printer::ConnectionItems function
+    // does not set a valid Printer::selected_connections_index so that the BasicAddDialog
+    // does not preselect a connection so that the first connection in the list is preselected
+    // (via Table widget fallback) which is correct because this is the current connection:
+    Printer::current_device_uri = "";
+    y2milestone( "Queue '%1' to be modified: '%2'", queue_name, Printer::queues[selected_queue_index]:$[] );
     return `modify;
   }
 

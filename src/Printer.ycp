@@ -207,10 +207,10 @@ global integer selected_ppds_index = -1;
  * where the last list entry is an emtpy map.
  * @struct autodetected_printer_map
  * $[ "uri":"the full CUPS DeviceURI (required)",
- *    "model":"the manufacturer and model, often "Unknown" (may be the empty string)",
+ *    "model":"the manufacturer and model, often 'Unknown' (may be the empty string)",
  *    "deviceID":"what the printer reported as its device ID (often the empty string)",
  *    "info":"arbitrary info regarding this connection (may be the empty string)",
- *    "class":"the kind of connection, e.g. "direct","network","file" (may be the empty string)"
+ *    "class":"one of 'direct','network','file','serial' or 'ConnectionWizardDialog' (may be the empty string)"
  *  ]
  */
 global list< map< string, string > > connections = [];
@@ -222,6 +222,20 @@ global list< map< string, string > > connections = [];
  * Preset to -1 which indicates that no connection is selected.
  */
 global integer selected_connections_index = -1;
+
+/**
+ * Current device uri:
+ * The device uri (i.e. the connection) which is currently in use
+ * so that the BasicAddDialog and BasicModifyDialog could preselect it.
+ * Note that selected_connections_index cannot be used for this
+ * because the ConnectionItems function which generates
+ * the list of connections for BasicAddDialog and BasicModifyDialog
+ * invalidates selected_connections_index because it autodetects
+ * the currently available connections in the system anew because
+ * those would change e.g. after a printer was connected or disconnected
+ * Preset to "" which indicates that no device uri is currently in use.
+ */
+global string current_device_uri = "";
 
 /**
  * Autodetected queues:
@@ -262,9 +276,24 @@ global boolean queue_filter_show_local = true;
 global boolean queue_filter_show_remote = true;
 
 /**
+ * Current queue name:
+ * The name of the queue which is currently in use
+ * so that the Overview dialog could preselect it.
+ * Note that selected_queues_index cannot be used for this
+ * because the QueueItems function which generates
+ * the list of queues for the Overview dialog
+ * invalidates selected_queues_index because it autodetects
+ * the current actual queues in the system anew because
+ * the list of queues in the system would have changed
+ * e.g. after a new queue was added or after a queue was removed.
+ * Preset to "" which indicates that no queue is currently in use.
+ */
+global string current_queue_name = "";
+
+/**
  * Driver options (options in the PPD for one specific existing queue):
  * Determined at runtime via Printer::DetermineDriverOptions( "queue_name")
-*  which calls the bash script "/usr/lib/YaST2/bin/determine_printer_driver_options"
+ * which calls the bash script "/usr/lib/YaST2/bin/determine_printer_driver_options"
  * which outputs on stdout a YCP list of @ref driver_option_map
  * where the last list entry is an emtpy map.
  * @struct driver_option_map
@@ -831,7 +860,8 @@ global list QueueItems( boolean local, boolean remote )
              string is_disabled = queue["disabled"]:"yes";
              string is_rejecting = queue["rejecting"]:"yes";
              if( name != "" && uri != "" )
-             { if( (config=="local" && local) || (config=="class" && local) || (config=="remote" && remote) )
+             { // Have local or remote stuff in the list depending on whether or not each is requested:
+               if( (config=="local" && local) || (config=="class" && local) || (config=="remote" && remote) )
                { if( "local" == config )
                  { // When the queue configuration exists on the local host:
                    config = _("Local");
@@ -876,6 +906,14 @@ global list QueueItems( boolean local, boolean remote )
                                                         queue_state
                                                       )
                                   );
+                 // Set selected_queues_index when the current_queue_name is in the list
+                 // so that the OverviewDialog can preselect the currently used queue
+                 // via its id in the list which is the selected_queues_index.
+                 // This is correct for any kind of queue ("local", "class", "remote") here
+                 // because any queue in the list can be selected in the OverviewDialog:
+                 if( current_queue_name == name )
+                 { selected_queues_index = queues_index;
+                 }
                }
              }
            }
@@ -901,20 +939,24 @@ global list QueueItems( boolean local, boolean remote )
 
 /**
  * Create a list of items from the autodetected connections
- * which is used for the SelectionBox in the BasicAddDialog and SelectConnectionDialog
+ * which is used for the SelectionBox in the BasicAddDialog and BasicModifyDialog.
+ * This function is also called in connectionwizard.ycp and in printer_proposal.ycp.
  * @param connection_filter_string string of a search string to return only matching connections
  *        (return all connections if connection_filter_string is the empty string)
  * @return list of connections (i.e. DeviceURI, model, and info of the "lpinfo -l -v" output)
  */
 global list ConnectionItems( string connection_filter_string )
-{ // Autodetect printers if the connections list is empty:
+{ // Invalidate selected_connections_index and selected_ppds_index to be safe:
+  selected_connections_index = -1;
+  selected_ppds_index = -1;
+  // Autodetect printers if the connections list is empty:
   if( size( connections ) < 1 || "MoreConnections" == connection_filter_string )
   { list< map< string, string > > connection_wizard_connections = [];
     // Save existing connections which have been manually added by the connection wizard:
     foreach( map< string, string > connection,
              connections,
              { if( "ConnectionWizardDialog" == connection["class"]:"" )
-               { connection_wizard_connections = add( connection_wizard_connections, connection);
+               { connection_wizard_connections = add( connection_wizard_connections, connection );
                }
              }
            );
@@ -925,13 +967,12 @@ global list ConnectionItems( string connection_filter_string )
                     // was called and this function would have shown more specific messages.
                     _("Failed to autodetect printers.")
                   );
-      // Return only the existing connection wizard connections which is usally an empty list:
-      return connection_wizard_connections;
     }
     // The connection wizard prepends its manually added connections to the connections list.
     // Therefore the connection_wizard_connections are also prepended to the connections list.
     // There is an error in the YaST documentation regarding "merge" for lists:
-    // It reads "Interprets two lists as sets" which would remove duplicates.
+    // It reads "Interprets two lists as sets" which would
+    // remove duplicates in each list before the merge.
     // Actually merge([1,2,2,3],[2,3,3,4]) results [1,2,2,3,2,3,3,4]
     // which is needed here to preserve any entry to be on the safe side:
     connections = (list <map <string, string> >)merge( connection_wizard_connections, connections );
@@ -952,9 +993,9 @@ global list ConnectionItems( string connection_filter_string )
          );
   // Make a list of uri, model, and info entries of the connections
   // and take the connection_filter_string into account (if it is not the empty string).
-  selected_connections_index = -1;
   list< term > connection_items = [];
   list< term > sorted_connection_items = [];
+  boolean an_item_was_added = false;
   integer connections_index = -1;
   string uri = "";
   string model = "";
@@ -962,7 +1003,8 @@ global list ConnectionItems( string connection_filter_string )
   string class = "";
   foreach( map< string, string > connection_entry,
            connections,
-           { // Set the connections_index to the index number of the current connection_entry:
+           { an_item_was_added = false;
+             // Set the connections_index to the index number of the current connection_entry:
              connections_index = connections_index + 1;
              // Use local variables to have shorter variable names:
              uri = connection_entry["uri"]:"";
@@ -981,6 +1023,7 @@ global list ConnectionItems( string connection_filter_string )
                                                                   info
                                                                 )
                                        );
+                 an_item_was_added = true;
                }
                else
                { // If the connection_filter_string is the special string "BasicAddDialog",
@@ -1051,6 +1094,7 @@ global list ConnectionItems( string connection_filter_string )
                                                                           info
                                                                         )
                                                );
+                         an_item_was_added = true;
                        }
                      }
                    }
@@ -1076,6 +1120,7 @@ global list ConnectionItems( string connection_filter_string )
                                                                         info
                                                                       )
                                              );
+                       an_item_was_added = true;
                      }
                    }
                    else
@@ -1091,63 +1136,24 @@ global list ConnectionItems( string connection_filter_string )
                                                                         info
                                                                       )
                                              );
+                       an_item_was_added = true;
                      }
                    }
+                 }
+               }
+               if( an_item_was_added
+                   && "" != current_device_uri
+                 )
+               { // Set selected_connections_index when the current_device_uri is in the list so that
+                 // BasicAddDialog and BasicModifyDialog can preselect the currently used connection
+                 // via its id in the list which is the selected_connections_index.
+                 if( current_device_uri == uri )
+                 { selected_connections_index = connections_index;
                  }
                }
              }
            }
          );
-/*
-  // Preselect the entry in the connection_items list which matches
-  // to the current value of selected_connections_index
-  // if such an entry exists in connection_items (e.g. because of the
-  // connection_filter_string there may be no such entry in connection_items):
-  integer connection_items_index = -1;
-  integer selected_connection_items_index = -1;
-  // Determine if such an entry exists:
-  foreach( term connection_item,
-           connection_items,
-           { // Set the connection_items_index to the index number of the current connection_item:
-             connection_items_index = connection_items_index + 1;
-             // connection_item[0] is the term `id(connections_index) and id[0] is the connections_index
-             // so that connection_item[0,0] is the connections_index:
-             if( selected_connections_index == connection_item[0,0]:-1 )
-             { selected_connection_items_index = connection_items_index;
-               break;
-             }
-           }
-         );
-  if( selected_connection_items_index >= 0 )
-  { // Actually preselect the entry and set selected_connections_index accordingly.
-    // connection_items[selected_connection_items_index] is a connection_item and
-    // connection_item[0] is the term `id(connections_index) so that
-    // connection_item[0,0] is the connections_index (see the previous comment) and
-    // connection_item[1] is the model string and
-    // connection_item[2] is the uri string and
-    // connection_item[3] is the info string so that
-    // connection_items[selected_connection_items_index,0,0] is the connections_index and
-    // connection_items[selected_connection_items_index,1] is the model string and
-    // connection_items[selected_connection_items_index,2] is the uri string and
-    // connection_items[selected_connection_items_index,3] is the info string:
-    selected_connections_index = connection_items[selected_connection_items_index,0,0]:-1;
-    model = connection_items[selected_connection_items_index,1]:"";
-    uri = connection_items[selected_connection_items_index,2]:"";
-    info = connection_items[selected_connection_items_index,3]:"";
-    connection_items[selected_connection_items_index] = `item( `id( selected_connections_index ),
-                                                               model,
-                                                               uri,
-                                                               info,
-                                                               true
-                                                             );
-    y2milestone( "Preselected connection shown to the user (model, uri, info): %1, %2, %3", model, uri, info );
-  }
-  else
-  { // Invalidate selected_connections_index to be safe:
-    selected_connections_index = -1;
-    y2milestone( "No preselected connection shown to the user. The connection_filter_string is: '%1'", connection_filter_string );
-  }
-*/
   // Sort the list according to the model:
   // connection_item[0] is `id(connections_index)
   // connection_item[1] is the model
@@ -1195,18 +1201,18 @@ global list ConnectionItems( string connection_filter_string )
                                     return tolower(this) < tolower(that);
                                   }
                                 );
-  // Preselect a particular entry in a Table widget is not possible.
-  // The Table widget has always the first entry preselected.
-  // Therefore the selected_connections_index (i.e. the selected printer)
-  // and the selected_ppds_index (i.e. the selected driver)
-  // are invalidated in any case:
-  selected_connections_index = -1;
-  selected_ppds_index = -1;
-  // Additionally an empty first dummy entry is prepended to avoid that the
-  // first real printer connection entry becomes always preselected
-  // regardless that selected_connections_index is invalidated
-  // which leads to arbitrary confusion (e.g. wrong driver selections):
-//  sorted_connection_items = prepend( sorted_connection_items, `item( `id( -1 ), "", "", "" ) );
+  if( size( sorted_connection_items ) < 1 )
+  { sorted_connection_items = [ `item( `id( -1 ),
+                                       "",
+                                       // Show a fallback text if there are no connections.
+                                       _("No connections."),
+                                       // A hint what to do if there are no connections.
+                                       // 'More Connections' and 'Connection Wizard' are
+                                       // button lables and must be translated accordingly:
+                                       _("Try 'More Connections' or use the 'Connection Wizard'.")
+                                     )
+                              ];
+  }
   return sorted_connection_items;
 }
 
@@ -1707,6 +1713,8 @@ global boolean AddQueue( string queue_name, string default_paper_size )
   }
   if( "" == uri || "" == ppd || "" == queue_name )
   { y2milestone( "Cannot set up queue because of empty mandatory parameter: queue_name = '%1', uri = '%2', ppd = '%3'", queue_name, uri, ppd );
+    current_queue_name = "";
+    current_device_uri = "";
     return false;
   }
   // Note the bash quotings of the parameters with ' characters:
@@ -1730,6 +1738,8 @@ global boolean AddQueue( string queue_name, string default_paper_size )
     // it is safe to try to remove the queue in any case if the setup had failed
     // but ignore any possible errors here (e.g. when the queue does not exist).
     Printerlib::ExecuteBashCommand( "/usr/sbin/lpadmin -h localhost -x '" + queue_name + "'" );
+    current_queue_name = "";
+    current_device_uri = "";
     return false;
   }
   // Try to set the requested default_paper_size if it is an available choice for this queue.
@@ -1758,6 +1768,8 @@ global boolean AddQueue( string queue_name, string default_paper_size )
       Printerlib::ExecuteBashCommand( commandline );
     }
   }
+  current_queue_name = queue_name;
+  current_device_uri = uri;
   return true;
 }
 
@@ -1766,7 +1778,11 @@ global boolean AddQueue( string queue_name, string default_paper_size )
  * @return true on success
  */
 global boolean DeleteQueue( string queue_name )
-{ if( "" == queue_name )
+{ // To be safe invalidate selected_queues_index, current_queue_name, and current_device_uri in any case:
+  selected_queues_index = -1;
+  current_queue_name = "";
+  current_device_uri = "";
+  if( "" == queue_name )
   { queue_name = queues[selected_queues_index,"name"]:"";
     if( "local" != queues[selected_queues_index,"config"]:"remote"
         && "class" != queues[selected_queues_index,"config"]:"remote"
@@ -1781,8 +1797,6 @@ global boolean DeleteQueue( string queue_name )
   { y2milestone( "Cannot delete queue because queue_name is the empty string" );
     return false;
   }
-  // To be safe invalidate selected_queues_index in any case:
-  selected_queues_index = -1;
   // Note the bash quoting of the queue_name string with ' characters:
   string commandline = "/usr/sbin/lpadmin -h localhost -x '" + queue_name + "'";
   if( ! Printerlib::ExecuteBashCommand( commandline ) )
