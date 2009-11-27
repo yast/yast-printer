@@ -378,15 +378,39 @@ A connection is specified as so called <b>device URI</b>.<br>
 Its first word (the so called URI scheme) specifies the kind of data-transfer,
 for example 'parallel', 'usb', 'socket', 'lpd', or 'ipp'.<br>
 After the scheme there are more or less additional parts
-(separated by slash '/' characters) which specify the details
-for this kind of data-transfer.<br>
+which specify the details for this kind of data-transfer.<br>
+The parts of an URI are separated by special reserved characters like
+colon ':', slash '/', question mark '?', ampersand '&amp;', or equals sign '='.<br>
 Finally there could be optional parameters (separated by a question mark '?')
 of the form option1=value1&amp;option2=value2&amp;option3=value3 so that
 a full device URI could be for example:<br>
 ipp://server.domain:631/printers/queuename?waitjob=false&amp;waitprinter=false<br>
-Special characters must be percent-encoded (also known as URL encoding).
-For example a space character ' ' must be written as '%20'
-and a plus sign '+' must be written as '%2B'.<br>
+Reserved characters inside of a part of the URI must be percent-encoded
+(also known as URL encoding).
+In particular a space character ' ' must be written as '%20'.<br>
+Here a list of the reserved characters and their percent encoding:<br>
+space ' ' -&gt; %20<br>
+exclamation mark ! -&gt; %21<br>
+number sign # -&gt; %23<br>
+Dollar sign $ -&gt; %24<br>
+percentage % -&gt; %25<br>
+ampersand &amp; -&gt; %26<br>
+apostrophe / single quotation mark ' -&gt; %27<br>
+left parenthesis ( -&gt; %28<br>
+right parenthesis ) -&gt; %29<br>
+asterisk * -&gt; %2A<br>
+plus sign + -&gt; %2B<br>
+comma , -&gt; %2C<br>
+slash / -&gt; %2F<br>
+colon : -&gt; %3A<br>
+semicolon ; -&gt; %3B<br>
+equals sign = -&gt; %3D<br>
+question mark ? -&gt; %3F<br>
+at sign @ -&gt; %40<br>
+left bracket [ -&gt; %5B<br>
+right bracket ] -&gt; %5D<br>
+For details see 'Uniform Resource Identifier (URI): Generic Syntax' at<br>
+http://tools.ietf.org/html/rfc3986<br>
 Some examples:<br>
 A USB printer model 'Fun Printer 1000+' made by 'ACME'
 with serial number 'A1B2C3' may have a device URI like:<br>
@@ -395,9 +419,9 @@ A network printer with IP 192.168.100.1 which is accessible
 via port 9100 may have a device URI like:<br>
 socket://192.168.100.1:9100<br>
 A network printer with IP 192.168.100.2 which is accessible
-via LPD protocol with a remote LPD queue name 'lpt1'
+via LPD protocol with a remote LPD queue name 'LPT1'
 may have a device URI like:<br>
-lpd://192.168.100.2/lpt1
+lpd://192.168.100.2/LPT1
 </p>") +
 // ConnectionWizardDialog help 3/6:
 _("<p>
@@ -457,7 +481,7 @@ lpd://ip-address/queue<br>
 IPP is the native protocol for CUPS which runs on a real computer
 but when IPP is implemented in a small printserver box,
 it is often not implemented properly. Only use IPP when the vendor
-actually documents official support for it. 
+actually documents official support for it.
 The matching device URI is:<br>
 ipp://ip-address:port-number/resource<br>
 What 'port-number' and 'resource' exactly is depends totally
@@ -481,8 +505,13 @@ to a SMB printer share.
 A server name and a printer share name and optionally a workgroup name
 is needed to access it.
 Furthermore a user name and a password may be required to get access.
+Have in mind that spaces and special characters in those values
+must be percent-encoded (see above).
 A matching full device URI is:<br>
 smb://username:password@workgroup/server/printer<br>
+For example 'John Doe' with password '@home!' may use something like
+the following device URI to access a 'Fun Printer 1000+' share:<br>
+smb://John%20Doe:%40home%21@MYGROUP/homeserver/Fun%20Printer%201000%2B<br>
 For <b>more information</b> have a look at <tt>man smbspool</tt> and<br>
 http://en.opensuse.org/SDB:Printing_via_SMB_(Samba)_Share_or_Windows_Share<br>
 <b>Traditional UNIX Server (LPR)</b><br>

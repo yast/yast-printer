@@ -43,11 +43,105 @@ include "printer/helps.ycp";
 string connection_uri="";
 string connection_model="";
 
+string URIpercentEncoding( string input )
+{ // Replace space and each reserved character ! # $ % & ' ( ) * + , / : ; = ? @ [ ]
+  // in a value of an URI with its percent encoding, see
+  // https://bugzilla.novell.com/show_bug.cgi?id=512549
+  // This function is only meant as "some kind of automated fix"
+  // when the user entered URI values but forgot to do percent encoding.
+  // The help text in the Connection Wizard dilaog explicitely demands
+  // that URI values (components) must be entered with percent encoding.
+  // This function can only be used for percent encoding for a single URI component.
+  // In particular this function cannot be used when the user can enter a whole URI
+  // or the whole set of URI options (e.g. option1=value1&option2=value2).
+  // The '%' character itself would need a special handling because
+  // the input string is usually already percent encoded
+  // (in particular when the URI was retreived from CUPS)
+  // so that the '%' character could be only replaced by '%25'
+  // if not two hexadecimal digits '0123456789AaBbCcDdEeFf' follow
+  // but for now the '%' character is simply not replaced at all
+  // which is no big shortfall for a "some kind of automated fix" function.
+  string output = input;
+  foreach( string reserved_character,
+           string percent_encoding,
+           $[ " ":"%20",
+              "!":"%21",
+              "#":"%23",
+              "$":"%24",
+              "&":"%26",
+              "'":"%27",
+              "(":"%28",
+              ")":"%29",
+              "*":"%2A",
+              "+":"%2B",
+              ",":"%2C",
+              "/":"%2F",
+              ":":"%3A",
+              ";":"%3B",
+              "=":"%3D",
+              "?":"%3F",
+              "@":"%40",
+              "[":"%5B",
+              "]":"%5D"
+            ],
+           { output = mergestring( splitstring( output, reserved_character ), percent_encoding );
+           }
+         );
+  return output;
+}
+
 string getCurrentDeviceURI()
 { if( "" != Printer::connections[Printer::selected_connections_index,"uri"]:"")
   { return Printer::connections[Printer::selected_connections_index,"uri"]:"";
   }
   return Printer::queues[Printer::selected_queues_index,"uri"]:"";
+}
+
+string getUriWithUsernameAndPassword( string uri, string scheme )
+{ // CUPS' "lpstat -v" suppresses "username:password@" (if it exists)
+  // so that I may have to retrieve it directly form /etc/cups/printers.conf
+  // but only in this special case (and not in general via tools/autodetect_print_queues)
+  // because I also do not want to show the password needlessly in any dialog.
+  // But the URI may be not in /etc/cups/printers.conf
+  // because there was no queue set up with this device URI
+  // or several queues in /etc/cups/printers.conf may match
+  // or the URI may already contain a "username:password@" part
+  // because it was created by a previous run of the connection wizard dialog
+  // and now "username:password@" in the URI should be changed.
+  // Therefore I do nothing if the URI already contains a '@'
+  // in its second part parts[1] (note that parts[0] = "<scheme>:")
+  // which indicates that a "username:password@" part already exists:
+  list<string> parts = splitstring( uri, "/" );
+  // Remove empty parts (e.g. <scheme>://server results ["<scheme>:","","server"]):
+  parts = filter( string part, parts, { return ( "" != part ); } );
+  if( ! issubstring( parts[1]:"", "@" ) )
+  { // Replace quotes and all special egrep characters by a simple '.':
+    string special_chars = "'\"\\()[]{}|^$?*+";
+    string part1 = mergestring( splitstring( parts[1]:"", special_chars ), "." );
+    string part2 = mergestring( splitstring( parts[2]:"", special_chars ), "." );
+    // Let the whole pipe fail if any of its commands fail (requires bash):
+    string grepcommand = "set -o pipefail ; egrep '^DeviceURI " + scheme + "://[^:]+:[^@]+@" + part1 + "/" + part2;
+    if( "" != parts[3]:"" )
+    { string part3 = mergestring( splitstring( parts[3]:"", special_chars ), "." );
+      grepcommand = grepcommand + "/" + part3;
+      y2milestone( "URI is 'smb://username:password@%1/%2/%3'", parts[1]:"", parts[2]:"", parts[3]:"" );
+    }
+    else
+    { y2milestone( "URI is 'smb://username:password@%1/%2'", parts[1]:"", parts[2]:"" );
+    }
+    grepcommand = grepcommand + "$' /etc/cups/printers.conf";
+    Printerlib::ExecuteBashCommand( grepcommand + " | sort -u | wc -l | tr -d '[:space:]'" );
+    if( "1" == Printerlib::result["stdout"]:"" )
+    { // The DeviceURIs in /etc/cups/printers.conf which match to current_device_uri
+      // are unambiguous (exactly one or several exactly same such DeviceURIs)
+      // so that I can actually get it form /etc/cups/printers.conf:
+      if( Printerlib::ExecuteBashCommand( grepcommand + " | head -n 1 | cut -s -d ' ' -f 2 | tr -d '[:space:]'" ) )
+      { return Printerlib::result["stdout"]:"";
+      }
+    }
+  }
+  // By default and as fallback return the unchanged URI:
+  return uri;
 }
 
 term getContentFromCurrentModel( boolean no_default_raw_queue )
@@ -198,8 +292,14 @@ term getNetworkContent( list<string>text )
                    ( `InputField( `id(`port_or_queue), text[1]:"", text[2]:"" )
                    ),
                    `Left
-                   ( // TRANSLATORS: InputField for optional Device URI parameters:
-                     `InputField( `id(`uri_options), _("Optional 'option=value' parameter (usually empty)"), "" )
+                   ( `InputField( `id(`uri_options),
+                                  // Show it as wide as possible because it may have to contain
+                                  // longer stuff like 'option1=value1&option2=value2':
+                                  `opt(`hstretch),
+                                  // TRANSLATORS: InputField for optional Device URI parameters:
+                                  _("Optional 'option=value' parameter (usually empty)"),
+                                  ""
+                                )
                    ),
                    `Left
                    ( // TRANSLATORS: Button to test remote printer machine
@@ -213,6 +313,7 @@ void changeSettingsDialog( symbol selected )
 { term content = nil;
   term connection_content = nil;
   term model_content = nil;
+  string current_device_uri = "";
   switch(selected)
   { // directly connected
     case(`parallel):
@@ -480,9 +581,9 @@ void changeSettingsDialog( symbol selected )
           // Fallback message what the user may run manually when it fails
           // to generate the current list of SCSI generic device nodes:
           string scsi_device_list = _("It seems there are no SCSI generic devices (/dev/sg...).\nRun 'lsscsi -g' to get a list of SCSI generic devices.");
-          if( ! Printerlib::ExecuteBashCommand( "lsscsi -g | tr -s ' ' | cut -s -d ' ' -f 3- | grep '/dev/sg' || echo 'no SCSI generic device found' 1>&2" ) )
-          { // Will probably never fail because the final "echo" should exit successfully in any case:
-            Popup::ErrorDetails( // Popup::ErrorDetails message:
+          // Let the whole pipe fail if any of its commands fail (requires bash):
+          if( ! Printerlib::ExecuteBashCommand( "set -o pipefail ; lsscsi -g | tr -s ' ' | cut -s -d ' ' -f 3- | grep '/dev/sg' || echo 'no SCSI generic device found' 1>&2" ) )
+          { Popup::ErrorDetails( // Popup::ErrorDetails message:
                                  _("Failed to get a list of SCSI generic devices."),
                                  "lsscsi -g" + "\n" + Printerlib::result["stderr"]:""
                                );
@@ -561,6 +662,9 @@ void changeSettingsDialog( symbol selected )
                     ( `Left
                       ( `InputField
                         ( `id(`uri),
+                          // Show it as wide as possible because it may have to contain
+                          // longer stuff like 'ipp://ip-address:port-number/resource':
+                          `opt(`hstretch),
                           // TRANSLATORS: Input field label
                           _("URI (see the printer's manual)"),
                           "ipp://ip-address:port-number/resource"
@@ -696,8 +800,14 @@ void changeSettingsDialog( symbol selected )
                         `InputField( `id(`queue), _("Queue Name") )
                       ),
                       `Left
-                      ( // TRANSLATORS: InputField for optional Device URI parameters:
-                        `InputField( `id(`uri_options), _("Optional 'option=value' parameter (usually empty)"), "" )
+                      ( `InputField( `id(`uri_options),
+                                     // Show it as wide as possible because it may have to contain
+                                     // longer stuff like 'option1=value1&option2=value2':
+                                     `opt(`hstretch),
+                                     // TRANSLATORS: InputField for optional Device URI parameters:
+                                     _("Optional 'option=value' parameter (usually empty)"),
+                                     ""
+                                   )
                       ),
                       `Left
                       ( `PushButton
@@ -774,13 +884,27 @@ void changeSettingsDialog( symbol selected )
     // special
     case(`uri):
           model_content = getContentFromCurrentModel( true );
+          current_device_uri = getCurrentDeviceURI();
+          if( "smb:/" == substring( current_device_uri, 0, size( "smb:/" ) ) )
+          { // CUPS' "lpstat -v" suppresses "username:password@" (if it exists)
+            // so that it may have to be retrieved form /etc/cups/printers.conf:
+            current_device_uri = getUriWithUsernameAndPassword( current_device_uri, "smb" );
+          }
+          if( "novell:/" == substring( current_device_uri, 0, size( "novell:/" ) ) )
+          { // CUPS' "lpstat -v" suppresses "username:password@" (if it exists)
+            // so that it may have to be retrieved form /etc/cups/printers.conf:
+            current_device_uri = getUriWithUsernameAndPassword( current_device_uri, "novell" );
+          }
           content = `VBox
                     ( `Left
                       ( `InputField
                         ( `id(`uri),
+                          // Show it as wide as possible because it may have to contain
+                          // longer stuff like 'scheme://server:port/path/to/resource':
+                          `opt(`hstretch),
                           // TRANSLATORS: Text entry for URI (Uniform Resource Identifier)
                           _("URI (Uniform Resource Identifier)"),
-                          getCurrentDeviceURI()
+                          current_device_uri
                         )
                       ),
                       model_content
@@ -809,8 +933,12 @@ void changeSettingsDialog( symbol selected )
                     ( `Left
                       ( `InputField
                         ( `id(`program),
+                          // Show it as wide as possible because it may have to contain
+                          // longer stuff like 'path/to/command?option1=value1&option2=value2':
+                          `opt(`hstretch),
                           // TRANSLATORS: Text entry for program name that will be called via pipe
-                          _("Program Name")
+                          _("Program Name"),
+                          "path/to/command?option1=value1&option2=value2"
                         )
                       ),
                       model_content
@@ -818,13 +946,32 @@ void changeSettingsDialog( symbol selected )
           break;
     case(`beh):
           model_content = getContentFromCurrentModel( true );
+          current_device_uri = getCurrentDeviceURI();
+          if( "beh:/" == substring( current_device_uri, 0, size( "beh:/" ) ) )
+          { // When it is already a "beh:/<dd>/<att>/<delay>/<originaluri>" URI
+            // remove the beh-related stuff so that only the <originaluri> is left:
+            current_device_uri = mergestring( sublist( splitstring( current_device_uri, "/" ), 4 ), "/" );
+          }
+          if( "smb:/" == substring( current_device_uri, 0, size( "smb:/" ) ) )
+          { // CUPS' "lpstat -v" suppresses "username:password@" (if it exists)
+            // so that it may have to be retrieved form /etc/cups/printers.conf:
+            current_device_uri = getUriWithUsernameAndPassword( current_device_uri, "smb" );
+          }
+          if( "novell:/" == substring( current_device_uri, 0, size( "novell:/" ) ) )
+          { // CUPS' "lpstat -v" suppresses "username:password@" (if it exists)
+            // so that it may have to be retrieved form /etc/cups/printers.conf:
+            current_device_uri = getUriWithUsernameAndPassword( current_device_uri, "novell" );
+          }
           content = `VBox
                     ( `Left
                       ( `InputField
-                        ( `id(`queue),
+                        ( `id(`beh_original_uri),
+                          // Show it as wide as possible because it may have to contain
+                          // longer stuff like 'scheme://server:port/path/to/resource':
+                          `opt(`hstretch),
                           // TRANSLATORS: Text entry for device URI (Uniform Resource Identifier)
                           _("Device URI (for which 'beh' should be applied)"),
-                          getCurrentDeviceURI()
+                          current_device_uri
                         )
                       ),
                       `Left
@@ -1122,18 +1269,110 @@ any ConnectionWizardDialog()
     else if( "smb:/" == substring( current_device_uri, 0, size( "smb:/" ) ) )
     { UI::ChangeWidget( `tree_selection, `CurrentItem, `smb );
       changeSettingsDialog( `smb );
+      // The Device URI has one of the forms ([...] is an optional part):
+      // smb://server[:port]/share
+      // smb://workgroup/server[:port]/share
+      // smb://username:password@server[:port]/share
+      // smb://username:password@workgroup/server[:port]/share
+      // CUPS' "lpstat -v" suppresses "username:password@" (if it exists)
+      // so that it may have to be retrieved form /etc/cups/printers.conf:
+      current_device_uri = getUriWithUsernameAndPassword( current_device_uri, "smb" );
+      // Here '/' is the only delimiter (so that username:password and server:port is one part):
+      list<string> uri_parts = splitstring( current_device_uri, "/" );
+      // Remove empty parts (e.g. smb://server results ["smb:","","server"]):
+      uri_parts = filter( string part, uri_parts, { return ( "" != part ); } );
+      y2milestone( "ConnectionWizardDialog uri_parts = '%1'", uri_parts );
+      if( "" != uri_parts[1]:"" && "" != uri_parts[2]:"" )
+      { // uri_parts[1] is server[:port] or workgroup or username:password@...
+        if( issubstring( uri_parts[1]:"", "@" ) )
+        { // smb://username:password@server[:port]/share
+          // or
+          // smb://username:password@workgroup/server[:port]/share
+          if( "" != uri_parts[3]:"" )
+          { // smb://username:password@workgroup/server[:port]/share
+            list<string> user_pass_domain = splitstring( uri_parts[1]:"", ":@" );
+            UI::ChangeWidget( `user, `Value, user_pass_domain[0]:"" );
+            UI::ChangeWidget( `pass, `Value, user_pass_domain[1]:"" );
+            UI::ChangeWidget( `domain, `Value, user_pass_domain[2]:"" );
+            UI::ChangeWidget( `hostname, `Value, uri_parts[2]:"" );
+            UI::ChangeWidget( `printer, `Value, uri_parts[3]:"" );
+          }
+          else
+          { // smb://username:password@server[:port]/share
+            list<string> user_pass_hostname = splitstring( uri_parts[1]:"", ":@" );
+            UI::ChangeWidget( `user, `Value, user_pass_hostname[0]:"" );
+            UI::ChangeWidget( `pass, `Value, user_pass_hostname[1]:"" );
+            UI::ChangeWidget( `hostname, `Value, user_pass_hostname[2]:"" );
+            UI::ChangeWidget( `printer, `Value, uri_parts[2]:"" );
+          }
+        }
+        else
+        { // smb://server[:port]/share
+          // or
+          // smb://workgroup/server[:port]/share
+          if( "" != uri_parts[3]:"" )
+          { // smb://workgroup/server[:port]/share
+            UI::ChangeWidget( `domain, `Value, uri_parts[1]:"" );
+            UI::ChangeWidget( `hostname, `Value, uri_parts[2]:"" );
+            UI::ChangeWidget( `printer, `Value, uri_parts[3]:"" );
+          }
+          else
+          { // smb://server[:port]/share
+            UI::ChangeWidget( `hostname, `Value, uri_parts[1]:"" );
+            UI::ChangeWidget( `printer, `Value, uri_parts[2]:"" );
+          }
+        }
+      }
     }
     else if( "novell:/" == substring( current_device_uri, 0, size( "novell:/" ) ) )
     { UI::ChangeWidget( `tree_selection, `CurrentItem, `ipx );
       changeSettingsDialog( `ipx );
+      // The Device URI has one of the forms ([...] is an optional part):
+      // novell://server/queue
+      // novell://username:password@server/queue
+      // CUPS' "lpstat -v" suppresses "username:password@" (if it exists)
+      // so that it may have to be retrieved form /etc/cups/printers.conf.
+      // Fortunately getSMBuriWithUsernameAndPassword works here too
+      // because the forms of IPX and SMB device URIs match sufficienty:
+      current_device_uri = getUriWithUsernameAndPassword( current_device_uri, "novell" );
+      // Here '/' is the only delimiter (so that username:password and server:port is one part):
+      list<string> uri_parts = splitstring( current_device_uri, "/" );
+      // Remove empty parts (e.g. novell://server results ["novell:","","server"]):
+      uri_parts = filter( string part, uri_parts, { return ( "" != part ); } );
+      y2milestone( "ConnectionWizardDialog uri_parts = '%1'", uri_parts );
+      if( "" != uri_parts[1]:"" && "" != uri_parts[2]:"" )
+      { // uri_parts[1] is server[:port] or username:password@...
+        if( issubstring( uri_parts[1]:"", "@" ) )
+        { // novell://username:password@server/queue
+          list<string> user_pass_hostname = splitstring( uri_parts[1]:"", ":@" );
+          UI::ChangeWidget( `user, `Value, user_pass_hostname[0]:"" );
+          UI::ChangeWidget( `pass, `Value, user_pass_hostname[1]:"" );
+          UI::ChangeWidget( `hostname, `Value, user_pass_hostname[2]:"" );
+          UI::ChangeWidget( `queue, `Value, uri_parts[2]:"" );
+        }
+        else
+        { // novell://server/queue
+          UI::ChangeWidget( `hostname, `Value, uri_parts[1]:"" );
+          UI::ChangeWidget( `queue, `Value, uri_parts[2]:"" );
+        }
+      }
     }
     else if( "pipe:/" == substring( current_device_uri, 0, size( "pipe:/" ) ) )
     { UI::ChangeWidget( `tree_selection, `CurrentItem, `pipe );
       changeSettingsDialog( `pipe );
+      // The Device URI has the form ([...] is an optional part):
+      // pipe:/path/to/command[?option1=value1&option2=value2...]
+      // remove the scheme 'pipe:/' so that only the 'path/to/command...' is left:
+      current_device_uri = mergestring( sublist( splitstring( current_device_uri, "/" ), 1 ), "/" );
+      if( "" != current_device_uri )
+      { UI::ChangeWidget( `program, `Value, current_device_uri );
+      }
     }
     else if( "beh:/" == substring( current_device_uri, 0, size( "beh:/" ) ) )
     { UI::ChangeWidget( `tree_selection, `CurrentItem, `beh );
       changeSettingsDialog( `beh );
+      // No need to preset something here because this happens
+      // already for each call of changeSettingsDialog(`beh).
     }
     else
     { // Do nothing by default and as fallback.
@@ -1150,9 +1389,10 @@ boolean validateAndMakeURI( symbol selected )
           integer selected_connection_index = (integer)UI::QueryWidget( `id(`connection_selection), `CurrentItem );
           if( nil == selected_connection_index )
           { Popup::AnyMessage( // Header of a Popup::AnyMessage when no connection was selected:
-                               _("No Connection Selected"),
-                               // Body of a Popup::AnyMessage when no connection was selected:
-                               _("Select a connection.")
+                               _("Select a connection"),
+                               // Body of a Popup::AnyMessage when no connection was selected
+                               // because there is no connection available to be selected:
+                               _("If no connection is shown here, it is not possible\nto access the device via this type of connection. ")
                              );
             break;
           }
@@ -1183,18 +1423,19 @@ boolean validateAndMakeURI( symbol selected )
               { Popup::Error( _("The 'mark' parity checking is only supported with 7 data bits and 1 stop bit.") );
               }
               else
-              { connection_uri = "serial:" + serial_device_node + "?baud=" + serial_baud_rate;
+              { connection_uri = "serial:" + URIpercentEncoding( serial_device_node )
+                                 + "?baud=" + URIpercentEncoding( serial_baud_rate );
                 if( size( serial_data_bits ) > 0 )
-                { connection_uri = connection_uri + "+bits=" + serial_data_bits;
+                { connection_uri = connection_uri + "+bits=" + URIpercentEncoding( serial_data_bits );
                 }
                 if( size( serial_parity ) > 0 )
-                { connection_uri = connection_uri + "+parity=" + serial_parity;
+                { connection_uri = connection_uri + "+parity=" + URIpercentEncoding( serial_parity );
                 }
                 if( size( serial_flow_control ) > 0 )
-                { connection_uri = connection_uri + "+flow=" + serial_flow_control;
+                { connection_uri = connection_uri + "+flow=" + URIpercentEncoding( serial_flow_control );
                 }
                 if( size( serial_stop_bits ) > 0 )
-                { connection_uri = connection_uri + "+stop=" + serial_stop_bits;
+                { connection_uri = connection_uri + "+stop=" + URIpercentEncoding( serial_stop_bits );
                 }
                 valid = true;
               }
@@ -1207,7 +1448,7 @@ boolean validateAndMakeURI( symbol selected )
           { Popup::Error( _("Bluetooth device ID could not be empty.") );
           }
           else
-          { connection_uri = "bluetooth://" + bluetooth_device_id;
+          { connection_uri = "bluetooth://" + URIpercentEncoding( bluetooth_device_id );
             valid = true;
           }
           break;
@@ -1217,67 +1458,66 @@ boolean validateAndMakeURI( symbol selected )
           { Popup::Error( _("SCSI generic device could not be empty.") );
           }
           else
-          { connection_uri = "scsi:" + scsi_device_node;
+          { connection_uri = "scsi:" + URIpercentEncoding( scsi_device_node );
             valid = true;
           }
           break;
     case(`uri):
-          connection_uri = (string)UI::QueryWidget( `uri, `Value );
-          if( size( connection_uri ) > 0 )
-          { valid = true;
-          }
-          else
-          { Popup::Error( _("URI could not be empty.") );
-          }
-          break;
     case(`ipp):
           connection_uri = (string)UI::QueryWidget( `uri, `Value );
           if( size( connection_uri ) > 0 )
-          { valid = true;
+          { // It would be wrong to do URIpercentEncoding(connection_uri)
+            // because special URI characters like ':' or '/' in connection_uri
+            // must stay as is and not be percent encoded because only the values
+            // of the URI parts must be percent encoded but not the whole URI.
+            valid = true;
           }
           else
           { Popup::Error( _("URI could not be empty.") );
           }
           break;
     case(`smb):
-          map<string, any> smb = $[ "hostname" : UI::QueryWidget( `hostname, `Value ),
-                                    "printer" : UI::QueryWidget( `printer, `Value ),
-                                    "domain" : UI::QueryWidget( `domain, `Value ),
-                                    "user" : UI::QueryWidget( `user, `Value ),
-                                    "pass" : UI::QueryWidget( `pass, `Value )
-                                  ];
-          if( size( smb["hostname"]:"" ) == 0
-              || size( smb["printer"]:"" ) == 0
+          string smb_hostname = (string)UI::QueryWidget( `hostname, `Value );
+          string smb_printer = (string)UI::QueryWidget( `printer, `Value );
+          string smb_domain = (string)UI::QueryWidget( `domain, `Value );
+          string smb_user = (string)UI::QueryWidget( `user, `Value );
+          string smb_pass = (string)UI::QueryWidget( `pass, `Value );
+          if( "" == filterchars( smb_hostname, Printer::alnum_chars )
+              || "" == filterchars( smb_printer, Printer::alnum_chars )
             )
           { Popup::Error( _("Servername and printer could not be empty.") );
           }
           else
-          { if( ( size( smb["user"]:"" ) > 0 && size( smb["pass"]:"" ) == 0 )
-                || ( size( smb["user"]:"" ) == 0 && size( smb["pass"]:"" ) > 0 )
+          { if( ( "" != filterchars( smb_user, Printer::alnum_chars )
+                  && size( smb_pass ) < 1
+                )
+                || ( "" == filterchars( smb_user, Printer::alnum_chars )
+                     && size( smb_pass ) > 0
+                   )
               )
             { Popup::Error( _("Both user and password must be specified.") );
             }
             else
             { connection_uri = "smb://";
-              if( size( smb["user"]:"" ) > 0
-                  && size( smb["pass"]:"" ) > 0
+              if( "" != filterchars( smb_user, Printer::alnum_chars )
+                  && size( smb_pass ) > 0
                 )
               { connection_uri = sformat( "%1%2:%3@",
                                           connection_uri,
-                                          smb["user"]:"",
-                                          smb["pass"]:""
+                                          URIpercentEncoding( smb_user ),
+                                          URIpercentEncoding( smb_pass )
                                         );
               }
-              if( size( smb["domain"]:"" ) > 0 )
+              if( "" != filterchars( smb_domain, Printer::alnum_chars ) )
               { connection_uri = sformat( "%1%2/",
                                           connection_uri,
-                                          smb["domain"]:""
+                                          URIpercentEncoding( smb_domain )
                                         );
               }
               connection_uri = sformat( "%1%2/%3",
                                         connection_uri,
-                                        smb["hostname"]:"",
-                                        smb["printer"]:""
+                                        URIpercentEncoding( smb_hostname ),
+                                        URIpercentEncoding( smb_printer )
                                       );
               valid = true;
             }
@@ -1290,14 +1530,27 @@ boolean validateAndMakeURI( symbol selected )
           if( "" != filterchars( tcp_hostname, Printer::alnum_chars ) )
           { if( "" != filterchars( tcp_port, Printer::alnum_chars ) )
             { if( "" != filterchars( tcp_uri_options, Printer::alnum_chars ) )
-              { connection_uri = sformat( "socket://%1:%2?%3", tcp_hostname, tcp_port, tcp_uri_options );
+              { // It would be wrong to do URIpercentEncoding(tcp_uri_options)
+                // because special URI characters like '=' or '&' in tcp_uri_options
+                // must stay as is and not be percent encoded because tcp_uri_options
+                // contains all options like 'option1=value1&option2=value2'.
+                connection_uri = sformat( "socket://%1:%2?%3",
+                                          URIpercentEncoding( tcp_hostname ),
+                                          URIpercentEncoding( tcp_port ),
+                                          tcp_uri_options
+                                        );
               }
               else
-              { connection_uri = sformat( "socket://%1:%2", tcp_hostname, tcp_port );
+              { connection_uri = sformat( "socket://%1:%2",
+                                          URIpercentEncoding( tcp_hostname ),
+                                          URIpercentEncoding( tcp_port )
+                                         );
               }
             }
             else
-            { connection_uri = sformat( "socket://%1", tcp_hostname );
+            { connection_uri = sformat( "socket://%1",
+                                        URIpercentEncoding( tcp_hostname )
+                                      );
             }
             valid = true;
           }
@@ -1314,10 +1567,21 @@ boolean validateAndMakeURI( symbol selected )
               && "" != filterchars( lpd_queue, Printer::alnum_chars )
             )
           { if( "" != filterchars( lpd_uri_options, Printer::alnum_chars ) )
-            { connection_uri = sformat( "lpd://%1/%2?%3", lpd_hostname, lpd_queue, lpd_uri_options );
+            { // It would be wrong to do URIpercentEncoding(lpd_uri_options)
+              // because special URI characters like '=' or '&' in lpd_uri_options
+              // must stay as is and not be percent encoded because lpd_uri_options
+              // contains all options like 'option1=value1&option2=value2'.
+              connection_uri = sformat( "lpd://%1/%2?%3",
+                                        URIpercentEncoding( lpd_hostname ),
+                                        URIpercentEncoding( lpd_queue ),
+                                        lpd_uri_options
+                                      );
             }
             else
-            { connection_uri = sformat( "lpd://%1/%2", lpd_hostname, lpd_queue );
+            { connection_uri = sformat( "lpd://%1/%2",
+                                        URIpercentEncoding( lpd_hostname ),
+                                        URIpercentEncoding( lpd_queue )
+                                      );
             }
             valid=true;
           }
@@ -1333,10 +1597,21 @@ boolean validateAndMakeURI( symbol selected )
               && "" != filterchars( cups_queue, Printer::alnum_chars )
             )
           { if( "" != filterchars( cups_uri_options, Printer::alnum_chars ) )
-            { connection_uri = sformat( "ipp://%1/printers/%2?%3", cups_hostname, cups_queue, cups_uri_options );
+            { // It would be wrong to do URIpercentEncoding(cups_uri_options)
+              // because special URI characters like '=' or '&' in cups_uri_options
+              // must stay as is and not be percent encoded because cups_uri_options
+              // contains all options like 'option1=value1&option2=value2'.
+              connection_uri = sformat( "ipp://%1/printers/%2?%3",
+                                        URIpercentEncoding( cups_hostname ),
+                                        URIpercentEncoding( cups_queue ),
+                                        cups_uri_options
+                                      );
             }
             else
-            { connection_uri = sformat( "ipp://%1/printers/%2", cups_hostname, cups_queue );
+            { connection_uri = sformat( "ipp://%1/printers/%2",
+                                        URIpercentEncoding( cups_hostname ),
+                                        URIpercentEncoding( cups_queue )
+                                      );
             }
             valid=true;
           }
@@ -1345,55 +1620,55 @@ boolean validateAndMakeURI( symbol selected )
           }
           break;
     case(`ipx):
-          map<string, any> ipx = $[ "hostname" : UI::QueryWidget( `hostname, `Value ),
-                                    "queue" : UI::QueryWidget( `queue, `Value ),
-                                    "user" : UI::QueryWidget( `user, `Value ),
-                                    "pass" : UI::QueryWidget( `pass, `Value )
-                                  ];
-          y2internal( "novell ipx map %1", ipx );
-          if( size( ipx["hostname"]:"" ) == 0
-              || size( ipx["queue"]:"" ) == 0
+          string ipx_hostname = (string)UI::QueryWidget( `hostname, `Value );
+          string ipx_queue = (string)UI::QueryWidget( `queue, `Value );
+          string ipx_user = (string)UI::QueryWidget( `user, `Value );
+          string ipx_pass = (string)UI::QueryWidget( `pass, `Value );
+          if( "" != filterchars( ipx_hostname, Printer::alnum_chars )
+              && "" != filterchars( ipx_queue, Printer::alnum_chars )
             )
-          { Popup::Error( _("Servername and queue name could not be empty.") );
+          { connection_uri = "novell://";
+            if( "" != filterchars( ipx_user, Printer::alnum_chars )
+                && size( ipx_pass ) > 0
+              )
+            { connection_uri = sformat( "%1%2:%3@", connection_uri, ipx_user, ipx_pass );
+            }
+            connection_uri = sformat("%1%2/%3", connection_uri, ipx_hostname, ipx_queue );
+            valid=true;
           }
           else
-          { connection_uri = "novell://";
-            if( size( ipx["user"]:"" ) > 0
-                && size( ipx["pass"]:"" ) > 0
-              )
-            { connection_uri = sformat( "%1%2:%3@", connection_uri, ipx["user"]:"", ipx["pass"]:"" );
-            }
-            connection_uri = sformat("%1%2/%3", connection_uri, ipx["hostname"]:"", ipx["queue"]:"" );
-            valid=true;
+          { Popup::Error( _("Servername and queue name could not be empty.") );
           }
           break;
     case(`beh):
-          map<string, any> beh = $[ "uri" : UI::QueryWidget( `queue, `Value ),
-                                    "do_not_disable" : UI::QueryWidget( `beh_do_not_disable, `Value ),
-                                    "attempts" : UI::QueryWidget( `beh_attempts, `Value ),
-                                    "delay" : UI::QueryWidget( `beh_delay, `Value )
-                                  ];
-          y2internal( "beh map %1", beh );
-          if( size( beh["uri"]:"") == 0
-              || size( beh["attempts"]:"" ) == 0
-              || size( beh["delay"]:"" ) == 0
+          string beh_original_uri = (string)UI::QueryWidget( `beh_original_uri, `Value );
+          boolean beh_do_not_disable = (boolean)UI::QueryWidget( `beh_do_not_disable, `Value );
+          string beh_attempts = (string)UI::QueryWidget( `beh_attempts, `Value );
+          string beh_delay = (string)UI::QueryWidget( `beh_delay, `Value );
+          if( "" != filterchars( beh_original_uri, Printer::alnum_chars )
+              && "" != filterchars( beh_attempts, Printer::alnum_chars )
+              && "" != filterchars( beh_delay, Printer::alnum_chars )
             )
-          { Popup::Error( _("Device URI, number of retries, and delay could not be empty." ) );
-          }
-          else
           { connection_uri = sformat( "beh:/%1/%2/%3/%4",
-                                      ( beh["dont_disable"]:false ? "1" : "0" ),
-                                      beh["attempts"]:"0",
-                                      beh["delay"]:"30",
-                                      beh["uri"]:""
+                                      ( beh_do_not_disable ? "1" : "0" ),
+                                      beh_attempts,
+                                      beh_delay,
+                                      beh_original_uri
                                     );
             valid = true;
+          }
+          else
+          { Popup::Error( _("Device URI, number of retries, and delay could not be empty." ) );
           }
           break;
     case(`pipe):
           string pipe = (string)UI::QueryWidget( `program, `Value );
-          if( size( pipe ) > 0 )
-          { connection_uri = sformat( "pipe:/%1", pipe );
+          if( "" != filterchars( pipe, Printer::alnum_chars ) )
+          { // It would be wrong to do URIpercentEncoding(pipe)
+            // because special URI characters like '/ ? = &' in pipe
+            // must stay as is and not be percent encoded because pipe
+            // contains all like 'path/to/command?option1=value1&option2=value2'
+            connection_uri = sformat( "pipe:/%1", pipe );
             valid = true;
           }
           else
@@ -1558,7 +1833,7 @@ boolean testQueue( symbol selected )
                                   port,
                                   timeout
                                 );
-          if( ! Printerlib::ExecuteBashCommand( test_command) )
+          if( ! Printerlib::ExecuteBashCommand( test_command ) )
           { Popup::ErrorDetails( sformat( // Message of a Popup::ErrorDetails
                                           // where %1 will be replaced by the port number
                                           // and %2 will be replaced by the host name:

@@ -452,6 +452,16 @@ any BasicModifyDialog()
                               Label::OKButton()
                             );
   Wizard::HideAbortButton();
+  // Try to preselect the connection which matches to the current_device_uri
+  // if such a connection exists in the connection_selection table:
+  if( Printer::selected_connections_index >= 0 )
+  { // An item which matches to Printer::selected_connections_index
+    // exists in the connection_selection table because the Printer::ConnectionItems function
+    // sets Printer::selected_connections_index != -1 only if such an item exists in the table
+    // so that this item can be preselected:
+    y2milestone( "Preselected connection: '%1'", Printer::connections[Printer::selected_connections_index]:$[] );
+    UI::ChangeWidget( `connection_selection, `CurrentItem, `id(Printer::selected_connections_index) );
+  }
   any ret = nil;
   while(true)
   { ret = UI::UserInput();
@@ -465,6 +475,7 @@ any BasicModifyDialog()
       { uri = Printer::connections[selected_connection_index,"uri"]:"";
         if( "" != uri )
         { commandline = commandline + " -v '" + uri + "'";
+          Printer::current_device_uri = uri;
           something_has_changed = true;
         }
       }
@@ -688,6 +699,16 @@ any BasicModifyDialog()
                                         )
                                )
                        );
+      // Try to preselect the connection which matches to the current_device_uri
+      // if such a connection exists in the connection_selection table:
+      if( Printer::selected_connections_index >= 0 )
+      { // An item which matches to Printer::selected_connections_index
+        // exists in the connection_selection table because the Printer::ConnectionItems function
+        // sets Printer::selected_connections_index != -1 only if such an item exists in the table
+        // so that this item can be preselected:
+        y2milestone( "Preselected connection: '%1'", Printer::connections[Printer::selected_connections_index]:$[] );
+        UI::ChangeWidget( `connection_selection, `CurrentItem, `id(Printer::selected_connections_index) );
+      }
       UI::FakeUserInput( `connection_selection );
       continue;
     }
@@ -708,6 +729,7 @@ any BasicModifyDialog()
       // Printer::selected_connections_index is set to -1 in this case.
       if( selected_connection_index != Printer::selected_connections_index )
       { Printer::selected_connections_index = selected_connection_index;
+        Printer::current_device_uri = Printer::connections[selected_connection_index,"uri"]:"";
         y2milestone( "Selected connection is: %1", Printer::connections[selected_connection_index]:$[] );
         // Invalidate any previously selected driver, if a connection is selected anew
         // or if a previously selected connection had changed:
@@ -1041,7 +1063,9 @@ any BasicModifyDialog()
       continue;
     }
     if( ret == `more_drivers )
-    { driver_filter_string = "";
+    { if( "qqqqqqqqqq" != driver_filter_string )
+      { driver_filter_string = "";
+      }
       boolean valid_driver_found = false;
       list driver_items = [];
       // Use the existing value of driver_filter_input_text
@@ -1054,6 +1078,7 @@ any BasicModifyDialog()
       y2milestone( "More drivers for '%1'", driver_filter_input_text );
       if( "" != driver_filter_input_text
           && "unknown" != tolower( driver_filter_input_text )
+          && "qqqqqqqqqq" != driver_filter_string
         )
       { // If the driver_filter_input_text string does not contain a space,
         // words is a singleton list which contains only one word.
