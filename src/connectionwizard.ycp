@@ -101,9 +101,11 @@ string getUriWithUsernameAndPassword( string uri, string scheme )
 { // CUPS' "lpstat -v" suppresses "username:password@" (if it exists)
   // so that I may have to retrieve it directly form /etc/cups/printers.conf
   // but only in this special case (and not in general via tools/autodetect_print_queues)
-  // because I also do not want to show the password needlessly in any dialog.
+  // because I also do not want to show the password needlessly in any dialog
+  // (and/or needlessly in /var/log/YaST2/y2log via "Autodetected queues").
   // But the URI may be not in /etc/cups/printers.conf
   // because there was no queue set up with this device URI
+  // (e.g. because the URI is right now created by the connection wizard)
   // or several queues in /etc/cups/printers.conf may match
   // or the URI may already contain a "username:password@" part
   // because it was created by a previous run of the connection wizard dialog
@@ -121,13 +123,15 @@ string getUriWithUsernameAndPassword( string uri, string scheme )
     string part2 = mergestring( splitstring( parts[2]:"", special_chars ), "." );
     // Let the whole pipe fail if any of its commands fail (requires bash):
     string grepcommand = "set -o pipefail ; egrep '^DeviceURI " + scheme + "://[^:]+:[^@]+@" + part1 + "/" + part2;
+    if( "lpd" == scheme )
+    { // The CUPS lpd backend supports a fixed username (there is no authentication via LPD protocol)
+      // to describe who requested a print job in the form lpd://username@ip-address-or-hostname/...
+      // (i.e. grep only for "username@" instead of the usual "username:password@"):
+      grepcommand = "set -o pipefail ; egrep '^DeviceURI " + scheme + "://[^@]+@" + part1 + "/" + part2;
+    }
     if( "" != parts[3]:"" )
     { string part3 = mergestring( splitstring( parts[3]:"", special_chars ), "." );
       grepcommand = grepcommand + "/" + part3;
-      y2milestone( "URI is 'smb://username:password@%1/%2/%3'", parts[1]:"", parts[2]:"", parts[3]:"" );
-    }
-    else
-    { y2milestone( "URI is 'smb://username:password@%1/%2'", parts[1]:"", parts[2]:"" );
     }
     grepcommand = grepcommand + "$' /etc/cups/printers.conf";
     Printerlib::ExecuteBashCommand( grepcommand + " | sort -u | wc -l | tr -d '[:space:]'" );
@@ -264,24 +268,21 @@ term getContentFromBackend( string backend )
   return content;
 }
 
-term getNetworkContent( list<string>text )
-{ if( size(text) != 3 )
-  { y2error( "To create content for Network dialog it needs 3 strings : %1", text );
-    return nil;
-  }
-  term content = `VBox
+term getNetworkContent( string hostname, string scan_hosts_label, string port_or_queue_label, string port_or_queue, string uri_options )
+{ term content = `VBox
                  ( `Left
                    ( `HBox
                      ( `ComboBox
                        ( `id(`hostname),
                          `opt(`editable),
                          // TRANSLATORS: Text entry to fill IP or hostname of remote server
-                         _("&IP Address or Host Name")
+                         _("&IP Address or Host Name"),
+                         [ hostname ]
                        ),
                        `MenuButton
                        ( // TRANSLATORS: Label for menu to search for remote servers
                          _("Look Up"),
-                         [ `item( `id(`scan), text[0]:"" ),
+                         [ `item( `id(`scan), scan_hosts_label ),
                            // TRANSLATORS: Button to search for remote servers
                            `item( `id(`scan_all), _("Look Up for All Hosts") )
                          ]
@@ -289,7 +290,7 @@ term getNetworkContent( list<string>text )
                      )
                    ),
                    `Left
-                   ( `InputField( `id(`port_or_queue), text[1]:"", text[2]:"" )
+                   ( `InputField( `id(`port_or_queue), port_or_queue_label, port_or_queue )
                    ),
                    `Left
                    ( `InputField( `id(`uri_options),
@@ -298,7 +299,7 @@ term getNetworkContent( list<string>text )
                                   `opt(`hstretch),
                                   // TRANSLATORS: InputField for optional Device URI parameters:
                                   _("Optional 'option=value' parameter (usually empty)"),
-                                  ""
+                                  uri_options
                                 )
                    ),
                    `Left
@@ -314,6 +315,19 @@ void changeSettingsDialog( symbol selected )
   term connection_content = nil;
   term model_content = nil;
   string current_device_uri = "";
+  list<string> uri_parts = [];
+  string hostname = "";
+  string port_or_queue = "";
+  string uri_options = "";
+  string uri = "";
+  string queue = "";
+  string domain = "";
+  string printer = "";
+  string user = "";
+  string pass = "";
+  boolean beh_do_not_disable = true;
+  string beh_attempts = "0";
+  string beh_delay = "30";
   switch(selected)
   { // directly connected
     case(`parallel):
@@ -536,9 +550,26 @@ void changeSettingsDialog( symbol selected )
           }
           Popup::ClearFeedback();
           y2milestone( "bluetooth_device_list '%1'", bluetooth_device_list );
-          // Have an empty string preselected to be on the safe side because
-          // the bluetooth backend may blindly write to the device:
-          list <term> bluetooth_device_id_items = [ `item( `id(""), "", true ) ];
+          current_device_uri = getCurrentDeviceURI();
+          string current_bluetooth_device_id = "";
+          list <term> bluetooth_device_id_items = [];
+          if( "bluetooth:/" == substring( current_device_uri, 0, size( "bluetooth:/" ) ) )
+          { // The Device URI has the form:
+            // bluetooth://deviceID
+            uri_parts = splitstring( current_device_uri, "/" );
+            // Remove empty parts (e.g. bluetooth://deviceID results ["bluetooth:","","deviceID"]):
+            uri_parts = filter( string part, uri_parts, { return ( "" != part ); } );
+            y2milestone( "ConnectionWizardDialog uri_parts = '%1'", uri_parts );
+            // Note that uri_parts[0] = "bluetooth:".
+            if( "" != uri_parts[1]:"" )
+            { current_bluetooth_device_id = uri_parts[1]:"";
+            }
+          }
+          if( "" == current_bluetooth_device_id )
+          { // Have an empty string preselected to be on the safe side because
+            // the bluetooth backend may blindly write to the bluetooth device:
+            bluetooth_device_id_items = [ `item( `id(""), "", true ) ];
+          }
           foreach( string word,
                    splitstring( bluetooth_device_list, " " ),
                    { if( regexpmatch( word, "..:..:..:..:..:..") )
@@ -547,7 +578,17 @@ void changeSettingsDialog( symbol selected )
                        // in its DeviceURI which has the form bluetooth://1A2B3C4D5E6F
                        string hexnumber = filterchars( word, "0123456789ABCDEFabcdef" );
                        if( "" != hexnumber )
-                       { bluetooth_device_id_items = add( bluetooth_device_id_items, `item( `id( hexnumber ), hexnumber ) );
+                       { if( current_bluetooth_device_id == hexnumber )
+                         { // Have the current bluetooth device id preselected:
+                           bluetooth_device_id_items = add( bluetooth_device_id_items,
+                                                            `item( `id( hexnumber ), hexnumber, true )
+                                                          );
+                         }
+                         else
+                         { bluetooth_device_id_items = add( bluetooth_device_id_items,
+                                                            `item( `id( hexnumber ), hexnumber )
+                                                          );
+                         }
                        }
                      }
                    }
@@ -594,6 +635,37 @@ void changeSettingsDialog( symbol selected )
             }
           }
           y2milestone( "scsi_device_list '%1'", scsi_device_list );
+          current_device_uri = getCurrentDeviceURI();
+          string current_scsi_device_node = "";
+          list <term> scsi_device_node_items = [];
+          if( "scsi:/" == substring( current_device_uri, 0, size( "scsi:/" ) ) )
+          { // The Device URI has the form:
+            // scsi:/dev/sg...
+            // remove the scheme 'scsi:' so that only the '/dev/sg...' is left:
+            current_scsi_device_node = mergestring( sublist( splitstring( current_device_uri, ":" ), 1 ), "" );
+
+          }
+          if( "" == current_scsi_device_node )
+          { // Have an empty string preselected to be on the safe side because
+            // the CUPS scsi backend may blindly write to the device,
+            // (see backend/scsi-linux.c in the CUPS 1.3.9 sources):
+            scsi_device_node_items = [ `item( `id(""), "", true ) ];
+          }
+          foreach( string device_node,
+                   [ "/dev/sg0", "/dev/sg1", "/dev/sg2", "/dev/sg3", "/dev/sg4", "/dev/sg5", "/dev/sg6", "/dev/sg7" ],
+                   { if( current_scsi_device_node == device_node )
+                     { // Have the current scsi device node preselected:
+                       scsi_device_node_items = add( scsi_device_node_items,
+                                                     `item( `id( device_node ), device_node, true )
+                                                   );
+                     }
+                     else
+                     { scsi_device_node_items = add( scsi_device_node_items,
+                                                     `item( `id( device_node ), device_node )
+                                                   );
+                     }
+                   }
+                 );
           model_content = getContentFromCurrentModel( true );
           content = `VBox
                     ( `Left
@@ -604,19 +676,7 @@ void changeSettingsDialog( symbol selected )
                           // a SCSI generic device node (e.g. /dev/sg0 or /dev/sg1)
                           // can be selected or entered:
                           _("&SCSI generic device"),
-                          [ // Have nothing preselected to be on the safe side because
-                            // the CUPS scsi backend may blindly write to the device,
-                            // (see backend/scsi-linux.c in the CUPS 1.3.9 sources):
-                            `item( `id(""), "", true ),
-                            `item( `id("/dev/sg0"), "/dev/sg0" ),
-                            `item( `id("/dev/sg1"), "/dev/sg1" ),
-                            `item( `id("/dev/sg2"), "/dev/sg2" ),
-                            `item( `id("/dev/sg3"), "/dev/sg3" ),
-                            `item( `id("/dev/sg4"), "/dev/sg4" ),
-                            `item( `id("/dev/sg5"), "/dev/sg5" ),
-                            `item( `id("/dev/sg6"), "/dev/sg6" ),
-                            `item( `id("/dev/sg7"), "/dev/sg7" )
-                          ]
+                          scsi_device_node_items
                         )
                       ),
                       `Left
@@ -633,30 +693,125 @@ void changeSettingsDialog( symbol selected )
           break;
     // network printer
     case(`tcp):
-          connection_content = getNetworkContent( [ // TRANSLATORS: List of input field labels,
-                                                    // first for network scan button,
-                                                    // second for the TCP port number:
-                                                    _("Scan for Direct Socket Servers"),
-                                                    _("TCP Port Number"),
-                                                    "9100"
-                                                  ]
+          hostname = "";
+          port_or_queue = "9100";
+          uri_options = "";
+          current_device_uri = getCurrentDeviceURI();
+          if( "socket:/" == substring( current_device_uri, 0, size( "socket:/" ) ) )
+          { // The Device URI has the form ([...] is an optional part):
+            // socket://ip-address-or-hostname[:port-number][?waiteof=false]
+            uri_parts = splitstring( current_device_uri, ":/?" );
+            // Remove empty parts (e.g. socket://server results ["socket","","","server"]):
+            uri_parts = filter( string part, uri_parts, { return ( "" != part ); } );
+            y2milestone( "ConnectionWizardDialog uri_parts = '%1'", uri_parts );
+            // Note that uri_parts[0] = "socket".
+            if( "" != uri_parts[1]:"" )
+            { hostname = uri_parts[1]:"";
+              if( "" != uri_parts[2]:"" )
+              { if( issubstring( uri_parts[2]:"", "=" ) )
+                { uri_options = uri_parts[2]:"";
+                }
+                else
+                { port_or_queue = uri_parts[2]:"";
+                  if( issubstring( uri_parts[3]:"", "=" ) )
+                  { uri_options = uri_parts[3]:"";
+                  }
+                }
+              }
+            }
+          }
+          connection_content = getNetworkContent( hostname,
+                                                  // TRANSLATORS: List of input field labels,
+                                                  // first for network scan button,
+                                                  // second for the TCP port number:
+                                                  _("Scan for Direct Socket Servers"),
+                                                  _("TCP Port Number"),
+                                                  port_or_queue,
+                                                  uri_options
                                                 );
           model_content = getContentFromCurrentModel( true );
           content = `VBox( connection_content, model_content );
           break;
     case(`lpd):
-          connection_content = getNetworkContent( [ // TRANSLATORS: List of input field labels,
-                                                    // first for network scan button,
-                                                    // second for name of printer queue
-                                                    _("Scan for LPD Servers"),
-                                                    _("Queue Name (see the printer's manual)"),
-                                                    "LPT1"
-                                                  ]
+          hostname = "";
+          port_or_queue = "LPT1";
+          uri_options = "";
+          current_device_uri = getCurrentDeviceURI();
+          if( "lpd:/" == substring( current_device_uri, 0, size( "lpd:/" ) ) )
+          { // Even the DeviceURI for lpd can contain a fixed username
+            // (there is no authentication via LPD protocol)
+            // to describe who requested a print job in the form
+            //   lpd://username@ip-address-or-hostname/...
+            // but usage of this is really really not encouraged, see
+            // https://bugzilla.novell.com/show_bug.cgi?id=512549
+            // so that its setup not supported here but when
+            // such an URI already exists, it should be shown correctly:
+            // CUPS' "lpstat -v" suppresses "username:password@" (if it exists)
+            // so that it may have to be retrieved form /etc/cups/printers.conf:
+            current_device_uri = getUriWithUsernameAndPassword( current_device_uri, "lpd" );
+            // The Device URI has the form ([...[...]...] are optional parts):
+            // lpd://ip-address-or-hostname/queue[?option1=value1[&option2=value2...[&optionN=valueN]...]]
+            uri_parts = splitstring( current_device_uri, ":/?" );
+            // Remove empty parts (e.g. lpd://server results ["lpd","","","server"]):
+            uri_parts = filter( string part, uri_parts, { return ( "" != part ); } );
+            y2milestone( "ConnectionWizardDialog uri_parts = '%1'", uri_parts );
+            // Note that uri_parts[0] = "lpd".
+            if( "" != uri_parts[1]:"" )
+            { hostname = uri_parts[1]:"";
+              if( "" != uri_parts[2]:"" )
+              { port_or_queue = uri_parts[2]:"";
+                if( "" != uri_parts[3]:"" )
+                { uri_options = uri_parts[3]:"";
+                }
+              }
+            }
+          }
+          connection_content = getNetworkContent( hostname,
+                                                  // TRANSLATORS: List of input field labels,
+                                                  // first for network scan button,
+                                                  // second for name of printer queue
+                                                  _("Scan for LPD Servers"),
+                                                  _("Queue Name (see the printer's manual)"),
+                                                  port_or_queue,
+                                                  uri_options
                                                 );
           model_content = getContentFromCurrentModel( true );
           content = `VBox( connection_content, model_content );
           break;
     case(`ipp):
+          uri = "";
+          current_device_uri = getCurrentDeviceURI();
+          if( "ipp:/" == substring( current_device_uri, 0, size( "ipp:/" ) )
+              || "http:/" == substring( current_device_uri, 0, size( "http:/" ) )
+            )
+          { // Even the DeviceURI for ipp/http can contain
+            // fixed username and password for authentication in the form
+            //   ipp://username:password@ip-address-or-hostname/...
+            //   http://username:password@ip-address-or-hostname/...
+            // but usage of this is really really not encouraged, see
+            // https://bugzilla.novell.com/show_bug.cgi?id=512549
+            // so that its setup not supported here but when
+            // such an URI already exists, it should be shown correctly:
+            if( "ipp:/" == substring( current_device_uri, 0, size( "ipp:/" ) ) )
+            { // CUPS' "lpstat -v" suppresses "username:password@" (if it exists)
+              // so that it may have to be retrieved form /etc/cups/printers.conf:
+              current_device_uri = getUriWithUsernameAndPassword( current_device_uri, "ipp" );
+            }
+            if( "http:/" == substring( current_device_uri, 0, size( "http:/" ) ) )
+            { // CUPS' "lpstat -v" suppresses "username:password@" (if it exists)
+              // so that it may have to be retrieved form /etc/cups/printers.conf:
+              current_device_uri = getUriWithUsernameAndPassword( current_device_uri, "http" );
+            }
+            // A Device URI to print via CUPS server has the form "ipp://server/printers/queue"
+            // while a Device URI to access a network printer via IPP
+            // does probably not contain "/printers/" so that this is used here
+            // as a best effort attempt to distinguish both cases:
+            if( ! issubstring( current_device_uri, "/printers/" ) )
+            { // The Device URI has the form ({either|or} and [...[...]...] are optional parts):
+              // {ipp|http}://ip-address-or-hostname[:port-number]/resource[?option1=value1...[&optionN=valueN]...]
+              uri = current_device_uri;
+            }
+          }
           model_content = getContentFromCurrentModel( true );
           content = `VBox
                     ( `Left
@@ -667,7 +822,7 @@ void changeSettingsDialog( symbol selected )
                           `opt(`hstretch),
                           // TRANSLATORS: Input field label
                           _("URI (see the printer's manual)"),
-                          "ipp://ip-address:port-number/resource"
+                          uri
                         )
                       ),
                       model_content
@@ -692,6 +847,68 @@ void changeSettingsDialog( symbol selected )
               break;
             }
           }
+          hostname = "";
+          domain = "";
+          printer = "";
+          user = "";
+          pass = "";
+          current_device_uri = getCurrentDeviceURI();
+          if( "smb:/" == substring( current_device_uri, 0, size( "smb:/" ) ) )
+          { // The Device URI has one of the forms ([...] is an optional part):
+            // smb://server[:port]/share
+            // smb://workgroup/server[:port]/share
+            // smb://username:password@server[:port]/share
+            // smb://username:password@workgroup/server[:port]/share
+            // CUPS' "lpstat -v" suppresses "username:password@" (if it exists)
+            // so that it may have to be retrieved form /etc/cups/printers.conf:
+            current_device_uri = getUriWithUsernameAndPassword( current_device_uri, "smb" );
+            // Here '/' is the only delimiter (so that username:password and server:port is one part):
+            uri_parts = splitstring( current_device_uri, "/" );
+            // Remove empty parts (e.g. smb://server results ["smb:","","server"]):
+            uri_parts = filter( string part, uri_parts, { return ( "" != part ); } );
+            y2milestone( "ConnectionWizardDialog uri_parts = '%1'", uri_parts );
+            if( "" != uri_parts[1]:"" && "" != uri_parts[2]:"" )
+            { // uri_parts[1] is server[:port] or workgroup or username:password@...
+              if( issubstring( uri_parts[1]:"", "@" ) )
+              { // smb://username:password@server[:port]/share
+                // or
+                // smb://username:password@workgroup/server[:port]/share
+                if( "" != uri_parts[3]:"" )
+                { // smb://username:password@workgroup/server[:port]/share
+                  list<string> user_pass_domain = splitstring( uri_parts[1]:"", ":@" );
+                  user = user_pass_domain[0]:"";
+                  pass = user_pass_domain[1]:"";
+                  domain = user_pass_domain[2]:"";
+                  hostname = uri_parts[2]:"";
+                  printer = uri_parts[3]:"";
+                }
+                else
+                { // smb://username:password@server[:port]/share
+                  list<string> user_pass_hostname = splitstring( uri_parts[1]:"", ":@" );
+                  user = user_pass_hostname[0]:"";
+                  pass = user_pass_hostname[1]:"";
+                  hostname = user_pass_hostname[2]:"";
+                  printer = uri_parts[2]:"";
+                }
+              }
+              else
+              { // smb://server[:port]/share
+                // or
+                // smb://workgroup/server[:port]/share
+                if( "" != uri_parts[3]:"" )
+                { // smb://workgroup/server[:port]/share
+                  domain = uri_parts[1]:"";
+                  hostname = uri_parts[2]:"";
+                  printer = uri_parts[3]:"";
+                }
+                else
+                { // smb://server[:port]/share
+                  hostname = uri_parts[1]:"";
+                  printer = uri_parts[2]:"";
+                }
+              }
+            }
+          }
           model_content = getContentFromCurrentModel( true );
           content = `VBox
                     ( `Left
@@ -700,7 +917,8 @@ void changeSettingsDialog( symbol selected )
                           ( `id(`hostname),
                             `opt(`editable),
                             // TRANSLATORS: Text entry for remote server name
-                            _("Server (NetBIOS Host Name)")
+                            _("Server (NetBIOS Host Name)"),
+                            [ hostname ]
                           //),
                           //`MenuButton
                           //( // TRANSLATORS: Label for menu to search for remote servers
@@ -716,7 +934,8 @@ void changeSettingsDialog( symbol selected )
                       ( `InputField
                         ( `id(`printer),
                           // TRANSLATORS: Text entry for printer name
-                          _("Printer (Share Name)")
+                          _("Printer (Share Name)"),
+                          printer
                         )
                       ),
                       `Left
@@ -725,7 +944,8 @@ void changeSettingsDialog( symbol selected )
                           ( `id(`domain),
                             `opt(`editable),
                             // TRANSLATORS: Text entry for samba domain
-                            _("Workgroup (Domain Name)")
+                            _("Workgroup (Domain Name)"),
+                            [ domain ]
                           //),
                           //PushButton
                           //( `id(`scan_domain),
@@ -742,12 +962,14 @@ void changeSettingsDialog( symbol selected )
                           ( `InputField
                             ( `id(`user),
                               // TRANSLATORS: Text entry for username (authentication)
-                              _("User")
+                              _("User"),
+                              user
                             ),
                             `Password
                             ( `id(`pass),
                               // TRANSLATORS: Text entry for password (authentication)
-                              _("&Password")
+                              _("&Password"),
+                              pass
                             )
                           )
                         )
@@ -763,18 +985,104 @@ void changeSettingsDialog( symbol selected )
                     );
           break;
     case(`lpr):
-          connection_content = getNetworkContent( [ // TRANSLATORS: List of input field labels,
-                                                    // first for network scan button,
-                                                    // second for name of printer queue
-                                                    _("Scan for LPD Servers"),
-                                                    _("Queue Name"),
-                                                    ""
-                                                  ]
+          hostname = "";
+          port_or_queue = "";
+          uri_options = "";
+          current_device_uri = getCurrentDeviceURI();
+          if( "lpd:/" == substring( current_device_uri, 0, size( "lpd:/" ) ) )
+          { // Even the DeviceURI for lpd can contain a fixed username
+            // (there is no authentication via LPD protocol)
+            // to describe who requested a print job in the form
+            //   lpd://username@ip-address-or-hostname/...
+            // but usage of this is really really not encouraged, see
+            // https://bugzilla.novell.com/show_bug.cgi?id=512549
+            // so that its setup not supported here but when
+            // such an URI already exists, it should be shown correctly:
+            // CUPS' "lpstat -v" suppresses "username:password@" (if it exists)
+            // so that it may have to be retrieved form /etc/cups/printers.conf:
+            current_device_uri = getUriWithUsernameAndPassword( current_device_uri, "lpd" );
+            // The Device URI has the form ([...[...]...] are optional parts):
+            // lpd://ip-address-or-hostname/queue[?option1=value1[&option2=value2...[&optionN=valueN]...]]
+            uri_parts = splitstring( current_device_uri, ":/?" );
+            // Remove empty parts (e.g. lpd://server results ["lpd","","","server"]):
+            uri_parts = filter( string part, uri_parts, { return ( "" != part ); } );
+            y2milestone( "ConnectionWizardDialog uri_parts = '%1'", uri_parts );
+            // Note that uri_parts[0] = "lpd".
+            if( "" != uri_parts[1]:"" )
+            { hostname = uri_parts[1]:"";
+              if( "" != uri_parts[2]:"" )
+              { port_or_queue = uri_parts[2]:"";
+                if( "" != uri_parts[3]:"" )
+                { uri_options = uri_parts[3]:"";
+                }
+              }
+            }
+          }
+          connection_content = getNetworkContent( hostname,
+                                                  // TRANSLATORS: List of input field labels,
+                                                  // first for network scan button,
+                                                  // second for name of printer queue
+                                                  _("Scan for LPD Servers"),
+                                                  _("Queue Name"),
+                                                  port_or_queue,
+                                                  uri_options
                                                 );
           model_content = getContentFromCurrentModel( false );
           content = `VBox( connection_content, model_content );
           break;
     case(`cups):
+          hostname = "";
+          queue = "";
+          uri_options = "";
+          current_device_uri = getCurrentDeviceURI();
+          if( "ipp:/" == substring( current_device_uri, 0, size( "ipp:/" ) )
+              || "http:/" == substring( current_device_uri, 0, size( "http:/" ) )
+            )
+          { // Even the DeviceURI for ipp/http can contain
+            // fixed username and password for authentication in the form
+            //   ipp://username:password@ip-address-or-hostname/...
+            //   http://username:password@ip-address-or-hostname/...
+            // but usage of this is really really not encouraged, see
+            // https://bugzilla.novell.com/show_bug.cgi?id=512549
+            // so that its setup not supported here but when
+            // such an URI already exists, it should be shown correctly:
+            if( "ipp:/" == substring( current_device_uri, 0, size( "ipp:/" ) ) )
+            { // CUPS' "lpstat -v" suppresses "username:password@" (if it exists)
+              // so that it may have to be retrieved form /etc/cups/printers.conf:
+              current_device_uri = getUriWithUsernameAndPassword( current_device_uri, "ipp" );
+            }
+            if( "http:/" == substring( current_device_uri, 0, size( "http:/" ) ) )
+            { // CUPS' "lpstat -v" suppresses "username:password@" (if it exists)
+              // so that it may have to be retrieved form /etc/cups/printers.conf:
+              current_device_uri = getUriWithUsernameAndPassword( current_device_uri, "http" );
+            }
+            // A Device URI to print via CUPS server has the form "ipp://server/printers/queue"
+            // while a Device URI to access a network printer via IPP
+            // does probably not contain "/printers/" so that this is used here
+            // as a best effort attempt to distinguish both cases:
+            if( issubstring( current_device_uri, "/printers/" ) )
+            { // The Device URI has the form ({either|or} and [...[...]...] are optional parts):
+              // {ipp|http}://ip-address-or-hostname[:port-number]/resource[?option1=value1...[&optionN=valueN]...]
+              // where resource is something like /printers/queue on a CUPS server.
+              // Here ':' is no delimiter so that ip-address-or-hostname:port-number is one part
+              uri_parts = splitstring( current_device_uri, "/?" );
+              // Remove empty parts (e.g. ipp://server results ["ipp:","","server"]):
+              uri_parts = filter( string part, uri_parts, { return ( "" != part ); } );
+              y2milestone( "ConnectionWizardDialog uri_parts = '%1'", uri_parts );
+              // Note that uri_parts[0] = "{ipp:|http:}".
+              if( "" != uri_parts[1]:"" )
+              { hostname = uri_parts[1]:"";
+                if( "printers" == uri_parts[2]:"" )
+                { if( "" != uri_parts[3]:"" )
+                  { queue = uri_parts[3]:"";
+                    if( issubstring( uri_parts[4]:"", "=" ) )
+                    { uri_options = uri_parts[4]:"";
+                    }
+                  }
+                }
+              }
+            }
+          }
           model_content = getContentFromCurrentModel( false );
           content = `VBox
                     ( `Left
@@ -783,7 +1091,8 @@ void changeSettingsDialog( symbol selected )
                           ( `id(`hostname),
                             `opt(`editable),
                             // TRANSLATORS: Text entry for IP or hostname of remote server
-                            _("IP Address or Host Name")
+                            _("IP Address or Host Name"),
+                            [ hostname ]
                           ),
                           `MenuButton
                           ( // TRANSLATORS: Label for menu to search for remote servers
@@ -797,7 +1106,7 @@ void changeSettingsDialog( symbol selected )
                       ),
                       `Left
                       ( // TRANSLATORS: InputField for a print queue name:
-                        `InputField( `id(`queue), _("Queue Name") )
+                        `InputField( `id(`queue), _("Queue Name"), queue )
                       ),
                       `Left
                       ( `InputField( `id(`uri_options),
@@ -806,7 +1115,7 @@ void changeSettingsDialog( symbol selected )
                                      `opt(`hstretch),
                                      // TRANSLATORS: InputField for optional Device URI parameters:
                                      _("Optional 'option=value' parameter (usually empty)"),
-                                     ""
+                                     uri_options
                                    )
                       ),
                       `Left
@@ -837,20 +1146,58 @@ void changeSettingsDialog( symbol selected )
               break;
             }
           }
+          hostname = "";
+          queue = "";
+          user = "";
+          pass = "";
+          current_device_uri = getCurrentDeviceURI();
+          if( "novell:/" == substring( current_device_uri, 0, size( "novell:/" ) ) )
+          { // The Device URI has one of the forms ([...] is an optional part):
+            // novell://server/queue
+            // novell://username:password@server/queue
+            // CUPS' "lpstat -v" suppresses "username:password@" (if it exists)
+            // so that it may have to be retrieved form /etc/cups/printers.conf.
+            // Fortunately getSMBuriWithUsernameAndPassword works here too
+            // because the forms of IPX and SMB device URIs match sufficienty:
+            current_device_uri = getUriWithUsernameAndPassword( current_device_uri, "novell" );
+            // Here '/' is the only delimiter (so that username:password and server:port is one part):
+            uri_parts = splitstring( current_device_uri, "/" );
+            // Remove empty parts (e.g. novell://server results ["novell:","","server"]):
+            uri_parts = filter( string part, uri_parts, { return ( "" != part ); } );
+            y2milestone( "ConnectionWizardDialog uri_parts = '%1'", uri_parts );
+            if( "" != uri_parts[1]:"" && "" != uri_parts[2]:"" )
+            { // uri_parts[1] is server[:port] or username:password@...
+              if( issubstring( uri_parts[1]:"", "@" ) )
+              { // novell://username:password@server/queue
+                list<string> user_pass_hostname = splitstring( uri_parts[1]:"", ":@" );
+                user = user_pass_hostname[0]:"";
+                pass = user_pass_hostname[1]:"";
+                hostname = user_pass_hostname[2]:"";
+                queue = uri_parts[2]:"";
+              }
+              else
+              { // novell://server/queue
+                hostname = uri_parts[1]:"";
+                queue = uri_parts[2]:"";
+              }
+            }
+          }
           model_content = getContentFromCurrentModel( true );
           content = `VBox
                     ( `Left
                       ( `InputField
                         ( `id(`hostname),
                           // TRANSLATORS: Text entry for IP or hostname of remote server
-                          _("IP Address or Host Name")
+                          _("IP Address or Host Name"),
+                          hostname
                         )
                       ),
                       `Left
                       ( `InputField
                         ( `id(`queue),
                           // TRANSLATORS: Text entry for name of remote printer queue
-                          _("Queue Name")
+                          _("Queue Name"),
+                          queue
                         )
                       ),
                       `Left
@@ -861,12 +1208,14 @@ void changeSettingsDialog( symbol selected )
                           ( `InputField
                             ( `id(`user),
                               // TRANSLATORS: Text entry for username (authentication)
-                              _("User")
+                              _("User"),
+                              user
                             ),
                             `Password
                             ( `id(`pass),
                               // TRANSLATORS: Text entry for password (authentication)
-                              _("&Password")
+                              _("&Password"),
+                              pass
                             )
                           )
                         )
@@ -883,7 +1232,6 @@ void changeSettingsDialog( symbol selected )
           break;
     // special
     case(`uri):
-          model_content = getContentFromCurrentModel( true );
           current_device_uri = getCurrentDeviceURI();
           if( "smb:/" == substring( current_device_uri, 0, size( "smb:/" ) ) )
           { // CUPS' "lpstat -v" suppresses "username:password@" (if it exists)
@@ -895,6 +1243,38 @@ void changeSettingsDialog( symbol selected )
             // so that it may have to be retrieved form /etc/cups/printers.conf:
             current_device_uri = getUriWithUsernameAndPassword( current_device_uri, "novell" );
           }
+          // Even the DeviceURI for ipp/http can contain
+          // fixed username and password for authentication in the form
+          //   ipp://username:password@ip-address-or-hostname/...
+          //   http://username:password@ip-address-or-hostname/...
+          // but usage of this is really really not encouraged, see
+          // https://bugzilla.novell.com/show_bug.cgi?id=512549
+          // so that its setup not supported here but when
+          // such an URI already exists, it should be shown correctly:
+          if( "ipp:/" == substring( current_device_uri, 0, size( "ipp:/" ) ) )
+          { // CUPS' "lpstat -v" suppresses "username:password@" (if it exists)
+            // so that it may have to be retrieved form /etc/cups/printers.conf:
+            current_device_uri = getUriWithUsernameAndPassword( current_device_uri, "ipp" );
+          }
+          if( "http:/" == substring( current_device_uri, 0, size( "http:/" ) ) )
+          { // CUPS' "lpstat -v" suppresses "username:password@" (if it exists)
+            // so that it may have to be retrieved form /etc/cups/printers.conf:
+            current_device_uri = getUriWithUsernameAndPassword( current_device_uri, "http" );
+          }
+          // Even the DeviceURI for lpd can contain a fixed username
+          // (there is no authentication via LPD protocol)
+          // to describe who requested a print job in the form
+          //   lpd://username@ip-address-or-hostname/...
+          // but usage of this is really really not encouraged, see
+          // https://bugzilla.novell.com/show_bug.cgi?id=512549
+          // so that its setup not supported here but when
+          // such an URI already exists, it should be shown correctly:
+          if( "lpd:/" == substring( current_device_uri, 0, size( "lpd:/" ) ) )
+          { // CUPS' "lpstat -v" suppresses "username:password@" (if it exists)
+            // so that it may have to be retrieved form /etc/cups/printers.conf:
+            current_device_uri = getUriWithUsernameAndPassword( current_device_uri, "lpd" );
+          }
+          model_content = getContentFromCurrentModel( true );
           content = `VBox
                     ( `Left
                       ( `InputField
@@ -928,6 +1308,14 @@ void changeSettingsDialog( symbol selected )
               break;
             }
           }
+          uri = "";
+          current_device_uri = getCurrentDeviceURI();
+          if( "pipe:/" == substring( current_device_uri, 0, size( "pipe:/" ) ) )
+          { // The Device URI has the form ([...] is an optional part):
+            // pipe:/path/to/command[?option1=value1&option2=value2...]
+            // remove the scheme 'pipe:' so that only the '/path/to/command...' is left:
+            uri = mergestring( sublist( splitstring( current_device_uri, ":" ), 1 ), "" );
+          }
           model_content = getContentFromCurrentModel( false );
           content = `VBox
                     ( `Left
@@ -937,21 +1325,19 @@ void changeSettingsDialog( symbol selected )
                           // longer stuff like 'path/to/command?option1=value1&option2=value2':
                           `opt(`hstretch),
                           // TRANSLATORS: Text entry for program name that will be called via pipe
-                          _("Program Name"),
-                          "path/to/command?option1=value1&option2=value2"
+                          _("Program (/path/to/command?option1=value1&option2=value2)"),
+                          uri
                         )
                       ),
                       model_content
                     );
           break;
     case(`beh):
-          model_content = getContentFromCurrentModel( true );
+          uri = "";
+          beh_do_not_disable = true;
+          beh_attempts = "0";
+          beh_delay = "30";
           current_device_uri = getCurrentDeviceURI();
-          if( "beh:/" == substring( current_device_uri, 0, size( "beh:/" ) ) )
-          { // When it is already a "beh:/<dd>/<att>/<delay>/<originaluri>" URI
-            // remove the beh-related stuff so that only the <originaluri> is left:
-            current_device_uri = mergestring( sublist( splitstring( current_device_uri, "/" ), 4 ), "/" );
-          }
           if( "smb:/" == substring( current_device_uri, 0, size( "smb:/" ) ) )
           { // CUPS' "lpstat -v" suppresses "username:password@" (if it exists)
             // so that it may have to be retrieved form /etc/cups/printers.conf:
@@ -962,6 +1348,55 @@ void changeSettingsDialog( symbol selected )
             // so that it may have to be retrieved form /etc/cups/printers.conf:
             current_device_uri = getUriWithUsernameAndPassword( current_device_uri, "novell" );
           }
+          // Even the DeviceURI for ipp/http can contain
+          // fixed username and password for authentication in the form
+          //   ipp://username:password@ip-address-or-hostname/...
+          //   http://username:password@ip-address-or-hostname/...
+          // but usage of this is really really not encouraged, see
+          // https://bugzilla.novell.com/show_bug.cgi?id=512549
+          // so that its setup not supported here but when
+          // such an URI already exists, it should be shown correctly:
+          if( "ipp:/" == substring( current_device_uri, 0, size( "ipp:/" ) ) )
+          { // CUPS' "lpstat -v" suppresses "username:password@" (if it exists)
+            // so that it may have to be retrieved form /etc/cups/printers.conf:
+            current_device_uri = getUriWithUsernameAndPassword( current_device_uri, "ipp" );
+          }
+          if( "http:/" == substring( current_device_uri, 0, size( "http:/" ) ) )
+          { // CUPS' "lpstat -v" suppresses "username:password@" (if it exists)
+            // so that it may have to be retrieved form /etc/cups/printers.conf:
+            current_device_uri = getUriWithUsernameAndPassword( current_device_uri, "http" );
+          }
+          // Even the DeviceURI for lpd can contain a fixed username
+          // (there is no authentication via LPD protocol)
+          // to describe who requested a print job in the form
+          //   lpd://username@ip-address-or-hostname/...
+          // but usage of this is really really not encouraged, see
+          // https://bugzilla.novell.com/show_bug.cgi?id=512549
+          // so that its setup not supported here but when
+          // such an URI already exists, it should be shown correctly:
+          if( "lpd:/" == substring( current_device_uri, 0, size( "lpd:/" ) ) )
+          { // CUPS' "lpstat -v" suppresses "username:password@" (if it exists)
+            // so that it may have to be retrieved form /etc/cups/printers.conf:
+            current_device_uri = getUriWithUsernameAndPassword( current_device_uri, "lpd" );
+          }
+          uri = current_device_uri;
+          if( "beh:/" == substring( current_device_uri, 0, size( "beh:/" ) ) )
+          { // When it is already a "beh:/<dd>/<att>/<delay>/<originaluri>" URI
+            // remove the beh-related stuff so that only the <originaluri> is left:
+            uri = mergestring( sublist( splitstring( current_device_uri, "/" ), 4 ), "/" );
+            uri_parts = splitstring( current_device_uri, "/" );
+            // Remove possibly empty parts:
+            uri_parts = filter( string part, uri_parts, { return ( "" != part ); } );
+            y2milestone( "ConnectionWizardDialog uri_parts = '%1'", uri_parts );
+            if( "" != uri_parts[1]:"" && "" != uri_parts[2]:"" && "" != uri_parts[3]:"" )
+            { if( "0" == uri_parts[1]:"" )
+              { beh_do_not_disable = false;
+              }
+              beh_attempts = uri_parts[2]:"";
+              beh_delay = uri_parts[3]:"";
+            }
+          }
+          model_content = getContentFromCurrentModel( true );
           content = `VBox
                     ( `Left
                       ( `InputField
@@ -971,7 +1406,7 @@ void changeSettingsDialog( symbol selected )
                           `opt(`hstretch),
                           // TRANSLATORS: Text entry for device URI (Uniform Resource Identifier)
                           _("Device URI (for which 'beh' should be applied)"),
-                          current_device_uri
+                          uri
                         )
                       ),
                       `Left
@@ -979,7 +1414,7 @@ void changeSettingsDialog( symbol selected )
                         ( `id(`beh_do_not_disable),
                           // TRANSLATORS: Check box
                           _("Never Disable the Queue"),
-                          true
+                          beh_do_not_disable
                         )
                       ),
                       `Left
@@ -987,7 +1422,7 @@ void changeSettingsDialog( symbol selected )
                         ( `id(`beh_attempts),
                           // TRANSLATORS: Text entry
                           _("Number of Retries ('0' means infinite retries)"),
-                          "0"
+                          beh_attempts
                         )
                       ),
                       `Left
@@ -995,7 +1430,7 @@ void changeSettingsDialog( symbol selected )
                         ( `id(`beh_delay),
                           // TRANSLATORS: Text entry
                           _("Delay in Seconds Between Two Retries"),
-                          "30"
+                          beh_delay
                         )
                       ),
                       model_content
@@ -1068,10 +1503,10 @@ any ConnectionWizardDialog()
                               [ // TRANSLATORS: Tree widget item
                                 `item( `id(`smb), _("Microsoft Windows/SAMBA (SMB/CIFS)") ),
                                 // TRANSLATORS: Tree widget item
-                                `item( `id(`lpr), _("Traditional UNIX Server (LPR)") ),
+                                `item( `id(`lpr), _("Traditional UNIX Server (LPR/LPD)") ),
                                 // `item( `id(`iprint), _("iPrint (Novell OES)") ),
                                 // TRANSLATORS: Tree widget item
-                                `item( `id(`cups), _("CUPS Server") ),
+                                `item( `id(`cups), _("CUPS Server (IPP)") ),
                                 // TRANSLATORS: Tree widget item
                                 `item( `id(`ipx), _("Novell Netware Print Server (IPX)") )
                               ]
@@ -1168,28 +1603,6 @@ any ConnectionWizardDialog()
     else if( "socket:/" == substring( current_device_uri, 0, size( "socket:/" ) ) )
     { UI::ChangeWidget( `tree_selection, `CurrentItem, `tcp );
       changeSettingsDialog( `tcp );
-      // The Device URI has the form ([...] is an optional part):
-      // socket://ip-address-or-hostname[:port-number][?waiteof=false]
-      list<string> uri_parts = splitstring( current_device_uri, ":/?" );
-      // Remove empty parts (e.g. socket://server results ["socket","","","server"]):
-      uri_parts = filter( string part, uri_parts, { return ( "" != part ); } );
-      y2milestone( "ConnectionWizardDialog uri_parts = '%1'", uri_parts );
-      // Note that uri_parts[0] = "socket".
-      if( "" != uri_parts[1]:"" )
-      { UI::ChangeWidget( `hostname, `Value, uri_parts[1]:"" );
-        if( "" != uri_parts[2]:"" )
-        { if( issubstring( uri_parts[2]:"", "=" ) )
-          { UI::ChangeWidget( `port_or_queue, `Value, "" );
-            UI::ChangeWidget( `uri_options, `Value, uri_parts[2]:"" );
-          }
-          else
-          { UI::ChangeWidget( `port_or_queue, `Value, uri_parts[2]:"" );
-            if( issubstring( uri_parts[3]:"", "=" ) )
-            { UI::ChangeWidget( `uri_options, `Value, uri_parts[3]:"" );
-            }
-          }
-        }
-      }
     }
     else if( "lpd:/" == substring( current_device_uri, 0, size( "lpd:/" ) ) )
     { // It is not possible to distinguish if a current_device_uri
@@ -1210,22 +1623,6 @@ any ConnectionWizardDialog()
       { UI::ChangeWidget( `tree_selection, `CurrentItem, `lpd );
         changeSettingsDialog( `lpd );
       }
-      // The Device URI has the form ([...[...]...] are optional parts):
-      // lpd://ip-address-or-hostname/queue[?option1=value1[&option2=value2...[&optionN=valueN]...]]
-      list<string> uri_parts = splitstring( current_device_uri, ":/?" );
-      // Remove empty parts (e.g. lpd://server results ["lpd","","","server"]):
-      uri_parts = filter( string part, uri_parts, { return ( "" != part ); } );
-      y2milestone( "ConnectionWizardDialog uri_parts = '%1'", uri_parts );
-      // Note that uri_parts[0] = "lpd".
-      if( "" != uri_parts[1]:"" )
-      { UI::ChangeWidget( `hostname, `Value, uri_parts[1]:"" );
-        if( "" != uri_parts[2]:"" )
-        { UI::ChangeWidget( `port_or_queue, `Value, uri_parts[2]:"" );
-          if( "" != uri_parts[3]:"" )
-          { UI::ChangeWidget( `uri_options, `Value, uri_parts[3]:"" );
-          }
-        }
-      }
     }
     else if( "ipp:/" == substring( current_device_uri, 0, size( "ipp:/" ) )
              || "http:/" == substring( current_device_uri, 0, size( "http:/" ) )
@@ -1237,142 +1634,27 @@ any ConnectionWizardDialog()
       if( issubstring( current_device_uri, "/printers/" ) )
       { UI::ChangeWidget( `tree_selection, `CurrentItem, `cups );
         changeSettingsDialog( `cups );
-        // The Device URI has the form ({either|or} and [...[...]...] are optional parts):
-        // {ipp|http}://ip-address-or-hostname[:port-number]/resource[?option1=value1...[&optionN=valueN]...]
-        // where resource is something like /printers/queue on a CUPS server (see above).
-        // Here ':' is no delimiter so that ip-address-or-hostname:port-number is one part
-        list<string> uri_parts = splitstring( current_device_uri, "/?" );
-        // Remove empty parts (e.g. ipp://server results ["ipp:","","server"]):
-        uri_parts = filter( string part, uri_parts, { return ( "" != part ); } );
-        y2milestone( "ConnectionWizardDialog uri_parts = '%1'", uri_parts );
-        // Note that uri_parts[0] = "{ipp:|http:}".
-        if( "" != uri_parts[1]:"" )
-        { UI::ChangeWidget( `hostname, `Value, uri_parts[1]:"" );
-          if( "printers" == uri_parts[2]:"" )
-          { if( "" != uri_parts[3]:"" )
-            { UI::ChangeWidget( `queue, `Value, uri_parts[3]:"" );
-              if( issubstring( uri_parts[4]:"", "=" ) )
-              { UI::ChangeWidget( `uri_options, `Value, uri_parts[4]:"" );
-              }
-            }
-          }
-        }
       }
       else
       { UI::ChangeWidget( `tree_selection, `CurrentItem, `ipp );
         changeSettingsDialog( `ipp );
-        // The Device URI has the form ({either|or} and [...[...]...] are optional parts):
-        // {ipp|http}://ip-address-or-hostname[:port-number]/resource[?option1=value1...[&optionN=valueN]...]
-        UI::ChangeWidget( `uri, `Value, current_device_uri );
       }
     }
     else if( "smb:/" == substring( current_device_uri, 0, size( "smb:/" ) ) )
     { UI::ChangeWidget( `tree_selection, `CurrentItem, `smb );
       changeSettingsDialog( `smb );
-      // The Device URI has one of the forms ([...] is an optional part):
-      // smb://server[:port]/share
-      // smb://workgroup/server[:port]/share
-      // smb://username:password@server[:port]/share
-      // smb://username:password@workgroup/server[:port]/share
-      // CUPS' "lpstat -v" suppresses "username:password@" (if it exists)
-      // so that it may have to be retrieved form /etc/cups/printers.conf:
-      current_device_uri = getUriWithUsernameAndPassword( current_device_uri, "smb" );
-      // Here '/' is the only delimiter (so that username:password and server:port is one part):
-      list<string> uri_parts = splitstring( current_device_uri, "/" );
-      // Remove empty parts (e.g. smb://server results ["smb:","","server"]):
-      uri_parts = filter( string part, uri_parts, { return ( "" != part ); } );
-      y2milestone( "ConnectionWizardDialog uri_parts = '%1'", uri_parts );
-      if( "" != uri_parts[1]:"" && "" != uri_parts[2]:"" )
-      { // uri_parts[1] is server[:port] or workgroup or username:password@...
-        if( issubstring( uri_parts[1]:"", "@" ) )
-        { // smb://username:password@server[:port]/share
-          // or
-          // smb://username:password@workgroup/server[:port]/share
-          if( "" != uri_parts[3]:"" )
-          { // smb://username:password@workgroup/server[:port]/share
-            list<string> user_pass_domain = splitstring( uri_parts[1]:"", ":@" );
-            UI::ChangeWidget( `user, `Value, user_pass_domain[0]:"" );
-            UI::ChangeWidget( `pass, `Value, user_pass_domain[1]:"" );
-            UI::ChangeWidget( `domain, `Value, user_pass_domain[2]:"" );
-            UI::ChangeWidget( `hostname, `Value, uri_parts[2]:"" );
-            UI::ChangeWidget( `printer, `Value, uri_parts[3]:"" );
-          }
-          else
-          { // smb://username:password@server[:port]/share
-            list<string> user_pass_hostname = splitstring( uri_parts[1]:"", ":@" );
-            UI::ChangeWidget( `user, `Value, user_pass_hostname[0]:"" );
-            UI::ChangeWidget( `pass, `Value, user_pass_hostname[1]:"" );
-            UI::ChangeWidget( `hostname, `Value, user_pass_hostname[2]:"" );
-            UI::ChangeWidget( `printer, `Value, uri_parts[2]:"" );
-          }
-        }
-        else
-        { // smb://server[:port]/share
-          // or
-          // smb://workgroup/server[:port]/share
-          if( "" != uri_parts[3]:"" )
-          { // smb://workgroup/server[:port]/share
-            UI::ChangeWidget( `domain, `Value, uri_parts[1]:"" );
-            UI::ChangeWidget( `hostname, `Value, uri_parts[2]:"" );
-            UI::ChangeWidget( `printer, `Value, uri_parts[3]:"" );
-          }
-          else
-          { // smb://server[:port]/share
-            UI::ChangeWidget( `hostname, `Value, uri_parts[1]:"" );
-            UI::ChangeWidget( `printer, `Value, uri_parts[2]:"" );
-          }
-        }
-      }
     }
     else if( "novell:/" == substring( current_device_uri, 0, size( "novell:/" ) ) )
     { UI::ChangeWidget( `tree_selection, `CurrentItem, `ipx );
       changeSettingsDialog( `ipx );
-      // The Device URI has one of the forms ([...] is an optional part):
-      // novell://server/queue
-      // novell://username:password@server/queue
-      // CUPS' "lpstat -v" suppresses "username:password@" (if it exists)
-      // so that it may have to be retrieved form /etc/cups/printers.conf.
-      // Fortunately getSMBuriWithUsernameAndPassword works here too
-      // because the forms of IPX and SMB device URIs match sufficienty:
-      current_device_uri = getUriWithUsernameAndPassword( current_device_uri, "novell" );
-      // Here '/' is the only delimiter (so that username:password and server:port is one part):
-      list<string> uri_parts = splitstring( current_device_uri, "/" );
-      // Remove empty parts (e.g. novell://server results ["novell:","","server"]):
-      uri_parts = filter( string part, uri_parts, { return ( "" != part ); } );
-      y2milestone( "ConnectionWizardDialog uri_parts = '%1'", uri_parts );
-      if( "" != uri_parts[1]:"" && "" != uri_parts[2]:"" )
-      { // uri_parts[1] is server[:port] or username:password@...
-        if( issubstring( uri_parts[1]:"", "@" ) )
-        { // novell://username:password@server/queue
-          list<string> user_pass_hostname = splitstring( uri_parts[1]:"", ":@" );
-          UI::ChangeWidget( `user, `Value, user_pass_hostname[0]:"" );
-          UI::ChangeWidget( `pass, `Value, user_pass_hostname[1]:"" );
-          UI::ChangeWidget( `hostname, `Value, user_pass_hostname[2]:"" );
-          UI::ChangeWidget( `queue, `Value, uri_parts[2]:"" );
-        }
-        else
-        { // novell://server/queue
-          UI::ChangeWidget( `hostname, `Value, uri_parts[1]:"" );
-          UI::ChangeWidget( `queue, `Value, uri_parts[2]:"" );
-        }
-      }
     }
     else if( "pipe:/" == substring( current_device_uri, 0, size( "pipe:/" ) ) )
     { UI::ChangeWidget( `tree_selection, `CurrentItem, `pipe );
       changeSettingsDialog( `pipe );
-      // The Device URI has the form ([...] is an optional part):
-      // pipe:/path/to/command[?option1=value1&option2=value2...]
-      // remove the scheme 'pipe:/' so that only the 'path/to/command...' is left:
-      current_device_uri = mergestring( sublist( splitstring( current_device_uri, "/" ), 1 ), "/" );
-      if( "" != current_device_uri )
-      { UI::ChangeWidget( `program, `Value, current_device_uri );
-      }
     }
     else if( "beh:/" == substring( current_device_uri, 0, size( "beh:/" ) ) )
     { UI::ChangeWidget( `tree_selection, `CurrentItem, `beh );
       changeSettingsDialog( `beh );
-      // No need to preset something here because this happens
-      // already for each call of changeSettingsDialog(`beh).
     }
     else
     { // Do nothing by default and as fallback.
@@ -1423,19 +1705,18 @@ boolean validateAndMakeURI( symbol selected )
               { Popup::Error( _("The 'mark' parity checking is only supported with 7 data bits and 1 stop bit.") );
               }
               else
-              { connection_uri = "serial:" + URIpercentEncoding( serial_device_node )
-                                 + "?baud=" + URIpercentEncoding( serial_baud_rate );
+              { connection_uri = "serial:" + serial_device_node + "?baud=" + serial_baud_rate;
                 if( size( serial_data_bits ) > 0 )
-                { connection_uri = connection_uri + "+bits=" + URIpercentEncoding( serial_data_bits );
+                { connection_uri = connection_uri + "+bits=" + serial_data_bits;
                 }
                 if( size( serial_parity ) > 0 )
-                { connection_uri = connection_uri + "+parity=" + URIpercentEncoding( serial_parity );
+                { connection_uri = connection_uri + "+parity=" + serial_parity;
                 }
                 if( size( serial_flow_control ) > 0 )
-                { connection_uri = connection_uri + "+flow=" + URIpercentEncoding( serial_flow_control );
+                { connection_uri = connection_uri + "+flow=" + serial_flow_control;
                 }
                 if( size( serial_stop_bits ) > 0 )
-                { connection_uri = connection_uri + "+stop=" + URIpercentEncoding( serial_stop_bits );
+                { connection_uri = connection_uri + "+stop=" + serial_stop_bits;
                 }
                 valid = true;
               }
@@ -1448,7 +1729,7 @@ boolean validateAndMakeURI( symbol selected )
           { Popup::Error( _("Bluetooth device ID could not be empty.") );
           }
           else
-          { connection_uri = "bluetooth://" + URIpercentEncoding( bluetooth_device_id );
+          { connection_uri = "bluetooth://" + bluetooth_device_id;
             valid = true;
           }
           break;
@@ -1458,7 +1739,10 @@ boolean validateAndMakeURI( symbol selected )
           { Popup::Error( _("SCSI generic device could not be empty.") );
           }
           else
-          { connection_uri = "scsi:" + URIpercentEncoding( scsi_device_node );
+          { // It would be wrong to do URIpercentEncoding(scsi_device_node)
+            // because scsi_device_node is e.g. '/dev/sg1' which must stay as is
+            // to result a valid 'scsi' URI like 'scsi:/dev/sg1':
+            connection_uri = "scsi:" + scsi_device_node;
             valid = true;
           }
           break;
@@ -1722,6 +2006,7 @@ boolean validateModel( symbol selected )
 
 void scanForServers( symbol selected, boolean all )
 { list<string> hosts = [];
+  string current_host = (string)UI::QueryWidget( `hostname, `Value );
   if( all )
   { y2milestone( "scanForServers 'all'" );
     Popup::ShowFeedback( // Title for a Popup::ShowFeedback:
@@ -1809,9 +2094,13 @@ void scanForServers( symbol selected, boolean all )
   { Popup::Message( // Popup::Message when scanning for hosts in the network did not find any host.
                     _("Scanning in the network did not find any host.\n(Network issue or firewall active?)")
                   );
-    UI::ChangeWidget( `hostname, `Value, "" );
+    hosts = [ current_host ];
+  }
+  if( ! contains( hosts, current_host ) )
+  { hosts = prepend( hosts, current_host );
   }
   UI::ChangeWidget( `hostname, `Items, hosts );
+  UI::ChangeWidget( `hostname, `Value, current_host );
 }
 
 boolean testQueue( symbol selected )
