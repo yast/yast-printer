@@ -159,17 +159,47 @@ term getContentFromCurrentModel( boolean no_default_raw_queue )
         && "unknown" != tolower( current_model_info )
       )
     { list <string> description_words = splitstring( current_model_info, " " );
-      if( size( description_words ) > 2 )
-      { current_model_info = description_words[0]:"" + " "
-                             + description_words[1]:"" + " "
-                             + description_words[2]:"";
+      // In Printer.ycp and basicmodify.ycp there are lines like
+      //  description = model + " with driver " + description;
+      //  new_description = model + " with driver " + new_description;
+      // Avoid having "with" and/or "driver" in the current_model_info:
+      description_words = filter( string word,
+                                  description_words,
+                                  { return( "with" != word && "driver" != word );
+                                  }
+                                );
+      // Use the queue description only if its first word is actually a known manufacturer:
+      boolean description_starts_with_known_manufacturer = false;
+      foreach( string known_manufacturer,
+               Printer::known_manufacturers,
+               { if( tolower( description_words[0]:"" ) == tolower( known_manufacturer ) )
+                 { description_starts_with_known_manufacturer = true;
+                   break;
+                 }
+               }
+             );
+      if( description_starts_with_known_manufacturer )
+      { if( size( description_words ) > 2
+            && "with" != description_words[1]:""
+            && "with" != description_words[2]:""
+            && "driver" != description_words[2]:""
+          )
+        { current_model_info = description_words[0]:"" + " "
+                               + description_words[1]:"" + " "
+                               + description_words[2]:"";
+        }
+        if( size( description_words ) == 2
+            && "with" != description_words[1]:""
+          )
+        { current_model_info = description_words[0]:"" + " "
+                               + description_words[1]:"";
+        }
+        if( size( description_words ) == 1 )
+        { current_model_info = description_words[0]:"";
+        }
       }
-      if( size( description_words ) == 2 )
-      { current_model_info = description_words[0]:"" + " "
-                             + description_words[1]:"";
-      }
-      if( size( description_words ) == 1 )
-      { current_model_info = description_words[0]:"";
+      else
+      { current_model_info = "";
       }
     }
   }
@@ -1845,6 +1875,13 @@ boolean validateAndMakeURI( symbol selected )
     case(`lpd):
     case(`lpr):
           string lpd_hostname = (string)UI::QueryWidget( `hostname, `Value );
+          if( ! issubstring( lpd_hostname, "@" ) )
+          { // It would be wrong to do URIpercentEncoding(lpd_hostname)
+            // when it contains a '@' because a lpd URI can be of the form
+            //   lpd://username@ip-address-or-hostname/...
+            // see https://bugzilla.novell.com/show_bug.cgi?id=512549
+            lpd_hostname = URIpercentEncoding( lpd_hostname );
+          }
           string lpd_queue = (string)UI::QueryWidget( `port_or_queue, `Value );
           string lpd_uri_options = (string)UI::QueryWidget( `uri_options, `Value );
           if( "" != filterchars( lpd_hostname, Printer::alnum_chars )
@@ -1856,14 +1893,14 @@ boolean validateAndMakeURI( symbol selected )
               // must stay as is and not be percent encoded because lpd_uri_options
               // contains all options like 'option1=value1&option2=value2'.
               connection_uri = sformat( "lpd://%1/%2?%3",
-                                        URIpercentEncoding( lpd_hostname ),
+                                        lpd_hostname,
                                         URIpercentEncoding( lpd_queue ),
                                         lpd_uri_options
                                       );
             }
             else
             { connection_uri = sformat( "lpd://%1/%2",
-                                        URIpercentEncoding( lpd_hostname ),
+                                        lpd_hostname,
                                         URIpercentEncoding( lpd_queue )
                                       );
             }
@@ -1875,6 +1912,14 @@ boolean validateAndMakeURI( symbol selected )
           break;
     case(`cups):
           string cups_hostname = (string)UI::QueryWidget( `hostname, `Value );
+          if( ! issubstring( cups_hostname, "@" ) )
+          { // It would be wrong to do URIpercentEncoding(cups_hostname)
+            // when it contains a '@' because a ipp/http URI can be of the form
+            //   ipp://username:password@ip-address-or-hostname/...
+            //   http://username:password@ip-address-or-hostname/...
+            // see https://bugzilla.novell.com/show_bug.cgi?id=512549
+            cups_hostname = URIpercentEncoding( cups_hostname );
+          }
           string cups_queue = (string)UI::QueryWidget( `queue, `Value );
           string cups_uri_options = (string)UI::QueryWidget( `uri_options, `Value );
           if( "" != filterchars( cups_hostname, Printer::alnum_chars )
@@ -1886,14 +1931,14 @@ boolean validateAndMakeURI( symbol selected )
               // must stay as is and not be percent encoded because cups_uri_options
               // contains all options like 'option1=value1&option2=value2'.
               connection_uri = sformat( "ipp://%1/printers/%2?%3",
-                                        URIpercentEncoding( cups_hostname ),
+                                        cups_hostname,
                                         URIpercentEncoding( cups_queue ),
                                         cups_uri_options
                                       );
             }
             else
             { connection_uri = sformat( "ipp://%1/printers/%2",
-                                        URIpercentEncoding( cups_hostname ),
+                                        cups_hostname,
                                         URIpercentEncoding( cups_queue )
                                       );
             }
@@ -2240,22 +2285,76 @@ boolean testQueue( symbol selected )
   return true;
 }
 
-boolean storeQueue( symbol selected )
+boolean UpdateConnectionsList( symbol selected )
 { if( "" == connection_uri )
   { return false;
   }
   if( "" == connection_model )
   { connection_model = "Unknown";
   }
-  y2internal( "storeQueue storing type '%1' with uri '%2' for model '%3'", selected, connection_uri, connection_model );
-  Printer::connections = add( Printer::connections,
-                              $[ "uri" : connection_uri,
-                                 "model" : connection_model,
-                                 "deviceID" : "",
-                                 "info" : "created by the connection wizard",
-                                 "class" : "ConnectionWizardDialog"
-                               ]
-                            );
+  // Avoid duplicate URIs because Printer::current_device_uri must point to a unique URI
+  // otherwise preselection in BasicAddDialog and BasicModifyDialog would be ambiguous.
+  // If an URI already exists, update its matching entry in the Printer::connections list.
+  // Usually there should not exist duplicate URIs in the Printer::connections list
+  // (in contrast duplicate URIs in the Printer::queues list are perfectly o.k.)
+  // but if duplicate URIs exist in Printer::connections, all those entries are updated.
+  boolean uri_already_exists = false;
+/*
+  // I do not know if it is allowed to modify one same list "in place" via foreach:
+  integer connections_index = -1;
+  foreach( map< string, string > connection_entry,
+           Printer::connections,
+           { // Set the connections_index to the index number of the current connection_entry:
+             connections_index = connections_index + 1;
+             // If the URI already exists, update its matching entry in the Printer::connections list:
+             if( connection_uri == connection_entry["uri"]:"" )
+             { uri_already_exists = true;
+               y2internal( "UpdateConnectionsList: modify connections list type '%1' with uri '%2' for model '%3'", selected, connection_uri, connection_model );
+               Printer::connections[connections_index,"model"] = connection_model;
+               // Leave te values for deviceID, info, and class unchanged because when the URI is the same
+               // those values still match to the URI and therefore should also stay the same.
+             }
+           }
+         );
+*/
+  Printer::connections = maplist( map< string, string > connection_entry,
+                                  Printer::connections,
+                                  { if( connection_uri == connection_entry["uri"]:"" )
+                                    { uri_already_exists = true;
+                                      y2internal( "UpdateConnectionsList: modify connections list type '%1' with uri '%2' for model '%3'", selected, connection_uri, connection_model );
+                                      return $[ "uri" : connection_uri,
+                                                "model" : connection_model,
+                                                "deviceID" : "",
+                                                "info" : "modified by the connection wizard",
+                                                "class" : "ConnectionWizardDialog"
+                                              ];
+                                    }
+                                    else
+                                    { return connection_entry;
+                                    }
+                                  }
+                                );
+  if( ! uri_already_exists )
+  { y2internal( "UpdateConnectionsList: adding connection type '%1' with uri '%2' for model '%3'", selected, connection_uri, connection_model );
+    Printer::connections = add( Printer::connections,
+                                $[ "uri" : connection_uri,
+                                   "model" : connection_model,
+                                   "deviceID" : "",
+                                   "info" : "created by the connection wizard",
+                                   "class" : "ConnectionWizardDialog"
+                                 ]
+                              );
+  }
+  // Set Printer::current_device_uri so that BasicAddDialog and BasicModifyDialog
+  // can preselect the currently used connection when calling Printer::ConnectionItems(...)
+  // which sets Printer::selected_connections_index if it matches to Printer::current_device_uri.
+  // It makes sense to have the currently used connection from the ConnectionWizardDialog
+  // preselected also in BasicModifyDialog because when the user launched the Connection Wizard
+  // from the BasicModifyDialog he wants to change the connection so that it is sufficiently safe
+  // to have the changed connection preselected when he is back in the BasicModifyDialog
+  // so that the connection would get changed in the system without explicite selection
+  // by the user in the BasicModifyDialog if the user clicks "OK" in the BasicModifyDialog.
+  Printer::current_device_uri = connection_uri;
   return true;
 }
 
@@ -2274,7 +2373,7 @@ while( ret != `back && ret != `next )
               && validateModel( selected )
             )
           { y2milestone( "ConnectionWizardDialog writing settings" );
-            storeQueue( selected );
+            UpdateConnectionsList( selected );
           }
           else
           { y2error( "ConnectionWizardDialog: Could not validate for '%1'", selected );

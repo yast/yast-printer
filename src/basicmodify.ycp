@@ -78,17 +78,38 @@ any BasicModifyDialog()
   Wizard::HideAbortButton();
   string model = "";
   list <string> description_words = splitstring( description, " " );
-  if( size( description_words ) > 2 )
-  { model = description_words[0]:"" + " "
-            + description_words[1]:"" + " "
-            + description_words[2]:"";
-  }
-  if( size( description_words ) == 2 )
-  { model = description_words[0]:"" + " "
-            + description_words[1]:"";
-  }
-  if( size( description_words ) == 1 )
-  { model = description_words[0]:"";
+  // In Printer.ycp and basicmodify.ycp there are lines like
+  //  description = model + " with driver " + description;
+  //  new_description = model + " with driver " + new_description;
+  // Avoid having "with" and/or "driver" in the model string:
+  description_words = filter( string word,
+                              description_words,
+                              { return( "with" != word && "driver" != word );
+                              }
+                            );
+  // Use the queue description only if its first word is actually a known manufacturer:
+  boolean description_starts_with_known_manufacturer = false;
+  foreach( string known_manufacturer,
+           Printer::known_manufacturers,
+           { if( tolower( description_words[0]:"" ) == tolower( known_manufacturer ) )
+             { description_starts_with_known_manufacturer = true;
+               break;
+             }
+           }
+         );
+  if( description_starts_with_known_manufacturer )
+  { if( size( description_words ) > 2 )
+    { model = description_words[0]:"" + " "
+              + description_words[1]:"" + " "
+              + description_words[2]:"";
+    }
+    if( size( description_words ) == 2 )
+    { model = description_words[0]:"" + " "
+              + description_words[1]:"";
+    }
+    if( size( description_words ) == 1 )
+    { model = description_words[0]:"";
+    }
   }
   string driver_filter_input_text = model;
   // Match anywhere in the NickName entry in the PPD:
@@ -461,6 +482,12 @@ any BasicModifyDialog()
     // so that this item can be preselected:
     y2milestone( "Preselected connection: '%1'", Printer::connections[Printer::selected_connections_index]:$[] );
     UI::ChangeWidget( `connection_selection, `CurrentItem, `id(Printer::selected_connections_index) );
+    // In contrast to BasicAddDialog fake user input of a connection_selection here only
+    // when a connection was preselected because initially drivers are shown which
+    // match to the description of the queue which is to be modified here
+    // but when the user had used the Connection Wizard, a different connection
+    // becomes usually preselected and this requires different drivers to be shown:
+    UI::FakeUserInput( `connection_selection );
   }
   any ret = nil;
   while(true)
@@ -789,7 +816,7 @@ any BasicModifyDialog()
           // (there is only "Kyocera" but not "Kyocera Mita" in the known_manufacturers list).
           foreach( string known_manufacturer,
                    Printer::known_manufacturers,
-                   { if( manufacturer == tolower( known_manufacturer ) )
+                   { if( tolower( manufacturer ) == tolower( known_manufacturer ) )
                      { driver_filter_string = "^" + driver_filter_string;
                        break;
                      }
@@ -808,17 +835,42 @@ any BasicModifyDialog()
         }
         else
         { description_words = splitstring( description, " " );
-          if( size( description_words ) > 2 )
-          { model = description_words[0]:"" + " "
-                    + description_words[1]:"" + " "
-                    + description_words[2]:"";
+          // In Printer.ycp and basicmodify.ycp there are lines like
+          //  description = model + " with driver " + description;
+          //  new_description = model + " with driver " + new_description;
+          // Avoid having "with" and/or "driver" in the model string:
+          description_words = filter( string word,
+                                      description_words,
+                                      { return( "with" != word && "driver" != word );
+                                      }
+                                    );
+          // Use the queue description only if its first word is actually a known manufacturer:
+          boolean description_starts_with_known_manufacturer = false;
+          foreach( string known_manufacturer,
+                   Printer::known_manufacturers,
+                   { if( tolower( description_words[0]:"" ) == tolower( known_manufacturer ) )
+                     { description_starts_with_known_manufacturer = true;
+                       break;
+                     }
+                   }
+                 );
+          if( description_starts_with_known_manufacturer )
+          { if( size( description_words ) > 2 )
+            if( size( description_words ) > 2 )
+            { model = description_words[0]:"" + " "
+                      + description_words[1]:"" + " "
+                      + description_words[2]:"";
+            }
+            if( size( description_words ) == 2 )
+            { model = description_words[0]:"" + " "
+                      + description_words[1]:"";
+            }
+            if( size( description_words ) == 1 )
+            { model = description_words[0]:"";
+            }
           }
-          if( size( description_words ) == 2 )
-          { model = description_words[0]:"" + " "
-                    + description_words[1]:"";
-          }
-          if( size( description_words ) == 1 )
-          { model = description_words[0]:"";
+          else
+          { model = "";
           }
           driver_filter_input_text = model;
           // Replace each sequence of spaces in driver_filter_input_text
@@ -864,7 +916,7 @@ any BasicModifyDialog()
           // (there is only "Kyocera" but not "Kyocera Mita" in the known_manufacturers list).
           foreach( string known_manufacturer,
                    Printer::known_manufacturers,
-                   { if( manufacturer == tolower( known_manufacturer ) )
+                   { if( tolower( manufacturer ) == tolower( known_manufacturer ) )
                      { driver_filter_string = "^" + driver_filter_string;
                        break;
                      }

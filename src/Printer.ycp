@@ -1165,23 +1165,25 @@ global list ConnectionItems( string connection_filter_string )
   sorted_connection_items = sort( term one_item,
                                   term another_item,
                                   connection_items,
-                                  { // Have the entries which are "created by the connection wizard" topmost:
+                                  { // Have entries which are "created by the connection wizard"
+                                    // or "modified by the connection wizard" topmost:
                                     // Have short local variable names for shorter comparison expression
                                     // and avoid multiple complicated accesses of same elements in an list:
                                     string this = one_item[3]:"";
                                     string that = another_item[3]:"";
-                                    // This is an entry where the info is "created by the connection wizard"
+                                    string connection_wizard_match = "by the connection wizard";
+                                    // This is an entry where the info is "created/modified by the connection wizard"
                                     // and that is no such entry:
-                                    if( ( this == "created by the connection wizard" )
-                                        && ( that != "created by the connection wizard" )
+                                    if( issubstring( this, connection_wizard_match )
+                                        && ( ! issubstring( that, connection_wizard_match ) )
                                       ) return true;
-                                    // This is an entry where the info is not "created by the connection wizard"
+                                    // This is an entry where the info is not "created/modified by the connection wizard"
                                     // but that is such an entry:
-                                    if( ( this != "created by the connection wizard" )
-                                        && ( that == "created by the connection wizard" )
+                                    if( ( ! issubstring( this, connection_wizard_match ) )
+                                        && issubstring( that, connection_wizard_match )
                                       ) return false;
-                                    // If both are "created by the connection wizard"
-                                    // or if both are not "created by the connection wizard"
+                                    // If both are "created/modified by the connection wizard"
+                                    // or if both are not "created/modified by the connection wizard"
                                     // have entries with a valid model name topmost:
                                     // Have short local variable names for shorter comparison expression
                                     // and avoid multiple complicated accesses of same elements in an list:
