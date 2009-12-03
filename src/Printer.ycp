@@ -759,6 +759,134 @@ global boolean Write()
 }
 
 /**
+ * Derive a reasonable model info from an arbitrary description string.
+ * @param string from which a model is derived.
+ * @return string (possibly the empty string)
+ */
+global string DeriveModelName( string description )
+{ string model_info = "";
+  list <string> description_words = splitstring( description, " " );
+  // Remove empty words because a sequence of spaces results empty words in description_words
+  // for example "ACME  Funprinter" (two spaces!) results ["ACME","","Funprinter"].
+  // In Printer.ycp and basicmodify.ycp there are lines like
+  //  description = model + " with driver " + description;
+  //  new_description = model + " with driver " + new_description;
+  // Avoid having "with" and/or "driver" in the model_info.
+  description_words = filter( string word,
+                              description_words,
+                              { return( "" != word && "with" != word && "driver" != word );
+                              }
+                            );
+  // Use the description only if its first word is actually a known manufacturer:
+  boolean description_starts_with_known_manufacturer = false;
+  foreach( string known_manufacturer,
+           known_manufacturers,
+           { if( tolower( description_words[0]:"" ) == tolower( known_manufacturer ) )
+             { description_starts_with_known_manufacturer = true;
+               break;
+             }
+           }
+         );
+  if( description_starts_with_known_manufacturer )
+  { // After the first word which contains the manufacturer name
+    // there are none or up to two words which contain only letters and hyphens (the model name)
+    // and then there is a word which contains at least one number (the model series).
+    // Therefore the manufacturer and model sub-string can be assumed to be:
+    //   One word which contains the manufacturer name,
+    //   followed by at most two words which contain only letters and perhaps hyphens
+    //   finished by one word which may start with letters and hyphens
+    //   but it must contain at least one number followed by whatever characters.
+    // It is crucial to take whatever (trailing) character in the model series into account
+    // to be on the safe side to distinguish different models
+    // (e.g. "HP LaserJet 4" versus "HP LaserJet 4/4M" or "Kyocera FS-1000" versus "Kyocera FS-1000+").
+    // For example as egrep regular expression:
+    //   lpinfo -m | cut -d' ' -f2-
+    //   | egrep -o '^[[:alpha:]]+[[:space:]]+([[:alpha:]-]+[[:space:]]+){0,2}[[:alpha:]-]*[[:digit:]][^[:space:]]*'
+    // Of course this best-guess is not 100% correct because it would result for example
+    // that "ACME FunPrinter 1000" and "ACME FunPrinter 1000 XL"
+    // are considered to be the same model "ACME FunPrinter 1000"
+    // but "ACME FunPrinter 1000XL" and "ACME FunPrinter 1000 XL"
+    // are considered to be different models "ACME FunPrinter 1000XL" and "ACME FunPrinter 1000":
+    boolean skip_the_rest = false;
+    integer index = -1;
+    description_words = maplist( string word,
+                                 description_words,
+                                 { if( ! skip_the_rest )
+                                   { index = index + 1;
+                                     if( 0 == index )
+                                     { // Return the manufacturer name:
+                                       return word;
+                                     }
+                                     if( 1 == index || 2 == index )
+                                     { // Check for words which look like the model name:
+                                       if( "" == deletechars( word, letter_chars + "-" ) )
+                                       { // Return a word of the model name:
+                                         return word;
+                                       }
+                                     }
+                                     if( 1 == index || 2 == index || 3 == index )
+                                     { // Check for a word which looks like the model series:
+                                       if( "" != filterchars( word, number_chars ) )
+                                       { // Skip the rest after the first model series word:
+                                         skip_the_rest = true;
+                                         // Return the model series:
+                                         return word;
+                                       }
+                                     }
+                                   }
+                                 }
+                               );
+    model_info = mergestring( description_words, " " );
+  }
+  y2milestone("DeriveModelName: derived '%1' from '%2'", model_info, description );
+  return model_info;
+}
+
+/**
+ * Derive a reasonable model info from an arbitrary description string.
+ * @param string from which a model is derived.
+ * @return string (possibly the empty string)
+ */
+global string DeriveDriverFilterString( string driver_filter_input_text )
+{ string driver_filter_string = "";
+  list <string> words = splitstring( driver_filter_input_text, " " );
+  // Remove empty words because a sequence of spaces results empty words in words
+  // for example "ACME  Funprinter" (two spaces!) results ["ACME","","Funprinter"].
+  // Avoid having meaningless words like "series" or "Serie"
+  // and "Mita" (from "Kyocera Mita") in the driver_filter_string
+  // (the driver_filter_string "kyocera.*FS-1000" finds the "Kyocera Mita FS-1000+")
+  words = filter( string word,
+                  words,
+                  { return( "" != word
+                            && ! issubstring( tolower( word ), "serie" )
+                            && "mita" != tolower( word )
+                          );
+                  }
+                );
+  if( size( words ) > 0 )
+  { // Replace each sequence of spaces in driver_filter_input_text
+    // by the regular expression '.*' so that the search result
+    // hopefully fits better to what the user expects to get,
+    // for example searching with "ACME 1000" should work to also
+    // find "ACME FunPrinter 1000" and "ACME Fancy Printer 1000 XL"
+    // Besides the regular expression characters '.*'
+    // only the special character '+' is also taken into account
+    // because this is also a meaningful character in model names
+    // for example the '+' at the end of a Kyocera model name
+    // indicates that this model has a built-in PostScript interpreter
+    // while the model without the '+' understands only PCL.
+    driver_filter_string = filterchars( tolower( mergestring( words, ".*" ) ), lower_alnum_chars + ".*+" );
+    // Replace '+' by '\\+' which evaluates to '\+' (because of YCP quoting with '\\')
+    // to get a '+' character in a word quoted as '\+' because otherwise
+    // a '+' character would be interpreded as a special regular expression character
+    // when the driver_filter_string is used as pattern for regexpmatch in DriverItems().
+    driver_filter_string = mergestring( splitstring( driver_filter_string, "+" ), "\\+" );
+  }
+  y2milestone("DeriveDriverFilterString: derived '%1' from '%2'", driver_filter_string, driver_filter_input_text );
+  return driver_filter_string;
+}
+
+/**
  * Create a valid new queue name.
  * @param proposal string from which a valid new queue name is derived.
  * @return string

@@ -158,49 +158,7 @@ term getContentFromCurrentModel( boolean no_default_raw_queue )
     if( "" != current_model_info
         && "unknown" != tolower( current_model_info )
       )
-    { list <string> description_words = splitstring( current_model_info, " " );
-      // In Printer.ycp and basicmodify.ycp there are lines like
-      //  description = model + " with driver " + description;
-      //  new_description = model + " with driver " + new_description;
-      // Avoid having "with" and/or "driver" in the current_model_info:
-      description_words = filter( string word,
-                                  description_words,
-                                  { return( "with" != word && "driver" != word );
-                                  }
-                                );
-      // Use the queue description only if its first word is actually a known manufacturer:
-      boolean description_starts_with_known_manufacturer = false;
-      foreach( string known_manufacturer,
-               Printer::known_manufacturers,
-               { if( tolower( description_words[0]:"" ) == tolower( known_manufacturer ) )
-                 { description_starts_with_known_manufacturer = true;
-                   break;
-                 }
-               }
-             );
-      if( description_starts_with_known_manufacturer )
-      { if( size( description_words ) > 2
-            && "with" != description_words[1]:""
-            && "with" != description_words[2]:""
-            && "driver" != description_words[2]:""
-          )
-        { current_model_info = description_words[0]:"" + " "
-                               + description_words[1]:"" + " "
-                               + description_words[2]:"";
-        }
-        if( size( description_words ) == 2
-            && "with" != description_words[1]:""
-          )
-        { current_model_info = description_words[0]:"" + " "
-                               + description_words[1]:"";
-        }
-        if( size( description_words ) == 1 )
-        { current_model_info = description_words[0]:"";
-        }
-      }
-      else
-      { current_model_info = "";
-      }
+    { current_model_info = Printer::DeriveModelName( current_model_info );
     }
   }
   if( "" != current_model_info
