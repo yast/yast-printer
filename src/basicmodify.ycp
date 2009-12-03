@@ -76,41 +76,7 @@ any BasicModifyDialog()
                        false
                      );
   Wizard::HideAbortButton();
-  string model = "";
-  list <string> description_words = splitstring( description, " " );
-  // In Printer.ycp and basicmodify.ycp there are lines like
-  //  description = model + " with driver " + description;
-  //  new_description = model + " with driver " + new_description;
-  // Avoid having "with" and/or "driver" in the model string:
-  description_words = filter( string word,
-                              description_words,
-                              { return( "with" != word && "driver" != word );
-                              }
-                            );
-  // Use the queue description only if its first word is actually a known manufacturer:
-  boolean description_starts_with_known_manufacturer = false;
-  foreach( string known_manufacturer,
-           Printer::known_manufacturers,
-           { if( tolower( description_words[0]:"" ) == tolower( known_manufacturer ) )
-             { description_starts_with_known_manufacturer = true;
-               break;
-             }
-           }
-         );
-  if( description_starts_with_known_manufacturer )
-  { if( size( description_words ) > 2 )
-    { model = description_words[0]:"" + " "
-              + description_words[1]:"" + " "
-              + description_words[2]:"";
-    }
-    if( size( description_words ) == 2 )
-    { model = description_words[0]:"" + " "
-              + description_words[1]:"";
-    }
-    if( size( description_words ) == 1 )
-    { model = description_words[0]:"";
-    }
-  }
+  string model = Printer::DeriveModelName( description );
   string driver_filter_input_text = model;
   // Match anywhere in the NickName entry in the PPD:
   string driver_filter_string = filterchars( tolower( driver_filter_input_text ), Printer::lower_alnum_chars );
@@ -297,6 +263,13 @@ any BasicModifyDialog()
                             _("Current Driver") + ": " + nick_name,
                             true
                           );
+  }
+  if( "" == driver_filter_string )
+  { // Set a fallback driver_filter_string which does not match to anything
+    // to avoid that the full list of thousands of PPDs is shown automatically
+    // because it can take a very long time until the user can proceed:
+    driver_filter_input_text = _("Enter your printer model here.");
+    driver_filter_string = "qqqqqqqqqq";
   }
   term contents = `VBox
                   ( `VBox
@@ -540,6 +513,13 @@ any BasicModifyDialog()
       string description_input = (string)UI::QueryWidget( `id(`description_input), `Value );
       // Delete ' characters because they are used for quoting in the bash commandline:
       description_input = deletechars( description_input, "'" );
+      // Leading and/or trailing and/or sequences of spaces look ugly and are condensed here:
+      description_input =  mergestring( filter( string word,
+                                                splitstring( description_input, " " ),
+                                                { return( "" != word ); }
+                                              ),
+                                        " "
+                                      );
       if( description_input != description )
       { commandline = commandline + " -D '" + description_input + "'";
         something_has_changed = true;
@@ -547,6 +527,13 @@ any BasicModifyDialog()
       string location_input = (string)UI::QueryWidget( `id(`location_input), `Value );
       // Delete ' characters because they are used for quoting in the bash commandline:
       location_input = deletechars( location_input, "'" );
+      // Leading and/or trailing and/or sequences of spaces look ugly and are condensed here:
+      location_input =  mergestring( filter( string word,
+                                             splitstring( location_input, " " ),
+                                             { return( "" != word ); }
+                                           ),
+                                     " "
+                                   );
       if( location_input != location )
       { commandline = commandline + " -L '" + location_input + "'";
         something_has_changed = true;
@@ -773,33 +760,10 @@ any BasicModifyDialog()
             && "unknown" != tolower( model )
           )
         { driver_filter_input_text = model;
-          // Replace each sequence of spaces in driver_filter_input_text
-          // by the regular expression '.*' so that the search result
-          // hopefully fits better to what the user expects to get,
-          // for example searching with "ACME 1000" should work to also
-          // find "ACME FunPrinter 1000" and "ACME Fancy Printer 1000 XL"
-          list <string> words = splitstring( driver_filter_input_text, " " );
-          // A sequence of spaces results empty strings in words which are removed here:
-          words = filter( string word,
-                          words,
-                          { return( "" != word );
-                          }
-                        );
-          // Besides the regular expression characters '.*'
-          // only the special character '+' is also taken into account
-          // because this is also a meaningful character in model names
-          // for example the '+' at the end of a Kyocera model name
-          // indicates that this model has a built-in PostScript interpreter
-          // while the model without the '+' understands only PCL.
-          driver_filter_string = filterchars( tolower( mergestring( words, ".*" ) ), Printer::lower_alnum_chars + ".*+" );
-          // Replace '+' by '\\+' which evaluates to '\+' (because of YCP quoting with '\\')
-          // to get a '+' character in a word quoted as '\+' because otherwise
-          // a '+' character would be interpreded as a special regular expression character
-          // when the driver_filter_string is used as pattern for regexpmatch in DriverItems().
-          driver_filter_string = mergestring( splitstring( driver_filter_string, "+" ), "\\+" );
+          driver_filter_string = Printer::DeriveDriverFilterString( driver_filter_input_text );
           // The first word in the driver_filter_string is usually the first word of the manufacturer name.
           // This fuzzy match is intended so that e.g. "Kyocera" and "Kyocera Mita" result the same.
-          // Note that because of the above the words in driver_filter_string are joined with '.*'
+          // Note that DeriveDriverFilterString joined the words in driver_filter_string with '.*'
           // so that the first word in driver_filter_string must be split from the rest at '.':
           string manufacturer = splitstring( driver_filter_string, "." )[0]:"";
           // Even more fuzziness for very ambiguous manufacturer names:
@@ -834,72 +798,12 @@ any BasicModifyDialog()
           driver_filter_string = "^" + filterchars( tolower( nick_name ), Printer::lower_alnum_chars );
         }
         else
-        { description_words = splitstring( description, " " );
-          // In Printer.ycp and basicmodify.ycp there are lines like
-          //  description = model + " with driver " + description;
-          //  new_description = model + " with driver " + new_description;
-          // Avoid having "with" and/or "driver" in the model string:
-          description_words = filter( string word,
-                                      description_words,
-                                      { return( "with" != word && "driver" != word );
-                                      }
-                                    );
-          // Use the queue description only if its first word is actually a known manufacturer:
-          boolean description_starts_with_known_manufacturer = false;
-          foreach( string known_manufacturer,
-                   Printer::known_manufacturers,
-                   { if( tolower( description_words[0]:"" ) == tolower( known_manufacturer ) )
-                     { description_starts_with_known_manufacturer = true;
-                       break;
-                     }
-                   }
-                 );
-          if( description_starts_with_known_manufacturer )
-          { if( size( description_words ) > 2 )
-            if( size( description_words ) > 2 )
-            { model = description_words[0]:"" + " "
-                      + description_words[1]:"" + " "
-                      + description_words[2]:"";
-            }
-            if( size( description_words ) == 2 )
-            { model = description_words[0]:"" + " "
-                      + description_words[1]:"";
-            }
-            if( size( description_words ) == 1 )
-            { model = description_words[0]:"";
-            }
-          }
-          else
-          { model = "";
-          }
+        { model = Printer::DeriveModelName( description );
           driver_filter_input_text = model;
-          // Replace each sequence of spaces in driver_filter_input_text
-          // by the regular expression '.*' so that the search result
-          // hopefully fits better to what the user expects to get,
-          // for example searching with "ACME 1000" should work to also
-          // find "ACME FunPrinter 1000" and "ACME Fancy Printer 1000 XL"
-          list <string> words = splitstring( driver_filter_input_text, " " );
-          // A sequence of spaces results empty strings in words which are removed here:
-          words = filter( string word,
-                          words,
-                          { return( "" != word );
-                          }
-                        );
-          // Besides the regular expression characters '.*'
-          // only the special character '+' is also taken into account
-          // because this is also a meaningful character in model names
-          // for example the '+' at the end of a Kyocera model name
-          // indicates that this model has a built-in PostScript interpreter
-          // while the model without the '+' understands only PCL.
-          driver_filter_string = filterchars( tolower( mergestring( words, ".*" ) ), Printer::lower_alnum_chars + ".*+" );
-          // Replace '+' by '\\+' which evaluates to '\+' (because of YCP quoting with '\\')
-          // to get a '+' character in a word quoted as '\+' because otherwise
-          // a '+' character would be interpreded as a special regular expression character
-          // when the driver_filter_string is used as pattern for regexpmatch in DriverItems().
-          driver_filter_string = mergestring( splitstring( driver_filter_string, "+" ), "\\+" );
+          driver_filter_string = Printer::DeriveDriverFilterString( driver_filter_input_text );
           // The first word in the driver_filter_string is usually the first word of the manufacturer name.
           // This fuzzy match is intended so that e.g. "Kyocera" and "Kyocera Mita" result the same.
-          // Note that because of the above the words in driver_filter_string are joined with '.*'
+          // Note that DeriveDriverFilterString joined the words in driver_filter_string with '.*'
           // so that the first word in driver_filter_string must be split from the rest at '.':
           string manufacturer = splitstring( driver_filter_string, "." )[0]:"";
           // Even more fuzziness for very ambiguous manufacturer names:
@@ -1063,30 +967,7 @@ any BasicModifyDialog()
       driver_filter_input_text = (string)UI::QueryWidget( `id(`driver_filter_input), `Value );
       y2milestone( "Drivers for '%1'", driver_filter_input_text );
       // Match anywhere in the NickName entry in the PPD (i.e. without leading '^').
-      // Replace each sequence of spaces in driver_filter_input_text
-      // by the regular expression '.*' so that the search result
-      // hopefully fits better to what the user expects to get,
-      // for example searching with "ACME 1000" should work to also
-      // find "ACME FunPrinter 1000" and "ACME Fancy Printer 1000 XL"
-      list <string> words = splitstring( driver_filter_input_text, " " );
-      // A sequence of spaces results empty strings in words which are removed here:
-      words = filter( string word,
-                      words,
-                      { return( "" != word );
-                      }
-                    );
-      // Besides the regular expression characters '.*'
-      // only the special character '+' is also taken into account
-      // because this is also a meaningful character in model names
-      // for example the '+' at the end of a Kyocera model name
-      // indicates that this model has a built-in PostScript interpreter
-      // while the model without the '+' understands only PCL.
-      driver_filter_string = filterchars( tolower( mergestring( words, ".*" ) ), Printer::lower_alnum_chars + ".*+" );
-      // Replace '+' by '\\+' which evaluates to '\+' (because of YCP quoting with '\\')
-      // to get a '+' character in a word quoted as '\+' because otherwise
-      // a '+' character would be interpreded as a special regular expression character
-      // when the driver_filter_string is used as pattern for regexpmatch in DriverItems().
-      driver_filter_string = mergestring( splitstring( driver_filter_string, "+" ), "\\+" );
+      driver_filter_string = Printer::DeriveDriverFilterString( driver_filter_input_text );
       if( "" == driver_filter_string )
       { driver_filter_input_text = _("any model");
       }
