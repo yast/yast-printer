@@ -154,17 +154,44 @@ term getContentFromCurrentModel( boolean no_default_raw_queue )
   if( "" == current_model_info
       || "unknown" == tolower( current_model_info )
     )
-  { current_model_info = Printer::queues[Printer::selected_queues_index,"description"]:"";
-    if( "" != current_model_info
-        && "unknown" != tolower( current_model_info )
-      )
-    { current_model_info = Printer::DeriveModelName( current_model_info );
+  { if( Printer::selected_queues_index >= 0 )
+    { if( "local" == Printer::queues[Printer::selected_queues_index,"config"]:"" )
+      { string ppd = Printer::queues[Printer::selected_queues_index,"ppd"]:"";
+        // For a local raw queue ppd is the empty string.
+        // For a local queue with a System V style interface script ppd is "/etc/cups/interfaces/<name-of-the-script>".
+        // For a local queue with URI "ipp://server/printers/queue" ppd is "ipp://server/printers/queue.ppd".
+        // For a normal local queue with URI "ipp://server/resource" ppd is "/etc/cups/ppd/<queue-name>.ppd".
+        // For a normal local queue ppd is "/etc/cups/ppd/<queue-name>.ppd".
+        // The leading part "/etc/" may vary depending on how the local cupsd
+        // is installed or configured, see "/usr/bin/cups-config --serverroot".
+        if( "" == ppd )
+        { no_default_raw_queue = false;
+        }
+        else
+        { no_default_raw_queue = true;
+        }
+        if( issubstring( ppd, "/cups/ppd/" ) )
+        { // A "(recommended)" is removed because there is a special patch in CUPS
+          // which suppresses it in certain "lpinfo -m" output.
+          // Note the YCP quoting: \" becomes " and \\n becomes \n in the commandline.
+          string commandline = "grep '^\*NickName' " + ppd + " | cut -s -d '\"' -f2 | sed -e 's/(recommended)//' -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | tr -s ' ' | tr -d '\\n'";
+          if( Printerlib::ExecuteBashCommand( commandline ) )
+          { current_model_info = Printerlib::result["stdout"]:"";
+          }
+        }
+      }
+      if( "" == current_model_info
+          || "unknown" == tolower( current_model_info )
+        )
+      { current_model_info = Printer::queues[Printer::selected_queues_index,"description"]:"";
+      }
     }
   }
   if( "" != current_model_info
       && "unknown" != tolower( current_model_info )
     )
-  { if( no_default_raw_queue )
+  { current_model_info = Printer::DeriveModelName( current_model_info );
+    if( no_default_raw_queue )
     { content = `Left
                 ( `ComboBox
                   ( `id("manufacturers_combo_box"),
@@ -221,7 +248,7 @@ term getContentFromCurrentModel( boolean no_default_raw_queue )
 
 term getContentFromBackend( string backend )
 { list items = [];
-  backend = sformat( "%1:/", backend );
+  backend = backend + ":/";
   foreach( term row,
            (list<term>)Printer::ConnectionItems( "" ),
            { if( backend == substring( row[2]:"", 0, size(backend) ) )
@@ -348,6 +375,285 @@ void changeSettingsDialog( symbol selected )
           content = getContentFromBackend("hp");
           break;
     case(`serial):
+          current_device_uri = getCurrentDeviceURI();
+          string current_serial_device_node = "";
+          list <term> serial_device_node_items = [];
+          if( "serial:/" == substring( current_device_uri, 0, size( "serial:/" ) ) )
+          { // The Device URI has the form like:
+            // serial:/dev/ttyS6?baud=115200+bits=7+parity=space+flow=hard+stop=1
+            // remove the scheme 'serial:' so that only '/dev/ttyS6' is left:
+            current_serial_device_node = mergestring( sublist( splitstring( current_device_uri, ":?" ), 1, 1 ), "" );
+
+          }
+          boolean current_serial_device_node_found = false;
+          foreach( string device_node,
+                   [ "/dev/ttyS0",
+                     "/dev/ttyS1",
+                     "/dev/ttyS2",
+                     "/dev/ttyS3",
+                     "/dev/ttyS4",
+                     "/dev/ttyS5",
+                     "/dev/ttyS6",
+                     "/dev/ttyS7"
+                   ],
+                   { if( current_serial_device_node == device_node )
+                     { current_serial_device_node_found = true;
+                       // Have the current serial device node preselected:
+                       serial_device_node_items = add( serial_device_node_items,
+                                                       `item( `id( device_node ), device_node, true )
+                                                     );
+                     }
+                     else
+                     { serial_device_node_items = add( serial_device_node_items,
+                                                       `item( `id( device_node ), device_node )
+                                                     );
+                     }
+                   }
+                 );
+          if( ! current_serial_device_node_found )
+          { if( "" == current_serial_device_node )
+            { // Have an empty entry topmost and preselected to be on the safe side because
+              // the CUPS serial backend may blindly write to any device:
+              serial_device_node_items = prepend( serial_device_node_items, `item( `id(""), "", true ) );
+            }
+            else
+            { // Have the current_serial_device_node topmost and preselected:
+              serial_device_node_items = prepend( serial_device_node_items,
+                                                   `item( `id( current_serial_device_node ),
+                                                          current_serial_device_node,
+                                                          true
+                                                        )
+                                                 );
+            }
+          }
+          list <term> serial_baud_rate_items = [];
+          list <term> serial_data_bits_items = [];
+          list <term> serial_parity_items = [];
+          list <term> serial_flow_control_items = [];
+          list <term> serial_stop_bits_items = [];
+          if( "serial:/" == substring( current_device_uri, 0, size( "serial:/" ) ) )
+          { foreach( string parameter,
+                     // The Device URI has the form like:
+                     // serial:/dev/ttyS6?baud=115200+bits=7+parity=space+flow=hard+stop=1
+                     // remove all before the '?' so that only the parameters 'baud=115200+bits=7...' are left
+                     // as strings in a list like ["baud=115200","bits=7","parity=space","flow=hard","stop=1"]:
+                     sublist( splitstring( current_device_uri, "?+" ), 1 ),
+                     { list <string> keyword_value = splitstring( parameter, "=" );
+                       string keyword = keyword_value[0]:"";
+                       string value = keyword_value[1]:"";
+                       boolean value_found = false;
+                       if( "baud" == keyword )
+                       { foreach( string item_value,
+                                  // The preset values are from backend/serial.c in the CUPS 1.3.9 sources:
+                                  [ "1200", "2400", "4800", "9600", "19200", "38400", "57600", "115200", "230400" ],
+                                  { if( value == item_value )
+                                    { value_found = true;
+                                      // Have the current value preselected:
+                                      serial_baud_rate_items = add( serial_baud_rate_items,
+                                                                    `item( `id( item_value ), item_value, true )
+                                                                  );
+                                    }
+                                    else
+                                    { serial_baud_rate_items = add( serial_baud_rate_items,
+                                                                    `item( `id( item_value ), item_value )
+                                                                  );
+                                    }
+                                  }
+                                );
+                         if( ! value_found )
+                         { if( "" == value )
+                           { // Have an empty entry topmost and preselected to be on the safe side because
+                             // the baud rate may have to be exactly what is set in the printer (e.g. via DIP switches):
+                             serial_baud_rate_items = prepend( serial_baud_rate_items, `item( `id(""), "", true ) );
+                           }
+                           else
+                           { // Only the above preset values are known to be supported by CUPS.
+                             // If the current value is none of them, it might be invalid or a typo.
+                             // Therefore the current value is added with an appropriate hint.
+                             // Nevertheless the current value must be topmost and preselected because
+                             // anything else which might be preselected (even an empty value)
+                             // would silently change the current value to the preselected one
+                             // when the user clicks [OK]:
+                             serial_baud_rate_items = prepend( serial_baud_rate_items,
+                                                               `item( `id( value ),
+                                                                      value + " (might be invalid or a typo)",
+                                                                      true
+                                                                    )
+                                                             );
+                           }
+                         }
+                       }
+                       if( "bits" == keyword )
+                       { foreach( string item_value,
+                                  // The preset values are from backend/serial.c in the CUPS 1.3.9 sources:
+                                  [ "7", "8" ],
+                                  { if( value == item_value )
+                                    { value_found = true;
+                                      // Have the current value preselected:
+                                      serial_data_bits_items = add( serial_data_bits_items,
+                                                                    `item( `id( item_value ), item_value, true )
+                                                                  );
+                                    }
+                                    else
+                                    { serial_data_bits_items = add( serial_data_bits_items,
+                                                                    `item( `id( item_value ), item_value )
+                                                                  );
+                                    }
+                                  }
+                                );
+                         if( ! value_found )
+                         { if( "" == value )
+                           { // Have an empty entry topmost and preselected to be on the safe side because
+                             // the data bits may have to be exactly what is set in the printer (e.g. via DIP switches):
+                             serial_data_bits_items = prepend( serial_data_bits_items, `item( `id(""), "", true ) );
+                           }
+                           else
+                           { // Only the above preset values are known to be supported by CUPS.
+                             // If the current value is none of them, it might be invalid or a typo.
+                             // Therefore the current value is added with an appropriate hint.
+                             // Nevertheless the current value must be topmost and preselected because
+                             // anything else which might be preselected (even an empty value)
+                             // would silently change the current value to the preselected one
+                             // when the user clicks [OK]:
+                             serial_data_bits_items = prepend( serial_data_bits_items,
+                                                               `item( `id( value ),
+                                                                      value + " (might be invalid or a typo)",
+                                                                      true
+                                                                    )
+                                                             );
+                           }
+                         }
+                       }
+                       if( "parity" == keyword )
+                       { foreach( string item_value,
+                                  // The preset values are from backend/serial.c in the CUPS 1.3.9 sources:
+                                  [ "even", "odd", "none", "space", "mark" ],
+                                  { if( value == item_value )
+                                    { value_found = true;
+                                      // Have the current value preselected:
+                                      serial_parity_items = add( serial_parity_items,
+                                                                 `item( `id( item_value ), item_value, true )
+                                                               );
+                                    }
+                                    else
+                                    { serial_parity_items = add( serial_parity_items,
+                                                                 `item( `id( item_value ), item_value )
+                                                               );
+                                    }
+                                  }
+                                );
+                         if( ! value_found )
+                         { if( "" == value )
+                           { // Have an empty entry topmost and preselected to be on the safe side because
+                             // the parity may have to be exactly what is set in the printer (e.g. via DIP switches):
+                             serial_parity_items = prepend( serial_parity_items, `item( `id(""), "", true ) );
+                           }
+                           else
+                           { // Only the above preset values are known to be supported by CUPS.
+                             // If the current value is none of them, it might be invalid or a typo.
+                             // Therefore the current value is added with an appropriate hint.
+                             // Nevertheless the current value must be topmost and preselected because
+                             // anything else which might be preselected (even an empty value)
+                             // would silently change the current value to the preselected one
+                             // when the user clicks [OK]:
+                             serial_parity_items = prepend( serial_parity_items,
+                                                            `item( `id( value ),
+                                                                   value + " (might be invalid or a typo)",
+                                                                   true
+                                                                 )
+                                                          );
+                           }
+                         }
+                       }
+                       if( "flow" == keyword )
+                       { foreach( string item_value,
+                                  // The preset values are from backend/serial.c in the CUPS 1.3.9 sources:
+                                  [ "none", "soft", "hard", "dtrdsr" ],
+                                  { string item_text = item_value;
+                                    if( "soft" == item_value ) item_text = "XON/XOFF (software)";
+                                    if( "hard" == item_value ) item_text = "RTS/CTS (hardware)";
+                                    if( "dtrdsr" == item_value ) item_text = "DTR/DSR (hardware)";
+                                    if( value == item_value )
+                                    { value_found = true;
+                                      // Have the current value preselected:
+                                      serial_flow_control_items = add( serial_flow_control_items,
+                                                                       `item( `id( item_value ), item_text, true )
+                                                                     );
+                                    }
+                                    else
+                                    { serial_flow_control_items = add( serial_flow_control_items,
+                                                                       `item( `id( item_value ), item_text )
+                                                                     );
+                                    }
+                                  }
+                                );
+                         if( ! value_found )
+                         { if( "" == value )
+                           { // Have an empty entry topmost and preselected to be on the safe side because the
+                             // flow control may have to be exactly what is set in the printer (e.g. via DIP switches):
+                             serial_flow_control_items = prepend( serial_flow_control_items, `item( `id(""), "", true ) );
+                           }
+                           else
+                           { // Only the above preset values are known to be supported by CUPS.
+                             // If the current value is none of them, it might be invalid or a typo.
+                             // Therefore the current value is added with an appropriate hint.
+                             // Nevertheless the current value must be topmost and preselected because
+                             // anything else which might be preselected (even an empty value)
+                             // would silently change the current value to the preselected one
+                             // when the user clicks [OK]:
+                             serial_flow_control_items = prepend( serial_flow_control_items,
+                                                                  `item( `id( value ),
+                                                                         value + " (might be invalid or a typo)",
+                                                                         true
+                                                                       )
+                                                                );
+                           }
+                         }
+                       }
+                       if( "stop" == keyword )
+                       { foreach( string item_value,
+                                  // The preset values are from backend/serial.c in the CUPS 1.3.9 sources:
+                                  [ "1", "2" ],
+                                  { if( value == item_value )
+                                    { value_found = true;
+                                      // Have the current value preselected:
+                                      serial_stop_bits_items = add( serial_stop_bits_items,
+                                                                    `item( `id( item_value ), item_value, true )
+                                                                  );
+                                    }
+                                    else
+                                    { serial_stop_bits_items = add( serial_stop_bits_items,
+                                                                    `item( `id( item_value ), item_value )
+                                                                  );
+                                    }
+                                  }
+                                );
+                         if( ! value_found )
+                         { if( "" == value )
+                           { // Have an empty entry topmost and preselected to be on the safe side because the
+                             // stop bits may have to be exactly what is set in the printer (e.g. via DIP switches):
+                             serial_stop_bits_items = prepend( serial_stop_bits_items, `item( `id(""), "", true ) );
+                           }
+                           else
+                           { // Only the above preset values are known to be supported by CUPS.
+                             // If the current value is none of them, it might be invalid or a typo.
+                             // Therefore the current value is added with an appropriate hint.
+                             // Nevertheless the current value must be topmost and preselected because
+                             // anything else which might be preselected (even an empty value)
+                             // would silently change the current value to the preselected one
+                             // when the user clicks [OK]:
+                             serial_stop_bits_items = prepend( serial_stop_bits_items,
+                                                               `item( `id( value ),
+                                                                      value + " (might be invalid or a typo)",
+                                                                      true
+                                                                    )
+                                                             );
+                           }
+                         }
+                       }
+                     }
+                   );
+          }
           model_content = getContentFromCurrentModel( true );
           content = `VBox
                     ( `Left
@@ -360,19 +666,7 @@ void changeSettingsDialog( symbol selected )
                           // a serial device node (e.g. /dev/ttyS0 or /dev/ttyS1)
                           // can be selected or entered:
                           _("&Serial device"),
-                          [ // Have nothing preselected to be on the safe side because
-                            // the CUPS serial backend may blindly write to the device,
-                            // (see backend/serial.c in the CUPS 1.3.9 sources):
-                            `item( `id(""), "", true ),
-                            `item( `id("/dev/ttyS0"), "/dev/ttyS0" ),
-                            `item( `id("/dev/ttyS1"), "/dev/ttyS1" ),
-                            `item( `id("/dev/ttyS2"), "/dev/ttyS2" ),
-                            `item( `id("/dev/ttyS3"), "/dev/ttyS3" ),
-                            `item( `id("/dev/ttyS4"), "/dev/ttyS4" ),
-                            `item( `id("/dev/ttyS5"), "/dev/ttyS5" ),
-                            `item( `id("/dev/ttyS6"), "/dev/ttyS6" ),
-                            `item( `id("/dev/ttyS7"), "/dev/ttyS7" )
-                          ]
+                          serial_device_node_items
                         )
                       ),
                       `Left
@@ -386,21 +680,7 @@ void changeSettingsDialog( symbol selected )
                           // the baud rate for a serial device
                           // can be selected or entered:
                           _("&Baud rate"),
-                          // The preset values are from backend/serial.c
-                          // in the CUPS 1.3.9 sources:
-                          [ // Have nothing preselected to be on the safe side because the baud rate
-                            // may have to be exactly what is set in the printer (e.g. via DIP switches):
-                            `item( `id(""), "", true ),
-                            `item( `id("1200"), "1200" ),
-                            `item( `id("2400"), "2400" ),
-                            `item( `id("4800"), "4800" ),
-                            `item( `id("9600"), "9600" ),
-                            `item( `id("19200"), "19200" ),
-                            `item( `id("38400"), "38400" ),
-                            `item( `id("57600"), "57600" ),
-                            `item( `id("115200"), "115200" ),
-                            `item( `id("230400"), "230400" )
-                          ]
+                          serial_baud_rate_items
                         )
                       ),
                       `Left
@@ -416,12 +696,7 @@ void changeSettingsDialog( symbol selected )
                           // the number of data bits for a serial device
                           // can be selected or entered:
                           _("&Data bits"),
-                          // The preset values are from backend/serial.c
-                          // in the CUPS 1.3.9 sources:
-                          [ `item( `id(""), "", true ),
-                            `item( `id("7"), "7" ),
-                            `item( `id("8"), "8" )
-                          ]
+                          serial_data_bits_items
                         )
                       ),
                       `Left
@@ -435,15 +710,7 @@ void changeSettingsDialog( symbol selected )
                           // the parity checking for a serial device
                           // can be selected or entered:
                           _("&Parity checking"),
-                          // The preset values are from backend/serial.c
-                          // in the CUPS 1.3.9 sources:
-                          [ `item( `id(""), "", true ),
-                            `item( `id("even"), "even" ),
-                            `item( `id("odd"), "odd" ),
-                            `item( `id("none"), "none" ),
-                            `item( `id("space"), "space" ),
-                            `item( `id("mark"), "mark" )
-                          ]
+                          serial_parity_items
                         )
                       ),
                       `Left
@@ -459,14 +726,7 @@ void changeSettingsDialog( symbol selected )
                           // the flow control for a serial device
                           // can be selected or entered:
                           _("&Flow control"),
-                          // The preset values are from backend/serial.c
-                          // in the CUPS 1.3.9 sources:
-                          [ `item( `id(""), "", true ),
-                            `item( `id("none"), "none" ),
-                            `item( `id("soft"), "XON/XOFF (software)" ),
-                            `item( `id("hard"), "RTS/CTS (hardware)" ),
-                            `item( `id("dtrdsr"), "DTR/DSR (hardware)" )
-                          ]
+                          serial_flow_control_items
                         )
                       ),
                       `Left
@@ -480,12 +740,7 @@ void changeSettingsDialog( symbol selected )
                           // the number of stop bits for a serial device
                           // can be selected or entered:
                           _("S&top bits"),
-                          // The preset values are from backend/serial.c
-                          // in the CUPS 1.3.9 sources:
-                          [ `item( `id(""), "", true ),
-                            `item( `id("1"), "1" ),
-                            `item( `id("2"), "2" )
-                          ]
+                          serial_stop_bits_items
                         )
                       ),
                       model_content
@@ -553,11 +808,7 @@ void changeSettingsDialog( symbol selected )
             { current_bluetooth_device_id = uri_parts[1]:"";
             }
           }
-          if( "" == current_bluetooth_device_id )
-          { // Have an empty string preselected to be on the safe side because
-            // the bluetooth backend may blindly write to the bluetooth device:
-            bluetooth_device_id_items = [ `item( `id(""), "", true ) ];
-          }
+          boolean current_bluetooth_device_id_found = false;
           foreach( string word,
                    splitstring( bluetooth_device_list, " " ),
                    { if( regexpmatch( word, "..:..:..:..:..:..") )
@@ -567,7 +818,8 @@ void changeSettingsDialog( symbol selected )
                        string hexnumber = filterchars( word, "0123456789ABCDEFabcdef" );
                        if( "" != hexnumber )
                        { if( current_bluetooth_device_id == hexnumber )
-                         { // Have the current bluetooth device id preselected:
+                         { current_bluetooth_device_id_found = true;
+                           // Have the current bluetooth device id preselected:
                            bluetooth_device_id_items = add( bluetooth_device_id_items,
                                                             `item( `id( hexnumber ), hexnumber, true )
                                                           );
@@ -581,6 +833,22 @@ void changeSettingsDialog( symbol selected )
                      }
                    }
                  );
+          if( ! current_bluetooth_device_id_found )
+          { if( "" == current_bluetooth_device_id )
+            { // Have an empty entry topmost and preselected to be on the safe side because
+              // the bluetooth backend may blindly write to any bluetooth device:
+              bluetooth_device_id_items = prepend( bluetooth_device_id_items, `item( `id(""), "", true ) );
+            }
+            else
+            { // Have the current_bluetooth_device_id topmost and preselected:
+              bluetooth_device_id_items = prepend( bluetooth_device_id_items,
+                                                   `item( `id( current_bluetooth_device_id ),
+                                                          current_bluetooth_device_id,
+                                                          true
+                                                        )
+                                                 );
+            }
+          }
           model_content = getContentFromCurrentModel( true );
           content = `VBox
                     ( `Left
@@ -633,16 +901,12 @@ void changeSettingsDialog( symbol selected )
             current_scsi_device_node = mergestring( sublist( splitstring( current_device_uri, ":" ), 1 ), "" );
 
           }
-          if( "" == current_scsi_device_node )
-          { // Have an empty string preselected to be on the safe side because
-            // the CUPS scsi backend may blindly write to the device,
-            // (see backend/scsi-linux.c in the CUPS 1.3.9 sources):
-            scsi_device_node_items = [ `item( `id(""), "", true ) ];
-          }
+          boolean current_scsi_device_node_found = false;
           foreach( string device_node,
                    [ "/dev/sg0", "/dev/sg1", "/dev/sg2", "/dev/sg3", "/dev/sg4", "/dev/sg5", "/dev/sg6", "/dev/sg7" ],
                    { if( current_scsi_device_node == device_node )
-                     { // Have the current scsi device node preselected:
+                     { current_scsi_device_node_found = true;
+                       // Have the current scsi device node preselected:
                        scsi_device_node_items = add( scsi_device_node_items,
                                                      `item( `id( device_node ), device_node, true )
                                                    );
@@ -654,6 +918,21 @@ void changeSettingsDialog( symbol selected )
                      }
                    }
                  );
+
+          if( ! current_scsi_device_node_found )
+          { if( "" == current_scsi_device_node )
+            { // Have an empty entry topmost and preselected to be on the safe side because
+              // the CUPS scsi backend may blindly write to any device,
+              // (see backend/scsi-linux.c in the CUPS 1.3.9 sources):
+              scsi_device_node_items = prepend( scsi_device_node_items, `item( `id(""), "", true ) );
+            }
+            else
+            { // Have the current_scsi_device_node topmost and preselected:
+              scsi_device_node_items = prepend( scsi_device_node_items,
+                                                `item( `id( current_scsi_device_node ), current_scsi_device_node, true )
+                                              );
+            }
+          }
           model_content = getContentFromCurrentModel( true );
           content = `VBox
                     ( `Left
@@ -1312,8 +1591,8 @@ void changeSettingsDialog( symbol selected )
                           // Show it as wide as possible because it may have to contain
                           // longer stuff like 'path/to/command?option1=value1&option2=value2':
                           `opt(`hstretch),
-                          // TRANSLATORS: Text entry for program name that will be called via pipe
-                          _("Program (/path/to/command?option1=value1&option2=value2)"),
+                          // TRANSLATORS: Text entry for program name that will be called via pipe:
+                          _("Program (/path/to/command?option=value)"),
                           uri
                         )
                       ),
@@ -1689,7 +1968,7 @@ boolean validateAndMakeURI( symbol selected )
             { Popup::Error( _("The 'space' parity checking is only supported with 7 data bits.") );
             }
             else
-            { if( "mark" == serial_parity && "7" != serial_data_bits && "1" != serial_stop_bits )
+            { if( "mark" == serial_parity && ( "7" != serial_data_bits || "1" != serial_stop_bits ) )
               { Popup::Error( _("The 'mark' parity checking is only supported with 7 data bits and 1 stop bit.") );
               }
               else
