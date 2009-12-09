@@ -247,15 +247,54 @@ term getContentFromCurrentModel( boolean no_default_raw_queue )
 }
 
 term getContentFromBackend( string backend )
-{ list items = [];
+{ list connection_items = [];
   backend = backend + ":/";
-  foreach( term row,
+  string current_device_uri = getCurrentDeviceURI();
+  boolean current_device_uri_found = false;
+  term current_connection_item = nil;
+  foreach( term connection_item,
            (list<term>)Printer::ConnectionItems( "" ),
-           { if( backend == substring( row[2]:"", 0, size(backend) ) )
-             { items = add( items, row );
+           { // A connection_item is `item( `id(connections_index), model, uri, info )
+             // but Printer::ConnectionItems adds a trailing space character to model and uri
+             // (because the current YaST UI has almost no additional space between table columns)
+             // so that the last character must be removed to get the correct device URI value:
+             string uri = connection_item[2]:"";
+             uri = substring( uri, 0, size(uri) - 1 );
+             if( backend == substring( uri, 0, size(backend) ) )
+             { if( current_device_uri == uri )
+               { current_device_uri_found = true;
+                 current_connection_item = connection_item;
+               }
+               else
+               { connection_items = add( connection_items, connection_item );
+               }
              }
            }
          );
+  if( backend == substring( current_device_uri, 0, size(backend) ) )
+  { if( ! current_device_uri_found )
+    { // The current connection is no longer vaild.
+      // Nevertheless the current connection must be topmost to be preselected because
+      // anything else which might be topmost and preselected (even an empty value)
+      // would silently change the current connection to the preselected one
+      // when the user clicks [OK]:
+      connection_items = prepend( connection_items,
+                                  // Add trailing spaces because the current YaST UI
+                                  // has almost no additional space between table columns
+                                  // in partitcular not where the widest entry in a column is:
+                                  `item( `id( -1 ),
+                                         "Unknown" + " ",
+                                         current_device_uri + " ",
+                                         "No longer valid (printer not connected?)"
+                                       )
+                                );
+    }
+    else
+    { // Add the current connection topmost to be preselected
+      // via the default Table widget preselection:
+      connection_items = prepend( connection_items, current_connection_item );
+    }
+  }
   term content = `VBox
                  ( `Table
                    ( `id(`connection_selection),
@@ -277,7 +316,7 @@ term getContentFromBackend( string backend )
                        // Additional description of the printer or its particular connection:
                        _("Description")
                      ),
-                     items
+                     connection_items
                    )
                  );
   return content;
@@ -1941,7 +1980,16 @@ boolean validateAndMakeURI( symbol selected )
                                _("Select a connection"),
                                // Body of a Popup::AnyMessage when no connection was selected
                                // because there is no connection available to be selected:
-                               _("If no connection is shown here, it is not possible\nto access the device via this type of connection. ")
+                               _("If no connection is shown here, it is not possible\nto access the device via this type of connection.\nWas the printer connected and switched on all the time?")
+                             );
+            break;
+          }
+          if( selected_connection_index < 0 )
+          { Popup::AnyMessage( // Header of a Popup::AnyMessage when an invalid connection was selected:
+                               _("Select a valid connection"),
+                               // Body of a Popup::AnyMessage when an invalid connection was selected
+                               // because the current connection is no longer valid:
+                               _("When the current connection is no longer valid,\nit does no longer work to access the device via this connection.\nIs the printer still connected and switched on?")
                              );
             break;
           }

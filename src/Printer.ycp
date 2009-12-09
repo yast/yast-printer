@@ -1123,6 +1123,7 @@ global list ConnectionItems( string connection_filter_string )
   // and take the connection_filter_string into account (if it is not the empty string).
   list< term > connection_items = [];
   list< term > sorted_connection_items = [];
+  list< string > already_added_uris = [];
   boolean an_item_was_added = false;
   integer connections_index = -1;
   string uri = "";
@@ -1139,145 +1140,156 @@ global list ConnectionItems( string connection_filter_string )
              model = connection_entry["model"]:"";
              info = connection_entry["info"]:"";
              class = connection_entry["class"]:"";
-             if( uri != "" )
-             { // Take the filter_string into account:
-               if( "" == connection_filter_string )
-               { // Add trailing spaces because the current YaST UI
-                 // has almost no additional space between table columns
-                 // in partitcular not where the widest entry in a column is:
-                 connection_items = add( connection_items, `item( `id( connections_index ),
-                                                                  model + " ",
-                                                                  uri + " ",
-                                                                  info
-                                                                )
-                                       );
-                 an_item_was_added = true;
-               }
-               else
-               { // If the connection_filter_string is the special string "BasicAddDialog",
-                 // do a special filtering for those connections which are suitable
-                 // for the BasicAddDialog (i.e. only parallel, usb, and hp connections):
-                 if( "BasicAddDialog" == connection_filter_string )
-                 { if( "parallel:/" == substring( uri, 0, 10 )
-                       || "usb:/" == substring( uri, 0, 5 )
-                       || "hp:/" == substring( uri, 0, 4 )
-                       || "ConnectionWizardDialog" == class
+             // Skip effectively empty (i.e. useless) entries:
+             if( "" == uri )
+             { continue;
+             }
+             // Skip duplicate URIs because it does not make sense
+             // to show more than one entry with the same URI because
+             // for CUPS only different URIs distinguish different devices.
+             // For example two same USB printer models without different serial numbers
+             // are indistinguishable for CUPS so that any printout would be sent only
+             // to one of both devices (probably the first one in the USB device list):
+             if( contains( already_added_uris, uri ) )
+             { y2milestone( "skipped connection_entry with duplicate DeviceURI: '%1'", connection_entry );
+               continue;
+             }
+             // Take the filter_string into account:
+             if( "" == connection_filter_string )
+             { // Add trailing spaces because the current YaST UI
+               // has almost no additional space between table columns
+               // in partitcular not where the widest entry in a column is:
+               connection_items = add( connection_items, `item( `id( connections_index ),
+                                                                model + " ",
+                                                                uri + " ",
+                                                                info
+                                                              )
+                                     );
+               an_item_was_added = true;
+             }
+             else
+             { // If the connection_filter_string is the special string "BasicAddDialog",
+               // do a special filtering for those connections which are suitable
+               // for the BasicAddDialog (i.e. only parallel, usb, and hp connections):
+               if( "BasicAddDialog" == connection_filter_string )
+               { if( "parallel:/" == substring( uri, 0, 10 )
+                     || "usb:/" == substring( uri, 0, 5 )
+                     || "hp:/" == substring( uri, 0, 4 )
+                     || "ConnectionWizardDialog" == class
+                   )
+                 { // Skip "usb://HP/" DeviceURIs if it was not created by the Connection Wizard
+                   // and if there is at least one "hp:/usb/" DeviceURI
+                   // so that the "hp:/usb/" DeviceURI is used with preference.
+                   // The "usb://HP/" DeviceURI is still available via "MoreConnections".
+                   // It can happen that a "usb://HP/" DeviceURI is skipped
+                   // without a matching "hp:/usb/" DeviceURI because
+                   // the "hp" backend lists only devices which are known as supported by HPLIP.
+                   // If there are two HP printers connected but only one is supported by HPLIP,
+                   // there exists one "hp:/usb/" DeviceURI and therefore all "usb://HP/" DeviceURIs
+                   // are skipped even the one for the HP printer which is unknown to HPLIP.
+                   // But this is no real problem because all "usb://HP/" DeviceURIs are still
+                   // available via "MoreConnections".
+                   // Actually it is even good that HP printers which are unknown to HPLIP
+                   // are skipped by default because usually we do not provide a driver
+                   // for such printers so that the extra-cklick on "MoreConnections" may
+                   // make the user aware that something is fishy with this particular model
+                   // so that the user hopefully pays more attention which driver he selects.
+                   // If a HP printer is unknown to HPLIP it does not mean that it is unsupported
+                   // (it does also not mean that it is unsupported by HPLIP) because
+                   // it could be simply a new model which is not yet known to HPLIP
+                   // but compatible to a known model. In this case the user must pay attention
+                   // which exact driver he selects manually for his particular model.
+                   if( "usb://hp/" == tolower( substring( uri, 0, 9 ) )
+                       && hp_usb_uri_exists
+                       && class != "ConnectionWizardDialog"
                      )
-                   { // Skip "usb://HP/" DeviceURIs if it was not created by the Connection Wizard
-                     // and if there is at least one "hp:/usb/" DeviceURI
-                     // so that the "hp:/usb/" DeviceURI is used with preference.
-                     // The "usb://HP/" DeviceURI is still available via "MoreConnections".
-                     // It can happen that a "usb://HP/" DeviceURI is skipped
-                     // without a matching "hp:/usb/" DeviceURI because
-                     // the "hp" backend lists only devices which are known as supported by HPLIP.
-                     // If there are two HP printers connected but only one is supported by HPLIP,
-                     // there exists one "hp:/usb/" DeviceURI and therefore all "usb://HP/" DeviceURIs
-                     // are skipped even the one for the HP printer which is unknown to HPLIP.
-                     // But this is no real problem because all "usb://HP/" DeviceURIs are still
-                     // available via "MoreConnections".
-                     // Actually it is even good that HP printers which are unknown to HPLIP
-                     // are skipped by default because usually we do not provide a driver
-                     // for such printers so that the extra-cklick on "MoreConnections" may
-                     // make the user aware that something is fishy with this particular model
-                     // so that the user hopefully pays more attention which driver he selects.
-                     // If a HP printer is unknown to HPLIP it does not mean that it is unsupported
-                     // (it does also not mean that it is unsupported by HPLIP) because
-                     // it could be simply a new model which is not yet known to HPLIP
-                     // but compatible to a known model. In this case the user must pay attention
-                     // which exact driver he selects manually for his particular model.
-                     if( "usb://hp/" == tolower( substring( uri, 0, 9 ) )
-                         && hp_usb_uri_exists
+                   { y2milestone( "skipped 'usb://HP/' DeviceURI '%1'", uri );
+                   }
+                   else
+                   { // Skip "hp:/par/" DeviceURIs if it was not created by the Connection Wizard
+                     // and if there is at least one "parallel:/" DeviceURI
+                     // so that the "parallel:/" DeviceURI is used with preference.
+                     // The reason for this preference is that for my LaserJet 1220
+                     // which is accessible via "parallel:/dev/lp0" and
+                     // via "hp:/par/HP_LaserJet_1220?device=/dev/parport0"
+                     // it does not work for the "hp:/par/" DeviceURI and in /var/log/messages there is
+                     // ... parport0: io/hpmud/pp.c 517: compat_write_data transfer stalled
+                     // ... parport0: io/hpmud/musb.c 1339: unable to write data
+                     //     hp:/par/HP_LaserJet_1220?device=/dev/parport0: Resource temporarily unavailable
+                     // so that the generic "parallel:/" DeviceURI seems to be the better fail-safe default.
+                     // It should not happen that a "hp:/par/" DeviceURI is skipped without
+                     // having a matching  generic "parallel:/" DeviceURI available.
+                     // The "hp:/par/" DeviceURI is still available via "MoreConnections".
+                     if( "hp:/par/" == tolower( substring( uri, 0, 8 ) )
+                         && parallel_uri_exists
                          && class != "ConnectionWizardDialog"
                        )
-                     { y2milestone( "skipped 'usb://HP/' DeviceURI '%1'", uri );
+                     { y2milestone( "skipped 'hp:/par/' DeviceURI '%1'", uri );
                      }
                      else
-                     { // Skip "hp:/par/" DeviceURIs if it was not created by the Connection Wizard
-                       // and if there is at least one "parallel:/" DeviceURI
-                       // so that the "parallel:/" DeviceURI is used with preference.
-                       // The reason for this preference is that for my LaserJet 1220
-                       // which is accessible via "parallel:/dev/lp0" and
-                       // via "hp:/par/HP_LaserJet_1220?device=/dev/parport0"
-                       // it does not work for the "hp:/par/" DeviceURI and in /var/log/messages there is
-                       // ... parport0: io/hpmud/pp.c 517: compat_write_data transfer stalled
-                       // ... parport0: io/hpmud/musb.c 1339: unable to write data
-                       //     hp:/par/HP_LaserJet_1220?device=/dev/parport0: Resource temporarily unavailable
-                       // so that the generic "parallel:/" DeviceURI seems to be the better fail-safe default.
-                       // It should not happen that a "hp:/par/" DeviceURI is skipped without
-                       // having a matching  generic "parallel:/" DeviceURI available.
-                       // The "hp:/par/" DeviceURI is still available via "MoreConnections".
-                       if( "hp:/par/" == tolower( substring( uri, 0, 8 ) )
-                           && parallel_uri_exists
-                           && class != "ConnectionWizardDialog"
-                         )
-                       { y2milestone( "skipped 'hp:/par/' DeviceURI '%1'", uri );
-                       }
-                       else
-                       { // Add trailing spaces because the current YaST UI
-                         // has almost no additional space between table columns
-                         // in partitcular not where the widest entry in a column is:
-                         connection_items = add( connection_items, `item( `id( connections_index ),
-                                                                          model + " ",
-                                                                          uri + " ",
-                                                                          info
-                                                                        )
-                                               );
-                         an_item_was_added = true;
-                       }
+                     { // Add trailing spaces because the current YaST UI
+                       // has almost no additional space between table columns
+                       // in partitcular not where the widest entry in a column is:
+                       connection_items = add( connection_items, `item( `id( connections_index ),
+                                                                        model + " ",
+                                                                        uri + " ",
+                                                                        info
+                                                                      )
+                                             );
+                       an_item_was_added = true;
                      }
+                   }
+                 }
+               }
+               else
+               { // If the connection_filter_string is the special string "MoreConnections",
+                 // do a special filtering for those connections which are supposed to work
+                 // i.e. where the uri seems to be a complete DeviceURI e.g. "socket://192.168.1.2:9100"
+                 // and not just an URI scheme like a plain "socket".
+                 // It doesn't matter if backends (i.e. schemes) with non alphanumeric characters
+                 // are skipped here because for unusual backends there is the "Connection Wizard":
+                 if( "MoreConnections" == connection_filter_string )
+                 { // if( issubstring ( uri , ":/" ) )
+                   if( regexpmatch( uri, "^[" + alnum_chars + "]+:/" )
+                       || "ConnectionWizardDialog" == class
+                     )
+                   { // Add trailing spaces because the current YaST UI
+                     // has almost no additional space between table columns
+                     // in partitcular not where the widest entry in a column is:
+                     connection_items = add( connection_items, `item( `id( connections_index ),
+                                                                      model + " ",
+                                                                      uri + " ",
+                                                                      info
+                                                                    )
+                                           );
+                     an_item_was_added = true;
                    }
                  }
                  else
-                 { // If the connection_filter_string is the special string "MoreConnections",
-                   // do a special filtering for those connections which are supposed to work
-                   // i.e. where the uri seems to be a complete DeviceURI e.g. "socket://192.168.1.2:9100"
-                   // and not just an URI scheme like a plain "socket".
-                   // It doesn't matter if backends (i.e. schemes) with non alphanumeric characters
-                   // are skipped here because for unusual backends there is the "Connection Wizard":
-                   if( "MoreConnections" == connection_filter_string )
-                   { // if( issubstring ( uri , ":/" ) )
-                     if( regexpmatch( uri, "^[" + alnum_chars + "]+:/" )
-                         || "ConnectionWizardDialog" == class
-                       )
-                     { // Add trailing spaces because the current YaST UI
-                       // has almost no additional space between table columns
-                       // in partitcular not where the widest entry in a column is:
-                       connection_items = add( connection_items, `item( `id( connections_index ),
-                                                                        model + " ",
-                                                                        uri + " ",
-                                                                        info
-                                                                      )
-                                             );
-                       an_item_was_added = true;
-                     }
-                   }
-                   else
-                   { // If the connection_filter_string is a usual non-empty string,
-                     // test whether the model matches to the connection_filter_string:
-                     if( regexpmatch( tolower( model ), tolower( connection_filter_string ) ) )
-                     { // Add trailing spaces because the current YaST UI
-                       // has almost no additional space between table columns
-                       // in partitcular not where the widest entry in a column is:
-                       connection_items = add( connection_items, `item( `id( connections_index ),
-                                                                        model + " ",
-                                                                        uri + " ",
-                                                                        info
-                                                                      )
-                                             );
-                       an_item_was_added = true;
-                     }
+                 { // If the connection_filter_string is a usual non-empty string,
+                   // test whether the model matches to the connection_filter_string:
+                   if( regexpmatch( tolower( model ), tolower( connection_filter_string ) ) )
+                   { // Add trailing spaces because the current YaST UI
+                     // has almost no additional space between table columns
+                     // in partitcular not where the widest entry in a column is:
+                     connection_items = add( connection_items, `item( `id( connections_index ),
+                                                                      model + " ",
+                                                                      uri + " ",
+                                                                      info
+                                                                    )
+                                           );
+                     an_item_was_added = true;
                    }
                  }
                }
-               if( an_item_was_added
-                   && "" != current_device_uri
-                 )
+             }
+             if( an_item_was_added )
+             { already_added_uris = add( already_added_uris, uri );
+               if( current_device_uri == uri )
                { // Set selected_connections_index when the current_device_uri is in the list so that
                  // BasicAddDialog and BasicModifyDialog can preselect the currently used connection
                  // via its id in the list which is the selected_connections_index.
-                 if( current_device_uri == uri )
-                 { selected_connections_index = connections_index;
-                 }
+                 selected_connections_index = connections_index;
                }
              }
            }
@@ -1414,28 +1426,30 @@ global list DriverItems( string driver_filter_string, boolean preselection )
              string nickname = ppd_entry["nickname"]:"";
              string deviceID = ppd_entry["deviceID"]:"";
              string language = ppd_entry["language"]:"";
+             // Skip effectively empty (i.e. useless) entries:
+             if( "" == ppd || "" == nickname )
+             { continue;
+             }
              // Build the entry:
-             if( ppd != "" && nickname != "" )
-             { driver_string = nickname + " [" + ppd + "]";
-               // Take the filter_string into account:
-               if( "" == driver_filter_string )
+             driver_string = nickname + " [" + ppd + "]";
+             // Take the filter_string into account:
+             if( "" == driver_filter_string )
+             { driver_items = add( driver_items, `item( `id( ppds_index ), driver_string ) );
+             }
+             else
+             { // If the driver_filter_string is a non-empty string,
+               // test whether nickname or deviceID matches to the driver_filter_string.
+               // Only the special character '+' is also taken into account because
+               // this is sometimes also a meaningful character in the model name
+               // for example the '+' at the end of a Kyocera model name
+               // indicates that this model has a built-in PostScript interpreter
+               // while the model without the '+' understands only PCL.
+               string unified_nickname = filterchars( tolower( nickname ), lower_alnum_chars + "+" );
+               string unified_deviceID = filterchars( tolower( deviceID ), lower_alnum_chars + "+" );
+               if( regexpmatch( unified_nickname, driver_filter_string )
+                   || regexpmatch( unified_deviceID, driver_filter_string )
+                 )
                { driver_items = add( driver_items, `item( `id( ppds_index ), driver_string ) );
-               }
-               else
-               { // If the driver_filter_string is a non-empty string,
-                 // test whether nickname or deviceID matches to the driver_filter_string.
-                 // Only the special character '+' is also taken into account because
-                 // this is sometimes also a meaningful character in the model name
-                 // for example the '+' at the end of a Kyocera model name
-                 // indicates that this model has a built-in PostScript interpreter
-                 // while the model without the '+' understands only PCL.
-                 string unified_nickname = filterchars( tolower( nickname ), lower_alnum_chars + "+" );
-                 string unified_deviceID = filterchars( tolower( deviceID ), lower_alnum_chars + "+" );
-                 if( regexpmatch( unified_nickname, driver_filter_string )
-                     || regexpmatch( unified_deviceID, driver_filter_string )
-                   )
-                 { driver_items = add( driver_items, `item( `id( ppds_index ), driver_string ) );
-                 }
                }
              }
            }
