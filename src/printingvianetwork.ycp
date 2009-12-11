@@ -1063,7 +1063,15 @@ symbol handleNetworkPrinting( string key, map event )
       return `printing_via_network_next;
     }
     if( `connection_wizard == event["ID"]:nil )
-    { return `printing_via_network_connection_wizard;
+    { // Invalidate Printer::selected_connections_index and Printer::selected_queues_index
+      // so that the getCurrentDeviceURI function in connectionwizard.ycp fails
+      // to avoid that the URI of whatever preselected queue in the Overview dialog
+      // becomes preselected in the Connection Wizard which should actually
+      // start without any preselection because a new queue is to be set up
+      // when the Connection Wizard is called from the Print via Network dialog:
+      Printer::selected_connections_index = -1;
+      Printer::selected_queues_index = -1;
+      return `printing_via_network_connection_wizard;
     }
     if( `test_client_conf_server == event["ID"]:nil )
     { string current_client_conf_input_value = (string)UI::QueryWidget( `id(`client_conf_input), `Value );
