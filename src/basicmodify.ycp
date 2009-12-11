@@ -45,6 +45,7 @@ include "printer/helps.ycp";
  */
 any BasicModifyDialog()
 { y2milestone( "entering BasicModifyDialog for queue '%1'", Printer::queues[Printer::selected_queues_index]:$[] );
+  string non_matching_fallback_driver_filter_string = "qqqqqqqqqq";
   string commandline = "";
   string name = Printer::queues[Printer::selected_queues_index,"name"]:"";
   string uri = Printer::queues[Printer::selected_queues_index,"uri"]:"";
@@ -76,10 +77,9 @@ any BasicModifyDialog()
                        false
                      );
   Wizard::HideAbortButton();
-  string model = Printer::DeriveModelName( description );
-  string driver_filter_input_text = model;
-  // Match anywhere in the NickName entry in the PPD:
-  string driver_filter_string = filterchars( tolower( driver_filter_input_text ), Printer::lower_alnum_chars );
+  string model = Printer::DeriveModelName( description, 0 );
+  string driver_filter_input_text = Printer::DeriveModelName( model, 0 );
+  string driver_filter_string = Printer::DeriveDriverFilterString( driver_filter_input_text );
   string nick_name = "";
   term driver_options_content = `Empty();
   term paper_choice_content = `Empty();
@@ -120,9 +120,8 @@ any BasicModifyDialog()
     if( Printerlib::ExecuteBashCommand( commandline ) )
     { y2milestone( "'%1' stdout (nick_name) is: '%2'", commandline, Printerlib::result["stdout"]:"" );
       nick_name = Printerlib::result["stdout"]:"";
-      driver_filter_input_text = nick_name;
-      // Match only at the beginning of the NickName entry in the PPD:
-      driver_filter_string = "^" + filterchars( tolower( nick_name ), Printer::lower_alnum_chars );
+      driver_filter_input_text = Printer::DeriveModelName( nick_name, 0 );
+      driver_filter_string = Printer::DeriveDriverFilterString( driver_filter_input_text );
     }
     if( ! Printer::DetermineDriverOptions( "" ) )
     { // Clear the Printer::driver_options so that no outdated driver options are used
@@ -271,7 +270,7 @@ any BasicModifyDialog()
     // to avoid that the full list of thousands of PPDs is shown automatically
     // because it can take a very long time until the user can proceed:
     driver_filter_input_text = _("Enter your printer model here.");
-    driver_filter_string = "qqqqqqqqqq";
+    driver_filter_string = non_matching_fallback_driver_filter_string;
   }
   term contents = `VBox
                   ( `VBox
@@ -761,33 +760,8 @@ any BasicModifyDialog()
         if( "" != model
             && "unknown" != tolower( model )
           )
-        { driver_filter_input_text = model;
+        { driver_filter_input_text = Printer::DeriveModelName( model, 0 );
           driver_filter_string = Printer::DeriveDriverFilterString( driver_filter_input_text );
-          // The first word in the driver_filter_string is usually the first word of the manufacturer name.
-          // This fuzzy match is intended so that e.g. "Kyocera" and "Kyocera Mita" result the same.
-          // Note that DeriveDriverFilterString joined the words in driver_filter_string with '.*'
-          // so that the first word in driver_filter_string must be split from the rest at '.':
-          string manufacturer = splitstring( driver_filter_string, "." )[0]:"";
-          // Even more fuzziness for very ambiguous manufacturer names:
-          if( "hewlett" == substring( tolower( manufacturer ), 0, 7 ) )
-          { // Let "Hewlett-Packard", "Hewlett Packard", and "HP be the same:
-            manufacturer = "HP";
-          }
-          if( "oki" == substring( tolower( manufacturer ), 0, 3 ) )
-          { // Let "Oki", "Okidata", and "Okipage" be the same:
-            manufacturer = "Oki";
-          }
-          // Match at the beginning only if the first word in the driver_filter_string
-          // is actually a known manufacturer name
-          // (there is only "Kyocera" but not "Kyocera Mita" in the known_manufacturers list).
-          foreach( string known_manufacturer,
-                   Printer::known_manufacturers,
-                   { if( tolower( manufacturer ) == tolower( known_manufacturer ) )
-                     { driver_filter_string = "^" + driver_filter_string;
-                       break;
-                     }
-                   }
-                 );
         }
       }
       else
@@ -795,47 +769,20 @@ any BasicModifyDialog()
         // derive the driver_filter_string from the NickName of the currently used PPD
         // or derive the driver_filter_string from the description of the currently used connection:
         if( "" != nick_name )
-        { driver_filter_input_text = nick_name;
-          // Match only at the beginning of the NickName entry in the PPD:
-          driver_filter_string = "^" + filterchars( tolower( nick_name ), Printer::lower_alnum_chars );
+        { driver_filter_input_text = Printer::DeriveModelName( nick_name, 0 );
         }
         else
-        { model = Printer::DeriveModelName( description );
-          driver_filter_input_text = model;
-          driver_filter_string = Printer::DeriveDriverFilterString( driver_filter_input_text );
-          // The first word in the driver_filter_string is usually the first word of the manufacturer name.
-          // This fuzzy match is intended so that e.g. "Kyocera" and "Kyocera Mita" result the same.
-          // Note that DeriveDriverFilterString joined the words in driver_filter_string with '.*'
-          // so that the first word in driver_filter_string must be split from the rest at '.':
-          string manufacturer = splitstring( driver_filter_string, "." )[0]:"";
-          // Even more fuzziness for very ambiguous manufacturer names:
-          if( "hewlett" == substring( tolower( manufacturer ), 0, 7 ) )
-          { // Let "Hewlett-Packard", "Hewlett Packard", and "HP be the same:
-            manufacturer = "HP";
-          }
-          if( "oki" == substring( tolower( manufacturer ), 0, 3 ) )
-          { // Let "Oki", "Okidata", and "Okipage" be the same:
-            manufacturer = "Oki";
-          }
-          // Match at the beginning only if the first word in the driver_filter_string
-          // is actually a known manufacturer name
-          // (there is only "Kyocera" but not "Kyocera Mita" in the known_manufacturers list).
-          foreach( string known_manufacturer,
-                   Printer::known_manufacturers,
-                   { if( tolower( manufacturer ) == tolower( known_manufacturer ) )
-                     { driver_filter_string = "^" + driver_filter_string;
-                       break;
-                     }
-                   }
-                 );
+        { model = Printer::DeriveModelName( description, 0 );
+          driver_filter_input_text = Printer::DeriveModelName( model, 0 );
         }
+        driver_filter_string = Printer::DeriveDriverFilterString( driver_filter_input_text );
       }
       if( "" == driver_filter_string )
       { // Set a fallback driver_filter_string which does not match to anything
         // to avoid that the full list of thousands of PPDs is shown automatically
         // because it can take a very long time until the user can proceed:
         driver_filter_input_text = _("Enter your printer model here.");
-        driver_filter_string = "qqqqqqqqqq";
+        driver_filter_string = non_matching_fallback_driver_filter_string;
       }
       UI::ReplaceWidget( `id(`driver_filter_input_replace_point),
                          `InputField
@@ -965,10 +912,8 @@ any BasicModifyDialog()
       continue;
     }
     if( ret == `apply_driver_filter )
-    { driver_filter_string = "";
-      driver_filter_input_text = (string)UI::QueryWidget( `id(`driver_filter_input), `Value );
+    { driver_filter_input_text = (string)UI::QueryWidget( `id(`driver_filter_input), `Value );
       y2milestone( "Drivers for '%1'", driver_filter_input_text );
-      // Match anywhere in the NickName entry in the PPD (i.e. without leading '^').
       driver_filter_string = Printer::DeriveDriverFilterString( driver_filter_input_text );
       if( "" == driver_filter_string )
       { driver_filter_input_text = _("any model");
@@ -998,7 +943,7 @@ any BasicModifyDialog()
       continue;
     }
     if( ret == `more_drivers )
-    { if( "qqqqqqqqqq" != driver_filter_string )
+    { if( non_matching_fallback_driver_filter_string != driver_filter_string )
       { driver_filter_string = "";
       }
       boolean valid_driver_found = false;
@@ -1013,46 +958,30 @@ any BasicModifyDialog()
       y2milestone( "More drivers for '%1'", driver_filter_input_text );
       if( "" != driver_filter_input_text
           && "unknown" != tolower( driver_filter_input_text )
-          && "qqqqqqqqqq" != driver_filter_string
+          && non_matching_fallback_driver_filter_string != driver_filter_string
         )
-      { // If the driver_filter_input_text string does not contain a space,
-        // words is a singleton list which contains only one word.
-        list <string> words = splitstring( driver_filter_input_text, " " );
-        if( size( words ) >= 1 )
-        { // Even if it is only one word, the following makes sense
-          // because the one word could already be the model_number_word.
-          // Try to find the word which contains a model number.
-          // This is usually the first word which contains a number.
-          string model_number_word = "";
-          foreach( string word,
-                   words,
-                   { if( "" != filterchars( word, Printer::number_chars ) )
-                     { model_number_word = word;
-                       break;
-                     }
-                   }
-                 );
-          // Provide visible feeback what is going on:
+      { string manufacturer_and_model_number = Printer::DeriveModelName( driver_filter_input_text, 2 );
+        // Note that manufacturer_and_model_number may be the empty string
+        // (when driver_filter_input_text does not contain word which contains a number)
+        // or manufacturer_and_model_number may be only one word
+        // (when driver_filter_input_text starts with a known manufacturer
+        //  but does not contain a word which contains a number
+        //  or when driver_filter_input_text does not start with a known manufacturer
+        //  but contains a word which contains a number).
+        if( "" != manufacturer_and_model_number
+            && issubstring( manufacturer_and_model_number, " ")
+          )
+        { // Provide visible feeback what is going on:
           UI::ReplaceWidget( `id(`driver_filter_input_replace_point),
                              `InputField
                              ( `id(`driver_filter_input),
                                `opt(`hstretch),
                                // No InputField header because there is the "Caption for a printer driver selection":
                                "",
-                               model_number_word
+                               manufacturer_and_model_number
                              )
                            );
-          // Only the special character '+' is also taken into account
-          // because this is also a meaningful character in model names
-          // for example the '+' at the end of a Kyocera model name
-          // indicates that this model has a built-in PostScript interpreter
-          // while the model without the '+' understands only PCL.
-          driver_filter_string = filterchars( tolower( model_number_word ), Printer::lower_alnum_chars + "+" );
-          // Replace '+' by '\\+' which evaluates to '\+' (because of YCP quoting with '\\')
-          // to get a '+' character in a word quoted as '\+' because otherwise
-          // a '+' character would be interpreded as a special regular expression character
-          // when the driver_filter_string is used as pattern for regexpmatch in DriverItems().
-          driver_filter_string = mergestring( splitstring( driver_filter_string, "+" ), "\\+" );
+          driver_filter_string = Printer::DeriveDriverFilterString( manufacturer_and_model_number );
           if( "" != driver_filter_string )
           { driver_items = Printer::DriverItems( driver_filter_string, true );
             // Printer::DriverItems may result a driver_items list with one single element
@@ -1072,44 +1001,23 @@ any BasicModifyDialog()
             }
           }
         }
-        // Try to use the manufacturer when nothing was found above:
+        // Try to use only the manufacturer or only the model number when nothing was found above:
         if( ! valid_driver_found )
-        { driver_filter_string = "";
-          // The first word in the driver_filter_input_text is usually the first word of the manufacturer name.
-          // This fuzzy match is intended so that e.g. "Kyocera" and "Kyocera Mita" are the same.
-          string manufacturer = splitstring( driver_filter_input_text, " " )[0]:"";
-          if( "" != manufacturer )
-          { // Even more fuzziness for very ambiguous manufacturer names:
-            if( "hewlett" == substring( tolower( driver_filter_input_text ), 0, 7 ) )
-            { // Let "Hewlett-Packard", "Hewlett Packard", and "HP be the same:
-              manufacturer = "HP";
-            }
-            if( "oki" == substring( tolower( driver_filter_input_text ), 0, 3 ) )
-            { // Let "Oki", "Okidata", and "Okipage" be the same:
-              manufacturer = "Oki";
-            }
-            // Provide visible feeback what is going on:
+        { string manufacturer_or_model_number = Printer::DeriveModelName( driver_filter_input_text, 1 );
+          if( "" != manufacturer_or_model_number )
+          { // Provide visible feeback what is going on:
             UI::ReplaceWidget( `id(`driver_filter_input_replace_point),
                                `InputField
                                ( `id(`driver_filter_input),
                                  `opt(`hstretch),
                                  // No InputField header because there is the "Caption for a printer driver selection":
                                  "",
-                                 manufacturer
+                                 manufacturer_or_model_number
                                )
                              );
-            driver_filter_string = filterchars( tolower( manufacturer ), Printer::lower_alnum_chars );
+            driver_filter_string = Printer::DeriveDriverFilterString( manufacturer_or_model_number );
             if( "" != driver_filter_string )
-            { // Match at the beginning only if the driver_filter_string is actually a known manufacturer:
-              foreach( string known_manufacturer,
-                       Printer::known_manufacturers,
-                       { if( driver_filter_string == tolower( known_manufacturer ) )
-                         { driver_filter_string = "^" + driver_filter_string;
-                           break;
-                         }
-                       }
-                     );
-              driver_items = Printer::DriverItems( driver_filter_string, true );
+            { driver_items = Printer::DriverItems( driver_filter_string, true );
               // Printer::DriverItems may result a driver_items list with one single element
               //   [ `item( `id( -1 ), _("No matching driver found.") ) ]
               // to show at least a meaningful text as fallback entry to the user
