@@ -170,11 +170,11 @@ global list< string > known_manufacturers = [ "Generic",
 
 /**
  * PPD database:
- * the database is created anew in Printer::CreateDatabase() which calls
+ * the database is created anew in CreateDatabase() which calls
  * the bash script "/usr/lib/YaST2/bin/create_ppd_database"
  * which outputs on stdout a YCP list of @ref printer_ppd_map
  * where the last list entry is an emtpy map.
- * Printer::CreateDatabase() leaves manufacturer and modelname empty because
+ * CreateDatabase() leaves manufacturer and modelname empty because
  * it would take several minutes (instead of a few seconds) to fill them up
  * (see the comments in create_ppd_database). Both fields can be filled up
  * during runtime for particular PPDs (e.g. for a more detailed PPD selection
@@ -201,7 +201,7 @@ global integer selected_ppds_index = -1;
 
 /**
  * Autodetected printers:
- * Determined at runtime via Printer::AutodetectPrinters() which calls the bash script
+ * Determined at runtime via AutodetectPrinters() which calls the bash script
  * "/usr/lib/YaST2/bin/autodetect_printers"
  * which outputs on stdout a YCP list of @ref autodetected_printer_map
  * where the last list entry is an emtpy map.
@@ -239,7 +239,7 @@ global string current_device_uri = "";
 
 /**
  * Autodetected queues:
- * Determined at runtime via Printer::AutodetectQueues() which calls the bash script
+ * Determined at runtime via AutodetectQueues() which calls the bash script
  * "/usr/lib/YaST2/bin/autodetect_print_queues"
  * which outputs on stdout a YCP list of @ref autodetected_queue_map
  * where the last list entry is an emtpy map.
@@ -292,7 +292,7 @@ global string current_queue_name = "";
 
 /**
  * Driver options (options in the PPD for one specific existing queue):
- * Determined at runtime via Printer::DetermineDriverOptions( "queue_name")
+ * Determined at runtime via DetermineDriverOptions( "queue_name")
  * which calls the bash script "/usr/lib/YaST2/bin/determine_printer_driver_options"
  * which outputs on stdout a YCP list of @ref driver_option_map
  * where the last list entry is an emtpy map.
@@ -760,122 +760,191 @@ global boolean Write()
 
 /**
  * Derive a reasonable model info from an arbitrary description string.
- * @param string from which a model is derived.
+ * @param string from which a model info is derived.
+ * @param integer how many words the model info can contain.
  * @return string (possibly the empty string)
  */
-global string DeriveModelName( string description )
+global string DeriveModelName( string description, integer max_words )
 { string model_info = "";
-  list <string> description_words = splitstring( description, " " );
-  // Remove empty words because a sequence of spaces results empty words in description_words
+  list <string> words = splitstring( description, " " );
+  // Remove empty words because a sequence of spaces results empty words in the list of words
   // for example "ACME  Funprinter" (two spaces!) results ["ACME","","Funprinter"].
   // In Printer.ycp and basicmodify.ycp there are lines like
   //  description = model + " with driver " + description;
   //  new_description = model + " with driver " + new_description;
   // Avoid having "with" and/or "driver" in the model_info.
-  description_words = filter( string word,
-                              description_words,
-                              { return( "" != word && "with" != word && "driver" != word );
-                              }
-                            );
-  // Use the description only if its first word is actually a known manufacturer:
-  boolean description_starts_with_known_manufacturer = false;
-  foreach( string known_manufacturer,
-           known_manufacturers,
-           { if( tolower( description_words[0]:"" ) == tolower( known_manufacturer ) )
-             { description_starts_with_known_manufacturer = true;
-               break;
+  words = filter( string word,
+                  words,
+                  { return( "" != word && "with" != word && "driver" != word );
+                  }
+                );
+  if( size( words ) > 0 )
+  { boolean words_start_with_known_manufacturer = false;
+    foreach( string known_manufacturer,
+             known_manufacturers,
+             { if( tolower( words[0]:"" ) == tolower( known_manufacturer ) )
+               { words_start_with_known_manufacturer = true;
+                 break;
+               }
              }
-           }
-         );
-  if( description_starts_with_known_manufacturer )
-  { // After the first word which contains the manufacturer name
-    // there are none or up to two words which contain only letters and hyphens (the model name)
-    // and then there is a word which contains at least one number (the model series).
-    // Therefore the manufacturer and model sub-string can be assumed to be:
-    //   One word which contains the manufacturer name,
-    //   followed by at most two words which contain only letters and perhaps hyphens
-    //   finished by one word which may start with letters and hyphens
-    //   but it must contain at least one number followed by whatever characters.
-    // It is crucial to take whatever (trailing) character in the model series into account
-    // to be on the safe side to distinguish different models
-    // (e.g. "HP LaserJet 4" versus "HP LaserJet 4/4M" or "Kyocera FS-1000" versus "Kyocera FS-1000+").
-    // For example as egrep regular expression:
-    //   lpinfo -m | cut -d' ' -f2-
-    //   | egrep -o '^[[:alpha:]]+[[:space:]]+([[:alpha:]-]+[[:space:]]+){0,2}[[:alpha:]-]*[[:digit:]][^[:space:]]*'
-    // Of course this best-guess is not 100% correct because it would result for example
-    // that "ACME FunPrinter 1000" and "ACME FunPrinter 1000 XL"
-    // are considered to be the same model "ACME FunPrinter 1000"
-    // but "ACME FunPrinter 1000XL" and "ACME FunPrinter 1000 XL"
-    // are considered to be different models "ACME FunPrinter 1000XL" and "ACME FunPrinter 1000":
-    boolean skip_the_rest = false;
-    integer index = -1;
-    description_words = maplist( string word,
-                                 description_words,
-                                 { if( ! skip_the_rest )
-                                   { index = index + 1;
-                                     if( 0 == index )
-                                     { // Return the manufacturer name:
-                                       return word;
-                                     }
-                                     if( 1 == index || 2 == index )
-                                     { // Check for words which look like the model name:
-                                       if( "" == deletechars( word, letter_chars + "-" ) )
-                                       { // Return a word of the model name:
-                                         return word;
-                                       }
-                                     }
-                                     if( 1 == index || 2 == index || 3 == index )
-                                     { // Check for a word which looks like the model series:
-                                       if( "" != filterchars( word, number_chars ) )
-                                       { // Skip the rest after the first model series word:
-                                         skip_the_rest = true;
-                                         // Return the model series:
-                                         return word;
-                                       }
-                                     }
-                                   }
-                                 }
-                               );
-    model_info = mergestring( description_words, " " );
+           );
+    if( 1 == max_words || 2 == max_words )
+    { if( words_start_with_known_manufacturer )
+      { model_info = words[0]:"";
+        if( 2 == max_words )
+        { // Try to find and append the word which contains a model number.
+          // This is usually the first word which contains a number.
+          foreach( string word,
+                   words,
+                   { if( "" != filterchars( word, number_chars ) )
+                     { model_info = model_info + " " + word;
+                       break;
+                     }
+                   }
+                 );
+        }
+      }
+      else
+      { // Try to find the word which contains a model number.
+        // This is usually the first word which contains a number.
+        foreach( string word,
+                 words,
+                 { if( "" != filterchars( word, number_chars ) )
+                   { model_info = word;
+                     break;
+                   }
+                 }
+               );
+      }
+    }
+    else
+    { // Derive a model info only if its first word is actually a known manufacturer:
+      if( words_start_with_known_manufacturer )
+      { // After the first word which contains the manufacturer name
+        // there are none or up to two words which contain only letters and hyphens (the model name)
+        // and then there is a word which contains at least one number (the model series).
+        // Therefore the manufacturer and model sub-string can be assumed to be:
+        //   One word which contains the manufacturer name,
+        //   followed by at most two words which contain only letters and perhaps hyphens
+        //   finished by one word which may start with letters and hyphens
+        //   but it must contain at least one number followed by whatever characters.
+        // It is crucial to take whatever (trailing) character in the model series into account
+        // to be on the safe side to distinguish different models
+        // (e.g. "HP LaserJet 4" versus "HP LaserJet 4/4M" or "Kyocera FS-1000" versus "Kyocera FS-1000+").
+        // For example as egrep regular expression:
+        //   lpinfo -m | cut -d' ' -f2-
+        //   | egrep -o '^[[:alpha:]]+[[:space:]]+([[:alpha:]-]+[[:space:]]+){0,2}[[:alpha:]-]*[[:digit:]][^[:space:]]*'
+        // Of course this best-guess is not 100% correct because it would result for example
+        // that "ACME FunPrinter 1000" and "ACME FunPrinter 1000 XL"
+        // are considered to be the same model "ACME FunPrinter 1000"
+        // but "ACME FunPrinter 1000XL" and "ACME FunPrinter 1000 XL"
+        // are considered to be different models "ACME FunPrinter 1000XL" and "ACME FunPrinter 1000":
+        boolean skip_the_rest = false;
+        integer index = -1;
+        words = maplist( string word,
+                         words,
+                         { if( ! skip_the_rest )
+                           { index = index + 1;
+                             if( 0 == index )
+                             { // Return the manufacturer name:
+                               return word;
+                             }
+                             if( 1 == index || 2 == index )
+                             { // Check for words which look like the model name:
+                               if( "" == deletechars( word, letter_chars + "-" ) )
+                               { // Return a word of the model name:
+                                 return word;
+                               }
+                             }
+                             if( 1 == index || 2 == index || 3 == index )
+                             { // Check for a word which looks like the model series:
+                               if( "" != filterchars( word, number_chars ) )
+                               { // Skip the rest after the first model series word:
+                                 skip_the_rest = true;
+                                 // Return the model series:
+                                 return word;
+                               }
+                             }
+                           }
+                         }
+                       );
+        model_info = mergestring( words, " " );
+      }
+    }
   }
-  y2milestone("DeriveModelName: derived '%1' from '%2'", model_info, description );
+  y2milestone("DeriveModelName: derived '%1' from '%2' (max_words=%3)", model_info, description, max_words );
   return model_info;
 }
 
 /**
- * Derive a reasonable model info from an arbitrary description string.
- * @param string from which a model is derived.
+ * Derive a reasonable driver_filter_string from an arbitrary driver_filter_input_text.
+ * @param string from which a driver_filter_string is derived.
  * @return string (possibly the empty string)
  */
 global string DeriveDriverFilterString( string driver_filter_input_text )
 { string driver_filter_string = "";
   list <string> words = splitstring( driver_filter_input_text, " " );
-  // Remove empty words because a sequence of spaces results empty words in words
-  // for example "ACME  Funprinter" (two spaces!) results ["ACME","","Funprinter"].
+  // Remove empty words because a sequence of spaces results empty words in the list of words
+  // for example "ACME  Funprinter" (two spaces!) results ["ACME","","Funprinter"]
+  // and remove effectively empty words like "-", "/" as a result of e.g. "ACME Funprinter / XL"
+  // i.e. remove words which do not contain at least one alphanumeric character or '+'
+  // because '+' is also a meaningful character in model names.
+  // For example the '+' at the end of a Kyocera model name
+  // indicates that this model has a built-in PostScript interpreter
+  // while the model without the '+' understands only PCL.
   // Avoid having meaningless words like "series" or "Serie"
+  // or addons to the manufacturer name like "Corp." and "Inc."
   // and "Mita" (from "Kyocera Mita") in the driver_filter_string
   // (the driver_filter_string "kyocera.*FS-1000" finds the "Kyocera Mita FS-1000+")
+  // and remove "Packard" from "Hewlett Packard" (without the '-') as precondition
+  // to change "Hewlett-Packard", "Hewlett - Packard" and "Hewlett Packard" to "HP".
+  // The '*Manufacturer' entries in our PPDs contain even more confusing stuff like
+  // "KONICA MINOLTA", "Minolta", "Minolta QMS", "QMS"
+  // where no good automated solution is possible.
   words = filter( string word,
                   words,
-                  { return( "" != word
-                            && ! issubstring( tolower( word ), "serie" )
+                  { return( "" != filterchars( word, alnum_chars + "+" )
+                            && "serie" != substring( tolower( word ), 0, size( "serie" ) )
+                            && "inc" != substring( tolower( word ), 0, size( "inc" ) )
+                            && "corp" != substring( tolower( word ), 0, size( "corp" ) )
                             && "mita" != tolower( word )
+                            && "packard" != tolower( word )
                           );
                   }
                 );
   if( size( words ) > 0 )
-  { // Replace each sequence of spaces in driver_filter_input_text
-    // by the regular expression '.*' so that the search result
-    // hopefully fits better to what the user expects to get,
+  { if( "hewlett" == substring( tolower( words[0]:"" ), 0, size( "hewlett" ) ) )
+    { // Let "Hewlett-Packard", "Hewlett", and "HP be the same.
+      // ("Hewlett - Packard" and "Hewlett Packard" were
+      //  already changed to "Hewlett" via the above filter.)
+      words[0] = "HP";
+    }
+    if( "oki" == substring( tolower( words[0]:"" ), 0, size( "oki" ) ) )
+    { // Let "Oki", "Okidata", and "Okipage" be the same.
+      words[0] = "Oki";
+    }
+    // Match at the beginning only if the first word
+    // is actually a known manufacturer name:
+    boolean words_start_with_known_manufacturer = false;
+    foreach( string known_manufacturer,
+             known_manufacturers,
+             { if( tolower( words[0]:"" ) == tolower( known_manufacturer ) )
+               { words_start_with_known_manufacturer = true;
+                 words[0] = "^" + words[0]:"";
+                 break;
+               }
+             }
+           );
+    // Concatenate the words by the regular expression '.*' so that the search result
+    // could hopefully fit better to what the user actually expects to get,
     // for example searching with "ACME 1000" should work to also
-    // find "ACME FunPrinter 1000" and "ACME Fancy Printer 1000 XL"
-    // Besides the regular expression characters '.*'
+    // find "ACME FunPrinter 1000" and "ACME Fancy Printer 1000 XL":
+    driver_filter_string = mergestring( words, ".*" );
+    // Besides lower alphanumeric characters
+    // and the characters '.*' and '^' for regular expressions
     // only the special character '+' is also taken into account
-    // because this is also a meaningful character in model names
-    // for example the '+' at the end of a Kyocera model name
-    // indicates that this model has a built-in PostScript interpreter
-    // while the model without the '+' understands only PCL.
-    driver_filter_string = filterchars( tolower( mergestring( words, ".*" ) ), lower_alnum_chars + ".*+" );
+    // because this is also a meaningful character in model names.
+    driver_filter_string = filterchars( tolower( driver_filter_string ), lower_alnum_chars + ".*^+" );
     // Replace '+' by '\\+' which evaluates to '\+' (because of YCP quoting with '\\')
     // to get a '+' character in a word quoted as '\+' because otherwise
     // a '+' character would be interpreded as a special regular expression character
@@ -1145,11 +1214,16 @@ global list ConnectionItems( string connection_filter_string )
              { continue;
              }
              // Skip duplicate URIs because it does not make sense
-             // to show more than one entry with the same URI because
+             // to show more than one connection with the same URI because
              // for CUPS only different URIs distinguish different devices.
              // For example two same USB printer models without different serial numbers
              // are indistinguishable for CUPS so that any printout would be sent only
-             // to one of both devices (probably the first one in the USB device list):
+             // to one of both devices, usually the first one which is autodetected
+             // by the CUPS backend (which is usually the first one in the USB device list).
+             // Accordingly the first one in the connections list is shown to the user
+             // (the ordering in the connections list is what "lpinfo -v" results)
+             // and subsequent entries in the connections list with duplicate URIs
+             // are hidden from what is shown to the user:
              if( contains( already_added_uris, uri ) )
              { y2milestone( "skipped connection_entry with duplicate DeviceURI: '%1'", connection_entry );
                continue;
@@ -1440,8 +1514,8 @@ global list DriverItems( string driver_filter_string, boolean preselection )
              { // If the driver_filter_string is a non-empty string,
                // test whether nickname or deviceID matches to the driver_filter_string.
                // Only the special character '+' is also taken into account because
-               // this is sometimes also a meaningful character in the model name
-               // for example the '+' at the end of a Kyocera model name
+               // this is also a meaningful character in the model name.
+               // For example the '+' at the end of a Kyocera model name
                // indicates that this model has a built-in PostScript interpreter
                // while the model without the '+' understands only PCL.
                string unified_nickname = filterchars( tolower( nickname ), lower_alnum_chars + "+" );
@@ -2115,8 +2189,8 @@ global boolean Import (map settings) {
  */
 global map Export () {
     Printerlib::DetermineClientOnly();
-    Printer::AutodetectQueues();
-    list <map> p_queues = filter(map queue, Printer::queues, { return (queue["config"]:""=="local"); });
+    AutodetectQueues();
+    list <map> p_queues = filter(map queue, queues, { return (queue["config"]:""=="local"); });
     map exp = $[
 //	"queues" : p_queues,
 //	"filters" : Printerlib::ExportFilters( p_queues ),
