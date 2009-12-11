@@ -43,9 +43,34 @@ include "printer/helps.ycp";
 string connection_uri="";
 string connection_model="";
 
+// Map of reserved URI characters ! # $ % & ' ( ) * + , / : ; = ? @ [ ]
+// plus the space character and their matching percent encoding
+// where each percent encoding must be exactly three characters
+// and uppercase letters, otherwise URIpercentDecoding will not work:
+map< string, string > uri_percent_encodings = $[ " ":"%20",
+                                                 "!":"%21",
+                                                 "#":"%23",
+                                                 "$":"%24",
+                                                 "&":"%26",
+                                                 "'":"%27",
+                                                 "(":"%28",
+                                                 ")":"%29",
+                                                 "*":"%2A",
+                                                 "+":"%2B",
+                                                 ",":"%2C",
+                                                 "/":"%2F",
+                                                 ":":"%3A",
+                                                 ";":"%3B",
+                                                 "=":"%3D",
+                                                 "?":"%3F",
+                                                 "@":"%40",
+                                                 "[":"%5B",
+                                                 "]":"%5D"
+                                               ];
+
 string URIpercentEncoding( string input )
 { // Replace space and each reserved character ! # $ % & ' ( ) * + , / : ; = ? @ [ ]
-  // in a value of an URI with its percent encoding, see
+  // in a value (component) of an URI with its percent encoding, see
   // https://bugzilla.novell.com/show_bug.cgi?id=512549
   // This function is only meant as "some kind of automated fix"
   // when the user entered URI values but forgot to do percent encoding.
@@ -64,27 +89,40 @@ string URIpercentEncoding( string input )
   string output = input;
   foreach( string reserved_character,
            string percent_encoding,
-           $[ " ":"%20",
-              "!":"%21",
-              "#":"%23",
-              "$":"%24",
-              "&":"%26",
-              "'":"%27",
-              "(":"%28",
-              ")":"%29",
-              "*":"%2A",
-              "+":"%2B",
-              ",":"%2C",
-              "/":"%2F",
-              ":":"%3A",
-              ";":"%3B",
-              "=":"%3D",
-              "?":"%3F",
-              "@":"%40",
-              "[":"%5B",
-              "]":"%5D"
-            ],
+           uri_percent_encodings,
            { output = mergestring( splitstring( output, reserved_character ), percent_encoding );
+           }
+         );
+  return output;
+}
+
+string URIpercentDecoding( string input )
+{ // The opposite of the above URIpercentEncoding function so that
+  // URIpercentDecoding( URIpercentEncoding ( input ) ) == input
+  string output = input;
+  foreach( string reserved_character,
+           string percent_encoding,
+           uri_percent_encodings,
+           { // Assume output = "Foo%2aBar%2aBaz"
+             integer position = search( output, percent_encoding );
+             // position = nil = search( "Foo%2ABar%2ABaz", "%2A" )
+             if( nil == position )
+             { position = search( output, tolower( percent_encoding ) );
+               // position = 3 = search( "Foo%2aBar%2aBaz", "%2a" )
+             }
+             while( position != nil )
+             { // Each percent encoding is exactly three characters so that
+               // the first position characters are those up to the current percent encoding
+               // and at position + 3 the rest after the current percent encoding starts:
+               output = substring( output, 0, position ) + reserved_character + substring( output, position + 3 );
+               // output = "Foo*Bar%2aBaz" = "Foo" + "*" + "Bar%2aBaz"
+               position = search( output, percent_encoding );
+               // position = nil = search( "Foo*Bar%2aBaz", "%2A" )
+               if( nil == position )
+               { position = search( output, tolower( percent_encoding ) );
+                 // position = 7 = search( "Foo*Bar%2aBaz", "%2a" )
+               }
+             }
            }
          );
   return output;
@@ -2444,8 +2482,8 @@ boolean testQueue( symbol selected )
   string password = "";
   switch(selected)
   { case(`tcp):
-          host = (string)UI::QueryWidget( `hostname, `Value );
-          port = (string)UI::QueryWidget( `port_or_queue, `Value );
+          host = URIpercentDecoding( (string)UI::QueryWidget( `hostname, `Value ) );
+          port = URIpercentDecoding( (string)UI::QueryWidget( `port_or_queue, `Value ) );
           test_command = sformat( "%1test_remote_socket \"%2\" \"%3\" %4",
                                   Printerlib::yast_bin_dir,
                                   host,
@@ -2467,8 +2505,8 @@ boolean testQueue( symbol selected )
           break;
     case(`lpd):
     case(`lpr):
-          host = (string)UI::QueryWidget( `hostname, `Value );
-          queue = (string)UI::QueryWidget( `port_or_queue, `Value );
+          host = URIpercentDecoding( (string)UI::QueryWidget( `hostname, `Value ) );
+          queue = URIpercentDecoding( (string)UI::QueryWidget( `port_or_queue, `Value ) );
           port = "515";
           test_command = sformat( "%1test_remote_lpd \"%2\" \"%3\" %4",
                                   Printerlib::yast_bin_dir,
@@ -2490,8 +2528,8 @@ boolean testQueue( symbol selected )
           }
           break;
     case(`cups):
-          host = (string)UI::QueryWidget( `hostname, `Value );
-          queue = (string)UI::QueryWidget( `queue, `Value );
+          host = URIpercentDecoding( (string)UI::QueryWidget( `hostname, `Value ) );
+          queue = URIpercentDecoding( (string)UI::QueryWidget( `queue, `Value ) );
           test_command = sformat( "%1test_remote_ipp \"%2\" \"%3\" %4",
                                   Printerlib::yast_bin_dir,
                                   host,
@@ -2512,11 +2550,11 @@ boolean testQueue( symbol selected )
           }
           break;
     case(`smb):
-          host = (string)UI::QueryWidget( `hostname, `Value );
-          queue = (string)UI::QueryWidget( `printer, `Value );
-          workgroup = (string)UI::QueryWidget( `domain, `Value );
-          user = (string)UI::QueryWidget( `user, `Value );
-          password = (string)UI::QueryWidget( `pass, `Value );
+          host = URIpercentDecoding( (string)UI::QueryWidget( `hostname, `Value ) );
+          queue = URIpercentDecoding( (string)UI::QueryWidget( `printer, `Value ) );
+          workgroup = URIpercentDecoding( (string)UI::QueryWidget( `domain, `Value ) );
+          user = URIpercentDecoding( (string)UI::QueryWidget( `user, `Value ) );
+          password = URIpercentDecoding( (string)UI::QueryWidget( `pass, `Value ) );
           test_command = sformat( "%1test_remote_smb \"%2\" \"%3\" \"%4\" \"%5\" \"%6\" %7",
                                   Printerlib::yast_bin_dir,
                                   workgroup,
@@ -2540,10 +2578,10 @@ boolean testQueue( symbol selected )
           }
           break;
     case(`ipx):
-          host = (string)UI::QueryWidget( `hostname, `Value );
-          queue = (string)UI::QueryWidget( `queue, `Value );
-          user = (string)UI::QueryWidget( `user, `Value );
-          password = (string)UI::QueryWidget( `pass, `Value );
+          host = URIpercentDecoding( (string)UI::QueryWidget( `hostname, `Value ) );
+          queue = URIpercentDecoding( (string)UI::QueryWidget( `queue, `Value ) );
+          user = URIpercentDecoding( (string)UI::QueryWidget( `user, `Value ) );
+          password = URIpercentDecoding( (string)UI::QueryWidget( `pass, `Value ) );
           test_command = sformat( "%1test_remote_novell \"%2\" \"%3\" \"%4\" \"%5\" %6",
                                   Printerlib::yast_bin_dir,
                                   host,
