@@ -351,13 +351,17 @@ symbol handleOverview( string key, map event )
   // "Test" is disabled when there is no queue selected or no queue in the table
   // and when the queue state is not "ready" (i.e. when jobs are rejected and/or when printing is disabled).
   integer selected_queue_index = (integer)UI::QueryWidget( `id(`overview_table), `CurrentItem );
-  // To be safe invalidate Printer::selected_queues_index, Printer::current_queue_name,
-  // and Printer::current_device_uri in any case by default and as fallback.
+  // To be safe invalidate Printer::selected_connections_index, Printer::current_device_uri,
+  // Printer::selected_queues_index, and Printer::current_queue_name in any case by default and as fallback.
+  // In particular invalidate Printer::selected_connections_index and Printer::selected_queues_index
+  // to let the getCurrentDeviceURI function in connectionwizard.ycp fail to avoid that
+  // the URI of a different previously preselected queue becomes preselected in the Connection Wizard.
   // The index of the currently selected queue is stored in selected_queue_index
   // which is used to re-enable those values later if appropriate conditions are met:
+  Printer::selected_connections_index = -1;
+  Printer::current_device_uri = "";
   Printer::selected_queues_index = -1;
   Printer::current_queue_name = "";
-  Printer::current_device_uri = "";
   if( selected_queue_index == nil || selected_queue_index < 0 )
   { // When no valid queue was selected, nothing can be tested or edited or deleted:
     UI::ChangeWidget( `test, `Enabled, false );

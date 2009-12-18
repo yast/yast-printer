@@ -43,88 +43,218 @@ include "printer/helps.ycp";
 string connection_uri="";
 string connection_model="";
 
-// Map of reserved URI characters ! # $ % & ' ( ) * + , / : ; = ? @ [ ]
-// plus the space character and their matching percent encoding
+// List of reserved URI characters ! # $ % & ' ( ) * + , / : ; = ? @ [ ]
+// (the % character is separated as percentage_percent_encoding)
+// plus the space character and their matching percent encodings
 // where each percent encoding must be exactly three characters
-// and uppercase letters, otherwise URIpercentDecoding will not work:
-map< string, string > uri_percent_encodings = $[ " ":"%20",
-                                                 "!":"%21",
-                                                 "#":"%23",
-                                                 "$":"%24",
-                                                 "&":"%26",
-                                                 "'":"%27",
-                                                 "(":"%28",
-                                                 ")":"%29",
-                                                 "*":"%2A",
-                                                 "+":"%2B",
-                                                 ",":"%2C",
-                                                 "/":"%2F",
-                                                 ":":"%3A",
-                                                 ";":"%3B",
-                                                 "=":"%3D",
-                                                 "?":"%3F",
-                                                 "@":"%40",
-                                                 "[":"%5B",
-                                                 "]":"%5D"
-                                               ];
+// and uppercase letters, otherwise URIpercentDecoding would not work.
+// It is crucial to have "%":"%25" first so that URIpercentEncoding works correctly
+// because "%" must be replaced by "%25" first of all otherwise
+// a duplicate encoding would happen "Foo Bar" -> "Foo%20Bar" -> "Foo%2520Bar"
+// but only "Foo Bar" -> "Foo%20Bar" would be the correct encoding.
+// It is crucial to have "%":"%25" last so that URIpercentDecoding works correctly
+// because "%25" must be replaced by "%" last otherwise
+// a duplicate dencoding would happen: "Foo%2520Bar" -> "Foo%20Bar" -> "Foo Bar".
+// but only "Foo%2520Bar" -> "Foo%20Bar" would be the correct dencoding.
+// Therefore "%":"%25" cannot be at all in this list but is
+// separated as percentage_percent_encoding which is
+// prepended to this list so that URIpercentEncoding works correctly and
+// appended to this list so that URIpercentDecoding works correctly.
+// Unfortunately a simple map like $[ "%":"%25", " ":"%20", ... ]
+// does not work because in a map the ordering is not kept
+// even when there is no operation which changes the map
+// the internal ordering in a map is different
+// from how it was specified here.
+// It seems the internal ordering in a map is alphabetically sorted
+// so that $[ "%":"%25", " ":"%20", ... ] -> $[ " ":"%20", ... "%":"%25", ... ]
+// Therefore a list is used which keeps the initial ordering.
+list< map< string, string > > uri_percent_encodings = [ $[ "character":" ",
+                                                           "encoding":"%20"
+                                                         ],
+                                                        $[ "character":"!",
+                                                           "encoding":"%21"
+                                                         ],
+                                                        $[ "character":"#",
+                                                           "encoding":"%23"
+                                                         ],
+                                                        $[ "character":"$",
+                                                           "encoding":"%24"
+                                                         ],
+                                                        $[ "character":"&",
+                                                           "encoding":"%26"
+                                                         ],
+                                                        $[ "character":"'",
+                                                           "encoding":"%27"
+                                                         ],
+                                                        $[ "character":"(",
+                                                           "encoding":"%28"
+                                                         ],
+                                                        $[ "character":")",
+                                                           "encoding":"%29"
+                                                         ],
+                                                        $[ "character":"*",
+                                                           "encoding":"%2A"
+                                                         ],
+                                                        $[ "character":"+",
+                                                           "encoding":"%2B"
+                                                         ],
+                                                        $[ "character":",",
+                                                           "encoding":"%2C"
+                                                         ],
+                                                        $[ "character":"/",
+                                                           "encoding":"%2F"
+                                                         ],
+                                                        $[ "character":":",
+                                                           "encoding":"%3A"
+                                                         ],
+                                                        $[ "character":";",
+                                                           "encoding":"%3B"
+                                                         ],
+                                                        $[ "character":"=",
+                                                           "encoding":"%3D"
+                                                         ],
+                                                        $[ "character":"?",
+                                                           "encoding":"%3F"
+                                                         ],
+                                                        $[ "character":"@",
+                                                           "encoding":"%40"
+                                                         ],
+                                                        $[ "character":"[",
+                                                           "encoding":"%5B"
+                                                         ],
+                                                        $[ "character":"]",
+                                                           "encoding":"%5D"
+                                                         ]
+                                                      ];
+map< string, string > percentage_percent_encoding = $[ "character":"%",
+                                                       "encoding":"%25"
+                                                     ];
 
 string URIpercentEncoding( string input )
-{ // Replace space and each reserved character ! # $ % & ' ( ) * + , / : ; = ? @ [ ]
-  // in a value (component) of an URI with its percent encoding, see
-  // https://bugzilla.novell.com/show_bug.cgi?id=512549
-  // This function is only meant as "some kind of automated fix"
-  // when the user entered URI values but forgot to do percent encoding.
-  // The help text in the Connection Wizard dilaog explicitely demands
-  // that URI values (components) must be entered with percent encoding.
-  // This function can only be used for percent encoding for a single URI component.
+{ // Unfortunately URL::EscapeString(input,URL::transform_map_passwd)
+  // cannot be used because URL::transform_map_passwd is insufficient because
+  // the characters ! # ' ( ) * [ ] are missing in URL::transform_map_passwd.
+  // URIpercentEncoding replaces the space character and
+  // each reserved character ! # $ % & ' ( ) * + , / : ; = ? @ [ ]
+  // in a value (component) of an URI with its matching percent encoding,
+  // see https://bugzilla.novell.com/show_bug.cgi?id=512549
+  // This function can only be used for percent encoding of the value
+  // of a single URI component where no character in the input
+  // is already percent encoded, otherwise e.g. "Foo%20Bar" results "Foo%2520Bar".
   // In particular this function cannot be used when the user can enter a whole URI
   // or the whole set of URI options (e.g. option1=value1&option2=value2).
-  // The '%' character itself would need a special handling because
-  // the input string is usually already percent encoded
-  // (in particular when the URI was retreived from CUPS)
-  // so that the '%' character could be only replaced by '%25'
-  // if not two hexadecimal digits '0123456789AaBbCcDdEeFf' follow
-  // but for now the '%' character is simply not replaced at all
-  // which is no big shortfall for a "some kind of automated fix" function.
   string output = input;
-  foreach( string reserved_character,
-           string percent_encoding,
-           uri_percent_encodings,
-           { output = mergestring( splitstring( output, reserved_character ), percent_encoding );
+  foreach( map< string, string > current_encoding,
+           prepend( uri_percent_encodings, percentage_percent_encoding ),
+           { string character = current_encoding["character"]:"";
+             string encoding = current_encoding["encoding"]:"";
+             if( "" == character || "" == encoding )
+             { continue;
+             }
+             output = mergestring( splitstring( output, character ), encoding );
            }
          );
+  y2milestone( "URIpercentEncoding from '%1' to '%2'", input, output );
   return output;
 }
 
 string URIpercentDecoding( string input )
-{ // The opposite of the above URIpercentEncoding function so that
-  // URIpercentDecoding( URIpercentEncoding ( input ) ) == input
+{ // Unfortunately URL::UnEscapeString(input,URL::transform_map_passwd)
+  // cannot be used because URL::transform_map_passwd is insufficient because
+  // the characters ! # ' ( ) * [ ] are missing in URL::transform_map_passwd
+  // and URL::UnEscapeString("Foo%2525Bar") results "Foo%Bar" which is wrong
+  // because URIpercentDecoding("Foo%2525Bar") results "Foo%25Bar".
+  // URIpercentDecoding is the opposite of the URIpercentEncoding function
+  // so that URIpercentDecoding(URIpercentEncoding(input)) == input
   string output = input;
-  foreach( string reserved_character,
-           string percent_encoding,
-           uri_percent_encodings,
-           { // Assume output = "Foo%2aBar%2aBaz"
-             integer position = search( output, percent_encoding );
-             // position = nil = search( "Foo%2ABar%2ABaz", "%2A" )
-             if( nil == position )
-             { position = search( output, tolower( percent_encoding ) );
-               // position = 3 = search( "Foo%2aBar%2aBaz", "%2a" )
+  // Assume the input is "First%3aSecond%3AThird%2525Rest"
+  // Character positions: 0123456789012345678901234567890
+  foreach( map< string, string > current_encoding,
+           add( uri_percent_encodings, percentage_percent_encoding ),
+           { string character = current_encoding["character"]:"";
+             string encoding = current_encoding["encoding"]:"";
+             if( "" == character || "" == encoding )
+             { continue;
              }
+             // Process the output of the previous foreach loop as rest_of_input
+             // and clear the output for the current foreach loop:
+             string rest_of_input = output;
+             output = "";
+             integer position = search( rest_of_input, encoding );
+             // For character = "%" and encoding = "%25"
+             //   position = 22 = search( "First%3aSecond%3AThird%2525Rest", "%25" )
+             // For character = ":" and encoding = "%3A"
+             //   position = 14 = search( "First%3aSecond%3AThird%25Rest", "%3A" )
+             integer position_lowercase = search( rest_of_input, tolower( encoding ) );
+             // For character = "%" and encoding = "%25"
+             //   position_lowercase = 22 = search( "First%3aSecond%3AThird%2525Rest", "%25" )
+             // For character = ":" and actual percent encoding = "%3a"
+             //   position = 5 = search( "First%3aSecond%3AThird%25Rest", "%3a" )
+             if( ( position != nil && position_lowercase != nil && position_lowercase < position )
+                 || ( position == nil && position_lowercase != nil )
+               )
+             { position = position_lowercase;
+               // For character = ":" and actual percent encoding = "%3a"
+               //   position = 5
+             }
+             // For character = "%" and encoding = "%25"
+             //   position = 22
              while( position != nil )
-             { // Each percent encoding is exactly three characters so that
+             { // Each percent encoding is exactly three characters long so that
                // the first position characters are those up to the current percent encoding
                // and at position + 3 the rest after the current percent encoding starts:
-               output = substring( output, 0, position ) + reserved_character + substring( output, position + 3 );
-               // output = "Foo*Bar%2aBaz" = "Foo" + "*" + "Bar%2aBaz"
-               position = search( output, percent_encoding );
-               // position = nil = search( "Foo*Bar%2aBaz", "%2A" )
-               if( nil == position )
-               { position = search( output, tolower( percent_encoding ) );
-                 // position = 7 = search( "Foo*Bar%2aBaz", "%2a" )
+               string characters_up_to_current_encoding = substring( rest_of_input, 0, position );
+               output = output + characters_up_to_current_encoding + character;
+               // For character = "%" and encoding = "%25"
+               //   output = "First%3aSecond%3AThird%" = "" + "First%3aSecond%3AThird" + "%"
+               // For character = ":" and actual percent encoding = "%3a"
+               //   output = "First:" = "" + "First" + ":"
+               // For character = ":" and encoding = "%3A"
+               //   output = "First:Second:" = "First:" + "Second" + ":"
+               rest_of_input = substring( rest_of_input, position + 3 );
+               // For character = "%" and encoding = "%25"
+               //   rest_of_input = "25Rest"
+               // For character = ":" and actual percent encoding = "%3a"
+               //   rest_of_input = "Second%3AThird%25Rest"
+               // For character = ":" and encoding = "%3A"
+               //   rest_of_input = "Third%25Rest"
+               position = search( rest_of_input, encoding );
+               // For character = "%" and encoding = "%25"
+               //   position = nil = search( "25Rest", "%25" )
+               // For character = ":" and encoding = "%3A"
+               //   position = 6 = search( "Second%3AThird%25Rest", "%3A" )
+               // For second while loop for character = ":" and encoding = "%3A"
+               //   position = nil = search( "Third%25Rest", "%3A" )
+               position_lowercase = search( rest_of_input, tolower( encoding ) );
+               // For character = "%" and encoding = "%25"
+               //   position_lowercase = nil = search( "25Rest", "%25" )
+               // For character = ":" and actual percent encoding = "%3a"
+               //   position = nil = search( "Second%3AThird%25Rest", "%3a" )
+               // For second while loop for character = ":" and actual percent encoding = "%3a"
+               //   position = nil = search( "Third%25Rest", "%3a" )
+               if( ( position != nil && position_lowercase != nil && position_lowercase < position )
+                   || ( position == nil && position_lowercase != nil )
+                 )
+               { position = position_lowercase;
                }
+               // For character = "%" and encoding = "%25"
+               //   position = nil
+               // For character = ":" and encoding = "%3A"
+               //   position = 6
+               // For second while loop for character = ":" and encoding = "%3A"
+               //   position = nil
              }
+             // After replacing all occurrences of the current percent encoding
+             // by its character append what is left as rest of the input:
+             output = output + rest_of_input;
+             // For character = "%" and encoding = "%25"
+             //   output = "First%3aSecond%3AThird%25Rest"
+             // For character = ":" and encoding = "%3A"
+             //   output = "First:Second:Third%25Rest"
            }
          );
+  // output = "First:Second:Third%25Rest"
+  y2milestone( "URIpercentDecoding from '%1' to '%2'", input, output );
   return output;
 }
 
@@ -361,14 +491,26 @@ term getContentFromBackend( string backend )
 }
 
 term getNetworkContent( string hostname, string scan_hosts_label, string port_or_queue_label, string port_or_queue, string uri_options )
-{ term content = `VBox
+{ // TRANSLATORS: Text entry to fill IP or hostname of remote server
+  string hostname_label = _("&IP Address or Host Name");
+  // No URIpercentDecoding/Encondin(hostname) is done
+  // when it contains a '@' because a lpd URI can be of the form
+  //   lpd://username@ip-address-or-hostname/...
+  // and a ipp/http URI can be of the form
+  //   ipp://username:password@ip-address-or-hostname/...
+  //   http://username:password@ip-address-or-hostname/...
+  // see https://bugzilla.novell.com/show_bug.cgi?id=512549
+  if( issubstring( hostname, "@" ) )
+  { // TRANSLATORS: Text entry to fill IP or hostname of remote server
+    hostname_label = _("&IP Address or Host Name [percent-encoded]");
+  }
+  term content = `VBox
                  ( `Left
                    ( `HBox
                      ( `ComboBox
                        ( `id(`hostname),
                          `opt(`editable),
-                         // TRANSLATORS: Text entry to fill IP or hostname of remote server
-                         _("&IP Address or Host Name"),
+                         hostname_label,
                          [ hostname ]
                        ),
                        `MenuButton
@@ -390,7 +532,7 @@ term getNetworkContent( string hostname, string scan_hosts_label, string port_or
                                   // longer stuff like 'option1=value1&option2=value2':
                                   `opt(`hstretch),
                                   // TRANSLATORS: InputField for optional Device URI parameters:
-                                  _("Optional 'option=value' parameter (usually empty)"),
+                                  _("Optional 'option=value' parameter (usually empty) [percent-encoded]"),
                                   uri_options
                                 )
                    ),
@@ -1064,13 +1206,13 @@ void changeSettingsDialog( symbol selected )
               }
             }
           }
-          connection_content = getNetworkContent( hostname,
+          connection_content = getNetworkContent( URIpercentDecoding( hostname ),
                                                   // TRANSLATORS: List of input field labels,
                                                   // first for network scan button,
                                                   // second for the TCP port number:
                                                   _("Scan for Direct Socket Servers"),
                                                   _("TCP Port Number"),
-                                                  port_or_queue,
+                                                  URIpercentDecoding( port_or_queue ),
                                                   uri_options
                                                 );
           model_content = getContentFromCurrentModel( true );
@@ -1110,13 +1252,20 @@ void changeSettingsDialog( symbol selected )
               }
             }
           }
+          if( ! issubstring( hostname, "@" ) )
+          { // It would be wrong to do URIpercentDecoding(hostname)
+            // when it contains a '@' because a lpd URI can be of the form
+            //   lpd://username@ip-address-or-hostname/...
+            // see https://bugzilla.novell.com/show_bug.cgi?id=512549
+            hostname = URIpercentDecoding( hostname );
+          }
           connection_content = getNetworkContent( hostname,
                                                   // TRANSLATORS: List of input field labels,
                                                   // first for network scan button,
                                                   // second for name of printer queue
                                                   _("Scan for LPD Servers"),
                                                   _("Queue Name (see the printer's manual)"),
-                                                  port_or_queue,
+                                                  URIpercentDecoding( port_or_queue ),
                                                   uri_options
                                                 );
           model_content = getContentFromCurrentModel( true );
@@ -1165,7 +1314,7 @@ void changeSettingsDialog( symbol selected )
                           // longer stuff like 'ipp://ip-address:port-number/resource':
                           `opt(`hstretch),
                           // TRANSLATORS: Input field label
-                          _("URI (see the printer's manual)"),
+                          _("URI (see the printer's manual) [percent-encoded]"),
                           uri
                         )
                       ),
@@ -1262,7 +1411,7 @@ void changeSettingsDialog( symbol selected )
                             `opt(`editable),
                             // TRANSLATORS: Text entry for remote server name
                             _("Server (NetBIOS Host Name)"),
-                            [ hostname ]
+                            [ URIpercentDecoding( hostname ) ]
                           //),
                           //`MenuButton
                           //( // TRANSLATORS: Label for menu to search for remote servers
@@ -1279,7 +1428,7 @@ void changeSettingsDialog( symbol selected )
                         ( `id(`printer),
                           // TRANSLATORS: Text entry for printer name
                           _("Printer (Share Name)"),
-                          printer
+                          URIpercentDecoding( printer )
                         )
                       ),
                       `Left
@@ -1289,7 +1438,7 @@ void changeSettingsDialog( symbol selected )
                             `opt(`editable),
                             // TRANSLATORS: Text entry for samba domain
                             _("Workgroup (Domain Name)"),
-                            [ domain ]
+                            [ URIpercentDecoding( domain ) ]
                           //),
                           //PushButton
                           //( `id(`scan_domain),
@@ -1307,13 +1456,13 @@ void changeSettingsDialog( symbol selected )
                             ( `id(`user),
                               // TRANSLATORS: Text entry for username (authentication)
                               _("User"),
-                              user
+                              URIpercentDecoding( user )
                             ),
                             `Password
                             ( `id(`pass),
                               // TRANSLATORS: Text entry for password (authentication)
                               _("&Password"),
-                              pass
+                              URIpercentDecoding( pass )
                             )
                           )
                         )
@@ -1362,13 +1511,20 @@ void changeSettingsDialog( symbol selected )
               }
             }
           }
+          if( ! issubstring( hostname, "@" ) )
+          { // It would be wrong to do URIpercentDecoding(hostname)
+            // when it contains a '@' because a lpd URI can be of the form
+            //   lpd://username@ip-address-or-hostname/...
+            // see https://bugzilla.novell.com/show_bug.cgi?id=512549
+            hostname = URIpercentDecoding( hostname );
+          }
           connection_content = getNetworkContent( hostname,
                                                   // TRANSLATORS: List of input field labels,
                                                   // first for network scan button,
                                                   // second for name of printer queue
                                                   _("Scan for LPD Servers"),
                                                   _("Queue Name"),
-                                                  port_or_queue,
+                                                  URIpercentDecoding( port_or_queue ),
                                                   uri_options
                                                 );
           model_content = getContentFromCurrentModel( false );
@@ -1427,6 +1583,18 @@ void changeSettingsDialog( symbol selected )
               }
             }
           }
+          // TRANSLATORS: Text entry to fill IP or hostname of remote server
+          string hostname_label = _("&IP Address or Host Name [percent-encoded]");
+          if( ! issubstring( hostname, "@" ) )
+          { // It would be wrong to do URIpercentDecoding(hostname)
+            // when it contains a '@' because a ipp/http URI can be of the form
+            //   ipp://username:password@ip-address-or-hostname/...
+            //   http://username:password@ip-address-or-hostname/...
+            // see https://bugzilla.novell.com/show_bug.cgi?id=512549
+            hostname = URIpercentDecoding( hostname );
+            // TRANSLATORS: Text entry to fill IP or hostname of remote server
+            hostname_label = _("&IP Address or Host Name");
+          }
           model_content = getContentFromCurrentModel( false );
           content = `VBox
                     ( `Left
@@ -1434,8 +1602,7 @@ void changeSettingsDialog( symbol selected )
                         ( `ComboBox
                           ( `id(`hostname),
                             `opt(`editable),
-                            // TRANSLATORS: Text entry for IP or hostname of remote server
-                            _("IP Address or Host Name"),
+                            hostname_label,
                             [ hostname ]
                           ),
                           `MenuButton
@@ -1450,7 +1617,7 @@ void changeSettingsDialog( symbol selected )
                       ),
                       `Left
                       ( // TRANSLATORS: InputField for a print queue name:
-                        `InputField( `id(`queue), _("Queue Name"), queue )
+                        `InputField( `id(`queue), _("Queue Name"), URIpercentDecoding( queue ) )
                       ),
                       `Left
                       ( `InputField( `id(`uri_options),
@@ -1458,7 +1625,7 @@ void changeSettingsDialog( symbol selected )
                                      // longer stuff like 'option1=value1&option2=value2':
                                      `opt(`hstretch),
                                      // TRANSLATORS: InputField for optional Device URI parameters:
-                                     _("Optional 'option=value' parameter (usually empty)"),
+                                     _("Optional 'option=value' parameter (usually empty) [percent-encoded]"),
                                      uri_options
                                    )
                       ),
@@ -1627,7 +1794,7 @@ void changeSettingsDialog( symbol selected )
                           // longer stuff like 'scheme://server:port/path/to/resource':
                           `opt(`hstretch),
                           // TRANSLATORS: Text entry for URI (Uniform Resource Identifier)
-                          _("URI (Uniform Resource Identifier)"),
+                          _("URI (Uniform Resource Identifier) [percent-encoded]"),
                           current_device_uri
                         )
                       ),
@@ -1669,7 +1836,7 @@ void changeSettingsDialog( symbol selected )
                           // longer stuff like 'path/to/command?option1=value1&option2=value2':
                           `opt(`hstretch),
                           // TRANSLATORS: Text entry for program name that will be called via pipe:
-                          _("Program (/path/to/command?option=value)"),
+                          _("Program (/path/to/command?option=value) [percent-encoded]"),
                           uri
                         )
                       ),
@@ -1749,7 +1916,7 @@ void changeSettingsDialog( symbol selected )
                           // longer stuff like 'scheme://server:port/path/to/resource':
                           `opt(`hstretch),
                           // TRANSLATORS: Text entry for device URI (Uniform Resource Identifier)
-                          _("Device URI (for which 'beh' should be applied)"),
+                          _("Device URI (for which 'beh' should be applied) [percent-encoded]"),
                           uri
                         )
                       ),
@@ -2482,8 +2649,8 @@ boolean testQueue( symbol selected )
   string password = "";
   switch(selected)
   { case(`tcp):
-          host = URIpercentDecoding( (string)UI::QueryWidget( `hostname, `Value ) );
-          port = URIpercentDecoding( (string)UI::QueryWidget( `port_or_queue, `Value ) );
+          host = (string)UI::QueryWidget( `hostname, `Value );
+          port = (string)UI::QueryWidget( `port_or_queue, `Value );
           test_command = sformat( "%1test_remote_socket \"%2\" \"%3\" %4",
                                   Printerlib::yast_bin_dir,
                                   host,
@@ -2505,8 +2672,8 @@ boolean testQueue( symbol selected )
           break;
     case(`lpd):
     case(`lpr):
-          host = URIpercentDecoding( (string)UI::QueryWidget( `hostname, `Value ) );
-          queue = URIpercentDecoding( (string)UI::QueryWidget( `port_or_queue, `Value ) );
+          host = (string)UI::QueryWidget( `hostname, `Value );
+          queue = (string)UI::QueryWidget( `port_or_queue, `Value );
           port = "515";
           test_command = sformat( "%1test_remote_lpd \"%2\" \"%3\" %4",
                                   Printerlib::yast_bin_dir,
@@ -2528,8 +2695,8 @@ boolean testQueue( symbol selected )
           }
           break;
     case(`cups):
-          host = URIpercentDecoding( (string)UI::QueryWidget( `hostname, `Value ) );
-          queue = URIpercentDecoding( (string)UI::QueryWidget( `queue, `Value ) );
+          host = (string)UI::QueryWidget( `hostname, `Value );
+          queue = (string)UI::QueryWidget( `queue, `Value );
           test_command = sformat( "%1test_remote_ipp \"%2\" \"%3\" %4",
                                   Printerlib::yast_bin_dir,
                                   host,
@@ -2550,11 +2717,11 @@ boolean testQueue( symbol selected )
           }
           break;
     case(`smb):
-          host = URIpercentDecoding( (string)UI::QueryWidget( `hostname, `Value ) );
-          queue = URIpercentDecoding( (string)UI::QueryWidget( `printer, `Value ) );
-          workgroup = URIpercentDecoding( (string)UI::QueryWidget( `domain, `Value ) );
-          user = URIpercentDecoding( (string)UI::QueryWidget( `user, `Value ) );
-          password = URIpercentDecoding( (string)UI::QueryWidget( `pass, `Value ) );
+          host = (string)UI::QueryWidget( `hostname, `Value );
+          queue = (string)UI::QueryWidget( `printer, `Value );
+          workgroup = (string)UI::QueryWidget( `domain, `Value );
+          user = (string)UI::QueryWidget( `user, `Value );
+          password = (string)UI::QueryWidget( `pass, `Value );
           test_command = sformat( "%1test_remote_smb \"%2\" \"%3\" \"%4\" \"%5\" \"%6\" %7",
                                   Printerlib::yast_bin_dir,
                                   workgroup,
@@ -2578,10 +2745,10 @@ boolean testQueue( symbol selected )
           }
           break;
     case(`ipx):
-          host = URIpercentDecoding( (string)UI::QueryWidget( `hostname, `Value ) );
-          queue = URIpercentDecoding( (string)UI::QueryWidget( `queue, `Value ) );
-          user = URIpercentDecoding( (string)UI::QueryWidget( `user, `Value ) );
-          password = URIpercentDecoding( (string)UI::QueryWidget( `pass, `Value ) );
+          host = (string)UI::QueryWidget( `hostname, `Value );
+          queue = (string)UI::QueryWidget( `queue, `Value );
+          user = (string)UI::QueryWidget( `user, `Value );
+          password = (string)UI::QueryWidget( `pass, `Value );
           test_command = sformat( "%1test_remote_novell \"%2\" \"%3\" \"%4\" \"%5\" %6",
                                   Printerlib::yast_bin_dir,
                                   host,
@@ -2622,24 +2789,23 @@ boolean UpdateConnectionsList( symbol selected )
   // (in contrast duplicate URIs in the Printer::queues list are perfectly o.k.)
   // but if duplicate URIs exist in Printer::connections, all those entries are updated.
   boolean uri_already_exists = false;
-/*
-  // I do not know if it is allowed to modify one same list "in place" via foreach:
-  integer connections_index = -1;
-  foreach( map< string, string > connection_entry,
-           Printer::connections,
-           { // Set the connections_index to the index number of the current connection_entry:
-             connections_index = connections_index + 1;
-             // If the URI already exists, update its matching entry in the Printer::connections list:
-             if( connection_uri == connection_entry["uri"]:"" )
-             { uri_already_exists = true;
-               y2internal( "UpdateConnectionsList: modify connections list type '%1' with uri '%2' for model '%3'", selected, connection_uri, connection_model );
-               Printer::connections[connections_index,"model"] = connection_model;
-               // Leave te values for deviceID, info, and class unchanged because when the URI is the same
-               // those values still match to the URI and therefore should also stay the same.
-             }
-           }
-         );
-*/
+  // I do not know if it is allowed to modify one same list "in place" via foreach like:
+  //   list < string > words = [ "Jane", "World", "John" ];
+  //   integer index = -1;
+  //   foreach( string word,
+  //            words,
+  //            { index = index + 1;
+  //              if( "World" == word )
+  //              { words[index] = "Hello " + word;
+  //              }
+  //            }
+  //          );
+  // so that in any case the result words == [ "Jane", "Hello World", "John" ]
+  // and therefore I prefer to be on the safe side with maplist
+  // which might consume unnecessarily much memory and CPU
+  // (maplist has two lists and all elements are at least copied
+  //  instead of "in place" modification only where needed via foreach)
+  // but for my small lists this does actually not matter:
   Printer::connections = maplist( map< string, string > connection_entry,
                                   Printer::connections,
                                   { if( connection_uri == connection_entry["uri"]:"" )

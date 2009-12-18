@@ -364,31 +364,93 @@ reference a printer driver.<br>
 </p>"),
 
 "connection_wizard_dialog" :
-// ConnectionWizardDialog help 1/6:
+// ConnectionWizardDialog help 1/7:
 _("<p>
 <b><big>Specify the Connection</big></b><br>
 The <b>connection</b> determines which way data is sent to the printer device.<br>
 If a wrong connection is used, no data can be sent to the device
 so that there cannot be any printout.
 </p>") +
-// ConnectionWizardDialog help 2/6:
+// ConnectionWizardDialog help 2/7:
 _("<p>
 <b><big>Printer Device URI</big></b><br>
 A connection is specified as so called <b>device URI</b>.<br>
 Its first word (the so called URI scheme) specifies the kind of data-transfer,
 for example 'parallel', 'usb', 'socket', 'lpd', or 'ipp'.<br>
-After the scheme there are more or less additional parts
+After the scheme there are more or less additional components
 which specify the details for this kind of data-transfer.<br>
-The parts of an URI are separated by special reserved characters like
+Space characters are not allowed in an URI.
+Therefore a space character in a value of an URI component
+is encoded as '%20' (20 is the hexadecimal value of the space character).<br>
+The components of an URI are separated by special reserved characters like
 colon ':', slash '/', question mark '?', ampersand '&amp;', or equals sign '='.<br>
 Finally there could be optional parameters (separated by a question mark '?')
-of the form option1=value1&amp;option2=value2&amp;option3=value3 so that
+of the form 'option1=value1&amp;option2=value2&amp;option3=value3' so that
 a full device URI could be for example:<br>
 ipp://server.domain:631/printers/queuename?waitjob=false&amp;waitprinter=false<br>
-Reserved characters inside of a part of the URI must be percent-encoded
-(also known as URL encoding).
-In particular a space character ' ' must be written as '%20'.<br>
-Here a list of the reserved characters and their percent encoding:<br>
+Some examples:<br>
+A USB printer model 'Fun Printer 1000+' made by 'ACME'
+with serial number 'A1B2C3' may have a device URI like:<br>
+usb://ACME/Fun%20Printer%201000%2B?serial=A1B2C3<br>
+A network printer with IP 192.168.100.1 which is accessible
+via port 9100 may have a device URI like:<br>
+socket://192.168.100.1:9100<br>
+A network printer with IP 192.168.100.2 which is accessible
+via LPD protocol with a remote LPD queue name 'LPT1'
+may have a device URI like:<br>
+lpd://192.168.100.2/LPT1
+</p>") +
+// ConnectionWizardDialog help 3/7:
+_("<p>
+<b><big>Percent Encoding</big></b><br>
+The issue is complicated.
+It is recommended to avoid reserved characters and spaces
+for component values in URIs if the values are under your control
+(e.g. you cannot avoid it when you must specify such characters
+in values for an URI to access a remote print queue
+but the remote print queue is not under your control).
+Whenever possible use only so called 'unreserved characters'.
+Unreserved characters are uppercase and lowercase letters,
+decimal digits, hyphen, period, underscore, and tilde.
+Even hyphen, period, tilde, and case sensitivity
+could cause special issues in special cases
+(e.g. only letters, digits, and underscore are known to work
+for a CUPS print queue name and case is not significant there).
+Therefore it is best to use only lowercase letters, digits,
+and underscore for all values in all URIs if possible.<br>
+Reserved characters and space characters in the value of a component
+must be percent-encoded (also known as URL encoding).<br>
+When an input field in the dialog is intended to enter
+only a single value for a single component of the URI
+(e.g. separated input fields for username and password),
+you must enter spaces and reserved characters literally
+(i.e. non-percent-encoded).
+For such input fields all spaces and reserved characters
+will be automatically percent-encoded.
+For example if a password is actually 'Foo%20Bar' (non-percent-encoded),
+it must be entered literally in the password input field in the dialog.
+The automated percent-encoding results 'Foo%2520Bar' which is how
+the vaule of the password component is actually stored in the URI.<br>
+In contrast when an input field in the dialog is intended to enter
+more that a single value for a single component of the URI
+(e.g. a single input field for all optional parameters
+like 'option1=value1&amp;option2=value2&amp;option3=value3'
+or a single input field to enter the whole URI),
+you must enter spaces and reserved characters percent-encoded
+because an automated percent-encoding is no longer possible.
+Assume in an optional parameter 'option=value'
+the value would be 'this&amp;that' so that the whole
+optional parameter would be 'option=this&amp;that' (literally).
+But a literal '&amp;' character denotes
+the separation of different optional parameters
+so that 'option=this&amp;that' in an URI means
+a first optional parameter 'option=this' and
+a second optional parameter which is only 'that'.
+Therefore a single optional parameter 'option=this&amp;that'
+must be entered percent-encoded as 'option=this%26that'<br>
+Input fields which require percent-encoded input
+are denoted by a '[percent-encoded]' hint.<br>
+Listing of characters and their percent encoding:<br>
 space ' ' -&gt; %20<br>
 exclamation mark ! -&gt; %21<br>
 number sign # -&gt; %23<br>
@@ -411,19 +473,8 @@ left bracket [ -&gt; %5B<br>
 right bracket ] -&gt; %5D<br>
 For details see 'Uniform Resource Identifier (URI): Generic Syntax' at<br>
 http://tools.ietf.org/html/rfc3986<br>
-Some examples:<br>
-A USB printer model 'Fun Printer 1000+' made by 'ACME'
-with serial number 'A1B2C3' may have a device URI like:<br>
-usb://ACME/Fun%20Printer%201000%2B?serial=A1B2C3<br>
-A network printer with IP 192.168.100.1 which is accessible
-via port 9100 may have a device URI like:<br>
-socket://192.168.100.1:9100<br>
-A network printer with IP 192.168.100.2 which is accessible
-via LPD protocol with a remote LPD queue name 'LPT1'
-may have a device URI like:<br>
-lpd://192.168.100.2/LPT1
 </p>") +
-// ConnectionWizardDialog help 3/6:
+// ConnectionWizardDialog help 4/7:
 _("<p>
 <b><big>Device URIs for Directly Connected Devices</big></b><br>
 Devices which are connected via the parallel port or via USB
@@ -452,7 +503,7 @@ To access a device via bluetooth, the RPM package bluez-cups must be installed.
 The package provides the CUPS backend 'bluetooth' which actually sends the data
 to a bluetooth printer.
 </p>") +
-// ConnectionWizardDialog help 4/6:
+// ConnectionWizardDialog help 5/7:
 _("<p>
 <b><big>Device URIs to Access a Network Printer or a Printserver Box</big></b><br>
 A printserver box is a small device with a network connection
@@ -489,7 +540,7 @@ on the particular network printer or printserver box model.<br>
 For <b>more information</b> have a look at<br>
 http://www.cups.org/documentation.php/network.html
 </p>") +
-// ConnectionWizardDialog help 5/6:
+// ConnectionWizardDialog help 6/7:
 _("<p>
 <b><big>Device URIs to Print Via a Print Server Machine</big></b><br>
 In contrast to a printserver box a print server machine
@@ -543,7 +594,7 @@ novell://username:password@server/queue<br>
 For <b>more information</b> have a look at <tt>man nprint</tt> and
 the other documentation in the RPM package ncpfs.
 </p>") +
-// ConnectionWizardDialog help 6/6:
+// ConnectionWizardDialog help 7/7:
 _("<p>
 <b><big>Special Device URIs</big></b><br>
 <b>Specify an Arbitrary Device URI</b>
