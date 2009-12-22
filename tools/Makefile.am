@@ -15,3 +15,8 @@ ybin_SCRIPTS =					\
 	test_remote_socket
 
 EXTRA_DIST = $(ybin_SCRIPTS)
+
+ybin_PROGRAMS = basicadd_displaytest
+basicadd_displaytest_SOURCES = basicadd_displaytest.c
+basicadd_displaytest_LDADD = -lX11
+

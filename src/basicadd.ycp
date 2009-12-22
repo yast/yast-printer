@@ -203,13 +203,35 @@ any BasicAddDialog()
                     ),
                     `VStretch(),
                     `Left
-                    ( `ReplacePoint
-                      ( `id(`queue_name_input_replace_point),
-                        `InputField
-                        ( `id(`queue_name_input),
-                          // Header of a TextEntry to enter the queue name:
-                          _("Set &Name"),
-                          queue_name_proposal
+                    ( `HBox
+                      ( `ReplacePoint
+                        ( `id(`queue_name_input_replace_point),
+                          `InputField
+                          ( `id(`queue_name_input),
+                            // Avoid that it becomes squeezed to only a few characters in text mode:
+                            `opt(`hstretch),
+                            // Header of a TextEntry to enter the queue name:
+                            _("Set &Name"),
+                            queue_name_proposal
+                          )
+                        ),
+                        `HStretch(),
+                        `VBox
+                        ( `Right
+                          ( `Label
+                            ( // Label text to run HPLIP's printer setup tool 'hp-setup'
+                              // to set up HP printers which runs only in English language:
+                              _("Alternative setup for HP printers (English only):")
+                            )
+                          ),
+                          `Right
+                          ( `PushButton
+                            ( `id(`run_hpsetup),
+                              // Label of a PushButton to run HPLIP's printer setup tool 'hp-setup'.
+                              // Do not change or translate "hp-setup", it is a program name:
+                              _("Run &hp-setup")
+                            )
+                          )
                         )
                       )
                     )
@@ -243,11 +265,11 @@ any BasicAddDialog()
     UI::ChangeWidget( `connection_selection, `CurrentItem, `id(Printer::selected_connections_index) );
   }
   UI::FakeUserInput( `connection_selection );
-  any ret = nil;
+  any user_input = nil;
   while(true)
-  { ret = UI::UserInput();
-    if( ret == `abort || ret == `cancel || ret == `back ) break;
-    if( ret == `next )
+  { user_input = UI::UserInput();
+    if( `abort == user_input || `cancel == user_input || `back == user_input ) break;
+    if( `next == user_input )
     { if( Printer::selected_connections_index < 0
           && Printer::selected_ppds_index < 0
         )
@@ -341,15 +363,15 @@ any BasicAddDialog()
       // Exit this dialog in any case:
       break;
     }
-    if( ret == `connection_wizard )
+    if( `connection_wizard == user_input )
     { // Exit this dialog and go to the ConnectionWizardDialog via the sequencer in wizards.ycp:
       break;
     }
-    if( ret == `add_driver )
+    if( `add_driver == user_input )
     { // Exit this dialog and go to the AddDriverDialog via the sequencer in wizards.ycp:
       break;
     }
-    if( ret == `more_connections )
+    if( `more_connections == user_input )
     { UI::ReplaceWidget( `id(`connection_selection_replace_point),
                          `Table( `id(`connection_selection),
                                  // By default there is no UserInput()
@@ -385,7 +407,7 @@ any BasicAddDialog()
       UI::FakeUserInput( `connection_selection );
       continue;
     }
-    if( ret == `connection_selection )
+    if( `connection_selection == user_input )
     { integer selected_connection_index = (integer)UI::QueryWidget( `id(`connection_selection), `CurrentItem );
       if( nil == selected_connection_index )
       { Popup::AnyMessage( // Header of a Popup::AnyMessage when no connection was selected:
@@ -444,6 +466,8 @@ any BasicAddDialog()
       UI::ReplaceWidget( `id(`queue_name_input_replace_point),
                          `InputField
                          ( `id(`queue_name_input),
+                            // Avoid that it becomes squeezed to only a few characters in text mode:
+                            `opt(`hstretch),
                            // Header of a TextEntry to enter the queue name:
                            _("Set &Name"),
                            queue_name_proposal
@@ -451,7 +475,7 @@ any BasicAddDialog()
                        );
       continue;
     }
-    if( ret == `driver_selection )
+    if( `driver_selection == user_input )
     { integer selected_ppd_index = (integer)UI::QueryWidget( `id(`driver_selection), `CurrentItem );
       if( nil == selected_ppd_index )
       { Popup::AnyMessage( // Header of a Popup::AnyMessage when no driver was selected:
@@ -467,7 +491,7 @@ any BasicAddDialog()
       }
       continue;
     }
-    if( ret == `apply_driver_filter )
+    if( `apply_driver_filter == user_input )
     { driver_filter_input_text = (string)UI::QueryWidget( `id(`driver_filter_input), `Value );
       y2milestone( "Drivers for '%1'", driver_filter_input_text );
       driver_filter_string = Printer::DeriveDriverFilterString( driver_filter_input_text );
@@ -495,7 +519,7 @@ any BasicAddDialog()
                        );
       continue;
     }
-    if( ret == `more_drivers )
+    if( `more_drivers == user_input )
     { if( non_matching_fallback_driver_filter_string != driver_filter_string )
       { driver_filter_string = "";
       }
@@ -619,11 +643,31 @@ any BasicAddDialog()
                        );
       continue;
     }
-    y2milestone( "Ignoring unexpected returncode in BasicAddDialog: %1", ret );
+    if( `run_hpsetup == user_input )
+    { // Run hp-setup and wait until it is finished, then go back directly to the Overview dialog.
+      // Printer::RunHpsetup() returns false only if hp-setup cannot be run.
+      // It returns true in any other case because there is no usable exit code of hp-setup
+      // (always zero even in case of error).
+      // The hp-setup exit code does not matter because the printer autodetection in the Overview dialog
+      // will show an appropriate result (e.g. no new print queue if hp-setup failed):
+      if( ! Printer::RunHpsetup() )
+      { Popup::Error( // Message of a Popup::Error.
+                      // Only a simple message because before the RunHpsetup function was called
+                      // and this function would have shown more specific messages.
+                      // Do not change or translate "hp-setup", it is a program name:
+                      _("Failed to run hp-setup.")
+                    );
+        continue;
+      }
+      // Exit this dialog and run go back to the Overview dialog via the sequencer in wizards.ycp
+      // to show the new printer autodetection results:
+      break;
+    }
+    y2milestone( "Ignoring unexpected returncode in BasicAddDialog: %1", user_input );
     continue;
   }
   y2milestone( "leaving BasicAddDialog" );
-  return ret;
+  return user_input;
 }
 
 /* EOF */
