@@ -2173,6 +2173,83 @@ global list DriverOptionItems( string selected_keyword, string selected_value )
 }
 
 /**
+ * Run hp-setup:
+ * @return false if hp-setup cannot be run and return true in any other case
+ * because there is no usable exit code of hp-setup (always zero even in case of error).
+ */
+global boolean RunHpsetup()
+{ // First of all the multi-line strings because such strings cannot be indented:
+  string basicadd_displaytest_failed_message =
+  // Message of a Popup::Error when hp-setup should be run.
+  // Do not change or translate "hp-setup", it is a program name.
+  // Do not change or translate "DISPLAY", it is an environment variable name.
+_("Cannot run hp-setup because no graphical display can be opened.
+This happens in particular when YaST runs in text-only mode,
+or when the user who runs YaST has no DISPLAY environment variable set,
+or when the YaST process is not allowed to access the graphical display.
+In this case you should run hp-setup manually directly as user 'root'.
+");
+  string hpsetup_not_executable_message =
+  // Message of a Popup::Error when hp-setup should be run.
+  // Do not change or translate "hp-setup", it is a program name:
+_("Cannot run hp-setup because
+/usr/bin/hp-setup is not executable
+or does not exist.
+");
+  string hpsetup_busy_message =
+  // Body of a Popup::ShowFeedback.
+  // Do not change or translate "hp-setup", it is a program name:
+_("Launched hp-setup.
+You must finish hp-setup before you can proceed with the printer configuration.
+");
+  if( ! Printerlib::ExecuteBashCommand( Printerlib::yast_bin_dir + "basicadd_displaytest" ) )
+  { // In particular when YaST runs in text-only mode, hp-setup must not be launched
+    // because it would run without any contact to the user "in the background"
+    // while in the foreground YaST waits for hp-setup to be finished
+    // which is imposible for the user so that the result is a deadlock.
+    // All the user could do is to kill the hp-setup process.
+    // It does not matter if basicadd_displaytest fails orderly because XOpenDisplay fails
+    // or if it crashes because of missing libX11.so on a minimal installation without X
+    // because any non-zero exit code indicates that no graphical window can be opened.
+    y2milestone( "RunHpsetup failed: %1basicadd_displaytest failed.", Printerlib::yast_bin_dir );
+    Popup::Error( basicadd_displaytest_failed_message );
+    return false;
+  }
+  if( ! Printerlib::TestAndInstallPackage( "hplip", "installed" ) )
+  { y2milestone( "RunHpsetup failed: hplip not installed." );
+    // Only a notification but no installation of HPLIP here.
+    // Installing the package hplip can pull in tons of required packages
+    // because the hplip package does not only provide the 'hp' backend but is a
+    // full featured multifunction solution with GUI for HP printers and all-in-one devices.
+    // HPLIP supports printing, scanning, faxing, photo card access, and device management.
+    // Additionally installing hplip can become very complicated (see driveradd.ycp).
+    // Therefore the RunHpsetup function is not bloated with installing HPLIP.
+    { Popup::Error( // Popup:::Error when the user had selected to run hp-setup
+                    // from the BasicAdd dialog but the RPM package hplip is not installed:
+                    // Do not change or translate "hp-setup", it is a program name.
+                    // Do not change or translate "hplip", it is a package name.
+                    // Translate 'Add Driver' the same as the PushButton name to go to the "Add Driver" dialog:
+                    _("To run hp-setup, the RPM package hplip must be installed.\nUse 'Add Driver' to install it.")
+                  );
+    }
+    return false;
+  }
+  if( ! Printerlib::ExecuteBashCommand( "test -x /usr/bin/hp-setup" ) )
+  { y2milestone( "RunHpsetup failed: /usr/bin/hp-setup not executable or does not exist." );
+    Popup::Error( hpsetup_not_executable_message );
+    return false;
+  }
+  Popup::ShowFeedback( // No title for a simple busy message:
+                       "",
+                       // Busy message:
+                       hpsetup_busy_message
+                     );
+  Printerlib::ExecuteBashCommand( "/usr/bin/hp-setup" );
+  Popup::ClearFeedback();
+  return true;
+}
+
+/**
  * Get all printer settings from the first parameter
  * (For use by autoinstallation.)
  * @param settings The YCP structure to be imported.
