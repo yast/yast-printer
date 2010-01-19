@@ -45,6 +45,7 @@ include "printer/helps.ycp";
  */
 any BasicAddDialog()
 { y2milestone( "entering BasicAddDialog" );
+  string any_model_driver_filter_input_text = _("any model");
   string non_matching_fallback_driver_filter_string = "qqqqqqqqqq";
   // Caption for the "Add Printer" dialog (BasicAddDialog):
   string caption = _("Add New Printer Configuration");
@@ -81,14 +82,15 @@ any BasicAddDialog()
                     ( `HBox
                       ( `Label
                         ( // Caption for a Table with a list of printer connections:
-                          _("Determine Connection")
+                          _("Specify the Connection")
                         ),
                         `HStretch(),
                         `PushButton
                         ( `id(`more_connections),
-                          // Label of a PushButton to show more available printer connections
+                          // Label of a PushButton to restart printer autodetection
+                          // to show more available printer connections
                           // in the Table with a list of printer connections:
-                          _("&More Connections")
+                          _("&Detect More")
                         ),
                         `PushButton
                         ( `id(`connection_wizard),
@@ -128,7 +130,7 @@ any BasicAddDialog()
                     ( `Left
                       ( `Label
                         ( // Caption for a printer driver selection:
-                          _("Assign Driver")
+                          _("Find and Assign a Driver")
                         )
                       ),
                       `HBox
@@ -143,7 +145,7 @@ any BasicAddDialog()
                           `opt(`default),
                           // Label of a PushButton to search a list for a search string
                           // and then show the search result:
-                          _("&Search")
+                          _("&Search for")
                         ),
                         `ReplacePoint
                         ( `id(`driver_filter_input_replace_point),
@@ -152,19 +154,24 @@ any BasicAddDialog()
                             `opt(`hstretch),
                             // No InputField header because there is the "Caption for a printer driver selection":
                             "",
-                            driver_filter_input_text
+                            // Make it lowercase to make it more obvious that this is a search string
+                            // which the user could change as needed and not a final fixed model name.
+                            // Many users do not understand that the model name which is preset here
+                            // (i.e. initially for this dialog and when the user selected a connection)
+                            // as search string can be changed by the user as needed to find drivers.
+                            tolower( driver_filter_input_text )
                           )
                         ),
                         `PushButton
                         ( `id(`more_drivers),
-                          // Label of a PushButton to show more available printer drivers:
-                          _("More &Drivers")
+                          // Label of a PushButton to find and show more available printer drivers:
+                          _("&Find More")
                         ),
                         `PushButton
                         ( `id(`add_driver),
                           // Label of a PushButton to go to the "Add Driver" dialog
                           // to install a new driver (and perhaps download it before):
-                          _("&Add Driver")
+                          _("&Install Driver")
                         )
                       ),
                       `ReplacePoint
@@ -211,7 +218,7 @@ any BasicAddDialog()
                             // Avoid that it becomes squeezed to only a few characters in text mode:
                             `opt(`hstretch),
                             // Header of a TextEntry to enter the queue name:
-                            _("Set &Name"),
+                            _("Set Arbitrary &Name"),
                             queue_name_proposal
                           )
                         ),
@@ -266,8 +273,15 @@ any BasicAddDialog()
   }
   UI::FakeUserInput( `connection_selection );
   any user_input = nil;
-  while(true)
-  { user_input = UI::UserInput();
+  while( true )
+  { // The [Search for] button must be the default
+    // (it is activated when the user pressed the Enter key)
+    // because when the user has clicked into TextEntry to enter something
+    // it is normal to finish entering by pressing the Enter key
+    // but if the Enter key was linked to 'Next' or 'Back',
+    // the user would get the wrong action.
+    UI::SetFocus( `apply_driver_filter );
+    user_input = UI::UserInput();
     if( `abort == user_input || `cancel == user_input || `back == user_input ) break;
     if( `next == user_input )
     { if( Printer::selected_connections_index < 0
@@ -449,7 +463,12 @@ any BasicAddDialog()
                           ( `id(`driver_filter_input), `opt(`hstretch),
                             // No InputField header because there is the "Caption for a printer driver selection":
                             "",
-                            driver_filter_input_text
+                            // Make it lowercase to make it more obvious that this is a search string
+                            // which the user could change as needed and not a final fixed model name.
+                            // Many users do not understand that the model name which is preset here
+                            // (i.e. initially for this dialog and when the user selected a connection)
+                            // as search string can be changed by the user as needed to find drivers.
+                            tolower( driver_filter_input_text )
                           )
                        );
       UI::ReplaceWidget( `id(`driver_selection_replace_point),
@@ -469,7 +488,7 @@ any BasicAddDialog()
                             // Avoid that it becomes squeezed to only a few characters in text mode:
                             `opt(`hstretch),
                            // Header of a TextEntry to enter the queue name:
-                           _("Set &Name"),
+                           _("Set Arbitrary &Name"),
                            queue_name_proposal
                          )
                        );
@@ -494,9 +513,12 @@ any BasicAddDialog()
     if( `apply_driver_filter == user_input )
     { driver_filter_input_text = (string)UI::QueryWidget( `id(`driver_filter_input), `Value );
       y2milestone( "Drivers for '%1'", driver_filter_input_text );
+      if( any_model_driver_filter_input_text == driver_filter_input_text )
+      { driver_filter_input_text = "";
+      }
       driver_filter_string = Printer::DeriveDriverFilterString( driver_filter_input_text );
       if( "" == driver_filter_string )
-      { driver_filter_input_text = _("any model");
+      { driver_filter_input_text = any_model_driver_filter_input_text;
       }
       UI::ReplaceWidget( `id(`driver_filter_input_replace_point),
                           `InputField
@@ -535,6 +557,7 @@ any BasicAddDialog()
       y2milestone( "More drivers for '%1'", driver_filter_input_text );
       if( "" != driver_filter_input_text
           && "unknown" != tolower( driver_filter_input_text )
+          && any_model_driver_filter_input_text != driver_filter_input_text
           && non_matching_fallback_driver_filter_string != driver_filter_string
         )
       { string manufacturer_and_model_number = Printer::DeriveModelName( driver_filter_input_text, 2 );
@@ -624,7 +647,7 @@ any BasicAddDialog()
                              `opt(`hstretch),
                              // No InputField header because there is the "Caption for a printer driver selection":
                              "",
-                             _("any model")
+                             any_model_driver_filter_input_text
                            )
                          );
         driver_items = Printer::DriverItems( "", true );
