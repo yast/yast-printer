@@ -134,18 +134,21 @@ any BasicAddDialog()
                         )
                       ),
                       `HBox
-                      ( `PushButton
-                        ( `id(`apply_driver_filter),
-                          // This button must be the default
-                          // (it is activated when the user pressed the Enter key)
-                          // because when the user has clicked into TextEntry to enter something
-                          // it is normal to finish entering by pressing the Enter key
-                          // but if the Enter key was linked to 'Next' or 'Back',
-                          // the user would get the wrong action.
-                          `opt(`default),
-                          // Label of a PushButton to search a list for a search string
-                          // and then show the search result:
-                          _("&Search for")
+                      ( `ReplacePoint
+                        ( `id(`apply_driver_filter_replace_point),
+                          `PushButton
+                          ( `id(`apply_driver_filter),
+                            // This button must be the default
+                            // (it is activated when the user pressed the Enter key)
+                            // because when the user has clicked into InputField to enter something
+                            // it is normal to finish entering by pressing the Enter key
+                            // but if the Enter key was linked to 'Next' or 'Back',
+                            // the user would get the wrong action.
+                            `opt(`default),
+                            // Label of a PushButton to search a list for a search string
+                            // and then show the search result:
+                            _("&Search for")
+                          )
                         ),
                         `ReplacePoint
                         ( `id(`driver_filter_input_replace_point),
@@ -274,13 +277,28 @@ any BasicAddDialog()
   UI::FakeUserInput( `connection_selection );
   any user_input = nil;
   while( true )
-  { // The [Search for] button must be the default
-    // (it is activated when the user pressed the Enter key)
-    // because when the user has clicked into TextEntry to enter something
-    // it is normal to finish entering by pressing the Enter key
-    // but if the Enter key was linked to 'Next' or 'Back',
-    // the user would get the wrong action.
-    UI::SetFocus( `apply_driver_filter );
+  { // Replace the [Search for] button with itself to enforce it is the default widget
+    // (the default widget is the result of UI::UserInput when the user pressed the Enter key)
+    // regardless whatever function call or UI bug (e.g. bnc#558900) may have changed the default widget:
+    UI::ReplaceWidget( `id(`apply_driver_filter_replace_point),
+                       `PushButton
+                       ( `id(`apply_driver_filter),
+                         // This button must be the default
+                         // (it is activated when the user pressed the Enter key)
+                         // because when the user has clicked into InputField to enter something
+                         // it is normal to finish entering by pressing the Enter key
+                         // but if the Enter key was linked to 'Next' or 'Back',
+                         // the user would get the wrong action.
+                         `opt(`default),
+                         // Label of a PushButton to search a list for a search string
+                         // and then show the search result:
+                         _("&Search for")
+                       )
+                     );
+    // Set the focus to the InputField for the driver search string
+    // so that the user can just start typing:
+    UI::SetFocus( `driver_filter_input );
+    // Wait for user input:
     user_input = UI::UserInput();
     if( `abort == user_input || `cancel == user_input || `back == user_input ) break;
     if( `next == user_input )
