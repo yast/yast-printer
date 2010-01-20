@@ -295,9 +295,15 @@ any BasicAddDialog()
                          _("&Search for")
                        )
                      );
-    // Set the focus to the InputField for the driver search string
-    // so that the user can just start typing:
-    UI::SetFocus( `driver_filter_input );
+    if( `apply_driver_filter == user_input )
+    { // Only when the user is already searching drivers,
+      // set the focus to the InputField for the driver search string
+      // so that the user can just continue typing other search strings.
+      // In contrast when the user is not already searching drivers,
+      // it is annoying in particular in the text-only ncurses UI
+      // when the focus becomes always set to the driver search string InputField.
+      UI::SetFocus( `driver_filter_input );
+    }
     // Wait for user input:
     user_input = UI::UserInput();
     if( `abort == user_input || `cancel == user_input || `back == user_input ) break;
