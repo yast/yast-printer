@@ -586,20 +586,29 @@ symbol handleOverview( string key, map event )
                                   ),
                            Printerlib::result["stderr"]:""
                          );
-      return nil;
+
+      // When submitting the testpage to the queue failed (also for non-local queues)
+      // there might be whatever reason (e.g. a remote queue might have been deleted in the meantime)
+      // so that a refresh of the overview content is needed to be on the safe side.
+      // Re-run the OverviewDialog (with re-created queue status) via the sequencer:
+      return `refresh;
     }
-    Popup::TimedAnyQuestion( // Popup::TimedAnyQuestion header:
-                             _("Wait Until Testprint Finished"),
-                             // Popup::TimedAnyQuestion message
-                             // where %1 will be replaced by the queue name.
-                             sformat( _("Sent testpage to %1. It should start to print soon."), queue_name ),
-                             // Popup::TimedAnyQuestion 'Yes' button label:
-                             Label::StopButton(),
-                             // Popup::TimedAnyQuestion 'No' button label:
-                             Label::OKButton(),
-                             `focus_yes,
-                             120
-                           );
+    string test_print_command_stdout = Printerlib::result["stdout"]:"";
+    boolean test_print_success = Popup::AnyQuestion( // Popup::AnyQuestion header regarding testpage printout result:
+                                                     _("Wait Until Testpage Printing Finished"),
+                                                     // Popup::AnyQuestion message regarding testpage printout result
+                                                     // where %1 will be replaced by the queue name.
+                                                     sformat( _("Sent testpage to %1. Printing should start soon."),
+                                                              queue_name
+                                                            ),
+                                                     // Popup::AnyQuestion 'Yes' button label
+                                                     // regarding a positive testpage printout result:
+                                                     _("Testpage printout was successful"),
+                                                     // Popup::AnyQuestion 'No' button label
+                                                     // regarding a negative testpage printout result:
+                                                     _("Testpage printing failed"),
+                                                     `focus_yes
+                                                   );
     if( "local" == Printer::queues[selected_queue_index,"config"]:"remote" )
     { // When it is a local queue and there are still pending jobs in the queue,
       // it seems something went wrong with the testpage printing
@@ -695,8 +704,62 @@ symbol handleOverview( string key, map event )
           }
         }
       }
+      if( ! test_print_success )
+      { // When the user had selected in the Popup::AnyQuestion that "Testpage printing failed"
+        // and when it is a local queue, extract logging information about the test print job
+        // from /var/log/cups/error_log and show them to the user:
+        string test_print_cups_error_log = "";
+        test_print_command_stdout = deletechars( test_print_command_stdout, "'" );
+        Printerlib::ExecuteBashCommand( // sed is greedy and cuts all up to the last '-' for example
+                                        //   echo ' funprinter-1000-123 ' | sed -e 's/.*-//'
+                                        // so that it works even if there is a '-' in the queue name
+                                        // which is not allowed but may happen nevertheless, see
+                                        // http://bugzilla.novell.com/show_bug.cgi?id=556819#c12
+                                        // and the final tr removes in particular spaces and newline:
+                                        "echo '"
+                                        + test_print_command_stdout
+                                        + "' | grep -o ' "
+                                        + queue_name
+                                        + "-[0-9]* ' | sed -e 's/.*-//' | tr -d -c '[:digit:]'"
+                                      );
+        string test_print_job_number = Printerlib::result["stdout"]:"";
+        if( "" != test_print_job_number )
+        { // Note the YCP quoting: \\ becomes \ in the commandline:
+          Printerlib::ExecuteBashCommand( "grep '\\[Job "
+                                          + test_print_job_number
+                                          + "\\]' /var/log/cups/error_log | grep -v '^[dD]'"
+                                        );
+          test_print_cups_error_log = Printerlib::result["stdout"]:"";
+        }
+        // Ignore an effectively empty test_print_cups_error_log:
+        if( "" != filterchars( test_print_cups_error_log, Printer::alnum_chars ) )
+        { // Whereto find the full CUPS log information when "Testpage printing failed":
+          string where_full_log = _("For the full log, see the /var/log/cups/error_log file.");
+          Popup::AnyMessage( sformat( // Header of a Popup::AnyMessage where %1 will be replaced by the queue name:
+                                      _("CUPS log information while processing the testpage for %1 (English only)"),
+                                      queue_name
+                                    ),
+                                    test_print_cups_error_log
+                                    + "\n----------------------------------------------------------------------\n"
+                                    + where_full_log
+                           );
+        }
+      }
     }
-    return nil;
+    else
+    { // It is a non-local queue:
+      if( ! test_print_success )
+      { Popup::Notify( // When the user had selected that "Testpage printing failed" for a non-local queue
+                       // show a very generic info to the user to show at least something:
+                       _( "When printing via a remote system fails, you may ask an admin of the remote system." )
+                     );
+      }
+    }
+    // While testpage printing the backend may have failed (also for non-local queues)
+    // e.g. exited with exit code 1 (CUPS_BACKEND_FAILED) or 4 (CUPS_BACKEND_STOP)
+    // which disables the queue so that a refresh of the overview content is needed.
+    // Re-run the OverviewDialog (with re-created queue status) via the sequencer:
+    return `refresh;
   }
 
   if( `add == event["ID"]:nil && "Activated" == event["EventReason"]:"" )
