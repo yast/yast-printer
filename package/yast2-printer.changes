@@ -1,4 +1,33 @@
 -------------------------------------------------------------------
+Wed Mar  3 12:18:38 CET 2010 - jsmeix@suse.de
+
+- Fixed tools/autodetect_print_queues by testing for the
+  positive "lpstat -r" output "scheduler is running"
+  the same way as already implemented in src/Printerlib.ycp
+  (bnc#584540).
+- Fixed testpage printing in overview.ycp:
+  When testpage printing failed, the queue may have
+  become disabled so that a refresh of the overview content
+  is needed (e.g. to show the new queue state).
+  Added support to show the particular logging info
+  in /var/log/cups/error_log for the testpage print job
+  when the user clicked "Testpage printing failed".
+- In CUPS version 1.5 SCSI printer support will be dropped,
+  see http://www.cups.org/str.php?L3500
+  i.e. the CUPS scsi backend will be dropped.
+  Therefore in yast2-printer SCSI printer support is
+  also dropped in connectionwizard.ycp and helps.ycp.
+  Nevertheless because of the dropped scsi backend
+  there is at least a user notification Popup::ErrorDetails
+  if the scsi backend is used for a queue but there
+  is no /usr/lib*/cups/backend/scsi (bnc#580121).
+- In none of the bash scripts for yast2-printer bash globbing
+  is needed. Actually in all those scripts no bash globbing
+  should happen. Therefore I added to all those scripts
+  a "set -f" line (bnc #575056).
+- 2.19.5
+
+-------------------------------------------------------------------
 Fri Jan 22 15:23:18 CET 2010 - jsmeix@suse.de
 
 - Fixed search usability in basicadd.ycp and basicmodify.ycp
