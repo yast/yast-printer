@@ -51,6 +51,12 @@ global boolean Modified();
 global boolean modified = false;
 
 /**
+ * Set by AutoYaST by calling in printer_auto.ycp the "SetModified" function.
+ * Preset to false which is the right default for AutoYast.
+ */
+global boolean printer_auto_modified = false;
+
+/**
  */
 global boolean proposal_valid = false;
 
@@ -1926,10 +1932,15 @@ global list DriverOptionItems( string selected_keyword, string selected_value )
 }
 
 /**
- * Get all printer settings from the first parameter
- * (For use by autoinstallation.)
- * @param settings The YCP structure to be imported.
- * @return boolean True on success
+ * Write printer settings according to the parameter settings map which
+ * contains a "cups_remote_server" sub-map and a "server_settings" sub-map
+ * via Printerlib::WriteClientSettings to /etc/cups/client.conf and
+ * via Printerlib::WriteCupsSettings to /etc/cups/cupsd.conf
+ * where empty sub-maps result empty system config files.
+ * For use by autoinstallation (called in printer_auto.ycp) and
+ * also called in printer_proposal.ycp in its "AskUser" function.
+ * @param settings The YCP map to be imported.
+ * @return boolean True in any case.
  */
 global boolean Import (map settings) {
         Printerlib::WriteClientSettings(settings["cups_remote_server"]:$[]);
@@ -1938,33 +1949,24 @@ global boolean Import (map settings) {
 }
 
 /**
- * Dump the printer settings to a single map
- * (For use by autoinstallation.)
- * @return map Dumped settings (later acceptable by Import ())
+ * Dump printer settings to a single map which contains
+ * the cupsd.conf entries in a "server_settings" sub-map and
+ * the client.conf entries in a "cups_remote_server" sub-map.
+ * For use by autoinstallation (called in printer_auto.ycp) and
+ * also called in printer_proposal.ycp in its "AskUser" function.
+ * @return map Dumped settings (later acceptable by Printer::Import(map) )
  */
 global map Export () {
-    Printerlib::DetermineClientOnly();
-    Printer::AutodetectQueues();
-    list <map> p_queues = filter(map queue, Printer::queues, { return (queue["config"]:""=="local"); });
+//  Printerlib::DetermineClientOnly();
+//  Printer::AutodetectQueues();
+//  list <map> p_queues = filter(map queue, Printer::queues, { return (queue["config"]:""=="local"); });
     map exp = $[
 //	"queues" : p_queues,
 //	"filters" : Printerlib::ExportFilters( p_queues ),
 	"server_settings" : (map)SCR::Read(.cups.server),
 	"cups_remote_server" : (map)SCR::Read(.cups.client)
 	];
-//y2internal("export %1", exp);
    return exp;
-}
-
-/**
- * Return packages needed to be installed and removed during
- * Autoinstallation to insure module has all needed software
- * installed.
- * @return map with 2 lists.
- */
-global map AutoPackages() {
-    // TODO FIXME: your code here...
-    return $[ "install":[], "remove":[] ];
 }
 
 /* EOF */
