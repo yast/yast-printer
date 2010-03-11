@@ -51,6 +51,18 @@ global boolean Modified();
 global boolean modified = false;
 
 /**
+ * Set by AutoYaST by calling in printer_auto.ycp the "SetModified" function.
+ * Preset to false which is the right default for AutoYast.
+ */
+global boolean printer_auto_modified = false;
+
+/**
+ * Filled in by AutoYaST by calling in printer_auto.ycp the "Import" function.
+ * Preset to the empty map which is the right default for AutoYast.
+ */
+global map autoyast_printer_settings_import = $[];
+
+/**
  */
 global boolean proposal_valid = false;
 
@@ -2249,47 +2261,6 @@ You must finish hp-setup before you can proceed with the printer configuration.
   return true;
 }
 
-/**
- * Get all printer settings from the first parameter
- * (For use by autoinstallation.)
- * @param settings The YCP structure to be imported.
- * @return boolean True on success
- */
-global boolean Import (map settings) {
-        Printerlib::WriteClientSettings(settings["cups_remote_server"]:$[]);
-	Printerlib::WriteCupsSettings(settings["server_settings"]:$[]);
-    return true;
-}
-
-/**
- * Dump the printer settings to a single map
- * (For use by autoinstallation.)
- * @return map Dumped settings (later acceptable by Import ())
- */
-global map Export () {
-    Printerlib::DetermineClientOnly();
-    AutodetectQueues();
-    list <map> p_queues = filter(map queue, queues, { return (queue["config"]:""=="local"); });
-    map exp = $[
-//	"queues" : p_queues,
-//	"filters" : Printerlib::ExportFilters( p_queues ),
-	"server_settings" : (map)SCR::Read(.cups.server),
-	"cups_remote_server" : (map)SCR::Read(.cups.client)
-	];
-//y2internal("export %1", exp);
-   return exp;
-}
-
-/**
- * Return packages needed to be installed and removed during
- * Autoinstallation to insure module has all needed software
- * installed.
- * @return map with 2 lists.
- */
-global map AutoPackages() {
-    // TODO FIXME: your code here...
-    return $[ "install":[], "remove":[] ];
-}
-
 /* EOF */
 }
+
