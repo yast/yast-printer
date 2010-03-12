@@ -141,5 +141,63 @@ symbol runMainDialog()
   return ret;
 }
 
+map< string, map< string, any > > AutoDialog_widgets_handling =
+                                  $[ "OVERVIEW" :
+                                     $[ "widget" : `custom,
+                                        "custom_widget" : widgetOverview,
+                                        "init" : initOverview,
+                                        "handle" : handleOverview,
+                                        "help" : HELPS["AutoYaSToverview"]:""
+                                      ],
+                                     "NETWORKPRINTING" :
+                                     $[ "widget" : `custom,
+                                        "custom_widget" : widgetNetworkPrinting,
+                                        "init" : initNetworkPrinting,
+                                        "handle" : handleNetworkPrinting,
+                                        "help" : HELPS["printing_via_network_dialog"]:""
+                                      ]
+                                   ];
+
+map< string, map< string, any > > AutoDialog_tabs_description =
+                                  $[ "overview" :
+                                     $[ "header" : _("AutoYaST Printer Configurations"),
+                                        "tree_item_label" : _("Printer Configurations"),
+                                        "caption" : _("AutoYaST Printer Configurations"),
+                                        "contents" : `VBox( "OVERVIEW" ),
+                                        "widget_names" : ["OVERVIEW"]
+                                      ],
+                                     "network" :
+                                     $[ "header" : _("AutoYaST Print via Network Settings"),
+                                        "tree_item_label" : _("Print via Network"),
+                                        "caption" : _("AutoYaST Print via Network Settings"),
+                                        "contents" : `VBox( "NETWORKPRINTING" ),
+                                        "widget_names" : ["NETWORKPRINTING"]
+                                      ]
+                                   ];
+
+symbol runAutoDialog()
+{ string caption = _("AutoYaST Settings for Printing with CUPS via Network");
+  symbol ret = DialogTree::ShowAndRun
+               ( $[ "ids_order" : [ "overview", "network" ],
+                    "initial_screen" : "overview",
+                    "screens" : AutoDialog_tabs_description,
+                    "widget_descr" : AutoDialog_widgets_handling,
+                    // All the dialogs in "ids_order" are single (step) configuration dialogs
+                    // and according to the new YaST style guide at
+                    // http://en.opensuse.org/YaST/Style_Guide#Single_Configuration.2FOverview.2FEdit_Dialog
+                    // there is no longer a "abort" functionality which exits the whole module.
+                    // Instead this button is now named "Cancel" and its functionality is
+                    // to go back to the Overview dialog (i.e. what the "back" button would do)
+                    // because it reads "Cancel - Closes the window and returns to the overview."
+                    // Therefore the button with the "abort" functionality is not shown at all
+                    // and the button with the "back" functionality is named "Cancel".
+                    "abort_button" : nil,
+                    "back_button" : Label::CancelButton(),
+                    "next_button" : Label::OKButton()
+                  ]
+               );
+  return ret;
+}
+
 /* EOF */
 }

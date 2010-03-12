@@ -51,16 +51,28 @@ global boolean Modified();
 global boolean modified = false;
 
 /**
- * Set by AutoYaST by calling in printer_auto.ycp the "SetModified" function.
+ * Set to 'true' by AutoYaST by calling in printer_auto.ycp the "SetModified" function.
+ * Read by AutoYaST by calling in printer_auto.ycp the "GetModified" function.
  * Preset to false which is the right default for AutoYast.
  */
 global boolean printer_auto_modified = false;
 
 /**
  * Filled in by AutoYaST by calling in printer_auto.ycp the "Import" function.
+ * Reset to the empty map by AutoYaST by calling in printer_auto.ycp the "Reset" function.
  * Preset to the empty map which is the right default for AutoYast.
  */
-global map autoyast_printer_settings_import = $[];
+global map autoyast_printer_settings = $[];
+
+/**
+ * Set to 'true' by AutoYaST by calling in printer_auto.ycp the "Change" function.
+ * Lets the Overview dialog disable the checkbox to show local queues
+ * which disables as a consequence in particular the [Delete] button.
+ * Lets the Printing via Network dialog disable the button to
+ * run the Connection Wizard (to set up a local queue for a network printer).
+ * Preset to false which is the right default for all dialogs.
+ */
+global boolean printer_auto_dialogs = false;
 
 /**
  */
@@ -279,10 +291,10 @@ global integer selected_queues_index = -1;
 
 /**
  * Queue filter string:
- * Can be either "all" or "local" or "remote" depending on
- * which kind of queues from the queues list (of queue maps)
- * the user wants to see in the overview dialog.
- * Preset to "all" which indicates that all queues are shown.
+ * Both boolean variables queue_filter_show_local and queue_filter_show_remote
+ * can be either 'true' or 'false' depending on which kind of queues
+ * from the queues list (of queue maps) the user wants to see in the overview dialog.
+ * Both are preset to 'true' which indicates that all queues are shown.
  */
 global boolean queue_filter_show_local = true;
 global boolean queue_filter_show_remote = true;

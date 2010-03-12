@@ -222,6 +222,16 @@ the YaST printer module to configure your printers.
       }
     }
   }
+  if( Printer::printer_auto_dialogs )
+  { // When the Overview dialog is called by AutoYaST
+    // (by calling in printer_auto.ycp the "Change" function)
+    // it does not make sense to let the user show local queues:
+    UI::ChangeWidget( `local_content_checkbox, `Enabled, false );
+    // Disable also the [Add] Button.
+    // It stays disabled as long as the dialog runs because
+    // it is nowhere again re-enabled below.
+    UI::ChangeWidget( `add, `Enabled, false );
+  }
   UI::ChangeWidget( `local_content_checkbox, `Value, local_content_selected );
   UI::ChangeWidget( `remote_content_checkbox, `Value, remote_content_selected );
   UI::ChangeWidget( `overview_table, `Items,
@@ -477,7 +487,10 @@ symbol handleOverview( string key, map event )
                          // Body of a Popup::AnyMessage when no queue was selected from the list:
                          _("Select an entry.")
                        );
-      return nil;
+      // When testpage printing failed there might be whatever reason
+      // so that a refresh of the overview content is needed to be on the safe side.
+      // Re-run the OverviewDialog (with re-created queue status) via the sequencer:
+      return `refresh;
     }
     if( "yes" == Printer::queues[selected_queue_index,"rejecting"]:"no" )
     { Popup::AnyMessage( // Header of a Popup::AnyMessage when the queue rejects print jobs:
@@ -485,7 +498,10 @@ symbol handleOverview( string key, map event )
                          // Body of a Popup::AnyMessage when the queue rejects print jobs:
                          _("The testpage cannot be printed because print jobs are rejected.")
                        );
-      return nil;
+      // When testpage printing failed there might be whatever reason
+      // so that a refresh of the overview content is needed to be on the safe side.
+      // Re-run the OverviewDialog (with re-created queue status) via the sequencer:
+      return `refresh;
     }
     if( "yes" == Printer::queues[selected_queue_index,"disabled"]:"no" )
     { Popup::AnyMessage( // Header of a Popup::AnyMessage when printing is disabled for the queue:
@@ -493,7 +509,10 @@ symbol handleOverview( string key, map event )
                          // Body of a Popup::AnyMessage when printing is disabled for the queue:
                          _("The testpage cannot be printed because printout is disabled.")
                        );
-      return nil;
+      // When testpage printing failed there might be whatever reason
+      // so that a refresh of the overview content is needed to be on the safe side.
+      // Re-run the OverviewDialog (with re-created queue status) via the sequencer:
+      return `refresh;
     }
     if( "local" == Printer::queues[selected_queue_index,"config"]:"remote" )
     { // When it is a local queue, remember it as the currently selected queue
@@ -586,7 +605,6 @@ symbol handleOverview( string key, map event )
                                   ),
                            Printerlib::result["stderr"]:""
                          );
-
       // When submitting the testpage to the queue failed (also for non-local queues)
       // there might be whatever reason (e.g. a remote queue might have been deleted in the meantime)
       // so that a refresh of the overview content is needed to be on the safe side.
