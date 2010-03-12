@@ -802,7 +802,8 @@ void initNetworkPrinting( string key )
   initial_client_conf_input_value = "";
   UI::ChangeWidget( `id(`test_client_conf_server), `Enabled, false );
   // Only the "Connection Wizard" button is enabled by default
-  // and disabled in case of "client_only", see "Client only settings" below:
+  // and disabled in case of "client_only" (see "Client only settings" below)
+  // and also disabled in case of Printer::printer_auto_dialogs.
   UI::ChangeWidget( `id(`connection_wizard), `Enabled, true );
   // Make the actual Browsing settings:
   // If "none" is present as a BrowseAllow value it is actually no Browsing config.
@@ -937,6 +938,13 @@ void initNetworkPrinting( string key )
   // Fill in the client-only values of the current settings in the system
   // regardless if it is actually a client-only config or not (see above):
   UI::ChangeWidget( `id(`client_conf_input), `Value, Printerlib::client_conf_server_name );
+  if( Printer::printer_auto_dialogs )
+  { // When the Overview dialog is called by AutoYaST
+    // (by calling in printer_auto.ycp the "Change" function)
+    // it does not make sense to let the user set up a local queue
+    // for a network printer via the "Connection Wizard":
+    UI::ChangeWidget( `id(`connection_wizard), `Enabled, false );
+  }
   initial_client_conf_input_value = Printerlib::client_conf_server_name;
   y2milestone( "leaving initNetworkPrinting with\ninitial_browsing = '%1'\ninitial_browse_allow = '%2'\ninitial_browse_allow_input_value = '%3'\ninitial_browse_poll = '%4'\ninitial_browse_poll_input_value = '%5'\ninitial_client_only = '%6'\ninitial_client_conf_input_value = '%7'", initial_browsing, initial_browse_allow, initial_browse_allow_input_value, initial_browse_poll, initial_browse_poll_input_value, initial_client_only, initial_client_conf_input_value );
 }
@@ -1000,10 +1008,12 @@ symbol handleNetworkPrinting( string key, map event )
         }
         UI::ChangeWidget( `id(`client_conf_input), `Enabled, false );
         UI::ChangeWidget( `id(`test_client_conf_server), `Enabled, false );
-        if( ! Printerlib::client_only )
+        if( ! Printerlib::client_only && ! Printer::printer_auto_dialogs )
         { // The "Connection Wizard" button is enabled by default
           // and disabled if currently a "client_only" config is active.
-          // In this case it is never again enabled as long as the dialog runs, see above:
+          // In this case it is never again enabled as long as the dialog runs, see above.
+          // It is also disabled in case of Printer::printer_auto_dialogs
+          // and then it must stay disabled as long as the dialog runs.
           UI::ChangeWidget( `id(`connection_wizard), `Enabled, true );
         }
       }

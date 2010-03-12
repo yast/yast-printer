@@ -113,7 +113,7 @@ any MainSequence()
                     "printing_via_network_connection_wizard" : $[ `abort : `abort,
                                                                   `back : "overview",
                                                                   `next : "add"
-                                                                ],
+                                                                ]
                   ];
   return Sequencer::Run( aliases, sequence );
 }
@@ -146,11 +146,62 @@ any PrinterSequence()
 }
 
 /**
- * Whole configuration of printer but without reading and writing.
+ * Workflow of the printer configuration for AutoYaST
+ * @return sequence result
+ */
+any AutoSequence()
+{ map aliases = $[ "overview" : ``( runAutoDialog() )
+                 ];
+  map sequence = $[ "ws_start" : "overview",
+                    "overview": $[ `abort : `abort,
+                                   `back : "overview",
+                                   `next : `next,
+                                   `add : "overview",
+                                   `modify : "overview",
+                                   `delete : "overview",
+                                   `refresh : "overview",
+                                   `printing_via_network_back : "overview",
+                                   `printing_via_network_next : "overview",
+                                   `printing_via_network_connection_wizard : "overview",
+                                   `sharing_back : "overview",
+                                   `sharing_next : "overview",
+                                   `policies_back : "overview",
+                                   `policies_next : "overview",
+                                   `autoconfig_back : "overview",
+                                   `autoconfig_next : "overview"
+                                 ]
+                  ];
+  return Sequencer::Run( aliases, sequence );
+}
+
+/**
+ * Only "Printing via Network" configuration of printer.
  * For use with autoinstallation.
  * @return sequence result
  */
 any PrinterAutoSequence()
+{ /* Initialization dialog caption */
+  string caption = _("Printer Configuration");
+  /* Initialization dialog contents */
+  term contents = `Label( _("Initializing...") );
+  Wizard::CreateDialog();
+  Wizard::SetContentsButtons( caption,
+                              contents,
+                              "",
+                              Label::BackButton(),
+                              Label::NextButton()
+                            );
+  any ret = AutoSequence();
+  UI::CloseDialog();
+  return ret;
+}
+
+/**
+ * Whole configuration of printer but without reading and writing.
+ * For use with proposal at the end of the system installation.
+ * @return sequence result
+ */
+any PrinterProposalSequence()
 { /* Initialization dialog caption */
   string caption = _("Printer Configuration");
   /* Initialization dialog contents */

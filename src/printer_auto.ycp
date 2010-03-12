@@ -82,11 +82,39 @@ y2milestone("Printer auto param='%1'", param);
 
 /* Create a summary string */
 if (func == "Summary")
-{ ret = _("AutoYaST printer client settings.");
+{ ret = _("AutoYaST settings for printing with CUPS via network. There is no AutoYaST support for local print queues.");
 }
-/* Reset configuration to an empty map */
+/*
+ * Reset the AutoYaST related printer settings to system defaults
+ * which means /etc/cups/cupsd.conf is overwritten by /etc/cups/cupsd.conf.default
+ * (/etc/cups/cupsd.conf.default is provided by our cups RPM for such cases)
+ * and all entries in /etc/cups/client.conf are commented out.
+ * Then read the content form those system config files
+ * (exactly the same way as it is done in the Export function)
+ * and store it in the Printer::autoyast_printer_settings map
+ * (exactly the same is done in the Import function)
+ * so that a subsequent call of the Export function by AutoYaST
+ * would export the system default values to AutoYaST
+ * and a subsequent call of the Write function by AutoYaST would
+ * write the same system default values again to /etc/cups/client.conf
+ * and to /etc/cups/cupsd.conf (regardless that their content
+ * is already reset to system defaults).
+ * Accordingly return the Printer::autoyast_printer_settings map
+ * to AutoYaST so that also the printer related settings inside AutoYaSTare
+ * are reset to system defaults so that a subsequent call of the Import
+ * function by AutoYaST would provide the correct system default values.
+ */
 else if (func == "Reset")
-{ ret = $[];
+{ // It is o.k. to ignore when the next two commands fail
+  // because then /etc/cups/cupsd.conf and/or /etc/cups/client.conf
+  // were (hopefully) not changed at all which is the right fallback
+  // so that there is no change of system config files in case of errors.
+  Printerlib::ExecuteBashCommand( "cp /etc/cups/cupsd.conf.default /etc/cups/cupsd.conf" );
+  Printerlib::ExecuteBashCommand( "sed -i -e '/^[^#]/s/^/#/' /etc/cups/client.conf" );
+  Printer::autoyast_printer_settings = $[ "server_settings" : (map)SCR::Read(.cups.server),
+                                          "cups_remote_server" : (map)SCR::Read(.cups.client)
+                                        ];
+  ret = Printer::autoyast_printer_settings;
 }
 /* Called appropriately by the AutoYaST framework */
 else if (func == "SetModified")
@@ -105,8 +133,17 @@ else if (func == "Change")
   boolean progress_orig = Progress::set( false );
   Printer::Read();
   Progress::set( progress_orig );
-  // PrinterAutoSequence in wizards.ycp runs only the MainSequence
-  // which are all the usual dialogs (starting with the "Overview")
+  // Let the Overview dialog disable the checkbox to show local queues
+  // which disables as a consequence in particular the [Delete] button.
+  // Lets the Printing via Network dialog disable the button to
+  // run the Connection Wizard (to set up a local queue for a network printer).
+  Printer::printer_auto_dialogs = true;
+  // Let the Overview dialog only show remote queues:
+  Printer::queue_filter_show_remote = true;
+  Printer::queue_filter_show_local = false;
+  // PrinterAutoSequence in wizards.ycp runs only the AutoSequence
+  // which is only the "Printing via Network" and the "Overview" dialog
+  // (starting with the "Printing via Network" dialog)
   // but without running before ReadDialog (which calls only Printer::Read)
   // and running afterwards WriteDialog (which calls only Printer::Write)
   // which is the reason that Printer::Read is called explicitely above.
@@ -117,7 +154,7 @@ else if (func == "Change")
  * and store it to be used later when the Write function is called.
  */
 else if (func == "Import")
-{ Printer::autoyast_printer_settings_import = param;
+{ Printer::autoyast_printer_settings = param;
   ret = true;
 }
 /*
@@ -162,7 +199,8 @@ else if (func == "Read")
 /*
  * Write the AutoYaST related printer settings to the system
  * according to the Printer::autoyast_printer_settings_import map
- * which was stored by a previous call of the Import function by AutoYaST.
+ * which was stored by a previous call of the Import function by AutoYaST
+ * or reset to an empty map by a previous call of the Reset function.
  * The map contains the cupsd.conf entries in a "server_settings" sub-map
  * and the client.conf entries in a "cups_remote_server" sub-map.
  * The cupsd.conf and client.conf entries are written by calling
@@ -171,9 +209,9 @@ else if (func == "Read")
  * where empty sub-maps would result empty system config files.
  */
 else if (func == "Write")
-{ y2milestone("Writing to system '%1'", Printer::autoyast_printer_settings_import);
-  Printerlib::WriteClientSettings( Printer::autoyast_printer_settings_import["cups_remote_server"]:$[] );
-  Printerlib::WriteCupsSettings( Printer::autoyast_printer_settings_import["server_settings"]:$[] );
+{ y2milestone("Writing to system '%1'", Printer::autoyast_printer_settings);
+  Printerlib::WriteClientSettings( Printer::autoyast_printer_settings["cups_remote_server"]:$[] );
+  Printerlib::WriteCupsSettings( Printer::autoyast_printer_settings["server_settings"]:$[] );
   return true;
 }
 /* Unknown function */
