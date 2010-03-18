@@ -51,40 +51,6 @@ global boolean Modified();
 global boolean modified = false;
 
 /**
- * Set to 'true' by AutoYaST by calling in printer_auto.ycp the "SetModified" function.
- * Read by AutoYaST by calling in printer_auto.ycp the "GetModified" function.
- * Preset to false which is the right default for AutoYast.
- */
-global boolean printer_auto_modified = false;
-
-/**
- * Filled in by AutoYaST by calling in printer_auto.ycp the "Import" function.
- * Reset to the empty map by AutoYaST by calling in printer_auto.ycp the "Reset" function.
- * Preset to the empty map which is the right default for AutoYast.
- */
-global map autoyast_printer_settings = $[];
-
-/**
- * Set to 'true' by AutoYaST by calling in printer_auto.ycp the "Change" function.
- * Lets the Overview dialog disable the checkbox to show local queues
- * which disables as a consequence in particular the [Delete] button.
- * Lets the Printing via Network dialog disable the button to
- * run the Connection Wizard (to set up a local queue for a network printer).
- * Preset to false which is the right default for all dialogs.
- */
-global boolean printer_auto_dialogs = false;
-
-/**
- */
-global boolean proposal_valid = false;
-
-/**
- * Write only, used during autoinstallation.
- * Don't run services and SuSEconfig, it's all done at one place.
- */
-global boolean write_only = false;
-
-/**
  * Abort function
  * return boolean return true if abort
  */
@@ -113,6 +79,43 @@ global boolean Modified() {
 
 // Settings:
 // Define all variables needed for configuration of a printer:
+
+/*
+ * Global variables:
+ */
+
+/**
+ * Used by AutoYaST by calling in printer_auto.ycp the "Summary" function.
+ */
+global string printer_auto_summary =
+_("<p>
+AutoYaST settings for printing with CUPS via network.<br>
+There is no AutoYaST support for local print queues.
+</p>");
+
+/**
+ * Set to 'true' by AutoYaST by calling in printer_auto.ycp the "SetModified" function.
+ * Read by AutoYaST by calling in printer_auto.ycp the "GetModified" function.
+ * Preset to false which is the right default for AutoYast.
+ */
+global boolean printer_auto_modified = false;
+
+/**
+ * Filled in by AutoYaST by calling in printer_auto.ycp the "Import" function.
+ * Reset to the empty map by AutoYaST by calling in printer_auto.ycp the "Reset" function.
+ * Preset to the empty map which is the right default for AutoYast.
+ */
+global map autoyast_printer_settings = $[];
+
+/**
+ * Set to 'true' by AutoYaST by calling in printer_auto.ycp the "Change" function.
+ * Lets the Overview dialog disable the checkbox to show local queues
+ * which disables as a consequence in particular the [Delete] button.
+ * Lets the Printing via Network dialog disable the button to
+ * run the Connection Wizard (to set up a local queue for a network printer).
+ * Preset to false which is the right default for all dialogs.
+ */
+global boolean printer_auto_dialogs = false;
 
 /**
  * Explicite listing of all alphanumeric ASCII characters.
@@ -1778,12 +1781,12 @@ global list DriverItems( string driver_filter_string, boolean preselection )
       // This is a PPD which was downloaded by the user:
       string downloaded = "\\[downloaded/";
       integer downloaded_weight = 32;
-      // This is a recommended PPD:
-      string recommended = "\\(recommended\\)";
-      integer recommended_weight = 16;
       // This is an original PPD from a manufacturer:
       string manufacturerPPD = "\\[manufacturer-PPDs/";
-      integer manufacturerPPD_weight = 8;
+      integer manufacturerPPD_weight = 16;
+      // This is a recommended PPD:
+      string recommended = "\\(recommended\\)";
+      integer recommended_weight = 8;
       // This is a PPD from the HPLIP project (HP Linux Imaging and Printing):
       string hplip = "/hplip/";
       integer hplip_weight = 4;
