@@ -1,10 +1,37 @@
 -------------------------------------------------------------------
-Thu Mar 11 17:55:54 CET 2010 - jsmeix@suse.de
+Thu Mar 18 16:17:41 CET 2010 - jsmeix@suse.de
 
-- printer_auto.ycp and printer_proposal.ycp cleanup, see
-  https://bugzilla.novell.com/show_bug.cgi?id=582680#c33
-  Currently this is untested work in progress!
-  When finished this will become version 2.19.6
+- Major cleanup of the AutoYaST printer client printer_auto.ycp
+  (see Novell/Suse Bugzilla bnc#588679):
+  Now there is verbatim cupsd.conf and client.conf
+  as XML CDATA in the AutoYaST control file.
+  This results a new AutoYaST control file structure:
+    <printer>
+      <client_conf_content>
+        <file_contents><![CDATA[
+    ... verbatim content of /etc/cups/client.conf ...
+    ]]></file_contents>
+      </client_conf_content>
+      <cupsd_conf_content>
+        <file_contents><![CDATA[
+    ... verbatim content of /etc/cups/cupsd.conf ...
+    ]]></file_contents>
+      </cupsd_conf_content>
+    </printer>
+  Provide a new src/printer.rnc to match the
+  new AutoYaST control file structure.
+- In src/printer.desktop added the line
+  X-SuSE-YaST-AutoInstSchema=printer.rnc
+  to pull in printer.rnc when yast2-schema is build
+  (see Novell/Suse Bugzilla bnc#588998).
+- In printer_proposal.ycp use Printer::DeriveModelName
+  and Printer::DeriveDriverFilterString the same way
+  as in basicadd.ycp so that the proposal results now
+  the same queue setup as if the user would have just
+  clicked [OK] in the BasicAddDialog.
+- Prefer "manufacturer-PPD" over "recommended" PPD
+  (see Novell/Suse Bugzilla bnc#589371).
+- 2.19.6
 
 -------------------------------------------------------------------
 Wed Mar  3 12:18:38 CET 2010 - jsmeix@suse.de
