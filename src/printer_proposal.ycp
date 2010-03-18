@@ -57,9 +57,8 @@ if( func == "MakeProposal" )
   string warning = nil;
   symbol warning_level = nil;
   boolean force_reset = param["force_reset"]:false;
-  if( force_reset || ! Printer::proposal_valid )
-  { Printer::proposal_valid = true;
-    // Do not call Printer::Read() here to
+  if( force_reset )
+  { // Do not call Printer::Read() here to
     // avoid that the hardware proposal asks the user
     // to install the packages cups-client and cups, see
     // https://bugzilla.novell.com/show_bug.cgi?id=445719#c13
@@ -201,14 +200,19 @@ if( func == "MakeProposal" )
                        { string uri = String::CutBlanks(printer[2]:"");
                          if( "" != uri )
                          { y2internal("Setting up a queue for URI '%1'", uri);
+                           // See basicadd.ycp how a queue_name_proposal is set there:
                            string queue_name = Printer::NewQueueName( tolower( model ) );
                            if( contains( already_set_up_uris, uri ) )
                            { y2internal("Skipping printer '%1' because a queue with the same URI already exists.", printer);
                              continue;
                            }
                            y2milestone("Proposed queue name: %1", queue_name);
-                           string driver_filter_string = "^" + filterchars( tolower( model ), Printer::lower_alnum_chars );
-                           if( "^" != driver_filter_string )
+                           // See basicadd.ycp how driver_filter_input_text and driver_filter_string are set there.
+                           // The same is done here so that the proposal results the same as if the user
+                           // would have blindly clicked [OK] in the BasicAddDialog:
+                           string driver_filter_input_text = Printer::DeriveModelName( model, 0 );
+                           string driver_filter_string = Printer::DeriveDriverFilterString( driver_filter_input_text );
+                           if( "" != driver_filter_string )
                            { list drivers = Printer::DriverItems( driver_filter_string, true );
                              // Printer::DriverItems may result a drivers list with one single element
                              //   [ `item( `id( -1 ), _("No matching driver found.") ) ]
@@ -228,7 +232,11 @@ if( func == "MakeProposal" )
                                  && Printer::selected_connections_index >= 0
                                )
                              { y2internal("Selected driver: %1", drivers[0]:nil);
-                               if( Printer::AddQueue( queue_name, "" ) )
+                               // An empty default_paper_size results CUPS's default paper size
+                               // (see the Printer::AddQueue function) so that the proposal results the same
+                               // as if the user would have blindly clicked [OK] in the BasicAddDialog:
+                               string default_paper_size = "";
+                               if( Printer::AddQueue( queue_name, default_paper_size ) )
                                { already_set_up_uris = add( already_set_up_uris, uri );
                                  // Autodetect queues again so that Printer::NewQueueName
                                  // can compare with existing queue names but ignore whatever failures

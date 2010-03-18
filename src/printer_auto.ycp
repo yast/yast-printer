@@ -80,9 +80,50 @@ if(size(WFM::Args()) > 0 && is(WFM::Args(0), string)) {
 y2milestone("Printer auto func='%1'", func);
 y2milestone("Printer auto param='%1'", param);
 
+string ReadFileContent( string file_name )
+{ if( -1 == SCR::Read( .target.size, file_name ) )
+  { // No user information popup because this would block autoinstallation.
+    // It is no error when /etc/cups/cupsd.conf or /etc/cups/client.conf
+    // cannot be read when those files just do not exist because
+    // it is perfectly o.k. to have a system without the package "cups"
+    // (e.g. a client-only setup without the "cups" RPM which provides /etc/cups/cupsd.conf)
+    // or even without a /etc/cups/client.conf file which is provided by the cups-libs RPM
+    // (e.g. a CUPS default setup where CUPS browsing is used and /etc/cups/client.conf was deleted)
+    y2milestone( "Warning: Cannot read %1 (file may not exist).", file_name );
+    Printer::printer_auto_summary = Printer::printer_auto_summary
+                                    + "<p>"
+                                    + sformat( // Warning message in the AutoYaST printer client
+                                               // which is added to its "Summary" text for AutoYaST
+                                               // where %1 is replaced by the file name which cannot be read.
+                                               _("Warning: Cannot read %1 (file may not exist)."),
+                                               file_name
+                                             )
+                                    + "</p>";
+    return "";
+  }
+  string content = (string)SCR::Read( .target.string, file_name );
+  if( "" == filterchars( content, Printer::alnum_chars ) )
+  { // No user information popup because this would block autoinstallation.
+    // It is an error when /etc/cups/cupsd.conf or /etc/cups/client.conf exist
+    // but are effectively empty because this indicates a broken CUPS config.
+    y2milestone( "Error: Failed to read %1 (possibly empty file).", file_name );
+    Printer::printer_auto_summary = Printer::printer_auto_summary
+                                    + "<p>"
+                                    + sformat( // Error message in the AutoYaST printer client
+                                               // which is added to its "Summary" text for AutoYaST
+                                               // where %1 is replaced by the file name which cannot be read.
+                                               _("Error: Failed to read %1 (possibly empty file)."),
+                                               file_name
+                                             )
+                                    + "</p>";
+    return "";
+  }
+  return content;
+}
+
 /* Create a summary string */
 if (func == "Summary")
-{ ret = _("AutoYaST settings for printing with CUPS via network. There is no AutoYaST support for local print queues.");
+{ ret = Printer::printer_auto_summary;
 }
 /*
  * Reset the AutoYaST related printer settings to system defaults
@@ -100,7 +141,7 @@ if (func == "Summary")
  * and to /etc/cups/cupsd.conf (regardless that their content
  * is already reset to system defaults).
  * Accordingly return the Printer::autoyast_printer_settings map
- * to AutoYaST so that also the printer related settings inside AutoYaSTare
+ * to AutoYaST so that also the printer related settings inside AutoYaST
  * are reset to system defaults so that a subsequent call of the Import
  * function by AutoYaST would provide the correct system default values.
  */
@@ -111,8 +152,11 @@ else if (func == "Reset")
   // so that there is no change of system config files in case of errors.
   Printerlib::ExecuteBashCommand( "cp /etc/cups/cupsd.conf.default /etc/cups/cupsd.conf" );
   Printerlib::ExecuteBashCommand( "sed -i -e '/^[^#]/s/^/#/' /etc/cups/client.conf" );
-  Printer::autoyast_printer_settings = $[ "server_settings" : (map)SCR::Read(.cups.server),
-                                          "cups_remote_server" : (map)SCR::Read(.cups.client)
+  // Ignore read failures and reset to even empty content because to what else could it be reset instead:
+  Printer::autoyast_printer_settings = $[ "cupsd_conf_content" :
+                                          $[ "file_contents" : ReadFileContent( "/etc/cups/cupsd.conf" ) ],
+                                          "client_conf_content" :
+                                          $[ "file_contents" : ReadFileContent( "/etc/cups/client.conf" ) ]
                                         ];
   ret = Printer::autoyast_printer_settings;
 }
@@ -159,15 +203,14 @@ else if (func == "Import")
 }
 /*
  * Read AutoYaST related printer configuration from this system's config files
- * and export them to AutoYaST as a single map which contains
- * the cupsd.conf entries in a "server_settings" sub-map and
- * the client.conf entries in a "cups_remote_server" sub-map
- * so that it can be imported later on another system from AutoYaST
- * when AutoYaST on the other system calls the above Import function.
+ * and export them to AutoYaST as a single map so that it can be imported later
+ * on another system from AutoYaST when AutoYaST on the other system
+ * calls the above Import function.
  */
 else if (func == "Export")
-{ ret = $[ "server_settings" : (map)SCR::Read(.cups.server),
-           "cups_remote_server" : (map)SCR::Read(.cups.client)
+{ // Ignore read failures and export even empty content because what else could be exported instead:
+  ret = $[ "cupsd_conf_content" : $[ "file_contents" : ReadFileContent( "/etc/cups/cupsd.conf" ) ],
+           "client_conf_content" : $[ "file_contents" : ReadFileContent( "/etc/cups/client.conf" ) ]
          ];
 }
 /*
@@ -201,17 +244,33 @@ else if (func == "Read")
  * according to the Printer::autoyast_printer_settings_import map
  * which was stored by a previous call of the Import function by AutoYaST
  * or reset to an empty map by a previous call of the Reset function.
- * The map contains the cupsd.conf entries in a "server_settings" sub-map
- * and the client.conf entries in a "cups_remote_server" sub-map.
- * The cupsd.conf and client.conf entries are written by calling
- * Printerlib::WriteClientSettings to write /etc/cups/client.conf and
- * Printerlib::WriteCupsSettings to write /etc/cups/cupsd.conf
- * where empty sub-maps would result empty system config files.
  */
 else if (func == "Write")
 { y2milestone("Writing to system '%1'", Printer::autoyast_printer_settings);
-  Printerlib::WriteClientSettings( Printer::autoyast_printer_settings["cups_remote_server"]:$[] );
-  Printerlib::WriteCupsSettings( Printer::autoyast_printer_settings["server_settings"]:$[] );
+  if( ! SCR::Write( .target.string,
+                    "/etc/cups/cupsd.conf",
+                    Printer::autoyast_printer_settings["cupsd_conf_content","file_contents"]:""
+                  )
+    )
+  { // No user information popup because this would block autoinstallation:
+    y2milestone( "Error: Failed to write /etc/cups/cupsd.conf" );
+    Printer::printer_auto_summary = Printer::printer_auto_summary
+                                    + "<p>"
+                                    + _("Error: Failed to write /etc/cups/cupsd.conf")
+                                    + "</p>";
+  }
+  if( ! SCR::Write( .target.string,
+                    "/etc/cups/client.conf",
+                    Printer::autoyast_printer_settings["client_conf_content","file_contents"]:""
+                  )
+    )
+  { // No user information popup because this would block autoinstallation:
+    y2milestone( "Error: Failed to write /etc/cups/client.conf" );
+    Printer::printer_auto_summary = Printer::printer_auto_summary
+                                    + "<p>"
+                                    + _("Error: Failed to write /etc/cups/client.conf")
+                                    + "</p>";
+  }
   return true;
 }
 /* Unknown function */
