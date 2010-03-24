@@ -101,6 +101,19 @@ string ReadFileContent( string file_name )
                                     + "</p>";
     return "";
   }
+  // The file content will appear as CDATA section in the AutoYaST XML control file.
+  // The content in a XML CDATA section cannot contain the string "]]>" because
+  // this exact string (without spaces in between) marks the end of the CDATA section.
+  // Therefore "]]>" in the file content is changed to "] ]>" to be on the safe side.
+  // This change is not reverted in the "Write" function below
+  // (which writes the CDATA section content back to a file)
+  // because "] ]>" should also work (hoping that the particular file format
+  // is not sensitive regarding a space between subsequent closing brackets).
+  // In particular in /etc/cups/cupsd.conf and /etc/cups/client.conf
+  // there is no string "]]>" (except perhaps in a comment).
+  // It is o.k. to ignore when the sed command fails because then
+  // the file content was (hopefully) not changed at all which is the right fallback:
+  Printerlib::ExecuteBashCommand( "sed -i -e 's/]]>/] ]>/g' " + file_name );
   string content = (string)SCR::Read( .target.string, file_name );
   if( "" == filterchars( content, Printer::alnum_chars ) )
   { // No user information popup because this would block autoinstallation.
@@ -119,6 +132,48 @@ string ReadFileContent( string file_name )
     return "";
   }
   return content;
+}
+
+boolean CreateBackupFile( string file_name )
+{ // Do nothing if no file specified or if file does not exist:
+  if( "" == file_name || ! Printerlib::ExecuteBashCommand( "test -f " + file_name ) )
+  { return true;
+  }
+  // See "Make a backup" in tools/modify_cupsd_conf how to create a backup file:
+  if( Printerlib::ExecuteBashCommand( "rpm -V -f " + file_name + " | grep -q '^..5.*" + file_name + "$'" ) )
+  { // The file was already changed (RPM tells that the MD5 sum differs):
+    if( Printerlib::ExecuteBashCommand( "cp -p " + file_name + " " + file_name + ".yast2save" ) )
+    { return true;
+    }
+    // No user information popup because this would block autoinstallation.
+    y2milestone( "Warning: Failed to backup %1 as %1.yast2save", file_name );
+    Printer::printer_auto_summary = Printer::printer_auto_summary
+                                    + "<p>"
+                                    + sformat( // Warning message in the AutoYaST printer client
+                                               // which is added to its "Summary" text for AutoYaST
+                                               // where %1 is replaced by the file name.
+                                               _("Warning: Failed to backup %1 as %1.yast2save"),
+                                               file_name
+                                             )
+                                    + "</p>";
+    return false;
+  }
+  // The file is the original from the RPM package or the file is not owned by any package:
+  if( Printerlib::ExecuteBashCommand( "cp -p " + file_name + " " + file_name + ".yast2orig" ) )
+  { return true;
+  }
+  // No user information popup because this would block autoinstallation.
+  y2milestone( "Warning: Failed to backup %1 as %1.yast2orig", file_name );
+  Printer::printer_auto_summary = Printer::printer_auto_summary
+                                  + "<p>"
+                                  + sformat( // Warning message in the AutoYaST printer client
+                                             // which is added to its "Summary" text for AutoYaST
+                                             // where %1 is replaced by the file name.
+                                             _("Warning: Failed to backup %1 as %1.yast2orig"),
+                                             file_name
+                                           )
+                                  + "</p>";
+  return false;
 }
 
 /* Create a summary string */
@@ -146,13 +201,29 @@ if (func == "Summary")
  * function by AutoYaST would provide the correct system default values.
  */
 else if (func == "Reset")
-{ // It is o.k. to ignore when the next two commands fail
+{ // It is o.k. to ignore when the next commands fail
   // because then /etc/cups/cupsd.conf and/or /etc/cups/client.conf
   // were (hopefully) not changed at all which is the right fallback
   // so that there is no change of system config files in case of errors.
+  CreateBackupFile( "/etc/cups/cupsd.conf" );
   Printerlib::ExecuteBashCommand( "cp /etc/cups/cupsd.conf.default /etc/cups/cupsd.conf" );
+  CreateBackupFile( "/etc/cups/client.conf" );
   Printerlib::ExecuteBashCommand( "sed -i -e '/^[^#]/s/^/#/' /etc/cups/client.conf" );
-  // Ignore read failures and reset to even empty content because to what else could it be reset instead:
+  // After /etc/cups/cupsd.conf and/or /etc/cups/client.conf were changed
+  // a restart of the local cupsd is needed if it is currently accessible
+  // so that a possible subsequent AutoYaST call of the "Change" function
+  // uses a local cupsd with the changed system default config which results
+  // the right system default settings in the "Printing via Network" dialog.
+  // To avoid that the user confirmation yes/no-popup in
+  // Printerlib::GetAndSetCupsdStatus("restart") could block autoinstallation
+  // only Printer::printer_auto_requires_cupsd_restart is set to true here
+  // which postpones and triggers the actual cupsd restart to be done later
+  // in the "Change" function which is meant to run interactive dialogs.
+  if( Printerlib::GetAndSetCupsdStatus( "" ) )
+  { Printer::printer_auto_requires_cupsd_restart = true;
+  }
+  // Ignore read failures and reset to even empty content because
+  // to what else could it be reset instead in case of errors:
   Printer::autoyast_printer_settings = $[ "cupsd_conf_content" :
                                           $[ "file_contents" : ReadFileContent( "/etc/cups/cupsd.conf" ) ],
                                           "client_conf_content" :
@@ -172,22 +243,27 @@ else if (func == "GetModified")
 /* Change configuration (run the wizards AutoSequence dialogs) */
 else if (func == "Change")
 { // Call Printer::Read() here (compare the 'func == "Read"' case below)
-  // to make sure that when the full printer module dialogs are launched
+  // to make sure that when the printer module dialogs are launched
   // it asks the user to install the packages cups-client and cups:
   boolean progress_orig = Progress::set( false );
   Printer::Read();
   Progress::set( progress_orig );
+  if( Printer::printer_auto_requires_cupsd_restart )
+  { if( Printerlib::GetAndSetCupsdStatus("restart") )
+    { // Only if the restart was successful, a restart is no longer required:
+      Printer::printer_auto_requires_cupsd_restart = false;
+    }
+  }
   // Let the Overview dialog disable the checkbox to show local queues
   // which disables as a consequence in particular the [Delete] button.
-  // Lets the Printing via Network dialog disable the button to
-  // run the Connection Wizard (to set up a local queue for a network printer).
+  // Let the "Printing via Network" dialog disable the button to
+  // run the "Connection Wizard" (to set up a local queue for a network printer).
   Printer::printer_auto_dialogs = true;
   // Let the Overview dialog only show remote queues:
   Printer::queue_filter_show_remote = true;
   Printer::queue_filter_show_local = false;
   // PrinterAutoSequence in wizards.ycp runs only the AutoSequence
-  // which is only the "Printing via Network" and the "Overview" dialog
-  // (starting with the "Printing via Network" dialog)
+  // which is only the "Printing via Network" and the "Overview" dialogs
   // but without running before ReadDialog (which calls only Printer::Read)
   // and running afterwards WriteDialog (which calls only Printer::Write)
   // which is the reason that Printer::Read is called explicitely above.
@@ -208,7 +284,8 @@ else if (func == "Import")
  * calls the above Import function.
  */
 else if (func == "Export")
-{ // Ignore read failures and export even empty content because what else could be exported instead:
+{ // Ignore read failures and export even empty content because
+  // what else could be exported instead in case of errors:
   ret = $[ "cupsd_conf_content" : $[ "file_contents" : ReadFileContent( "/etc/cups/cupsd.conf" ) ],
            "client_conf_content" : $[ "file_contents" : ReadFileContent( "/etc/cups/client.conf" ) ]
          ];
@@ -247,6 +324,7 @@ else if (func == "Read")
  */
 else if (func == "Write")
 { y2milestone("Writing to system '%1'", Printer::autoyast_printer_settings);
+  CreateBackupFile( "/etc/cups/cupsd.conf" );
   if( ! SCR::Write( .target.string,
                     "/etc/cups/cupsd.conf",
                     Printer::autoyast_printer_settings["cupsd_conf_content","file_contents"]:""
@@ -259,6 +337,7 @@ else if (func == "Write")
                                     + _("Error: Failed to write /etc/cups/cupsd.conf")
                                     + "</p>";
   }
+  CreateBackupFile( "/etc/cups/client.conf" );
   if( ! SCR::Write( .target.string,
                     "/etc/cups/client.conf",
                     Printer::autoyast_printer_settings["client_conf_content","file_contents"]:""
