@@ -487,10 +487,7 @@ symbol handleOverview( string key, map event )
                          // Body of a Popup::AnyMessage when no queue was selected from the list:
                          _("Select an entry.")
                        );
-      // When testpage printing failed there might be whatever reason
-      // so that a refresh of the overview content is needed to be on the safe side.
-      // Re-run the OverviewDialog (with re-created queue status) via the sequencer:
-      return `refresh;
+      return nil;
     }
     if( "yes" == Printer::queues[selected_queue_index,"rejecting"]:"no" )
     { Popup::AnyMessage( // Header of a Popup::AnyMessage when the queue rejects print jobs:
@@ -498,8 +495,8 @@ symbol handleOverview( string key, map event )
                          // Body of a Popup::AnyMessage when the queue rejects print jobs:
                          _("The testpage cannot be printed because print jobs are rejected.")
                        );
-      // When testpage printing failed there might be whatever reason
-      // so that a refresh of the overview content is needed to be on the safe side.
+      // Do a refresh of the overview content to be on the safe side.
+      // Perhaps the actual current queue state is no longer "rejecting".
       // Re-run the OverviewDialog (with re-created queue status) via the sequencer:
       return `refresh;
     }
@@ -509,8 +506,8 @@ symbol handleOverview( string key, map event )
                          // Body of a Popup::AnyMessage when printing is disabled for the queue:
                          _("The testpage cannot be printed because printout is disabled.")
                        );
-      // When testpage printing failed there might be whatever reason
-      // so that a refresh of the overview content is needed to be on the safe side.
+      // Do that a refresh of the overview content to be on the safe side.
+      // Perhaps the actual current queue state is no longer "disabled".
       // Re-run the OverviewDialog (with re-created queue status) via the sequencer:
       return `refresh;
     }
@@ -726,7 +723,6 @@ symbol handleOverview( string key, map event )
       { // When the user had selected in the Popup::AnyQuestion that "Testpage printing failed"
         // and when it is a local queue, extract logging information about the test print job
         // from /var/log/cups/error_log and show them to the user:
-        string test_print_cups_error_log = "";
         test_print_command_stdout = deletechars( test_print_command_stdout, "'" );
         Printerlib::ExecuteBashCommand( // sed is greedy and cuts all up to the last '-' for example
                                         //   echo ' funprinter-1000-123 ' | sed -e 's/.*-//'
@@ -741,6 +737,7 @@ symbol handleOverview( string key, map event )
                                         + "-[0-9]* ' | sed -e 's/.*-//' | tr -d -c '[:digit:]'"
                                       );
         string test_print_job_number = Printerlib::result["stdout"]:"";
+        string test_print_cups_error_log = "";
         if( "" != test_print_job_number )
         { // Note the YCP quoting: \\ becomes \ in the commandline:
           Printerlib::ExecuteBashCommand( "grep '\\[Job "
@@ -761,6 +758,13 @@ symbol handleOverview( string key, map event )
                                     + "\n----------------------------------------------------------------------\n"
                                     + where_full_log
                            );
+        }
+        else
+        { Popup::Notify( // When the user had selected that "Testpage printing failed" for a local queue
+                         // but the test_print_cups_error_log was effectively empty,
+                         // show a very generic info to the user to show at least something:
+                         _( "For CUPS log information, see the /var/log/cups/error_log file." )
+                       );
         }
       }
     }
