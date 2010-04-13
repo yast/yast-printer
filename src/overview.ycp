@@ -742,9 +742,9 @@ symbol handleOverview( string key, map event )
         { // Note the YCP quoting: \\ becomes \ in the commandline:
           Printerlib::ExecuteBashCommand( "grep '\\[Job "
                                           + test_print_job_number
-                                          + "\\]' /var/log/cups/error_log | grep -v '^[dD]'"
+                                          + "\\]' /var/log/cups/error_log | grep -v '^[dD]' | tail -n 20"
                                         );
-          test_print_cups_error_log = Printerlib::result["stdout"]:"";
+          test_print_cups_error_log = "...\n" + Printerlib::result["stdout"]:"";
         }
         // Ignore an effectively empty test_print_cups_error_log:
         if( "" != filterchars( test_print_cups_error_log, Printer::alnum_chars ) )
