@@ -924,8 +924,17 @@ symbol handleNetworkPrinting( string key, map event )
     }
     if( `test_client_conf_server == event["ID"]:nil )
     { string current_client_conf_input_value = (string)UI::QueryWidget( `id(`client_conf_input), `Value );
-      // Ignore what TestClientOnlyServer() returns, it shows sufficient popups to the user:
-      Printer::TestClientOnlyServer( deletechars( tolower( current_client_conf_input_value ), " " ), true );
+      string server_name = deletechars( tolower( current_client_conf_input_value ), " " );
+      // No need for error popups because TestClientOnlyServer shows sufficient error popups:
+      if( Printer::TestClientOnlyServer( server_name, true ) )
+      { // Show positive feedback because TestClientOnlyServer doesn't do it:
+         Popup::Message( sformat( // Popup message
+                                  // where %1 will be replaced by the server name.
+                                  _("The server '%1' is accessible via port 631 (IPP/CUPS)."),
+                                  server_name
+                                )
+                       );
+      }
     }
   }
   return nil;
