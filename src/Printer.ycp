@@ -2232,11 +2232,6 @@ global boolean TestClientOnlyServer( string server_name, boolean fail_if_executa
   // First do the most meaningful test and only if this works return true.
   // The subsequent tests are only there to provide more info for the user
   // what might be the reason why the server is not accessible via port 631.
-  string netcat_test_good_message = sformat( // Popup message
-                                             // where %1 will be replaced by the server name.
-                                             _("The server '%1' is accessible via port 631 (IPP/CUPS)."),
-                                             server_name
-                                           );
   string netcat_test_fail_message = sformat( // Popup message
                                              // where %1 will be replaced by the server name.
                                              _("The server '%1' is not accessible via port 631 (IPP/CUPS)."),
@@ -2271,16 +2266,20 @@ global boolean TestClientOnlyServer( string server_name, boolean fail_if_executa
   // Only the netcat test provides a really meaningful result
   // so that only this test returns immediately true if it was successful.
   if( ! Printerlib::ExecuteBashCommand( "type -P netcat" ) )
-  { // netcat is required for a meaningful test.
-    // Show negative feedback:
-    Popup::ErrorDetails( // Popup::ErrorDetails message:
-                         _("Cannot execute the program 'netcat'"),
-                         // Popup::ErrorDetails details:
-                         _("The RPM package 'netcat' is required for a meaningful test.") + "\n"
-                         + Printerlib::result["stderr"]:"" + "\n" + Printerlib::result["stdout"]:""
-                       );
+  { // netcat is required for a meaningful test
+    // but in most cases TestClientOnlyServer is called
+    // implicitely without a button click by the user
+    // so that even the netcat test is silently skipped
+    // and no negative feedback is shown when netcat is not executable:
     if( fail_if_executable_is_missing )
-    { return false;
+    { // Show negative feedback:
+      Popup::ErrorDetails( // Popup::ErrorDetails message:
+                           _("Cannot execute the program 'netcat'"),
+                           // Popup::ErrorDetails details:
+                           _("The RPM package 'netcat' is required for a meaningful test.") + "\n"
+                           + Printerlib::result["stderr"]:"" + "\n" + Printerlib::result["stdout"]:""
+                         );
+      return false;
     }
   }
   else
@@ -2288,10 +2287,8 @@ global boolean TestClientOnlyServer( string server_name, boolean fail_if_executa
     // Make netcat verbose, otherwise there would be no output at all
     // but some output is needed for the Popup::ErrorDetails below:
     if( Printerlib::ExecuteBashCommand( "netcat -v -w 1 -z " + server_name + " 631" ) )
-    { // Show positive feedback.
-      // Show it as TimedMessage so that is disappears automatically
-      // when TestClientOnlyServer() is called from ApplyNetworkPrintingSettings():
-      Popup::TimedMessage( netcat_test_good_message, 3 );
+    { // Don't show positive feedback because this would be annoying popups for the user
+      // because in most cases TestClientOnlyServer is called implicitely without a button click.
       return true;
     }
     // The netcat-test failed:
@@ -2342,8 +2339,8 @@ global boolean TestClientOnlyServer( string server_name, boolean fail_if_executa
         return false;
       }
       // netcat was not executable but at least the ping-test was successful.
-      // There was already a Popup::ErrorDetails that netcat is required for a meaningful test
-      // so that the less meaningful ping-test is all what could be done in this case.
+      // Don't show positive feedback because this would be annoying popups for the user
+      // because in most cases TestClientOnlyServer is called implicitely without a button click.
       return true;
     }
     // The ping-test failed:
@@ -2395,8 +2392,8 @@ global boolean TestClientOnlyServer( string server_name, boolean fail_if_executa
         return false;
       }
       // ping was not executable but at least the host-test was successful.
-      // There was already a Popup::ErrorDetails that netcat is required for a meaningful test
-      // so that the last host-test is all what could be done in this case.
+      // Don't show positive feedback because this would be annoying popups for the user
+      // because in most cases TestClientOnlyServer is called implicitely without a button click.
       return true;
     }
     // The host-test failed:
@@ -2423,7 +2420,8 @@ global boolean TestClientOnlyServer( string server_name, boolean fail_if_executa
     return false;
   }
   // Neither netcat nor ping nor host were executable.
-  // There was already a Popup::ErrorDetails that netcat is required for a meaningful test
+  // Don't show any kind of feedback because this would be annoying popups for the user
+  // because in most cases TestClientOnlyServer is called implicitely without a button click
   // so that nothing else could be done in this case except a "hope-for-the-best" successful return:
   return true;
 }
