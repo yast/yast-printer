@@ -145,6 +145,7 @@ A non-accessible cupsd leads to an endless sequence of further failures.
 _("The CUPS daemon seems not to listen on the official IANA IPP port (631).
 Check with 'netstat -nap | grep cupsd' where the cupsd actually listens.
 This happens when there is a 'Listen ...:1234' or 'Port 1234' setting
+(where 1234 means any port number which is not the official port 631)
 in /etc/cups/cupsd.conf (check also if there is 'BrowsePort 1234').
 The YaST printer module does not support a non-official port.
 A non-official port leads to an endless sequence of further failures.
@@ -160,28 +161,117 @@ the YaST printer module to configure your printers.
   boolean local_content_selected = Printer::queue_filter_show_local;
   boolean remote_content_selected = Printer::queue_filter_show_remote;
   boolean local_cupsd_required = true;
+  boolean feedback_popup_exists = false;
   // Determine whether or not it is currently a real client-only config
   // (i.e. a ServerName != "localhost/127.0.0.1" in /etc/cups/client.conf)
   // and ignore when it fails (i.e. use the fallback value silently):
+  integer time_before = time();
   Printerlib::DetermineClientOnly();
   if( Printerlib::client_only )
-  { local_cupsd_required = false;
-    local_content_selected = false;
-    remote_content_selected = true;
-    UI::ChangeWidget( `client_only_server_name,
-                      `Value,
-                      sformat( // Show the CUPS server name if it is a client-only config
-                               // where %1 will be replaced by the CUPS server name.
-                               _("CUPS Server %1"),
-                               Printerlib::client_conf_server_name
-                             )
-                    );
-    // In case of a client-only config it does not work to show local queues:
-    UI::ChangeWidget( `local_content_checkbox, `Enabled, false );
+  { if( time() - time_before > 10 )
+    { y2milestone( "DetermineClientOnly took longer than 10 seconds. CUPS server is '%1'",
+                   Printerlib::client_conf_server_name
+                 );
+      // When Printerlib::DetermineClientOnly took longer than 10 seconds
+      // something is fishy regarding CUPS server access.
+      // In this case show feedback what goes on because for example
+      // when a CUPS server is unknown by the DNS there can be longer DNS timeouts
+      // which would also delay Printer::TestClientOnlyServer for up to a few minutes
+      // so that the user must be informed what goes on while he is wainting:
+      Popup::ShowFeedback( // No title for a simple busy message:
+                           "",
+                           // Busy message:
+                           // Body of a Popup::ShowFeedback
+                           _("Running several tests regarding CUPS server accessibility...\n(this might take some time)")
+                         );
+      feedback_popup_exists =  true;
+      // Sleep one second to let the feedback popup stay for at least one second
+      // to avoid a flickering popup which appears and disappears at the same time:
+      sleep( 1000 );
+    }
+    // A non-accessible client-only server leads to an endless sequence of weird further behaviour
+    // of the module so that a non-accessible server is only accepted after insistent warning popups:
+    if( ! Printer::TestClientOnlyServer( Printerlib::client_conf_server_name, false ) )
+    { if( feedback_popup_exists )
+      { Popup::ClearFeedback();
+        feedback_popup_exists = false;
+      }
+      if( Popup::YesNoHeadline( // Popup::YesNoHeadline headline question
+                                // where %1 will be replaced by the server name:
+                                sformat( _("Do no longer use the inaccessible CUPS server '%1'?"),
+                                         Printerlib::client_conf_server_name
+                                       ),
+                                // Popup::YesNoHeadline body recommendation how to answer the headline question
+                                // where %1 will be replaced by the server name:
+                                sformat( _("To proceed, you should agree that '%1' will be no longer used."),
+                                         Printerlib::client_conf_server_name
+                                       )
+                              )
+        )
+      { // Remove the 'ServerName' entry in /etc/cups/client.conf:
+        if( ! Printerlib::ExecuteBashCommand( Printerlib::yast_bin_dir + "cups_client_only none" ) )
+        { Popup::ErrorDetails( // Popup::ErrorDetails message:
+                               _("Failed to remove the 'ServerName' entry in /etc/cups/client.conf"),
+                               Printerlib::result["stderr"]:""
+                             );
+          Popup::Warning( // Popup::Warning message:
+                          _("A non-accessible server leads to an endless sequence of delays and failures.")
+                        );
+        }
+        // The 'ServerName' entry in /etc/cups/client.conf was removed
+        // so that it is now no longer a real client-only config and
+        // therefore the Printerlib::client_* values must be determined anew:
+        Printerlib::DetermineClientOnly();
+      }
+      else
+      { // The user decided not to remove the non-accessible 'ServerName' in /etc/cups/client.conf:
+        Popup::Warning( // Popup::Warning message:
+                        _("A non-accessible server leads to an endless sequence of delays and failures.")
+                      );
+      }
+    }
+    // The 'ServerName' entry in /etc/cups/client.conf may have been removed above
+    // when the client-only server was non-accessible so that it might be now
+    // no longer a real client-only config and therefore it is tested again
+    // whether or not it is still a real client-only config:
+    if( Printerlib::client_only )
+    { local_cupsd_required = false;
+      local_content_selected = false;
+      remote_content_selected = true;
+      UI::ChangeWidget( `client_only_server_name,
+                        `Value,
+                        sformat( // Show the CUPS server name if it is a client-only config
+                                 // where %1 will be replaced by the CUPS server name.
+                                 _("CUPS Server %1"),
+                                 Printerlib::client_conf_server_name
+                               )
+                      );
+      // In case of a client-only config it does not work to show local queues:
+      UI::ChangeWidget( `local_content_checkbox, `Enabled, false );
+    }
   }
   // Determine whether or not a local cupsd is accessible:
+  time_before = time();
   if( local_cupsd_required && ! Printerlib::GetAndSetCupsdStatus( "" ) )
-  { // Printerlib::GetAndSetCupsdStatus results also false when
+  { if( time() - time_before > 10 )
+    { y2milestone( "GetAndSetCupsdStatus('') took longer than 10 seconds." );
+      // When Printerlib::GetAndSetCupsdStatus took longer than 10 seconds
+      // something is fishy regarding CUPS server access.
+      // In this case show feedback what goes on because subsequent
+      // Printerlib::GetAndSetCupsdStatus calls would be also delayed
+      // so that the user must be informed what goes on while he is wainting:
+      Popup::ShowFeedback( // No title for a simple busy message:
+                           "",
+                           // Busy message:
+                           // Body of a Popup::ShowFeedback:
+                           _("Testing if CUPS server is accessible...")
+                         );
+      feedback_popup_exists =  true;
+      // Sleep one second to let the feedback popup stay for at least one second
+      // to avoid a flickering popup which appears and disappears at the same time:
+      sleep( 1000 );
+    }
+    // Printerlib::GetAndSetCupsdStatus results also false when
     // a local running cupsd does not listen on the official IPP port.
     // Therefore, to be on the safe side, do a restart here.
     // Printerlib::GetAndSetCupsdStatus already shows a confirmation popup:
@@ -191,7 +281,11 @@ the YaST printer module to configure your printers.
     // the user may have aborted the Popup::TimedMessage from the above call
     // which would wait until a started cupsd becomes actually accessible.
     if( ! Printerlib::GetAndSetCupsdStatus( "" ) )
-    { Popup::ErrorDetails( required_cupsd_not_accessible,
+    { if( feedback_popup_exists )
+      { Popup::ClearFeedback();
+        feedback_popup_exists = false;
+      }
+      Popup::ErrorDetails( required_cupsd_not_accessible,
                            Printerlib::result["stderr"]:"" + "\n" + Printerlib::result["stdout"]:""
                          );
       // A special case is when the cupsd does not listen on the official IANA IPP port (631).
@@ -221,6 +315,10 @@ the YaST printer module to configure your printers.
         }
       }
     }
+  }
+  if( feedback_popup_exists )
+  { Popup::ClearFeedback();
+    feedback_popup_exists = false;
   }
   if( Printer::printer_auto_dialogs )
   { // When the Overview dialog is called by AutoYaST
