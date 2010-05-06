@@ -697,6 +697,8 @@ any BasicAddDialog()
       // (always zero even in case of error).
       // The hp-setup exit code does not matter because the printer autodetection in the Overview dialog
       // will show an appropriate result (e.g. no new print queue if hp-setup failed):
+      Wizard::DisableBackButton();
+      Wizard::DisableNextButton();
       if( ! Printer::RunHpsetup() )
       { Popup::Error( // Message of a Popup::Error.
                       // Only a simple message because before the RunHpsetup function was called
@@ -704,10 +706,29 @@ any BasicAddDialog()
                       // Do not change or translate "hp-setup", it is a program name:
                       _("Failed to run hp-setup.")
                     );
+        Wizard::EnableBackButton();
+        Wizard::EnableNextButton();
         continue;
       }
-      // Exit this dialog and run go back to the Overview dialog via the sequencer in wizards.ycp
+      // When hp-setup has finished, it is likely that a new print queue was created by it.
+      // After a local queue was added, enforce to show also local queues
+      // in particular when no local queues were shown before:
+      Printer::queue_filter_show_local = true;
+      // Since CUPS 1.4 the new DirtyCleanInterval directive controls the delay when cupsd updates config files:
+      if( ! Printerlib::WaitForUpdatedConfigFiles( _("Creating New Printer Setup") ) )
+      { // It returns false if the user had interrupted the waiting for updated config files:
+        Popup::ErrorDetails( // Message of a Popup::ErrorDetails:
+                             _("New Printer Configuration not yet Stored in the System"),
+                             // Explanation details of a Popup::ErrorDetails.
+                             // The 'next dialog' is the overview dialog where the printer configurations are shown
+                             // which has a 'Refresh List' button to update the shown printer configurations:
+                             _("If the next dialog does not show the new printer configuration as expected, wait some time and use the 'Refresh List' button.")
+                           );
+      }
+      // Exit this dialog and go back to the Overview dialog via the sequencer in wizards.ycp
       // to show the new printer autodetection results:
+      Wizard::EnableBackButton();
+      Wizard::EnableNextButton();
       break;
     }
     y2milestone( "Ignoring unexpected returncode in BasicAddDialog: %1", user_input );
