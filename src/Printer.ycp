@@ -2090,6 +2090,16 @@ global list DriverOptionItems( string selected_keyword, string selected_value )
       return [ _("No driver options available") ];
     }
   }
+  // Info for a currently selected item:
+  string currently_selected_info = _("currently selected");
+  // Info for the current setting of the print queue:
+  string current_setting_info = _("current setting of the print queue");
+  // It seems to be impossible to preselect the currently selected item in a Tree widget.
+  // In particular `item( value, true) does not preselect it.
+  // Therefore an info string is appended to the option value string to mark the currently selected item.
+  // This addendum is separated by a space and removed in driveroptions.ycp
+  // because spaces in main keywords or option keywords violate the PPD specification
+  // so that the first word in such a string can be split as the option value keyword.
   list driver_options_tree_items_list = [];
   integer driver_options_index = -1;
   integer pagesize_option_index = -1;
@@ -2112,12 +2122,23 @@ global list DriverOptionItems( string selected_keyword, string selected_value )
                  && size( driver_option["values"]:[] ) > 1
                  && "PageRegion" != keyword
                )
-             { if( "PageSize" == keyword )
+             { // Remember the index for the PageSize option to move it topmost at the end:
+               if( "PageSize" == keyword )
                { pagesize_option_index = driver_options_index;
                }
+               // Have the value list opened for the currently selected keyword:
                if( selected_keyword == keyword )
                { opened = true;
+                 // If the user had selected a value for this keyword
+                 // store it so that if is know for subsequent DriverOptionItems calls:
+                 if( "" != selected_value )
+                 { driver_options[driver_options_index] = add( driver_options[driver_options_index]:$[],
+                                                               "selected",
+                                                               selected_value
+                                                             );
+                 }
                }
+               string currently_selected_value = driver_options[driver_options_index,"selected"]:"";
                string option_name = keyword;
                if( "" != driver_option["translation"]:"" )
                { option_name = option_name + " / " + driver_option["translation"]:"";
@@ -2135,54 +2156,29 @@ global list DriverOptionItems( string selected_keyword, string selected_value )
                               // Do not show the leading '*' to the user:
                               value = substring( value, 1 );
                               current_value_setting = value;
-                            }
-                            if( selected_keyword == keyword
-                                && selected_value == value
-                              )
-                            { // Dummy info for a currently selected item:
-                              string dummy_info = _("currently selected");
-                              if( current_value_setting == value  )
-                              { // Info when a currently selected item is already set:
-                                dummy_info = _("current setting of the print queue");
-                              }
-                              // It seems to be impossible to preselect the currently selected item.
-                              // In particular `item( value, true) does not preselect it.
-                              // Therefore a dirty hack is used to mark the currently selected item
-                              // only by means of the user interface because changing the content
-                              // of the string value (e.g. like ">> value <<") is even more evil
-                              // because then the content is no longer a valid option value keyword.
-                              // Therefore a dummy item list is added (an empty list doesn't work)
-                              // which lets the user interface show a '+' before the value
-                              // but because the added item list is meaningless we keep it closed:
-                              value_items_list = add( value_items_list, `item( value, false, [ dummy_info ] ) );
+                              value = value + " (" + current_setting_info + ")";
                             }
                             else
-                            { value_items_list = add( value_items_list, `item( value ) );
+                            { if( currently_selected_value == value )
+                              { value = value + " (" + currently_selected_info + ")";
+                              }
                             }
+                            value_items_list = add( value_items_list, `item( value ) );
                           }
                         }
                       );
-               // Have the value list opened for the currently selected keyword:
-               if( selected_keyword == keyword )
-               { opened = true;
-                 // If the user had selected another value for this keyword
-                 // store it so that if is know for subsequent DriverOptionItems calls:
-                 if( "" != selected_value )
-                 { driver_options[driver_options_index] = add( driver_options[driver_options_index]:$[],
-                                                               "selected",
-                                                               selected_value
-                                                             );
-                 }
-               }
-               // Override the current_value_setting if the user has selected another value:
-               if( "" != driver_options[driver_options_index,"selected"]:"" )
-               { current_value_setting = driver_options[driver_options_index,"selected"]:"";
-               }
-               if( "" != current_value_setting )
-               { // Show the currently set value at the tree item name of the particular option
+
+               if( "" != currently_selected_value )
+               { // Show a currently selected value at the tree item name of the particular option
                  // so that the user can see it even when the respective tree item is not opened.
                  // By default the option items are not opened to provide a concise overview:
-                 option_name = option_name + " : " + current_value_setting;
+                 option_name = option_name + " : " + currently_selected_value;
+               }
+               else
+               { // Otherwise show the current value setting:
+                 if( "" != current_value_setting )
+                 { option_name = option_name + " : " + current_value_setting;
+                 }
                }
                driver_options_tree_items_list = add( driver_options_tree_items_list,
                                                      `item( `id( keyword ),
