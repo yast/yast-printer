@@ -136,10 +136,14 @@ any DriverOptionsDialog()
       y2milestone( "Selected driver options tree branch: %1", selected_branch );
       // The selected branch list has
       // either one elemet which is the main keyword when an option is selected e.g. ["PageSize"]
-      // or it has two elements: main keyword and option value keyword e.g. ["PageSize", "A4"]
+      // or it has two elements: main keyword and option value e.g. ["PageSize", "A4 (currently selected)"]
+      // where only the first word in the option value string is the option value keyword
+      // (spaces in main keywords or option keywords violate the PPD specification).
+      string selected_main_keyword = selected_branch[0]:"";
+      string selected_option_value_keyword = splitstring( selected_branch[1]:"", " " )[0]:"";
       if( 2 == size( selected_branch ) )
-      { if( "" != selected_branch[0]:""
-            && "" != selected_branch[1]:""
+      { if( "" != selected_main_keyword
+            && "" != selected_option_value_keyword
           )
         { // Sleep a tenth of a second to let the user notice when he selected a value
           // before the tree is re-built via the UI::ChangeWidget below:
@@ -149,7 +153,7 @@ any DriverOptionsDialog()
           // (in particular when the changes are committed when the dialog finishes):
           UI::ChangeWidget( `driver_options_tree,
                             `Items,
-                            Printer::DriverOptionItems( selected_branch[0]:"", selected_branch[1]:"" )
+                            Printer::DriverOptionItems( selected_main_keyword, selected_option_value_keyword )
                           );
         }
       }
@@ -160,7 +164,7 @@ any DriverOptionsDialog()
         // Open the matching values list in the tree when the option is selected:
         UI::ChangeWidget( `driver_options_tree,
                           `Items,
-                          Printer::DriverOptionItems( selected_branch[0]:"", "" )
+                          Printer::DriverOptionItems( selected_main_keyword, "" )
                         );
       }
       continue;
