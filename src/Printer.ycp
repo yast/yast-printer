@@ -1460,9 +1460,9 @@ global list ConnectionItems( string connection_filter_string )
                                        // Show a fallback text if there are no connections.
                                        _("No connections."),
                                        // A hint what to do if there are no connections.
-                                       // 'More Connections' and 'Connection Wizard' are
+                                       // 'Detect More' and 'Connection Wizard' are
                                        // button lables and must be translated accordingly:
-                                       _("Try 'More Connections' or use the 'Connection Wizard'.")
+                                       _("Try 'Detect More' or use the 'Connection Wizard'.")
                                      )
                               ];
   }
@@ -1567,8 +1567,8 @@ global list DriverItems( string driver_filter_string, boolean preselection )
          );
   if( size( driver_items ) == 0 )
   { // If the driver_items list is empty (e.g. because of a too restrictive driver_filter_string),
-    // show a meaningful text as fallback entry ('More Drivers' is a button label).
-    driver_string = _("No matching driver found. Change the search string or try 'More Drivers'.");
+    // show a meaningful text as fallback entry ('Find More' is a button label).
+    driver_string = _("No matching driver found. Change the search string or try 'Find More'.");
     driver_items =  [ `item( `id( -1 ), driver_string ) ];
     // Invalidate selected_ppds_index to be on the safe side.
     // Otherwise it is possible to set up a queue with a previously selected driver
@@ -2090,10 +2090,10 @@ global list DriverOptionItems( string selected_keyword, string selected_value )
       return [ _("No driver options available") ];
     }
   }
-  // Info for a currently selected item:
-  string currently_selected_info = _("currently selected");
-  // Info for the current setting of the print queue:
-  string current_setting_info = _("current setting of the print queue");
+  // Info for a currently selected item which is to be set as new value in the system:
+  string currently_selected_info = _("new value");
+  // Info for a current setting which is the currently still saved value in the system:
+  string current_setting_info = _("saved value");
   // It seems to be impossible to preselect the currently selected item in a Tree widget.
   // In particular `item( value, true) does not preselect it.
   // Therefore an info string is appended to the option value string to mark the currently selected item.
@@ -2156,11 +2156,11 @@ global list DriverOptionItems( string selected_keyword, string selected_value )
                               // Do not show the leading '*' to the user:
                               value = substring( value, 1 );
                               current_value_setting = value;
-                              value = value + " (" + current_setting_info + ")";
+                              value = value + "    (" + current_setting_info + ")";
                             }
                             else
                             { if( currently_selected_value == value )
-                              { value = value + " (" + currently_selected_info + ")";
+                              { value = value + "    (" + currently_selected_info + ")";
                               }
                             }
                             value_items_list = add( value_items_list, `item( value ) );
