@@ -149,8 +149,8 @@ while read KEY VALUE
 do case "$KEY" in
         queue) Output
                QUEUE="$VALUE"
-               DESCRIPTION=$( sed -n -e "/printer $QUEUE /,/On fault:/{s/^[[:space:]]*Description: //p}" $TMP_DATA_RAW_L )
-               LOCATION=$( sed -n -e "/printer $QUEUE /,/On fault:/{s/^[[:space:]]*Location: //p}" $TMP_DATA_RAW_L )
+               DESCRIPTION=$( sed -n -e "/printer $QUEUE /,/On fault:/{s/^[[:space:]]*Description: //p}" $TMP_DATA_RAW_L | sed -e 's/"/\\"/g' )
+               LOCATION=$( sed -n -e "/printer $QUEUE /,/On fault:/{s/^[[:space:]]*Location: //p}" $TMP_DATA_RAW_L | sed -e 's/"/\\"/g' )
                PPD=$( sed -n -e "/printer $QUEUE /,/On fault:/{s/^[[:space:]]*Interface: //p}" $TMP_DATA_RAW_L )
                [ "${PPD##*.}" != "ppd" ] && PPD=""
                DISABLED=$( grep -q "^printer $QUEUE disabled" $TMP_DATA_RAW_L && echo "yes" || echo "no" )
