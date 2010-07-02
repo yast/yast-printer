@@ -5,15 +5,17 @@
 # Remote host $1 and queue $2 are required parameters.
 # If no timeout $3 is given it is set to 10 seconds.
 #
-# Exits:   0 doesn't seem to have a problem
-#          1 remote host $1 or queue $2 not set
-#          2 the remote host $1 is unreachable (network issue or firewall active?)
-#          3 no connection possible to port 515 on host $1 (no lpd running there or firewall active there?)
-#          4 queue does not accept a print job (queue may not exist or queueing disabled?)
-#         10 ping not executable (no iputils RPM installed?)
-#         11 netcat not executable (no netcat RPM installed?)
-#         12 fuser not executable (no psmisc RPM installed?)
-#         13 mktemp not executable (no mktemp RPM or coreutils RPM installed?)
+# Exits:   0 queue on host accepts print jobs
+#          1 host $1 or queue $2 not set
+#          2 no connection possible to port 515 on host and host does not respond to a 'ping'
+#          3 no connection possible to port 515 on host but host responds to a 'ping'
+#          4 connection possible to port 515 on host but queue does not accept a print job
+#            (queue may not exist or queueing disabled?)
+#          5 connection possible to port 515 on host but no free source port to test queue on host
+#         10 no connection possible to port 515 on host and ping not executable (no iputils RPM installed?)
+#         11 give up empty-handed because netcat not executable (no netcat RPM installed?)
+#         12 connection possible to port 515 on host but fuser not executable (no psmisc RPM installed?)
+#         13 connection possible to port 515 on host but mktemp not executable (no mktemp RPM or coreutils RPM installed?)
 #            up to Suse Linux 10.3 and up to SLE10 /bin/mktemp was in the mktemp RPM
 #            since Suse Linux 11.0 /bin/mktemp is in the coreutils RPM which is required by YaST
 # The programs head, mkfifo, sleep, tr, rm are in the coreutils RPM and therefore assumed to exist.
@@ -33,16 +35,6 @@ umask 022
 # Disable bash file name globbing:
 set -f
 
-# Use the binaries of the operating system (no aliases, functions, /usr/local/):
-export PING=$( type -ap ping | head -n 1 )
-[ -z "$PING" ] && { echo -en "\nping not executable (no iputils RPM installed?)\n" 1>&2 ; exit 10 ; }
-export NETCAT=$( type -ap netcat | head -n 1 )
-[ -z "$NETCAT" ] && { echo -en "\nnetcat not executable (no netcat RPM installed?)\n" 1>&2 ; exit 11 ; }
-export FUSER=$( type -ap fuser | head -n 1 )
-[ -z "$FUSER" ] && { echo -en "\nfuser not executable (no psmisc RPM installed?)\n" 1>&2 ; exit 12 ; }
-export MKTEMP=$( type -ap mktemp | head -n 1 )
-[ -z "$MKTEMP" ] && { echo -en "\nmktemp not executable (no mktemp RPM or coreutils RPM installed?)\n" 1>&2 ; exit 13 ; }
-
 MY_NAME=${0##*/}
 HOST="$1"
 QUEUE="$2"
@@ -50,53 +42,97 @@ QUEUE="$2"
 TIMEOUT="$3"
 [ -z "$TIMEOUT" ] && TIMEOUT=10
 
-# test whether the remote host is accessible
-$PING -c 1 -w $TIMEOUT $HOST || { echo -en "\nHost $HOST unreachable (network issue or firewall active?)\n" ; exit 2 ; }
+# Use the binaries of the operating system (no aliases, functions, /usr/local/):
+export PING=$( type -ap ping | head -n 1 )
+export NETCAT=$( type -ap netcat | head -n 1 )
+export FUSER=$( type -ap fuser | head -n 1 )
+export MKTEMP=$( type -ap mktemp | head -n 1 )
 
-# test whether connection is possible to port 515 (lpd) on the remote host
-$NETCAT -w $TIMEOUT -z $HOST 515 || { echo -en "\nNo connection possible to LPD port 515 on host $HOST (no lpd running there or firewall active there?)\n" ; exit 3 ; }
+# Test whether netcat is executable:
+if test -z "$NETCAT"
+then # Give up empty-handed when netcat is not executable because only the ping test is meaningless:
+     echo -en "\nGiving up empty-handed because 'netcat' not executable (no 'netcat' RPM installed?)\n" 1>&2
+     exit 11
+fi
+# Test whether connection is possible to port 515 on host:
+if ! $NETCAT -w $TIMEOUT -z $HOST 515
+then # The netcat test failed:
+     echo -en "\nNo connection possible to LPD port 515 on host '$HOST' (no LPD running or firewall active there?)\n\n"
+     # Test whether ping is executable:
+     [ -z "$PING" ] && { echo -en "\n'ping' not executable (no 'iputils' RPM installed?)\n" 1>&2 ; exit 10 ; }
+     # Test whether host is accessible:
+     if $PING -c 1 -w $TIMEOUT $HOST
+     then # The ping test was successful but the netcat test failed:
+          echo -en "\nHost '$HOST' is accessible (responds to a 'ping')\n"
+          exit 3
+     fi
+     # Both the netcat test and the ping test failed:
+     echo -en "\nHost '$HOST' unreachable (network issue or wrong host or firewall active?)\n"
+     exit 2
+fi
 
-# Find an available local port for connecting
-PORT=$(for I in 721 722 723 724 725 726 727 728 729 730 731
-       do
-         $FUSER -n tcp $I &>/dev/null || { echo $I ; break ; }
-       done)
+# The netcat test succeeded:
+echo -en "\nConnection possible to LPD port 515 on host '$HOST'\n"
 
-# Create temporary fifos
-TMP_IN=$( $MKTEMP -u /tmp/$MY_NAME.in.XXXXXX )
-TMP_OUT=$( $MKTEMP -u /tmp/$MY_NAME.out.XXXXXX)
-mkfifo $TMP_IN
-mkfifo $TMP_OUT
+# Test whether fuser and mktemp are executable:
+if test -z "$FUSER"
+then echo -en "\nFailed to test if queue '$QUEUE' on host '$HOST' accepts print jobs" 1>&2
+     echo -en "\nbecause 'fuser' not executable (no 'psmisc' RPM installed?)\n" 1>&2
+     exit 12
+fi
+if test -z "$MKTEMP"
+then echo -en "\nFailed to test if queue '$QUEUE' on host '$HOST' accepts print jobs" 1>&2
+     echo -en "\nbecause 'mktemp' not executable (no 'mktemp' RPM or 'coreutils' RPM installed?)\n" 1>&2
+     exit 13
+fi
+
+# Create temporary fifos:
+NETCAT_IN=$( $MKTEMP -u /tmp/$MY_NAME.in.XXXXXX )
+NETCAT_OUT=$( $MKTEMP -u /tmp/$MY_NAME.out.XXXXXX )
+mkfifo $NETCAT_IN
+mkfifo $NETCAT_OUT
 
 # Test the queue:
+echo -en "\nTesting queue '$QUEUE' on host '$HOST':\n"
+
+# Find an available local port for connecting:
+PORT=$( for P in 721 722 723 724 725 726 727 728 729 730 731
+        do $FUSER -n tcp $P &>/dev/null || { echo $P ; break ; }
+        done )
+if test -z "$PORT"
+then echo -en "\nFailed to test if queue '$QUEUE' on host '$HOST' accepts print jobs" 1>&2
+     echo -en "\nbecause there is no LPD source port (721..731) available\n" 1>&2
+     exit 5
+fi
+
 # Use source port $PORT and destination port 515 (LPD)
 # "\002$QUEUE\n" is a request to receive a new job for $QUEUE
-# The remote lpd sends '\000' if it accepts the request. Then we must
-# send "\001\n" back which is a request to cancel the new job.
+# The remote lpd sends '\000' if it accepts the request.
+# Then we must send "\001\n" back which is a request to cancel the new job.
 # After $TIMEOUT netcat would close the connection provided stdin of netcat
 # was closed too which would happen if there is any response from the remote port.
 # But as there may be no response from the remote port we have additionally
 # a time bomb which would kill the netcat process after $TIMEOUT.
 
-$NETCAT -w $TIMEOUT -p $PORT $HOST 515 <$TMP_IN >$TMP_OUT 2>/dev/null &
+$NETCAT -w $TIMEOUT -p $PORT $HOST 515 <$NETCAT_IN >$NETCAT_OUT 2>/dev/null &
 NETCAT_PID=$!
 { sleep ${TIMEOUT}s ; kill $NETCAT_PID &>/dev/null ; } &
 
 RESULT=""
 { echo -en "\002$QUEUE\n" ; \
-  RESULT=$( head --bytes=1 <$TMP_OUT | tr '\000' '0' ) ; \
-  [ "$RESULT" = "0" ] && echo -en "\001\n" ; } >$TMP_IN
+  RESULT=$( head --bytes=1 <$NETCAT_OUT | tr '\000' '0' ) ; \
+  [ "$RESULT" = "0" ] && echo -en "\001\n" ; } >$NETCAT_IN
 
-rm $TMP_IN
-rm $TMP_OUT
+rm $NETCAT_IN
+rm $NETCAT_OUT
 
-[ "$RESULT" = "0" ] && { echo -en "\nQueue $QUEUE on host $HOST accepts print jobs\n" ; exit 0 ; }
+[ "$RESULT" = "0" ] && { echo -en "\nQueue '$QUEUE' on host '$HOST' accepts print jobs\n" ; exit 0 ; }
 
-echo -en "\nQueue $QUEUE on host $HOST does not accept print jobs (queue may not exist or queueing disabled?)\n"
+echo -en "\nQueue '$QUEUE' on host '$HOST' does not accept print jobs (queue may not exist or queueing disabled?)\n"
 
 # If $QUEUE does not accept jobs, print $QUEUE status in long format.
 # "\004$QUEUE\n" is a request to receive $QUEUE status (very long output in case of LPRng).
-echo -en "\nStatus of the queue $QUEUE\n"
+echo -en "\nStatus of the queue '$QUEUE' (possibly empty or not available):\n\n"
 echo -en "\004$QUEUE\n" | $NETCAT -w $TIMEOUT -p $PORT $HOST 515
 exit 4
 

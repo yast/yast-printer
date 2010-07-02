@@ -2,16 +2,19 @@
 #
 # Test ability to connect to remote IPP server.
 #
-# Exits:   0 doesn't seem to have a problem
-#          1 remote host $1 or queue $2 not set
-#          2 the remote host $1 is unreachable (network issue or firewall active?)
-#          3 no connection possible to port 631 on host $1 (no cups server running there or firewall active there?)
-#          4 queue does not accept a print job (queue may not exist or queueing disabled?)
-#         10 ping not executable (no iputils RPM installed?)
-#         11 netcat not executable (no netcat RPM installed?)
+# Exits:   0 queue on host accepts print jobs
+#          1 host $1 or queue $2 not set
+#          2 no connection possible to port 631 on host and host does not respond to a 'ping'
+#          3 no connection possible to port 631 on host but host responds to a 'ping'
+#          4 connection possible to port 631 on host but queue does not accept a print job
+#            (queue may not exist or queueing disabled?)
+#         10 no connection possible to port 631 on host and ping not executable (no iputils RPM installed?)
+#         11 give up empty-handed because netcat not executable (no netcat RPM installed?)
 #         (12=fuser,13=mktemp,14=sed: see listen_remote_ipp)
-#         15 lp not executable (no cups-client RPM installed?)
+#         15 connection possible to port 631 on host but lp not executable (no cups-client RPM installed?)
+#         16 queue on host does not accept print jobs but lpstat not executable (no cups-client RPM installed?)
 # The program head is in the coreutils RPM and therefore assumed to exist.
+# The program rpm is assumed to exist and even if not it triggers only a non-matching warning message.
 #
 # Johannes Meixner <jsmeix@suse.de>, 2000, 2002, 2007, 2008, 2009, 2010
 # Jan Holesovsky <kendy@suse.cz>, 2000
@@ -28,14 +31,6 @@ umask 022
 # Disable bash file name globbing:
 set -f
 
-# Use the binaries of the operating system (no aliases, functions, /usr/local/):
-export PING=$( type -ap ping | head -n 1 )
-[ -z "$PING" ] && { echo -en "\nping not executable (no iputils RPM installed?)\n" 1>&2 ; exit 10 ; }
-export NETCAT=$( type -ap netcat | head -n 1 )
-[ -z "$NETCAT" ] && { echo -en "\nnetcat not executable (no netcat RPM installed?)\n" 1>&2 ; exit 11 ; }
-export LP=$( type -ap lp | head -n 1 )
-[ -z "$LP" ] && { echo -en "\nlp not executable (no cups-client RPM installed?)\n" 1>&2 ; exit 15 ; }
-
 MY_NAME=${0##*/}
 HOST="$1"
 QUEUE="$2"
@@ -43,15 +38,70 @@ QUEUE="$2"
 TIMEOUT="$3"
 [ -z "$TIMEOUT" ] && TIMEOUT=10
 
-# test whether the remote host is accessible
-$PING -c 1 -w $TIMEOUT $HOST || { echo -en "\nHost $HOST unreachable (network issue or firewall active?)\n" ; exit 2 ; }
+# Use the binaries of the operating system (no aliases, functions, /usr/local/):
+export PING=$( type -ap ping | head -n 1 )
+export NETCAT=$( type -ap netcat | head -n 1 )
+export LP=$( type -ap lp | head -n 1 )
+export LPSTAT=$( type -ap lpstat | head -n 1 )
 
-# test whether connection is possible to port 631 (ipp) on the remote host
-$NETCAT -w $TIMEOUT -z $HOST 631 || { echo -en "\nNo connection possible to port 631 (IPP) on host $HOST (no cups server running there or firewall active there?)\n" ; exit 3 ; }
+# Test whether netcat is executable:
+if test -z "$NETCAT"
+then # Give up empty-handed when netcat is not executable because only the ping test is meaningless:
+     echo -en "\nGiving up empty-handed because 'netcat' not executable (no 'netcat' RPM installed?)\n" 1>&2
+     exit 11
+fi
+# Test whether connection is possible to port 631 on host:
+if ! $NETCAT -w $TIMEOUT -z $HOST 631
+then # The netcat test failed:
+     echo -en "\nNo connection possible to IPP port 631 on host '$HOST' (no server running or firewall active there?)\n\n"
+     # Test whether ping is executable:
+     [ -z "$PING" ] && { echo -en "\n'ping' not executable (no 'iputils' RPM installed?)\n" 1>&2 ; exit 10 ; }
+     # Test whether host is accessible:
+     if $PING -c 1 -w $TIMEOUT $HOST
+     then # The ping test was successful but the netcat test failed:
+          echo -en "\nHost '$HOST' is accessible (responds to a 'ping')\n"
+          exit 3
+     fi
+     # Both the netcat test and the ping test failed:
+     echo -en "\nHost '$HOST' unreachable (network issue or wrong host or firewall active?)\n"
+     exit 2
+fi
 
-# test whether the queue on the server accepts print jobs
-echo -en "\r" | $LP -d $QUEUE -h $HOST 2>&1
-[ "$?" = "0" ] && { echo -en "\nQueue $QUEUE on host $HOST accepts print jobs\n" ; exit 0 ; }
-echo -en "\nQueue $QUEUE on host $HOST does not accept print jobs (queue may not exist or queueing disabled?)\n"
+# The netcat test succeeded:
+echo -en "\nConnection possible to IPP port 631 on host '$HOST'\n"
+
+# Test whether lp is executable:
+if test -z "$LP"
+then echo -en "\nFailed to test if queue '$QUEUE' on host '$HOST' accepts print jobs" 1>&2
+     echo -en "\nbecause 'lp' not executable (no 'cups-client' RPM installed?)\n" 1>&2
+     exit 15
+fi
+# Warn if lp is not from the cups-client RPM e.g. from self-compiled CUPS (o.k.) or e.g. from LPRng (bad):
+if ! rpm -qf "$LP" | grep -q '^cups-client'
+then echo -en "\nIt may fail to test if queue '$QUEUE' on host '$HOST' accepts print jobs"
+     echo -en "\nbecause '$LP' is not the expected one from the 'cups-client' RPM\n"
+fi
+# Test whether the queue on the server accepts print jobs:
+echo -en "\nTesting queue '$QUEUE' on host '$HOST':\n"
+if echo -en "\r" | $LP -d $QUEUE -h $HOST 2>&1
+then echo -en "\nQueue '$QUEUE' on host '$HOST' accepts print jobs\n"
+     exit 0
+fi
+echo -en "\nQueue '$QUEUE' on host '$HOST' does not accept print jobs (queue may not exist or queueing disabled?)\n"
+# If queue on host does not accept jobs, print queue status:
+# Test whether lpstat is executable:
+if test -z "$LPSTAT"
+then echo -en "\nFailed to determine the status of queue '$QUEUE' on host '$HOST'" 1>&2
+     echo -en "\nbecause 'lpstat' not executable (no 'cups-client' RPM installed?)\n" 1>&2
+     exit 16
+fi
+# Warn if lpstat is not from the cups-client RPM e.g. from self-compiled CUPS (o.k.) or e.g. from LPRng (bad):
+if ! rpm -qf "$LPSTAT" | grep -q '^cups-client'
+then echo -en "\nIt may fail to determine the status of queue '$QUEUE' on host '$HOST'"
+     echo -en "\nbecause '$LPSTAT' is not the expected one from the 'cups-client' RPM\n"
+fi
+echo -en "\nStatus of the queue '$QUEUE' (possibly empty or not available):\n\n"
+$LPSTAT -h $HOST -a $QUEUE -p $QUEUE
 exit 4
+
 
