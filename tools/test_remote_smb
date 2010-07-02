@@ -2,13 +2,13 @@
 #
 # Test ability to connect to remote SMB server.
 #
-# Exits:   0 doesn't seem to have a problem
-#          1 remote host $1 or queue $2 not set
-#          2 the remote host $1 is unreachable (network issue or firewall active?)
-#          4 queue does not accept a print job (queue may not exist or queueing disabled?)
-#         10 ping not executable (no iputils RPM installed?)
+# Exits:   0 share on workgroup/host accepts print jobs
+#          1 host $2 or share $3 not set
+#          2 share does not accept a print job and host does not respond to a 'ping'
+#          4 share does not accept a print job but host responds to a 'ping'
+#         10 share does not accept a print job and ping not executable (no iputils RPM installed?)
 #         (11=netcat,12=fuser,13=mktemp,14=sed,15=lp: see test_remote_ipp)
-#         16 smbclient not executable (no samba-client RPM installed?)
+#         16 give up empty-handed because smbclient not executable (no samba-client RPM installed?)
 # The programs head, mkfifo, sleep, tr, rm are in the coreutils RPM and therefore assumed to exist.
 #
 # Johannes Meixner <jsmeix@suse.de>, 2000, 2002, 2007, 2008, 2009, 2010
@@ -26,31 +26,54 @@ umask 022
 # Disable bash file name globbing:
 set -f
 
-# Use the binaries of the operating system (no aliases, functions, /usr/local/):
-export PING=$( type -ap ping | head -n 1 )
-[ -z "$PING" ] && { echo -en "\nping not executable (no iputils RPM installed?)\n" 1>&2 ; exit 10 ; }
-export SMBCLIENT=$( type -ap smbclient | head -n 1 )
-[ -z "$SMBCLIENT" ] && { echo -en "\nsmbclient not executable (no samba-client RPM installed?)\n" 1>&2 ; exit 16 ; }
-
 MY_NAME=${0##*/}
 WORKGROUP=$1
 HOST=$2
-QUEUE=$3
-[ -z "$HOST" -o -z "$QUEUE" ] && { echo -en "\nUsage:\n$MY_NAME WORKGROUP HOST QUEUE [USER] [PASS] [TIMEOUT]\n" 1>&2 ; exit 1 ; }
+SHARE=$3
+if test -z "$HOST" -o -z "$SHARE"
+then echo -en "\nUsage:\n$MY_NAME WORKGROUP HOST SHARE [USER] [PASSWORD] [TIMEOUT]\n" 1>&2
+     exit 1
+fi
 USER=$4
 PASSWORD=$5
 TIMEOUT="$6"
-
 [ -z "$TIMEOUT" ] && TIMEOUT=10
 
-# test whether the remote host is accessible
-$PING -c 1 -w $TIMEOUT $HOST || { echo -en "\nHost $HOST unreachable (network issue or firewall active?)\n" ; exit 2 ; }
+# Use the binaries of the operating system (no aliases, functions, /usr/local/):
+export PING=$( type -ap ping | head -n 1 )
+export SMBCLIENT=$( type -ap smbclient | head -n 1 )
 
-# test whether the queue on the server accepts print jobs
-echo -e "\nTesting $QUEUE on $WORKGROUP/$HOST:"
+# Test whether smbclient is executable:
+if test -z "$SMBCLIENT"
+then # Give up empty-handed when smbclient is not executable because only the ping test is meaningless:
+     echo -en "\nGiving up empty-handed because 'smbclient' not executable (no 'samba-client' RPM installed?)\n" 1>&2
+     exit 16
+fi
+# Test whether the SMB share on the server accepts print jobs:
+echo -en "\nTesting share '$SHARE' on '$WORKGROUP/$HOST':\n"
 test -z "$PASSWORD" && PASSWORD="-N"
-echo -en "\r" | $SMBCLIENT "//$HOST/$QUEUE" "$PASSWORD" -c "print -" -U "$USER" -W "$WORKGROUP"
-[ "$?" = "0" ] && { echo -en "\nShare $QUEUE on $WORKGROUP/$HOST accepts print jobs\n" ; exit 0 ; }
-echo -en "\nShare $QUEUE on $WORKGROUP/$HOST does not accept print jobs (queue may not exist or queueing disabled?)\n"
-exit 4
+if echo -en "\r" | $SMBCLIENT "//$HOST/$SHARE" "$PASSWORD" -c "print -" -U "$USER" -W "$WORKGROUP"
+then echo -en "\nShare '$SHARE' on '$WORKGROUP/$HOST' accepts print jobs\n"
+     exit 0
+fi
+
+# The smbclient test failed:
+echo -en "\nShare '$SHARE' on '$WORKGROUP/$HOST' does not accept print jobs (share may not exist?)\n\n"
+
+# Test whether ping is executable:
+if test -z "$PING"
+then # ping is not executable and the smbclient test failed:
+     echo -en "\n'ping' not executable (no 'iputils' RPM installed?)\n" 1>&2
+     exit 10
+fi
+# Test whether host is accessible:
+if $PING -c 1 -w $TIMEOUT $HOST
+then # The ping test was successful but the smbclient test failed:
+     echo -en "\nHost '$HOST' is accessible (responds to a 'ping')\n"
+     exit 4
+fi
+
+# Both the smbclient test and the ping test failed:
+echo -en "\nHost '$HOST' unreachable (network issue or wrong host or firewall active?)\n"
+exit 2
 

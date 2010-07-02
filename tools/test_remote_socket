@@ -2,13 +2,13 @@
 #
 # Test ability to connect to remote direct socket (JetDirect) server.
 #
-# Exits:   0 doesn't seem to have a problem
-#          1 remote host $1 not set
-#          2 the remote host $1 is unreachable (network issue or firewall active?)
-#          3 no connection possible to port 9100 or port $2 on host $1 (wrong port or firewall active there?)
-#          4 port 9100 or port $2 on host $1 does not accept data (wrong port or firewall active there?)
-#         10 ping not executable (no iputils RPM installed?)
-#         11 netcat not executable (no netcat RPM installed?)
+# Exits:   0 port on host accepts data
+#          1 host $1 not set
+#          2 no connection possible to port on host and host does not respond to a 'ping'
+#          3 no connection possible to port on host but host responds to a 'ping'
+#          4 connection possible to port on host but does not accept data
+#         10 no connection possible to port on host and ping not executable (no iputils RPM installed?)
+#         11 give up empty-handed because netcat not executable (no netcat RPM installed?)
 # The program head is in the coreutils RPM and therefore assumed to exist.
 #
 # Johannes Meixner <jsmeix@suse.de> 2002, 2007, 2008, 2009, 2010
@@ -25,12 +25,6 @@ umask 022
 # Disable bash file name globbing:
 set -f
 
-# Use the binaries of the operating system (no aliases, functions, /usr/local/):
-export PING=$( type -ap ping | head -n 1 )
-[ -z "$PING" ] && { echo -en "\nping not executable (no iputils RPM installed?)\n" 1>&2 ; exit 10 ; }
-export NETCAT=$( type -ap netcat | head -n 1 )
-[ -z "$NETCAT" ] && { echo -en "\nnetcat not executable (no netcat RPM installed?)\n" 1>&2 ; exit 11 ; }
-
 MY_NAME=${0##*/}
 HOST="$1"
 [ -z "$HOST" ] && { echo -en "\nUsage:\n$MY_NAME HOST [PORT [TIMEOUT]]\n" 1>&2 ; exit 1 ; }
@@ -39,15 +33,45 @@ PORT="$2"
 TIMEOUT="$3"
 [ -z "$TIMEOUT" ] && TIMEOUT=10
 
-# test whether the remote host is accessible
-$PING -c 1 -w $TIMEOUT $HOST || { echo -en "\nHost $HOST unreachable (network issue or firewall active?)\n" ; exit 2 ; }
+# Use the binaries of the operating system (no aliases, functions, /usr/local/):
+export NETCAT=$( type -ap netcat | head -n 1 )
+export PING=$( type -ap ping | head -n 1 )
 
-# test whether connection is possible to $PORT on the remote host
-$NETCAT -w $TIMEOUT -z $HOST $PORT || { echo -en "\nNo connection possible to port $PORT on host $HOST (wrong port or firewall active there?)\n" ; exit 3 ; }
+# Test whether netcat is executable:
+if test -z "$NETCAT"
+then # Give up empty-handed when netcat is not executable because only the ping test is meaningless:
+     echo -en "\nGiving up empty-handed because 'netcat' not executable (no 'netcat' RPM installed?)\n" 1>&2
+     exit 11
+fi
+# Test whether connection is possible to port on host:
+if $NETCAT -w $TIMEOUT -z $HOST $PORT
+then # Test whether port on host accepts data:
+     if echo -en "\r" | $NETCAT -w $TIMEOUT $HOST $PORT 2>&1
+     then echo -en "\nPort '$PORT' on host '$HOST' accepts data\n"
+          exit 0
+     fi
+     echo -en "\nConnection possible to port '$PORT' on host '$HOST' but does not accept data\n"
+     exit 4
+fi
 
-# test whether $PORT on the remote host accepts data
-echo -en "\r" | $NETCAT -w $TIMEOUT $HOST $PORT 2>&1
-[ "$?" = "0" ] && { echo -en "\nPort $PORT on host $HOST accepts data\n" ; exit 0 ; }
-echo -en "\nPort $PORT on host $HOST does not accept data (wrong port or firewall active there?)\n"
-exit 4
+# The netcat test failed:
+echo -en "\nNo connection possible to port '$PORT' on host '$HOST' (wrong port or firewall active there?)\n\n"
+
+# Test whether ping is executable:
+if test -z "$PING"
+then # ping is not executable and the netcat test failed:
+     echo -en "\n'ping' not executable (no 'iputils' RPM installed?)\n" 1>&2
+     exit 10
+fi
+# Test whether host is accessible:
+if $PING -c 1 -w $TIMEOUT $HOST
+then # The ping test was successful but the netcat test failed:
+     echo -en "\nHost '$HOST' is accessible (responds to a 'ping')\n"
+     exit 3
+fi
+
+# Both the netcat test and the ping test failed:
+echo -en "\nHost '$HOST' unreachable (network issue or wrong host or firewall active?)\n"
+exit 2
+
 
