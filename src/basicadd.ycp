@@ -214,15 +214,29 @@ any BasicAddDialog()
                     `VStretch(),
                     `Left
                     ( `HBox
-                      ( `ReplacePoint
-                        ( `id(`queue_name_input_replace_point),
-                          `InputField
-                          ( `id(`queue_name_input),
-                            // Avoid that it becomes squeezed to only a few characters in text mode:
-                            `opt(`hstretch),
-                            // Header of a TextEntry to enter the queue name:
-                            _("Set Arbitrary &Name"),
-                            queue_name_proposal
+                      ( `VBox
+                        ( `Left
+                          ( `ReplacePoint
+                            ( `id(`queue_name_input_replace_point),
+                              `InputField
+                              ( `id(`queue_name_input),
+                                // Avoid that it becomes squeezed to only a few characters in text mode:
+                                `opt(`hstretch),
+                                // Header of a TextEntry to enter the queue name:
+                                _("Set Arbitrary &Name"),
+                                queue_name_proposal
+                              )
+                            )
+                          ),
+                          `Left
+                          ( `CheckBox
+                            ( `id(`default_queue_checkbox),
+                              // CheckBox to set a local print queue to be the default queue:
+                              _("&Use as Default"),
+                              // When adding a new queue, do not use it as default queue by default
+                              // because this would override an existing default queue setting:
+                              false
+                            )
                           )
                         ),
                         `HStretch(),
@@ -230,8 +244,8 @@ any BasicAddDialog()
                         ( `Right
                           ( `Label
                             ( // Label text to run HPLIP's printer setup tool 'hp-setup'
-                              // to set up HP printers which runs only in English language:
-                              _("Alternative setup for HP printers (English only):")
+                              // to set up HP printers:
+                              _("Alternative setup for HP printers:")
                             )
                           ),
                           `Right
@@ -240,6 +254,14 @@ any BasicAddDialog()
                               // Label of a PushButton to run HPLIP's printer setup tool 'hp-setup'.
                               // Do not change or translate "hp-setup", it is a program name:
                               _("Run &hp-setup")
+                            )
+                          ),
+                          `Right
+                          ( `Label
+                            ( // Label text to inform the user that HPLIP's
+                              // printer setup tool 'hp-setup' runs in English language.
+                              // Do not change or translate "hp-setup", it is a program name:
+                              _("hp-setup runs in English language")
                             )
                           )
                         )
@@ -370,6 +392,7 @@ any BasicAddDialog()
         }
         queue_name = validated_queue_name;
       }
+      boolean is_default_queue = (boolean)UI::QueryWidget( `id(`default_queue_checkbox), `Value );
       string default_paper_size = "";
       any paper_size = UI::QueryWidget( `id(`paper_size_radio_buttons), `CurrentButton );
       if( `a4 == paper_size )
@@ -381,7 +404,7 @@ any BasicAddDialog()
       Wizard::DisableBackButton();
       Wizard::DisableNextButton();
       // No error messages here because Printer::AddQueue already shows them:
-      Printer::AddQueue( queue_name, default_paper_size );
+      Printer::AddQueue( queue_name, is_default_queue, default_paper_size );
       // After a local queue was added, enforce to show also local queues
       // in particular when no local queues were shown before:
       Printer::queue_filter_show_local = true;

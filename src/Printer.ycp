@@ -1950,9 +1950,10 @@ global list DriverItems( string driver_filter_string, boolean preselection )
  * Add new queue or overwrite existing queue
  * @return true on success
  */
-global boolean AddQueue( string queue_name, string default_paper_size )
+global boolean AddQueue( string queue_name, boolean is_default_queue, string default_paper_size )
 { // Delete ' characters because they are used for quoting in the bash commandline below:
   queue_name = deletechars( queue_name, "'" );
+  default_paper_size = deletechars( default_paper_size, "'" );
   string uri = deletechars( connections[selected_connections_index,"uri"]:"", "'" );
   string ppd = deletechars( ppds[selected_ppds_index,"ppd"]:"", "'" );
   string model = deletechars( connections[selected_connections_index,"model"]:"", "'" );
@@ -1996,6 +1997,15 @@ global boolean AddQueue( string queue_name, string default_paper_size )
     current_queue_name = "";
     current_device_uri = "";
     return false;
+  }
+  // If the new queue was created successfully, make it the default queue if this is requested:
+  if( is_default_queue )
+  { // Acording to "man lpadmin" the "-d queue_name" setting does not work intermixed
+    // with other option settings so that a separate lpadmin command is called:
+    commandline = "/usr/sbin/lpadmin -h localhost -d '" + queue_name + "'";
+    // Do not care if it fails to make it the default queue (i.e. show no error message to the user)
+    // because the default queue setting is nice to have but not mandatoty for a working queue:
+    Printerlib::ExecuteBashCommand( commandline );
   }
   // Try to set the requested default_paper_size if it is an available choice for this queue.
   // If no default_paper_size is requested, the CUPS default is used.

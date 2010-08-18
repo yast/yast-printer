@@ -234,9 +234,12 @@ if( func == "MakeProposal" )
                              { y2internal("Selected driver: %1", drivers[0]:nil);
                                // An empty default_paper_size results CUPS's default paper size
                                // (see the Printer::AddQueue function) so that the proposal results the same
-                               // as if the user would have blindly clicked [OK] in the BasicAddDialog:
+                               // as if the user would have blindly clicked [OK] in the BasicAddDialog.
+                               // The BasicAddDialog does by default not set the default queue
+                               // to avoid that a possibly existing default queue gets overwritten.
+                               boolean is_default_queue = false;
                                string default_paper_size = "";
-                               if( Printer::AddQueue( queue_name, default_paper_size ) )
+                               if( Printer::AddQueue( queue_name, is_default_queue, default_paper_size ) )
                                { already_set_up_uris = add( already_set_up_uris, uri );
                                  // Autodetect queues again so that Printer::NewQueueName
                                  // can compare with existing queue names but ignore whatever failures
