@@ -574,7 +574,7 @@ global boolean WaitForUpdatedConfigFiles( string popupheader )
   // Use fallback cupsd_conf_dirty_clean_interval value when the command above failed.
   y2milestone( "Waiting DirtyCleanInterval='%1'+1 seconds for updated config files.", dirty_clean_interval );
   if( dirty_clean_interval < 1 )
-  { // Even in case if "immediate" update of the config files
+  { // Even in case of "immediate" update of the config files
     // be on the safe side and sleep one second but without user notification:
     sleep( 1000 );
     return true;
@@ -585,19 +585,40 @@ global boolean WaitForUpdatedConfigFiles( string popupheader )
   // Return true if the user did not interrupt the waiting for updated config files
   // but return false if the user interrupted the waiting for updated config files.
   // To be on the safe side sleep one second longer than the dirty_clean_interval.
-  // Only Popup::TimedAnyQuestion and Popup::TimedOKCancel return a non-void value
-  // but neither of them return false if the user interrupted the waiting
-  // because both of them return true if the user interrupted via the 'Yes' or 'OK' button
-  // so that both are useless to determine if the user interrupted the waiting
-  // and therefore I return depending on calculating the waiting time directly
-  // by calling time() which returns the number of seconds since 1.1.1970:
-  integer time_before = time();
-  Popup::TimedMessage( // Message of a Popup::TimedMessage:
-                       popupheader + "\n\n" + _("Updating configuration files..."),
-                       dirty_clean_interval + 1
-                     );
-  integer waiting_time = time() - time_before;
-  if( waiting_time < dirty_clean_interval )
+  integer max_waiting_time = dirty_clean_interval + 1;
+  integer waited_time = 0;
+  UI::OpenDialog
+  ( `VBox
+    ( `Label( popupheader ),
+      `ProgressBar
+      ( `id( "wait_for_updated_config_files_progress_bar" ),
+        // Label for a ProgressBar while waiting for updated config files:
+        _("Updating configuration files..."),
+        max_waiting_time,
+        waited_time
+      ),
+      `Right
+      ( `PushButton
+        ( `id( "skip_waiting_for_updated_config_files" ),
+          // Label for a PushButton to skip waiting for updated config files:
+          _("&Skip waiting")
+        )
+      )
+    )
+  );
+  while( waited_time < max_waiting_time )
+  { // Wait one second for user input:
+    string user_input = (string)UI::TimeoutUserInput(1000);
+    // Break waiting loop if the user wants to skip waiting for updated config files:
+    if( "skip_waiting_for_updated_config_files" == user_input )
+    { break;
+    }
+    // Otherwise update the progress bar and loop to wait one more second for user input:
+    waited_time = waited_time + 1;
+    UI::ChangeWidget( `id("wait_for_updated_config_files_progress_bar"), `Value, waited_time );
+  }
+  UI::CloseDialog();
+  if( waited_time < dirty_clean_interval )
   { // To avoid needless error popups be on the safe side and return false only
     // when the waiting_time is strictly less than the dirty_clean_interval.
     // Don't show a warning popup here.
