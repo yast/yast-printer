@@ -46,13 +46,15 @@ include "printer/helps.ycp";
 any AddDriverDialog()
 { // Title of the Add Driver Dialog:
   string caption = _("Driver Packages");
-  boolean cups_drivers_installed = Printerlib::TestAndInstallPackage( "cups-drivers", "installed" );
+  boolean OpenPrintingPPDs_ghostscript_installed = Printerlib::TestAndInstallPackage( "OpenPrintingPPDs-ghostscript", "installed" );
+  boolean OpenPrintingPPDs_hpijs_installed = Printerlib::TestAndInstallPackage( "OpenPrintingPPDs-hpijs", "installed" );
+  boolean OpenPrintingPPDs_postscript_installed = Printerlib::TestAndInstallPackage( "OpenPrintingPPDs-postscript", "installed" );
   boolean gutenprint_installed = Printerlib::TestAndInstallPackage( "gutenprint", "installed" );
   boolean hplip_installed = Printerlib::TestAndInstallPackage( "hplip", "installed" );
   boolean manufacturer_PPDs_installed = Printerlib::TestAndInstallPackage( "manufacturer-PPDs", "installed" );
-  boolean ghostscript_omni_installed = Printerlib::TestAndInstallPackage( "ghostscript-omni", "installed" );
-  boolean filters_installed = Printerlib::TestAndInstallPackage( "filters", "installed" );
-  y2milestone( "entering AddDriverDialog with cups_drivers_installed:'%1' gutenprint_installed:'%2' hplip_installed:'%3' manufacturer_PPDs_installed:'%4' ghostscript_omni_installed:'%5' filters_installed:'%6'", cups_drivers_installed, gutenprint_installed, hplip_installed, manufacturer_PPDs_installed, ghostscript_omni_installed, filters_installed );
+  boolean cups_drivers_splix_installed = Printerlib::TestAndInstallPackage( "cups-drivers-splix", "installed" );
+  boolean m2300w_installed = Printerlib::TestAndInstallPackage( "m2300w", "installed" );
+  y2milestone( "entering AddDriverDialog with OpenPrintingPPDs_ghostscript_installed:'%1' OpenPrintingPPDs_hpijs_installed:'%2' OpenPrintingPPDs_postscript_installed:'%3' gutenprint_installed:'%4' hplip_installed:'%5' manufacturer_PPDs_installed:'%6' cups_drivers_splix_installed:'%7' m2300w_installed:'%8'", OpenPrintingPPDs_ghostscript_installed, OpenPrintingPPDs_hpijs_installed, OpenPrintingPPDs_postscript_installed, gutenprint_installed, hplip_installed, manufacturer_PPDs_installed, cups_drivers_splix_installed, m2300w_installed );
   term contents = `VBox
                   ( `VStretch(),
                     `Left
@@ -68,12 +70,32 @@ any AddDriverDialog()
                       `VBox
                       ( `Left
                         ( `CheckBox
-                          ( `id("cups-drivers"),
-                            // CheckBox to select or un-select the printer driver package cups-drivers.
-                            // There is no need to have the package name "cups-drivers" in this text
+                          ( `id("OpenPrintingPPDs-ghostscript"),
+                            // CheckBox to select or un-select the printer driver package OpenPrintingPPDs-ghostscript.
+                            // There is no need to have the package name "OpenPrintingPPDs-ghostscript" in this text
                             // because it is shown in a separated column to the left of this text.
-                            "&cups-drivers : " + _("Various Standard Drivers"),
-                            cups_drivers_installed
+                            "&OpenPrintingPPDs-ghostscript : " + _("Printer Description Files for Ghostscript Drivers"),
+                            OpenPrintingPPDs_ghostscript_installed
+                          )
+                        ),
+                        `Left
+                        ( `CheckBox
+                          ( `id("OpenPrintingPPDs-hpijs"),
+                            // CheckBox to select or un-select the printer driver package OpenPrintingPPDs-hpijs.
+                            // There is no need to have the package name "OpenPrintingPPDs-hpijs" in this text
+                            // because it is shown in a separated column to the left of this text.
+                            "OpenPrintingPPDs-hp&ijs : " + _("Printer Description Files for some PCL Printers"),
+                            OpenPrintingPPDs_hpijs_installed
+                          )
+                        ),
+                        `Left
+                        ( `CheckBox
+                          ( `id("OpenPrintingPPDs-postscript"),
+                            // CheckBox to select or un-select the printer driver package OpenPrintingPPDs-postscript.
+                            // There is no need to have the package name "OpenPrintingPPDs-postscript" in this text
+                            // because it is shown in a separated column to the left of this text.
+                            "OpenPrintingPPDs-&postscript : " + _("Printer Description Files for PostScript Printers"),
+                            OpenPrintingPPDs_postscript_installed
                           )
                         ),
                         `Left
@@ -94,7 +116,7 @@ any AddDriverDialog()
                             // CheckBox to select or un-select the printer driver packages hplip and hplip-hpijs.
                             // There is no need to have the package names "hplip" and "hplip-hpijs" in this text
                             // because they are shown in a separated column to the left of this text.
-                            "&hplip + hplip-hpijs : " + _("Driver for HP Printers and All-in-One Devices"),
+                            "&hplip + hplip-hpijs : " + _("Driver for HP Printers and HP All-in-One Devices"),
                             hplip_installed
                           )
                         ),
@@ -104,18 +126,28 @@ any AddDriverDialog()
                             // CheckBox to select or un-select the printer driver package manufacturer-PPDs.
                             // There is no need to have the package name "manufacturer-PPDs" in this text
                             // because it is shown in a separated column to the left of this text.
-                            "&manufacturer-PPDs : " + _("Printer Description Files for PostScript Printers"),
+                            "&manufacturer-PPDs : " + _("Manufacturer's PostScript Printer Description Files"),
                             manufacturer_PPDs_installed
                           )
                         ),
                         `Left
                         ( `CheckBox
-                          ( `id("ghostscript-omni"),
-                            // CheckBox to select or un-select the printer driver package ghostscript-omni.
-                            // There is no need to have the package name "ghostscript-omni" in this text
+                          ( `id("cups-drivers-splix"),
+                            // CheckBox to select or un-select the printer driver package cups-drivers-splix.
+                            // There is no need to have the package name "cups-drivers-splix" in this text
                             // because it is shown in a separated column to the left of this text.
-                            "ghostscript-&omni : " + _("The Omni Printer Driver (Unmaintained)"),
-                            ghostscript_omni_installed
+                            "cups-drivers-&splix : " + _("SpliX Driver for SPL Printers without JBIG"),
+                            cups_drivers_splix_installed
+                          )
+                        ),
+                        `Left
+                        ( `CheckBox
+                          ( `id("m2300w"),
+                            // CheckBox to select or un-select the printer driver package manufacturer-PPDs.
+                            // There is no need to have the package name "m2300w" in this text
+                            // because it is shown in a separated column to the left of this text.
+                            "m2300&w : " + _("Driver for Konica Minolta 2300W and 2400W (unmaintained)"),
+                            m2300w_installed
                           )
                         )
                       )
@@ -137,7 +169,7 @@ any AddDriverDialog()
                         ( `TextEntry
                           ( `id("ppd_path_input"),
                             // TextEntry to specify the full path of a PPD file:
-                            _("&Printer description file name with full path where it is located")
+                            _("Printer description &file name with full path where it is located")
                           ),
 			  `VBox(
 			   `Label(""),
@@ -191,18 +223,24 @@ any AddDriverDialog()
     }
     if( ret == `next )
     { // Get the actual settings and values from the dialog:
-      boolean cups_drivers_install = (boolean)UI::QueryWidget( `id("cups-drivers"), `Value );
+      boolean OpenPrintingPPDs_ghostscript_install = (boolean)UI::QueryWidget( `id("OpenPrintingPPDs-ghostscript"), `Value );
+      boolean OpenPrintingPPDs_hpijs_install = (boolean)UI::QueryWidget( `id("OpenPrintingPPDs-hpijs"), `Value );
+      boolean OpenPrintingPPDs_postscript_install = (boolean)UI::QueryWidget( `id("OpenPrintingPPDs-postscript"), `Value );
       boolean gutenprint_install = (boolean)UI::QueryWidget( `id("gutenprint"), `Value );
       boolean hplip_install = (boolean)UI::QueryWidget( `id("hplip"), `Value );
       boolean manufacturer_PPDs_install = (boolean)UI::QueryWidget( `id("manufacturer-PPDs"), `Value );
-      boolean ghostscript_omni_install = (boolean)UI::QueryWidget( `id("ghostscript-omni"), `Value );
+      boolean cups_drivers_splix_install = (boolean)UI::QueryWidget( `id("cups-drivers-splix"), `Value );
+      boolean m2300w_install = (boolean)UI::QueryWidget( `id("m2300w"), `Value );
       string ppd_path_input_value = (string)UI::QueryWidget( `id("ppd_path_input"), `Value );
       // Ignore an effectively empty ppd_path_input_value:
-      if( cups_drivers_install == cups_drivers_installed
+      if( OpenPrintingPPDs_ghostscript_install == OpenPrintingPPDs_ghostscript_installed
+          && OpenPrintingPPDs_hpijs_install == OpenPrintingPPDs_hpijs_installed
+          && OpenPrintingPPDs_postscript_install == OpenPrintingPPDs_postscript_installed
           && gutenprint_install == gutenprint_installed
           && hplip_install == hplip_installed
           && manufacturer_PPDs_install == manufacturer_PPDs_installed
-          && ghostscript_omni_install == ghostscript_omni_installed
+          && cups_drivers_splix_install == cups_drivers_splix_installed
+          && m2300w_install == m2300w_installed
           && "" == filterchars( ppd_path_input_value, Printer::alnum_chars )
         )
       { y2milestone( "Nothing changed in AddDriverDialog." );
@@ -228,18 +266,41 @@ any AddDriverDialog()
       // when I would let the package manager install several packages at once
       // but one package is not avaialble in the repository to be installed.
       // For example on a host without Internet access when whatever rarely used
-      // drivers (e.g. ghostscript-omni) or too-big drivers (e.g. hplip)
-      // are not provided on whatever media for whatever product
-      // (e.g. our Live CD or a stripped DVD/CD in whatever magazine).
+      // drivers or too-big drivers are not provided on whatever media
+      // for whatever product (e.g. a Live CD or a stripped DVD/CD in whatever magazine).
       boolean package_changed = false;
-      if( cups_drivers_install != cups_drivers_installed )
-      { if( cups_drivers_install )
-        { if( Printerlib::TestAndInstallPackage( "cups-drivers", "install" ) )
+      if( OpenPrintingPPDs_ghostscript_install != OpenPrintingPPDs_ghostscript_installed )
+      { if( OpenPrintingPPDs_ghostscript_install )
+        { if( Printerlib::TestAndInstallPackage( "OpenPrintingPPDs-ghostscript", "install" ) )
           { package_changed = true;
           }
         }
         else
-        { if( Printerlib::TestAndInstallPackage( "cups-drivers", "remove" ) )
+        { if( Printerlib::TestAndInstallPackage( "OpenPrintingPPDs-ghostscript", "remove" ) )
+          { package_changed = true;
+          }
+        }
+      }
+      if( OpenPrintingPPDs_hpijs_install != OpenPrintingPPDs_hpijs_installed )
+      { if( OpenPrintingPPDs_hpijs_install )
+        { if( Printerlib::TestAndInstallPackage( "OpenPrintingPPDs-hpijs", "install" ) )
+          { package_changed = true;
+          }
+        }
+        else
+        { if( Printerlib::TestAndInstallPackage( "OpenPrintingPPDs-hpijs", "remove" ) )
+          { package_changed = true;
+          }
+        }
+      }
+      if( OpenPrintingPPDs_postscript_install != OpenPrintingPPDs_postscript_installed )
+      { if( OpenPrintingPPDs_postscript_install )
+        { if( Printerlib::TestAndInstallPackage( "OpenPrintingPPDs-postscript", "install" ) )
+          { package_changed = true;
+          }
+        }
+        else
+        { if( Printerlib::TestAndInstallPackage( "OpenPrintingPPDs-postscript", "remove" ) )
           { package_changed = true;
           }
         }
@@ -346,14 +407,26 @@ any AddDriverDialog()
           }
         }
       }
-      if( ghostscript_omni_install != ghostscript_omni_installed )
-      { if( ghostscript_omni_install )
-        { if( Printerlib::TestAndInstallPackage( "ghostscript-omni", "install" ) )
+      if( cups_drivers_splix_install != cups_drivers_splix_installed )
+      { if( cups_drivers_splix_install )
+        { if( Printerlib::TestAndInstallPackage( "cups-drivers-splix", "install" ) )
           { package_changed = true;
           }
         }
         else
-        { if( Printerlib::TestAndInstallPackage( "ghostscript-omni", "remove" ) )
+        { if( Printerlib::TestAndInstallPackage( "cups-drivers-splix", "remove" ) )
+          { package_changed = true;
+          }
+        }
+      }
+      if( m2300w_install != m2300w_installed )
+      { if( m2300w_install )
+        { if( Printerlib::TestAndInstallPackage( "m2300w", "install" ) )
+          { package_changed = true;
+          }
+        }
+        else
+        { if( Printerlib::TestAndInstallPackage( "m2300w", "remove" ) )
           { package_changed = true;
           }
         }
@@ -416,7 +489,7 @@ any AddDriverDialog()
         }
         if( ! Printerlib::ExecuteBashCommand( "test -d /usr/share/cups/model/downloaded || mkdir /usr/share/cups/model/downloaded ; cp '" + ppd_path_input_value + "' /usr/share/cups/model/downloaded" ) )
         { Popup::ErrorDetails( // Popup::ErrorDetails message:
-                               _("Failed make the printer description file available"),
+                               _("Failed to make the printer description file available"),
                                Printerlib::result["stderr"]:""
                              );
           // Simply exit this dialog because it does not make sense to proceed here
