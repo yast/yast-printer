@@ -808,6 +808,14 @@ symbol handleNetworkPrinting( string key, map event )
         else
         { UI::ChangeWidget( `id(`browse_allow_input), `Enabled, true );
         }
+        if( ! Printerlib::client_only && ! Printer::printer_auto_dialogs )
+        { // The "Connection Wizard" button is enabled by default
+          // and disabled if currently a "client_only" config is active.
+          // In this case it is never again enabled as long as the dialog runs, see above.
+          // It is also disabled in case of Printer::printer_auto_dialogs
+          // and then it must stay disabled as long as the dialog runs.
+          UI::ChangeWidget( `id(`connection_wizard), `Enabled, true );
+        }
         UI::ChangeWidget( `id(`client_only_check_box), `Value, false );
         UI::ChangeWidget( `id(`client_conf_input), `Enabled, false );
         UI::ChangeWidget( `id(`test_client_conf_server), `Enabled, false );
@@ -820,6 +828,14 @@ symbol handleNetworkPrinting( string key, map event )
     if( `browse_poll_check_box == event["ID"]:nil )
     { if( (boolean)UI::QueryWidget( `browse_poll_check_box, `Value ) )
       { UI::ChangeWidget( `id(`browse_poll_input), `Enabled, true );
+        if( ! Printerlib::client_only && ! Printer::printer_auto_dialogs )
+        { // The "Connection Wizard" button is enabled by default
+          // and disabled if currently a "client_only" config is active.
+          // In this case it is never again enabled as long as the dialog runs, see above.
+          // It is also disabled in case of Printer::printer_auto_dialogs
+          // and then it must stay disabled as long as the dialog runs.
+          UI::ChangeWidget( `id(`connection_wizard), `Enabled, true );
+        }
         UI::ChangeWidget( `id(`client_only_check_box), `Value, false );
         UI::ChangeWidget( `id(`client_conf_input), `Enabled, false );
         UI::ChangeWidget( `id(`test_client_conf_server), `Enabled, false );
@@ -847,8 +863,6 @@ symbol handleNetworkPrinting( string key, map event )
         if( (boolean)UI::QueryWidget( `browse_poll_check_box, `Value ) )
         { UI::ChangeWidget( `id(`browse_poll_input), `Enabled, true );
         }
-        UI::ChangeWidget( `id(`client_conf_input), `Enabled, false );
-        UI::ChangeWidget( `id(`test_client_conf_server), `Enabled, false );
         if( ! Printerlib::client_only && ! Printer::printer_auto_dialogs )
         { // The "Connection Wizard" button is enabled by default
           // and disabled if currently a "client_only" config is active.
@@ -857,6 +871,8 @@ symbol handleNetworkPrinting( string key, map event )
           // and then it must stay disabled as long as the dialog runs.
           UI::ChangeWidget( `id(`connection_wizard), `Enabled, true );
         }
+        UI::ChangeWidget( `id(`client_conf_input), `Enabled, false );
+        UI::ChangeWidget( `id(`test_client_conf_server), `Enabled, false );
       }
     }
     if( `browse_allow_combo_box == event["ID"]:nil )

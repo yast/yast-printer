@@ -587,13 +587,41 @@ provides in your particular network:<br>
 To access a SMB printer share, the RPM package samba-client must be installed.
 The package provides the CUPS backend 'smb' which is a link to
 the <tt>/usr/bin/smbspool</tt> program which actually sends the data
-to a SMB printer share.
+to a SMB printer share.<br>
 A server name and a printer share name and optionally a workgroup name
 is needed to access it.
 Furthermore a user name and a password may be required to get access.
 Have in mind that spaces and special characters in those values
-must be percent-encoded (see above).
-A matching full device URI is:<br>
+must be percent-encoded (see above).<br>
+By default CUPS runs backends (here smbspool) as user 'lp'.
+When printing in a Windows Active Directory (AD) environment
+the user 'lp' is not allowed to print in this environment
+so that the traditional way to print via smbspool as user 'lp'
+would not work.<br>
+For printing in an AD environment additionally
+the RPM package samba-krb-printing must be installed.
+In this case the CUPS backend 'smb' link
+is changed to <tt>/usr/bin/get_printing_ticket</tt>
+which is a wrapper to run smbspool as the original user
+who submitted a particular print job.
+When the Kerberos protocol is used for authentication
+in an AD environment, a user gets a ticket granting ticket (TGT)
+via the display manager during login at the Gnome or KDE desktop.
+When smbspool is run as the original user who submitted
+a particular print job, it can access the TGT of this user
+and use it to pass the printing data to the SMB printer share
+even in an AD environment with Kerberos authentication.
+In this case neither a fixed user name nor a fixed password
+has to be specified for authentication.
+A precondition is that get_printing_ticket runs on the same host
+where the user who submitted a particular print job is logged in.
+This means that it must be set up on the workstation
+for the particular user who will submit such print jobs
+and the user's workstation must send its printing data
+directly to the SMB printer share in the AD environment.
+In particular it does not work on a separated CUPS server machine
+where users who submit print jobs are not logged in.<br>
+For the traditional way a matching full device URI is:<br>
 smb://username:password@workgroup/server/printer<br>
 For example 'John Doe' with password '@home!' may use something like
 the following device URI to access a 'Fun Printer 1000+' share:<br>

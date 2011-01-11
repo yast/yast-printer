@@ -54,8 +54,8 @@ string connection_model="";
 // but only "Foo Bar" -> "Foo%20Bar" would be the correct encoding.
 // It is crucial to have "%":"%25" last so that URIpercentDecoding works correctly
 // because "%25" must be replaced by "%" last otherwise
-// a duplicate dencoding would happen: "Foo%2520Bar" -> "Foo%20Bar" -> "Foo Bar".
-// but only "Foo%2520Bar" -> "Foo%20Bar" would be the correct dencoding.
+// a duplicate decoding would happen: "Foo%2520Bar" -> "Foo%20Bar" -> "Foo Bar".
+// but only "Foo%2520Bar" -> "Foo%20Bar" would be the correct decoding.
 // Therefore "%":"%25" cannot be at all in this list but is
 // separated as percentage_percent_encoding which is
 // prepended to this list so that URIpercentEncoding works correctly and
@@ -559,11 +559,12 @@ void changeSettingsDialog( symbol selected )
   string printer = "";
   string user = "";
   string pass = "";
+  boolean active_directory_support = false;
   boolean beh_do_not_disable = true;
   string beh_attempts = "0";
   string beh_delay = "30";
   switch(selected)
-  { // directly connected
+  { // Directly connected device:
     case(`parallel):
           content = getContentFromBackend("parallel");
           break;
@@ -1093,7 +1094,7 @@ void changeSettingsDialog( symbol selected )
                       model_content
                     );
           break;
-    // network printer
+    // Access network printer or printserver box via
     case(`tcp):
           hostname = "";
           port_or_queue = "9100";
@@ -1237,7 +1238,7 @@ void changeSettingsDialog( symbol selected )
                       model_content
                     );
           break;
-    // print via
+    // Print via print server machine
     case(`smb):
           if( ! Printerlib::TestAndInstallPackage( "samba-client", "installed" ) )
           { if( Popup::ContinueCancel( _("To access a SMB printer share, the RPM package samba-client must be installed.") ) )
@@ -1318,6 +1319,15 @@ void changeSettingsDialog( symbol selected )
               }
             }
           }
+          // Be backward compatible for openSUSE < 11.3 and be prepared for /usr/lib64/cups/
+          Printerlib::ExecuteBashCommand( "ls -1 /usr/lib*/cups/backend/smb | head -n1 | tr -d '[:space:]'" );
+          // readlink is in the coreutils RPM so that it is available in any case.
+          Printerlib::ExecuteBashCommand( "readlink " + Printerlib::result["stdout"]:"" + " | tr -d '[:space:]'" );
+          // Only if /usr/lib[64]/cups/backend/smb -> /usr/bin/get_printing_ticket
+          // there is support for Windows Active Directory:
+          if( "/usr/bin/get_printing_ticket" == Printerlib::result["stdout"]:"" )
+          { active_directory_support = true;
+          }
           model_content = getContentFromCurrentModel( true );
           content = `VBox
                     ( `Left
@@ -1326,7 +1336,7 @@ void changeSettingsDialog( symbol selected )
                           ( `id(`hostname),
                             `opt(`editable),
                             // TRANSLATORS: Text entry for remote server name
-                            _("Server (NetBIOS Host Name)"),
+                            _("&Server (NetBIOS Host Name)"),
                             [ URIpercentDecoding( hostname ) ]
                           //),
                           //`MenuButton
@@ -1343,7 +1353,7 @@ void changeSettingsDialog( symbol selected )
                       ( `InputField
                         ( `id(`printer),
                           // TRANSLATORS: Text entry for printer name
-                          _("Printer (Share Name)"),
+                          _("&Printer (Share Name)"),
                           URIpercentDecoding( printer )
                         )
                       ),
@@ -1353,7 +1363,7 @@ void changeSettingsDialog( symbol selected )
                           ( `id(`domain),
                             `opt(`editable),
                             // TRANSLATORS: Text entry for samba domain
-                            _("Workgroup (Domain Name)"),
+                            _("&Workgroup (Domain Name)"),
                             [ URIpercentDecoding( domain ) ]
                           //),
                           //PushButton
@@ -1366,19 +1376,45 @@ void changeSettingsDialog( symbol selected )
                       `Left
                       ( `Frame
                         ( // TRANSLATORS: Frame label for authentication
-                          _("Authenticate As"),
+                          _("Authentication (if needed)"),
                           `VBox
-                          ( `InputField
-                            ( `id(`user),
-                              // TRANSLATORS: Text entry for username (authentication)
-                              _("User"),
-                              URIpercentDecoding( user )
+                          ( `Left
+                            ( `Label
+                              ( // A Label for authentication via fixed username and password:
+                                _("Use fixed username and password")
+                              )
                             ),
-                            `Password
-                            ( `id(`pass),
-                              // TRANSLATORS: Text entry for password (authentication)
-                              _("&Password"),
-                              URIpercentDecoding( pass )
+                            `Left
+                            ( `HBox
+                              ( `HSpacing( 2 ),
+                                `VBox
+                                ( `Left
+                                  ( `InputField
+                                    ( `id(`user),
+                                      // TRANSLATORS: Text entry for username (authentication)
+                                      _("&User"),
+                                      URIpercentDecoding( user )
+                                    )
+                                  ),
+                                  `Left
+                                  ( `Password
+                                    ( `id(`pass),
+                                      // TRANSLATORS: Text entry for password (authentication)
+                                      _("Pass&word"),
+                                      URIpercentDecoding( pass )
+                                    )
+                                  )
+                                )
+                              )
+                            ),
+                            `Left
+                            ( `CheckBox
+                              ( `id(`active_directory_check_box),
+                                `opt(`notify),
+                                // A CheckBox to support Windows Active Directory:
+                                _("Support for &Windows Active Directory"),
+                                active_directory_support
+                              )
                             )
                           )
                         )
@@ -1657,7 +1693,7 @@ void changeSettingsDialog( symbol selected )
                       model_content
                     );
           break;
-    // special
+    // Special
     case(`uri):
           current_device_uri = getCurrentDeviceURI();
           if( "smb:/" == substring( current_device_uri, 0, size( "smb:/" ) ) )
@@ -2631,6 +2667,16 @@ boolean testQueue( symbol selected )
           }
           break;
     case(`smb):
+          boolean active_directory = (boolean)UI::QueryWidget( `active_directory_check_box, `Value );
+          if( active_directory )
+          { if( ! Popup::ContinueCancel( // Body of a Popup::ContinueCancel when testing a SMB connection is not possible
+                                         // because there is authentication via Windows Active Directory required:
+                                        _("This is only a generic test which may untruly report failures\nif authentication via Windows Active Directory is required.\nIn this case a particular user who is allowed to print via Active Directory\nshould log in and test by himself if he can print from Gnome or KDE.")
+                                       )
+              )
+            { return true;
+            }
+          }
           host = (string)UI::QueryWidget( `hostname, `Value );
           queue = (string)UI::QueryWidget( `printer, `Value );
           workgroup = (string)UI::QueryWidget( `domain, `Value );
@@ -2646,7 +2692,19 @@ boolean testQueue( symbol selected )
                                   timeout
                                 );
           if( ! Printerlib::ExecuteBashCommand( test_command) )
-          { Popup::ErrorDetails( sformat( // Message of a Popup::ErrorDetails
+          { if( active_directory )
+            { Popup::ErrorDetails( sformat( // Message of a Popup::ErrorDetails
+                                            // where %1 will be replaced by the SMB share name
+                                            // and %2 will be replaced by the host name:
+                                            _("The generic test reports failures for share '%1' on host '%2'."),
+                                            queue,
+                                            host
+                                          ),
+                                   Printerlib::result["stderr"]:"" + "\n" + Printerlib::result["stdout"]:""
+                                 );
+              return true;
+            }
+            Popup::ErrorDetails( sformat( // Message of a Popup::ErrorDetails
                                           // where %1 will be replaced by the SMB share name
                                           // and %2 will be replaced by the host name:
                                           _("Access test failed for share '%1' on host '%2'."),
@@ -2766,7 +2824,7 @@ any ret = nil;
 while( ret != `back && ret != `next )
 { ret = UI::UserInput();
   symbol selected = (symbol)UI::QueryWidget( `tree_selection, `Value );
-  y2milestone( "ConnectionWizardDialog selected = '%1'", selected );
+  y2milestone( "ConnectionWizardDialog selected = '%1', ret = '%2'", selected, ret );
   switch( (symbol)ret )
   { case(`tree_selection):
           changeSettingsDialog( selected );
@@ -2780,7 +2838,7 @@ while( ret != `back && ret != `next )
           }
           else
           { y2error( "ConnectionWizardDialog: Could not validate for '%1'", selected );
-            ret=nil;
+            ret = nil;
           }
           break;
     case(`scan_all):
@@ -2794,9 +2852,70 @@ while( ret != `back && ret != `next )
           { testQueue( selected );
           }
           break;
-    y2internal( "ret %1", ret );
+    case(`active_directory_check_box):
+          // Be backward compatible for openSUSE < 11.3 and be prepared for /usr/lib64/cups/
+          Printerlib::ExecuteBashCommand( "ls -1 /usr/lib*/cups/backend/smb | head -n1 | tr -d '[:space:]'" );
+          string smb_backend_link_name = Printerlib::result["stdout"]:"";
+          // Without a link name /usr/lib[64]/cups/backend/smb (which is provided by samba-client)
+          // the rest makes no sense (in particular the ln commands would create nonsense links in $PWD):
+          if( "" == smb_backend_link_name )
+          { UI::ChangeWidget( `id(`active_directory_check_box), `Value, false );
+            UI::ChangeWidget( `id(`active_directory_check_box), `Enabled, false );
+          }
+          else
+          { // readlink is in the coreutils RPM so that it is available in any case.
+            string smb_backend_link_target_commandline = "readlink " + smb_backend_link_name + " | tr -d '[:space:]'";
+            if( (boolean)UI::QueryWidget( `id(`active_directory_check_box), `Value ) )
+            { // The active_directory_check_box is checked:
+              if( ! Printerlib::TestAndInstallPackage( "samba-krb-printing", "installed" ) )
+              { // Install samba-krb-printing when it is not installed:
+                if( Popup::ContinueCancel( _("To support Windows Active Directory, the RPM package samba-krb-printing must be installed.") ) )
+                { Printerlib::TestAndInstallPackage( "samba-krb-printing", "install" );
+                }
+              }
+              // The user can also decide during the actual installation not to install it
+              // or the installation may have failed for whatever reason
+              // so that we test again whether or not it is now actually installed:
+              if( Printerlib::TestAndInstallPackage( "samba-krb-printing", "installed" ) )
+              { // Regardless if samba-krb-printing became installed right now
+                // or if samba-krb-printing is installed since a longer time
+                // make sure that the symbolic link /usr/lib[64]/cups/backend/smb
+                // points to /usr/bin/get_printing_ticket:
+                Printerlib::ExecuteBashCommand( "ln -sf /usr/bin/get_printing_ticket " + smb_backend_link_name );
+              }
+            }
+            else
+            { // The active_directory_check_box is not checked:
+              Printerlib::ExecuteBashCommand( smb_backend_link_target_commandline );
+              if( "/usr/bin/get_printing_ticket" == Printerlib::result["stdout"]:"" )
+              { // Currently there is support for Windows Active Directory.
+                // Show a user notification before it gets disabled:
+                Popup::Warning( // Popup::Warning message before Windows Active Directory support gets disabled:
+                                _("Windows Active Directory support will be disabled for all SMB print queues.")
+                              );
+              }
+              // Regardless if samba-krb-printing is installed or not,
+              // only let the symbolic link /usr/lib[64]/cups/backend/smb
+              // point to its traditional target /usr/bin/smbspool (provided by samba-client):
+              Printerlib::ExecuteBashCommand( "ln -sf /usr/bin/smbspool " + smb_backend_link_name );
+            }
+            // Detremine and set the actually right state of the active_directory_check_box:
+            // Only if the /usr/lib[64]/cups/backend/smb link points to /usr/bin/get_printing_ticket
+            // there is support for Windows Active Directory for SMB print queues.
+            Printerlib::ExecuteBashCommand( smb_backend_link_target_commandline );
+            if( "/usr/bin/get_printing_ticket" == Printerlib::result["stdout"]:"" )
+            { UI::ChangeWidget( `id(`active_directory_check_box), `Value, true );
+            }
+            else
+            { UI::ChangeWidget( `id(`active_directory_check_box), `Value, false );
+            }
+          }
+          break;
+    default:
+      y2milestone( "Ignoring unexpected ret = '%1'", ret );
   }
 }
+// ret == `back || ret == `next
 return ret;
 //UI::CloseDialog();
 }
