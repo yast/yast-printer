@@ -1324,7 +1324,7 @@ void changeSettingsDialog( symbol selected )
           // readlink is in the coreutils RPM so that it is available in any case.
           Printerlib::ExecuteBashCommand( "readlink " + Printerlib::result["stdout"]:"" + " | tr -d '[:space:]'" );
           // Only if /usr/lib[64]/cups/backend/smb -> /usr/bin/get_printing_ticket
-          // there is support for Windows Active Directory:
+          // there is support for Active Directory (R):
           if( "/usr/bin/get_printing_ticket" == Printerlib::result["stdout"]:"" )
           { active_directory_support = true;
           }
@@ -1365,11 +1365,6 @@ void changeSettingsDialog( symbol selected )
                             // TRANSLATORS: Text entry for samba domain
                             _("&Workgroup (Domain Name)"),
                             [ URIpercentDecoding( domain ) ]
-                          //),
-                          //PushButton
-                          //( `id(`scan_domain),
-                          //  _("Scan for Windows Share Domains")
-                          //)
                           )
                         )
                       ),
@@ -1411,8 +1406,8 @@ void changeSettingsDialog( symbol selected )
                             ( `CheckBox
                               ( `id(`active_directory_check_box),
                                 `opt(`notify),
-                                // A CheckBox to support Windows Active Directory:
-                                _("Support for &Windows Active Directory"),
+                                // A CheckBox to support Active Directory (R):
+                                _("Support for &Active Directory (R)"),
                                 active_directory_support
                               )
                             )
@@ -1962,7 +1957,7 @@ any ConnectionWizardDialog()
                               _("Print Via Print Server Machine"),
                               true,
                               [ // TRANSLATORS: Tree widget item
-                                `item( `id(`smb), _("Microsoft Windows/SAMBA (SMB/CIFS)") ),
+                                `item( `id(`smb), _("Windows (R) or Samba (SMB/CIFS)") ),
                                 // TRANSLATORS: Tree widget item
                                 `item( `id(`lpr), _("Traditional UNIX Server (LPR/LPD)") ),
                                 // `item( `id(`iprint), _("iPrint (Novell OES)") ),
@@ -2670,8 +2665,8 @@ boolean testQueue( symbol selected )
           boolean active_directory = (boolean)UI::QueryWidget( `active_directory_check_box, `Value );
           if( active_directory )
           { if( ! Popup::ContinueCancel( // Body of a Popup::ContinueCancel when testing a SMB connection is not possible
-                                         // because there is authentication via Windows Active Directory required:
-                                        _("This is only a generic test which may untruly report failures\nif authentication via Windows Active Directory is required.\nIn this case a particular user who is allowed to print via Active Directory\nshould log in and test by himself if he can print from Gnome or KDE.")
+                                         // because there is authentication via Active Directory (R) required:
+                                        _("This is only a generic test which may untruly report failures\nif authentication via Active Directory (R) is required.\nIn this case a user who is allowed to print via Active Directory (R)\nshould log in and test by himself if he can print from Gnome or KDE.")
                                        )
               )
             { return true;
@@ -2869,7 +2864,7 @@ while( ret != `back && ret != `next )
             { // The active_directory_check_box is checked:
               if( ! Printerlib::TestAndInstallPackage( "samba-krb-printing", "installed" ) )
               { // Install samba-krb-printing when it is not installed:
-                if( Popup::ContinueCancel( _("To support Windows Active Directory, the RPM package samba-krb-printing must be installed.") ) )
+                if( Popup::ContinueCancel( _("To support Active Directory (R), the RPM package samba-krb-printing must be installed.") ) )
                 { Printerlib::TestAndInstallPackage( "samba-krb-printing", "install" );
                 }
               }
@@ -2888,10 +2883,10 @@ while( ret != `back && ret != `next )
             { // The active_directory_check_box is not checked:
               Printerlib::ExecuteBashCommand( smb_backend_link_target_commandline );
               if( "/usr/bin/get_printing_ticket" == Printerlib::result["stdout"]:"" )
-              { // Currently there is support for Windows Active Directory.
+              { // Currently there is support for Active Directory (R).
                 // Show a user notification before it gets disabled:
-                Popup::Warning( // Popup::Warning message before Windows Active Directory support gets disabled:
-                                _("Windows Active Directory support will be disabled for all SMB print queues.")
+                Popup::Warning( // Popup::Warning message before Active Directory (R) support gets disabled:
+                                _("Active Directory (R) support will be disabled for all SMB print queues.")
                               );
               }
               // Regardless if samba-krb-printing is installed or not,
@@ -2901,7 +2896,7 @@ while( ret != `back && ret != `next )
             }
             // Detremine and set the actually right state of the active_directory_check_box:
             // Only if the /usr/lib[64]/cups/backend/smb link points to /usr/bin/get_printing_ticket
-            // there is support for Windows Active Directory for SMB print queues.
+            // there is support for Active Directory (R) for SMB print queues.
             Printerlib::ExecuteBashCommand( smb_backend_link_target_commandline );
             if( "/usr/bin/get_printing_ticket" == Printerlib::result["stdout"]:"" )
             { UI::ChangeWidget( `id(`active_directory_check_box), `Value, true );
