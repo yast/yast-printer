@@ -453,6 +453,11 @@ any AddDriverDialog()
       if( package_changed )
       { Printer::ppds = [];
         Printer::connections = [];
+        // There is no "abort" functionality which does a sudden death of the whole module (see dialogs.ycp).
+        // Unfortunately when the YaST package installer is run via Printerlib::TestAndInstallPackage
+        // it leaves a misused "abort" button labeled "Skip Autorefresh" with WidgetID "`abort"
+        // so that this leftover "abort" button must be explicitely hidden here:
+        Wizard::HideAbortButton();
       }
       // Ignore an effectively empty ppd_path_input_value:
       if( "" != filterchars( ppd_path_input_value, Printer::alnum_chars ) )

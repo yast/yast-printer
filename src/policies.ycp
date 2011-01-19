@@ -314,8 +314,14 @@ boolean ApplyPoliciesSettings()
 symbol handlePolicies( string key, map event )
 { y2milestone( "entering handlePolicies with key '%1'\nand event '%2'", key, event );
   if( "Activated" == event["EventReason"]:"" )
-  { if( `back == event["ID"]:nil )
-    { return `policies_back;
+  { if( `abort == event["ID"]:nil || `cancel == event["ID"]:nil || `back == event["ID"]:nil )
+    { // There is no "abort" functionality which does a sudden death of the whole module.
+      // There is only a "Cancel" functionality (via the "back" button) which goes back one step
+      // and the button with the "abort" functionality is not shown at all (see dialogs.ycp).
+      // Unfortunately when the YaST package installer is run via Printerlib::TestAndInstallPackage
+      // it leaves a misused "abort" button labeled "Skip Autorefresh" with WidgetID "`abort"
+      // so that this case is mapped to the "Cancel" functionality:
+      return `policies_back;
     }
     if( `next == event["ID"]:nil )
     { if( ! ApplyPoliciesSettings() )

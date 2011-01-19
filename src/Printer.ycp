@@ -39,6 +39,7 @@ import "Progress";
 import "Summary";
 import "Popup";
 import "Printerlib";
+import "Wizard";
 
 /**
  * Prototypes
@@ -746,7 +747,12 @@ global boolean Read()
   // for accessing remote CUPS servers via a "client-only" config.
   // Therefore abort (return false) if cups-client is not installed:
   if( ! Printerlib::TestAndInstallPackage( "cups-client", "install" ) )
-  { return false;
+  { // There is no "abort" functionality which does a sudden death of the whole module (see dialogs.ycp).
+    // Unfortunately when the YaST package installer is run via Printerlib::TestAndInstallPackage
+    // it leaves a misused "abort" button labeled "Skip Autorefresh" with WidgetID "`abort"
+    // so that this leftover "abort" button must be explicitely hidden here:
+    Wizard::HideAbortButton();
+    return false;
   }
   // The cups RPM ist the default requirement
   // for accessing remote CUPS servers via CUPS Browsing
@@ -754,6 +760,11 @@ global boolean Read()
   // Therefore try to install cups but because for a "client-only" config
   // only cups-client is required, proceed even if cups is not installed:
   Printerlib::TestAndInstallPackage( "cups", "install" );
+  // There is no "abort" functionality which does a sudden death of the whole module (see dialogs.ycp).
+  // Unfortunately when the YaST package installer is run via Printerlib::TestAndInstallPackage
+  // it leaves a misused "abort" button labeled "Skip Autorefresh" with WidgetID "`abort"
+  // so that this leftover "abort" button must be explicitely hidden here:
+  Wizard::HideAbortButton();
   // Progress last stage (progress finished):
   if( Abort() ) return false;
   Progress::NextStage();
