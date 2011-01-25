@@ -52,9 +52,10 @@ any AddDriverDialog()
   boolean gutenprint_installed = Printerlib::TestAndInstallPackage( "gutenprint", "installed" );
   boolean hplip_installed = Printerlib::TestAndInstallPackage( "hplip", "installed" );
   boolean manufacturer_PPDs_installed = Printerlib::TestAndInstallPackage( "manufacturer-PPDs", "installed" );
-  boolean cups_drivers_splix_installed = Printerlib::TestAndInstallPackage( "cups-drivers-splix", "installed" );
+  boolean splix_installed = Printerlib::TestAndInstallPackage( "splix", "installed" )
+                            || Printerlib::TestAndInstallPackage( "cups-drivers-splix", "installed" );
   boolean m2300w_installed = Printerlib::TestAndInstallPackage( "m2300w", "installed" );
-  y2milestone( "entering AddDriverDialog with OpenPrintingPPDs_ghostscript_installed:'%1' OpenPrintingPPDs_hpijs_installed:'%2' OpenPrintingPPDs_postscript_installed:'%3' gutenprint_installed:'%4' hplip_installed:'%5' manufacturer_PPDs_installed:'%6' cups_drivers_splix_installed:'%7' m2300w_installed:'%8'", OpenPrintingPPDs_ghostscript_installed, OpenPrintingPPDs_hpijs_installed, OpenPrintingPPDs_postscript_installed, gutenprint_installed, hplip_installed, manufacturer_PPDs_installed, cups_drivers_splix_installed, m2300w_installed );
+  y2milestone( "entering AddDriverDialog with OpenPrintingPPDs_ghostscript_installed:'%1' OpenPrintingPPDs_hpijs_installed:'%2' OpenPrintingPPDs_postscript_installed:'%3' gutenprint_installed:'%4' hplip_installed:'%5' manufacturer_PPDs_installed:'%6' splix_installed:'%7' m2300w_installed:'%8'", OpenPrintingPPDs_ghostscript_installed, OpenPrintingPPDs_hpijs_installed, OpenPrintingPPDs_postscript_installed, gutenprint_installed, hplip_installed, manufacturer_PPDs_installed, splix_installed, m2300w_installed );
   term contents = `VBox
                   ( `VStretch(),
                     `Left
@@ -132,12 +133,12 @@ any AddDriverDialog()
                         ),
                         `Left
                         ( `CheckBox
-                          ( `id("cups-drivers-splix"),
-                            // CheckBox to select or un-select the printer driver package cups-drivers-splix.
-                            // There is no need to have the package name "cups-drivers-splix" in this text
+                          ( `id("splix"),
+                            // CheckBox to select or un-select the printer driver package splix.
+                            // There is no need to have the package name "splix" in this text
                             // because it is shown in a separated column to the left of this text.
-                            "cups-drivers-&splix : " + _("SpliX Driver for SPL Printers without JBIG"),
-                            cups_drivers_splix_installed
+                            "&splix : " + _("SpliX Driver for SPL Printers without JBIG"),
+                            splix_installed
                           )
                         ),
                         `Left
@@ -229,7 +230,7 @@ any AddDriverDialog()
       boolean gutenprint_install = (boolean)UI::QueryWidget( `id("gutenprint"), `Value );
       boolean hplip_install = (boolean)UI::QueryWidget( `id("hplip"), `Value );
       boolean manufacturer_PPDs_install = (boolean)UI::QueryWidget( `id("manufacturer-PPDs"), `Value );
-      boolean cups_drivers_splix_install = (boolean)UI::QueryWidget( `id("cups-drivers-splix"), `Value );
+      boolean splix_install = (boolean)UI::QueryWidget( `id("splix"), `Value );
       boolean m2300w_install = (boolean)UI::QueryWidget( `id("m2300w"), `Value );
       string ppd_path_input_value = (string)UI::QueryWidget( `id("ppd_path_input"), `Value );
       // Ignore an effectively empty ppd_path_input_value:
@@ -239,7 +240,7 @@ any AddDriverDialog()
           && gutenprint_install == gutenprint_installed
           && hplip_install == hplip_installed
           && manufacturer_PPDs_install == manufacturer_PPDs_installed
-          && cups_drivers_splix_install == cups_drivers_splix_installed
+          && splix_install == splix_installed
           && m2300w_install == m2300w_installed
           && "" == filterchars( ppd_path_input_value, Printer::alnum_chars )
         )
@@ -407,15 +408,29 @@ any AddDriverDialog()
           }
         }
       }
-      if( cups_drivers_splix_install != cups_drivers_splix_installed )
-      { if( cups_drivers_splix_install )
-        { if( Printerlib::TestAndInstallPackage( "cups-drivers-splix", "install" ) )
+      if( splix_install != splix_installed )
+      { if( splix_install )
+        { if( Printerlib::TestAndInstallPackage( "splix", "install" ) )
           { package_changed = true;
+          }
+          if( ! Printerlib::TestAndInstallPackage( "splix", "installed" ) )
+          { // Try to install the old cups-drivers-splix only if the newer splix was not installed:
+            if( Printerlib::TestAndInstallPackage( "cups-drivers-splix", "install" ) )
+            { package_changed = true;
+            }
           }
         }
         else
-        { if( Printerlib::TestAndInstallPackage( "cups-drivers-splix", "remove" ) )
-          { package_changed = true;
+        { // Try to remove both splix and cups-drivers-splix if installed:
+          if( Printerlib::TestAndInstallPackage( "splix", "installed" ) )
+          { if( Printerlib::TestAndInstallPackage( "splix", "remove" ) )
+            { package_changed = true;
+            }
+          }
+          if( Printerlib::TestAndInstallPackage( "cups-drivers-splix", "installed" ) )
+          { if( Printerlib::TestAndInstallPackage( "cups-drivers-splix", "remove" ) )
+            { package_changed = true;
+            }
           }
         }
       }
