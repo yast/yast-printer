@@ -72,6 +72,16 @@ term widgetSharing = `VBox
                                _("&Allow remote access"),
                                initial_allow_remote_access
                              )
+                           ),
+                           `Left
+                           ( `HBox
+                             ( `HSpacing( 2 ),
+                               `Label
+                               ( `id(`allow_remote_access_label),
+                                 // A label which explains how the subsequent choices can be used:
+                                 _("There are various ways how to specify which remote hosts are allowed:")
+                               )
+                             )
                            )
                          )
                        ),
@@ -95,7 +105,7 @@ term widgetSharing = `VBox
                                ( `id(`publish_to_local_network_check_box),
                                  `opt(`notify),
                                  // A CheckBox label to publish local print queues by default within the local network:
-                                 _("&Publish printers by default within the local network"),
+                                 _("&Publish printers within the local network"),
                                  initial_publish_to_local_network
                                )
                              )
@@ -105,7 +115,7 @@ term widgetSharing = `VBox
                              ( `id(`interface_table_label),
                                // A caption for a table to allow remote access to local print queues
                                // via network interfaces specified in the table below:
-                               _("Via network interfaces specified below")
+                               _("Via network interfaces")
                              )
                            ),
                            `HBox
@@ -122,7 +132,7 @@ term widgetSharing = `VBox
                                      // A table column header where the column shows whether or not
                                      // local print queues are published by default
                                      // via the network interface in the other table column:
-                                     _("Publish printers by default via this interface")
+                                     _("Publish printers via this interface")
                                    ),
                                    initial_interface_table_items
                                  )
@@ -154,7 +164,7 @@ term widgetSharing = `VBox
                              ( `id(`specific_addresses_label),
                                // A caption to allow remote access to local print queues
                                // for hosts and/or networks specified in two TextEntries below:
-                               _("For Experts: Optional Specific IP Addresses or Networks")
+                               _("For Specific IP Addresses or Networks")
                              )
                            ),
                            `HBox
@@ -165,7 +175,7 @@ term widgetSharing = `VBox
                                  ( `id(`allow_input),
                                    // TextEntry to allow remote access to local print queues
                                    // for hosts and/or networks:
-                                   _("Allow remote access from those IP addresses or &network/netmask (separated by space)")
+                                   _("Allow access from those IP addresses or &network/netmask (separated by space)")
                                  )
                                ),
                                `Left
@@ -572,6 +582,7 @@ void initSharing( string key )
     // with a local running cupsd (e.g. before he set up the first local queue:
     // Also the basic buttons "Help", "Cancel", "OK" are enabled.
     UI::ChangeWidget( `allow_remote_access_radio_button, `Enabled, false );
+    UI::ChangeWidget( `allow_remote_access_label, `Enabled, false );
     UI::ChangeWidget( `allow_local_network_access_check_box, `Enabled, false );
     UI::ChangeWidget( `publish_to_local_network_check_box, `Enabled, false );
     UI::ChangeWidget( `interface_table_label, `Enabled, false );
@@ -984,6 +995,7 @@ symbol handleSharing( string key, map event )
     // does not trigger any event even not with "`opt(`notify, `immediate)"
     // so that this special action is unnoticed.
     boolean remote_access = (boolean)UI::QueryWidget( `allow_remote_access_radio_button, `Value );
+    UI::ChangeWidget( `allow_remote_access_label, `Enabled, remote_access );
     UI::ChangeWidget( `allow_local_network_access_check_box, `Enabled, remote_access );
     UI::ChangeWidget( `publish_to_local_network_check_box, `Enabled, remote_access );
     UI::ChangeWidget( `interface_table_label, `Enabled, remote_access );

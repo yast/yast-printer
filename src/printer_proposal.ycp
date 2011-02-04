@@ -43,15 +43,29 @@ import "Stage";
 import "Service";
 import "Popup";
 
-/* The main () */
 y2milestone("----------------------------------------");
 y2milestone("Printer proposal started");
 
-string func = (string) WFM::Args(0);
-map param = (map) WFM::Args(1);
-map ret = $[];
+any ret = nil;
+string func = "";
+map param = $[];
 
-/* create a textual proposal and write it instantly to the system */
+// Check arguments:
+if( size( WFM::Args() ) > 0
+    && is( WFM::Args(0), string )
+  )
+{ func = (string)WFM::Args(0);
+  if( size( WFM::Args() ) > 1
+      && is( WFM::Args(1), map )
+    )
+  { param = (map)WFM::Args(1);
+  }
+}
+y2milestone("Printer proposal func='%1'", func);
+y2milestone("Printer proposal param='%1'", param);
+
+
+// Create a textual proposal and write it instantly to the system:
 if( func == "MakeProposal" )
 { list<string> proposal = [];
   string warning = nil;
@@ -69,7 +83,7 @@ if( func == "MakeProposal" )
   // and skip the automated queue setup if one of them is missing, see
   // https://bugzilla.novell.com/show_bug.cgi?id=445719#c13
   // If cups-client is missing, it would run into an endless sequence of errors.
-  // If cups is missing, theer can be no local running cupsd which is
+  // If cups is missing, there can be no local running cupsd which is
   // mandatory to set up local print queues.
   if( ! Printerlib::TestAndInstallPackage( "cups-client", "installed" ) )
   { y2milestone("Skipped automated queue setup because the package cups-client is not installed.");
@@ -181,12 +195,16 @@ if( func == "MakeProposal" )
           }
           else
           { y2milestone("Local printers detected, will set up queues for them:");
+            list<string> initially_existing_queues = [];
             list<string> already_set_up_uris = [];
             // An empty list of autodetected queues is the fallback which is correct:
             Printer::AutodetectQueues();
             foreach( map< string, string > queue,
                      Printer::queues,
-                     { if( "" != queue["uri"]:"" )
+                     { if( "" != queue["name"]:"" )
+                       { initially_existing_queues = add( initially_existing_queues, queue["name"]:"" );
+                       }
+                       if( "" != queue["uri"]:"" )
                        { already_set_up_uris = add( already_set_up_uris, queue["uri"]:"" );
                        }
                      }
@@ -241,6 +259,16 @@ if( func == "MakeProposal" )
                                string default_paper_size = "";
                                if( Printer::AddQueue( queue_name, is_default_queue, default_paper_size ) )
                                { already_set_up_uris = add( already_set_up_uris, uri );
+                                 // Since CUPS 1.4 the new DirtyCleanInterval directive controls
+                                 // the delay when cupsd updates config files (see basicadd.ycp).
+                                 if( ! Printerlib::WaitForUpdatedConfigFiles( _("Creating New Printer Setup") ) )
+                                 { // It returns false if the user had interrupted the waiting for updated config files:
+                                   Popup::ErrorDetails( // Message of a Popup::ErrorDetails:
+                                                        _("New Printer Configuration not yet Stored in the System"),
+                                                        // Explanation details of a Popup::ErrorDetails.
+                                                        _("This may result broken printer configurations.")
+                                                      );
+                                 }
                                  // Autodetect queues again so that Printer::NewQueueName
                                  // can compare with existing queue names but ignore whatever failures
                                  // (an empty list of autodetected queues is the fallback result):
@@ -261,7 +289,18 @@ if( func == "MakeProposal" )
                        // has almost no additional space between table columns:
                        string name = String::CutBlanks(queue[2]:"");
                        string description = String::CutBlanks(queue[3]:"");
-                       proposal = add( proposal, name + ": " + description );
+                       string configuration = name;
+                       if( description != "" )
+                       { configuration = configuration + " : " + description;
+                       }
+                       if( contains( initially_existing_queues, name ) )
+                       { // The automated printer setup found an already existing configuration:
+                         proposal = add( proposal, _("Found existing configuration") + " : " + configuration );
+                       }
+                       else
+                       { // The automated printer setup created a new configuration:
+                         proposal = add( proposal, _("Created configuration") + " : " + configuration );
+                       }
                      }
                    );
           }
@@ -278,7 +317,7 @@ if( func == "MakeProposal" )
            "warning" : warning,
          ];
 }
-/* run the full printer module dialogs */
+// Run the full printer module dialogs:
 else if(func == "AskUser")
 { // Call Printer::Read() here (compare "MakeProposal" above)
   // to make sure that when the full printer module dialogs are launched
@@ -296,7 +335,7 @@ else if(func == "AskUser")
   y2debug("seq=%1",seq);
   ret = $[ "workflow_sequence" : seq ];
 }
-/* create titles */
+// Create titles:
 else if(func == "Description")
 { ret = $[ /* Rich text title for Printer in proposals */
            "rich_text_title" : _("Printer"),
@@ -305,7 +344,7 @@ else if(func == "Description")
            "id" : "printer",
          ];
 }
-/* write the proposal */
+// Dummy function to write the proposal (it is already written in the "MakeProposal" function):
 else if(func == "Write")
 { // There is no need to call Printer::Write() here because
   // it does actually nothing except to exit verbosely, see
@@ -313,12 +352,11 @@ else if(func == "Write")
   // for background information.
   y2milestone("No need to call Printer::Write() because it does nothing.");
 }
-/* unknown function */
+// Unknown function:
 else
-{ y2error("unknown function: %1", func);
+{ y2error("Unknown function: %1", func);
 }
 
-/* Finish */
 y2debug("ret=%1",ret);
 y2milestone("Printer proposal finished");
 y2milestone("----------------------------------------");
