@@ -271,14 +271,34 @@ any AddDriverDialog()
       // for whatever product (e.g. a Live CD or a stripped DVD/CD in whatever magazine).
       boolean package_changed = false;
       if( OpenPrintingPPDs_ghostscript_install != OpenPrintingPPDs_ghostscript_installed )
-      { if( OpenPrintingPPDs_ghostscript_install )
+      { // Since openSUSE 11.4 OpenPrintingPPDs-ghostscript is to a certain extent the successor of cups-drivers
+        // (more precisely: OpenPrintingPPDs-ghostscript contains most of what cups-drivers contained),
+        // see https://bugzilla.novell.com/show_bug.cgi?id=641704
+        // To be backward compatible try also cups-drivers:
+        if( OpenPrintingPPDs_ghostscript_install )
         { if( Printerlib::TestAndInstallPackage( "OpenPrintingPPDs-ghostscript", "install" ) )
           { package_changed = true;
           }
+          if( ! Printerlib::TestAndInstallPackage( "OpenPrintingPPDs-ghostscript", "installed" ) )
+          { // Try to install the old cups-drivers only if the newer OpenPrintingPPDs-ghostscript was not installed:
+            if( Printerlib::TestAndInstallPackage( "cups-drivers", "install" ) )
+            { package_changed = true;
+            }
+          }
         }
         else
-        { if( Printerlib::TestAndInstallPackage( "OpenPrintingPPDs-ghostscript", "remove" ) )
-          { package_changed = true;
+        { // Try to remove both OpenPrintingPPDs-ghostscript and cups-drivers if installed:
+          if( Printerlib::TestAndInstallPackage( "OpenPrintingPPDs-ghostscript", "installed" ) )
+          { if( Printerlib::TestAndInstallPackage( "OpenPrintingPPDs-ghostscript", "remove" ) )
+            { package_changed = true;
+            }
+          }
+          if( Printerlib::TestAndInstallPackage( "cups-drivers", "installed" ) )
+          { // The user must confirm each package which should be removed
+            // so that the user can decide not to remove cups-drivers:
+            if( Printerlib::TestAndInstallPackage( "cups-drivers", "remove" ) )
+            { package_changed = true;
+            }
           }
         }
       }
@@ -409,7 +429,10 @@ any AddDriverDialog()
         }
       }
       if( splix_install != splix_installed )
-      { if( splix_install )
+      { // Since openSUSE 11.4 cups-drivers-splix is renamed splix,
+        // see https://bugzilla.novell.com/show_bug.cgi?id=659579
+        // To be backward compatible try also cups-drivers-splix:
+        if( splix_install )
         { if( Printerlib::TestAndInstallPackage( "splix", "install" ) )
           { package_changed = true;
           }
