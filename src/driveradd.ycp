@@ -55,7 +55,8 @@ any AddDriverDialog()
   boolean splix_installed = Printerlib::TestAndInstallPackage( "splix", "installed" )
                             || Printerlib::TestAndInstallPackage( "cups-drivers-splix", "installed" );
   boolean m2300w_installed = Printerlib::TestAndInstallPackage( "m2300w", "installed" );
-  y2milestone( "entering AddDriverDialog with OpenPrintingPPDs_ghostscript_installed:'%1' OpenPrintingPPDs_hpijs_installed:'%2' OpenPrintingPPDs_postscript_installed:'%3' gutenprint_installed:'%4' hplip_installed:'%5' manufacturer_PPDs_installed:'%6' splix_installed:'%7' m2300w_installed:'%8'", OpenPrintingPPDs_ghostscript_installed, OpenPrintingPPDs_hpijs_installed, OpenPrintingPPDs_postscript_installed, gutenprint_installed, hplip_installed, manufacturer_PPDs_installed, splix_installed, m2300w_installed );
+  boolean epson_inkjet_printer_escpr_installed = Printerlib::TestAndInstallPackage( "epson-inkjet-printer-escpr", "installed" );
+  y2milestone( "entering AddDriverDialog with OpenPrintingPPDs_ghostscript_installed:'%1' OpenPrintingPPDs_hpijs_installed:'%2' OpenPrintingPPDs_postscript_installed:'%3' gutenprint_installed:'%4' hplip_installed:'%5' manufacturer_PPDs_installed:'%6' splix_installed:'%7' m2300w_installed:'%8' epson_inkjet_printer_escpr_installed:'%9'", OpenPrintingPPDs_ghostscript_installed, OpenPrintingPPDs_hpijs_installed, OpenPrintingPPDs_postscript_installed, gutenprint_installed, hplip_installed, manufacturer_PPDs_installed, splix_installed, m2300w_installed , epson_inkjet_printer_escpr_installed );
   term contents = `VBox
                   ( `VStretch(),
                     `Left
@@ -144,11 +145,21 @@ any AddDriverDialog()
                         `Left
                         ( `CheckBox
                           ( `id("m2300w"),
-                            // CheckBox to select or un-select the printer driver package manufacturer-PPDs.
+                            // CheckBox to select or un-select the printer driver package m2300w.
                             // There is no need to have the package name "m2300w" in this text
                             // because it is shown in a separated column to the left of this text.
                             "m2300&w : " + _("Driver for Konica Minolta 2300W and 2400W (unmaintained)"),
                             m2300w_installed
+                          )
+                        ),
+                        `Left
+                        ( `CheckBox
+                          ( `id("epson-inkjet-printer-escpr"),
+                            // CheckBox to select or un-select the printer driver package epson-inkjet-printer-escpr.
+                            // There is no need to have the package name "epson-inkjet-printer-escpr" in this text
+                            // because it is shown in a separated column to the left of this text.
+                            "&epson-inkjet-printer-escpr : " + _("Epson ESC/P-R Inkjet Printer Driver"),
+                            epson_inkjet_printer_escpr_installed
                           )
                         )
                       )
@@ -232,6 +243,7 @@ any AddDriverDialog()
       boolean manufacturer_PPDs_install = (boolean)UI::QueryWidget( `id("manufacturer-PPDs"), `Value );
       boolean splix_install = (boolean)UI::QueryWidget( `id("splix"), `Value );
       boolean m2300w_install = (boolean)UI::QueryWidget( `id("m2300w"), `Value );
+      boolean epson_inkjet_printer_escpr_install = (boolean)UI::QueryWidget( `id("epson-inkjet-printer-escpr"), `Value );
       string ppd_path_input_value = (string)UI::QueryWidget( `id("ppd_path_input"), `Value );
       // Ignore an effectively empty ppd_path_input_value:
       if( OpenPrintingPPDs_ghostscript_install == OpenPrintingPPDs_ghostscript_installed
@@ -242,6 +254,7 @@ any AddDriverDialog()
           && manufacturer_PPDs_install == manufacturer_PPDs_installed
           && splix_install == splix_installed
           && m2300w_install == m2300w_installed
+          && epson_inkjet_printer_escpr_install == epson_inkjet_printer_escpr_installed
           && "" == filterchars( ppd_path_input_value, Printer::alnum_chars )
         )
       { y2milestone( "Nothing changed in AddDriverDialog." );
@@ -469,6 +482,18 @@ any AddDriverDialog()
           }
         }
       }
+      if( epson_inkjet_printer_escpr_install != epson_inkjet_printer_escpr_installed )
+      { if( epson_inkjet_printer_escpr_install )
+        { if( Printerlib::TestAndInstallPackage( "epson-inkjet-printer-escpr", "install" ) )
+          { package_changed = true;
+          }
+        }
+        else
+        { if( Printerlib::TestAndInstallPackage( "epson-inkjet-printer-escpr", "remove" ) )
+          { package_changed = true;
+          }
+        }
+      }
       // If driver packages were actually changed (the user may have rejected it),
       // enforce that the BasicAddDialog and/or the BasicModifyDialog
       // (only form those dialogs this AddDriverDialog can be called)
@@ -494,7 +519,7 @@ any AddDriverDialog()
         // There is no "abort" functionality which does a sudden death of the whole module (see dialogs.ycp).
         // Unfortunately when the YaST package installer is run via Printerlib::TestAndInstallPackage
         // it leaves a misused "abort" button labeled "Skip Autorefresh" with WidgetID "`abort"
-        // so that this leftover "abort" button must be explicitely hidden here:
+        // so that this leftover "abort" button must be explicitly hidden here:
         Wizard::HideAbortButton();
       }
       // Ignore an effectively empty ppd_path_input_value:
