@@ -21,8 +21,16 @@ MY_NAME=${0##*/}
 TMP_DATA=$(mktemp -u /tmp/$MY_NAME.XXXXXX)
 TMP_DATA_RAW=$(mktemp -u /tmp/$MY_NAME.XXXXXX)
 
+echo 'This file is used as progress indicator for DownloadProgress in Printer.ycp' >$PROGRESS
+# Provide some amount of dummy content in the progress file so that the
+# the DownloadProgress bar in YaST initially shows a first bit of progress
+# to initially show to the user that something is actually going on:
+for i in $( seq 10 )
+do echo 'Dummy content so that DownloadProgress in YaST initially shows a first bit of progress' >>$PROGRESS
+done
+
 # Test if lpstat and lpinfo are executable:
-echo 'Testing if lpstat and lpinfo are executable...' >$PROGRESS
+echo 'Testing if lpstat and lpinfo are executable...' >>$PROGRESS
 LPSTAT="$( type -P lpstat )"
 if ! test -x "$LPSTAT"
 then echo "Cannot execute lpstat" 1>&2
@@ -64,7 +72,9 @@ lpinfoPID=$!
 for i in $( seq $MAXIMUM_WAIT )
 do ps $lpinfoPID &>/dev/null || break
    echo "Waiting for response from $LPINFO (PID $lpinfoPID)..." >>$PROGRESS
-   sleep 1
+   # Sleep only 1/10 of a second to make the "waiting for lpinfo" part sufficiently big
+   # in the progress file to be really visible in the DownloadProgress bar in YaST:
+   usleep 100
 done
 if ps $lpinfoPID &>/dev/null
 then kill -9 $lpinfoPID &>/dev/null
@@ -93,16 +103,14 @@ echo 'Creating the YCP map...' >>$PROGRESS
 echo "[" 
 
 # Function to output one entry.
-# Limit what is written to the PROGRESS file here to 8 characters per PPD.
-# Otherwise the PROGRESS file would grow up to more than 300000 bytes here
+# Limit what is written to the PROGRESS file here to 4 characters per PPD.
+# Otherwise the PROGRESS file would grow up too much here
 # which would make the above "waiting for lpinfo" part too small
 # to be really visible in the DownloadProgress bar in YaST.
-# With the limited output here the PROGRESS file grows to about 80000 bytes
-# for the about 8000 PPDs which are installed by default in openSUSE 11.0:
 Output()
 { if [ -n "$PPD" -a -n "$NICKNAME" ]
   then echo -e "  \$[ \"ppd\":\"$PPD\",\n     \"nickname\":\"$NICKNAME\",\n     \"deviceID\":\"$ID\",\n     \"language\":\"$LANGUAGE\",\n     \"manufacturer\":\"$MANUFACTURER\",\n     \"modelname\":\"$MODELNAME\"\n  ],"
-  echo "$NICKNAME" | cut -b-8 >>$PROGRESS
+  echo "$NICKNAME" | cut -b-4 >>$PROGRESS
   fi
 }
 

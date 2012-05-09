@@ -50,7 +50,7 @@ any AddDriverDialog()
   boolean OpenPrintingPPDs_hpijs_installed = Printerlib::TestAndInstallPackage( "OpenPrintingPPDs-hpijs", "installed" );
   boolean OpenPrintingPPDs_postscript_installed = Printerlib::TestAndInstallPackage( "OpenPrintingPPDs-postscript", "installed" );
   boolean gutenprint_installed = Printerlib::TestAndInstallPackage( "gutenprint", "installed" );
-  boolean hplip_installed = Printerlib::TestAndInstallPackage( "hplip", "installed" );
+  boolean hplip_installed = Printerlib::TestAndInstallPackage( "hplip-hpijs", "installed" );
   boolean manufacturer_PPDs_installed = Printerlib::TestAndInstallPackage( "manufacturer-PPDs", "installed" );
   boolean splix_installed = Printerlib::TestAndInstallPackage( "splix", "installed" )
                             || Printerlib::TestAndInstallPackage( "cups-drivers-splix", "installed" );
@@ -418,14 +418,42 @@ any AddDriverDialog()
           }
         }
         else
-        { if( Printerlib::TestAndInstallPackage( "hplip", "remove" ) )
-          { package_changed = true;
-            // The user is free to decide to keep hplip-hpijs installed
-            // because hplip-hpijs contains only the hpijs binary and required libraries
-            // but all the rest (in particular the PPDs and the hp backend) is in hplip
-            // so that after hplip was removed neither a "hp:/" DeviceURI is autodetected
-            // nor a hplip/hpijs driver description exists.
-            Printerlib::TestAndInstallPackage( "hplip-hpijs", "remove" );
+        { // HPLIP should be removed:
+          // Removing HPLIP means to remove the packages hplip, hplip-sane, and hplip-hpijs where
+          // hplip must be removed first, then hplip-sane and finally hplip-hpijs because
+          // hplip-hpijs is needed by hplip and hplip-sane and hplip-sane is needed by hplip.
+          // Since openSUSE 12.1 the HPLIP SANE driver (libsane-hpaio.* files)
+          // is split from the hplip package into a separated subpackage hplip-sane,
+          // see https://bugzilla.novell.com/show_bug.cgi?id=723870
+          // and https://bugzilla.novell.com/show_bug.cgi?id=726316
+          if( Printerlib::TestAndInstallPackage( "hplip", "installed" ) )
+          { // In TestAndInstallPackage there is a confirmation popup before a package
+            // is actually removed so that the user is free to decide to keep hplip installed:
+            if( Printerlib::TestAndInstallPackage( "hplip", "remove" ) )
+            { package_changed = true;
+            }
+          }
+          // Only if there is no package hplip installed (regardless if it was removed right now
+          // or if it was not installed all the time) it makes sense to remove hplip-sane.
+          if( ! Printerlib::TestAndInstallPackage( "hplip", "installed" ) )
+          { if( Printerlib::TestAndInstallPackage( "hplip-sane", "installed" ) )
+            { // In TestAndInstallPackage there is a confirmation popup before a package
+              // is actually removed so that the user is free to decide to keep hplip-sane installed:
+              if( Printerlib::TestAndInstallPackage( "hplip-sane", "remove" ) )
+              { package_changed = true;
+              }
+            }
+            // Only if there is no package hplip-sane installed (regardless if it was removed right now
+            // or if it was not installed all the time) it makes sense to remove hplip-hpijs:
+            if( ! Printerlib::TestAndInstallPackage( "hplip-sane", "installed" ) )
+            { // When hplip_installed is true it means hplip-hpijs is installed
+              // so that a test if hplip-hpijs is installed is not needed here.
+              // In TestAndInstallPackage there is a confirmation popup before a package
+              // is actually removed so that the user is free to decide to keep hplip-hpijs installed:
+              if( Printerlib::TestAndInstallPackage( "hplip-hpijs", "remove" ) )
+              { package_changed = true;
+              }
+            }
           }
         }
       }
