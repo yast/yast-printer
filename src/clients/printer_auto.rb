@@ -192,7 +192,7 @@ module Yast
           }
         }
       # Return packages needed to be installed and removed during
-      # Autoinstallation to insure it has all needed software installed.
+      # Autoinstallation to ensure it has all needed software installed.
       # @return map with 2 lists of strings $["install":[],"remove":[]]
       elsif @func == "Packages"
         @to_be_installed_packages = []
