@@ -62,7 +62,7 @@ module Yast
         "installed"
       )
       hplip_installed = Printerlib.TestAndInstallPackage(
-        "hplip-hpijs",
+        "hplip",
         "installed"
       )
       manufacturer_PPDs_installed = Printerlib.TestAndInstallPackage(
