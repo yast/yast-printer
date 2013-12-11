@@ -28,7 +28,7 @@ BuildRequires:  update-desktop-files
 BuildRequires:  xorg-x11-libX11-devel
 BuildRequires:  yast2
 BuildRequires:  yast2-core-devel
-BuildRequires:  yast2-devtools >= 3.0.6
+BuildRequires:  yast2-devtools >= 3.1.10
 BuildRequires:  yast2-testsuite
 
 Recommends:     cups-client iptables netcat samba-client
