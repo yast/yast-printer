@@ -1,3 +1,97 @@
+-------------------------------------------------------------------
+Fri Sep  5 11:32:11 CEST 2014 - jsmeix@suse.de
+
+- disable_legacy_items_and_add_beh_requirement.diff
+  disables legacy stuff for SLE12 (see comment#18 in bnc#871548
+  and for other legacy stuff see bnc#892395 and bnc#877520) and
+  furthermore it adds the cups-backends RPM as needed package
+  when using beh (beh = Backend Error Handler).
+
+-------------------------------------------------------------------
+Fri Aug  1 12:27:55 CEST 2014 - jsmeix@suse.de
+
+- restart_cupsd_when_driver_RPMs_changed.diff shows the
+  "Restart locally running CUPS daemon" user confirmation popup
+  because usually a change in printer driver RPMs (installation
+  or removal) changes print job processing which requires
+  a restart of cupsd (bnc#888782).
+
+-------------------------------------------------------------------
+Thu Jul 17 10:07:33 CEST 2014 - jsmeix@suse.de
+
+- In replace_network_test_with_echo.diff replace the therein new
+  string "Server name must not be empty" by the elsewhere existing
+  string "Servername could not be empty." that exists already
+  in the list of translated strings so that its translation
+  is shown in non-English locales (bnc#887562).
+
+-------------------------------------------------------------------
+Mon May 26 14:38:47 CEST 2014 - jsmeix@suse.de
+
+- Added timeouts to cups_client_only.for_cups_since_version_1.6,
+  replace_network_test_with_echo.diff, test_remote_ipp.without_ping,
+  test_remote_lpd.without_ping, and test_remote_socket.without_ping
+  (i.e. all test that run "echo -n '' >/dev/tcp/$SERVER/$PORT")
+  so that those tests exit in any case after 2 seconds and do no
+  longer hang in possibly annoying long default system timeouts
+  in "unfriendly" network environments e.g. when a firewall
+  drops packages without any response (fate#312491).
+- Added "/version=1.1" support to test_remote_ipp.without_ping
+  see the entry dated "Tue Apr 29 15:00:04 CEST 2014" below
+  (bnc#868241).
+
+-------------------------------------------------------------------
+Thu May 15 11:58:17 CEST 2014 - jsmeix@suse.de
+
+- use_fast_append_instead_of_slow_add.diff replaces
+  slow Builtins.add() with fast '<<' append operator
+  where needed to avoid "hang up impression" (bnc#877516).
+
+-------------------------------------------------------------------
+Fri May  2 15:21:49 CEST 2014 - jsmeix@suse.de
+
+- test_remote_ipp.without_ping, test_remote_lpd.without_ping,
+  test_remote_novell.without_ping, test_remote_smb.without_ping,
+  and test_remote_socket.without_ping are replacements for
+  test_remote_ipp, test_remote_lpd, test_remote_novell,
+  test_remote_smb and test_remote_socket in /usr/lib/YaST2/bin/
+  that do no longer use 'ping' so that there is no need to
+  distinguish between IPv4 and IPv6 and there is no longer
+  a requirement for 'netcat' (fate#312491).
+- Adapted cups_client_only.for_cups_since_version_1.6 so that
+  it also does no longer use 'ping' or 'netcat' (fate#312491).
+
+-------------------------------------------------------------------
+Tue Apr 29 15:00:04 CEST 2014 - jsmeix@suse.de
+
+- cups_client_only.for_cups_since_version_1.6 is an enhancement
+  for /usr/lib/YaST2/bin/cups_client_only that provides additional
+  support when on a CUPS >= 1.6 client system a CUPS <= 1.5 server
+  should be used via "ServerName <name>/version=1.1" (bnc#868241).
+- Enhanced modify_cupsd_conf.for_cups-browsed which now has
+  support when cups-browsed should poll CUPS <= 1.5 servers
+  via "BrowsePoll <name>/version=1.1" (bnc#868241).
+
+-------------------------------------------------------------------
+Fri Apr 11 12:51:03 CEST 2014 - jsmeix@suse.de
+
+- Enhanced modify_cupsd_conf.for_cups-browsed which now has
+  some basic support for what was BrowseAddress up to CUPS 1.5.4
+  via BrowseLocalProtocols settings for cups-browsed (bnc#868241).
+
+-------------------------------------------------------------------
+Thu Apr 10 15:30:33 CEST 2014 - jsmeix@suse.de
+
+- modify_cupsd_conf.for_cups-browsed is an enhancement
+  for /usr/lib/YaST2/bin/modify_cupsd_conf that provides
+  additional support for cups-browsed (bnc#868241).
+
+-------------------------------------------------------------------
+Wed Mar 12 14:38:58 CET 2014 - jsmeix@suse.de
+
+- replace_network_test_with_echo.diff implements
+  IPv6 support for YaST printer module (fate#312491).
+
 ------------------------------------------------------------------
 Wed Nov 13 15:56:18 UTC 2013 - jreidinger@suse.com
 

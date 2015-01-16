@@ -2039,135 +2039,160 @@ module Yast
             )
           end
         when :beh
-          uri = ""
-          beh_do_not_disable = true
-          beh_attempts = "0"
-          beh_delay = "30"
-          current_device_uri = getCurrentDeviceURI
-          if "smb:/" ==
-              Builtins.substring(current_device_uri, 0, Builtins.size("smb:/"))
-            # so that it may have to be retrieved form /etc/cups/printers.conf:
-            current_device_uri = getUriWithUsernameAndPassword(
-              current_device_uri,
-              "smb"
-            )
-          end
-          if "novell:/" ==
-              Builtins.substring(
-                current_device_uri,
-                0,
-                Builtins.size("novell:/")
-              )
-            # so that it may have to be retrieved form /etc/cups/printers.conf:
-            current_device_uri = getUriWithUsernameAndPassword(
-              current_device_uri,
-              "novell"
-            )
-          end
-          # Even the DeviceURI for ipp/http can contain
-          # fixed username and password for authentication in the form
-          #   ipp://username:password@ip-address-or-hostname/...
-          #   http://username:password@ip-address-or-hostname/...
-          # but usage of this is really really not encouraged, see
-          # https://bugzilla.novell.com/show_bug.cgi?id=512549
-          # so that its setup not supported here but when
-          # such an URI already exists, it should be shown correctly:
-          if "ipp:/" ==
-              Builtins.substring(current_device_uri, 0, Builtins.size("ipp:/"))
-            # so that it may have to be retrieved form /etc/cups/printers.conf:
-            current_device_uri = getUriWithUsernameAndPassword(
-              current_device_uri,
-              "ipp"
-            )
-          end
-          if "http:/" ==
-              Builtins.substring(current_device_uri, 0, Builtins.size("http:/"))
-            # so that it may have to be retrieved form /etc/cups/printers.conf:
-            current_device_uri = getUriWithUsernameAndPassword(
-              current_device_uri,
-              "http"
-            )
-          end
-          # Even the DeviceURI for lpd can contain a fixed username
-          # (there is no authentication via LPD protocol)
-          # to describe who requested a print job in the form
-          #   lpd://username@ip-address-or-hostname/...
-          # but usage of this is really really not encouraged, see
-          # https://bugzilla.novell.com/show_bug.cgi?id=512549
-          # so that its setup not supported here but when
-          # such an URI already exists, it should be shown correctly:
-          if "lpd:/" ==
-              Builtins.substring(current_device_uri, 0, Builtins.size("lpd:/"))
-            # so that it may have to be retrieved form /etc/cups/printers.conf:
-            current_device_uri = getUriWithUsernameAndPassword(
-              current_device_uri,
-              "lpd"
-            )
-          end
-          uri = current_device_uri
-          if "beh:/" ==
-              Builtins.substring(current_device_uri, 0, Builtins.size("beh:/"))
-            # remove the beh-related stuff so that only the <originaluri> is left:
-            uri = Builtins.mergestring(
-              Builtins.sublist(Builtins.splitstring(current_device_uri, "/"), 4),
-              "/"
-            )
-            uri_parts = Builtins.splitstring(current_device_uri, "/")
-            # Remove possibly empty parts:
-            uri_parts = Builtins.filter(uri_parts) { |part| "" != part }
-            Builtins.y2milestone(
-              "ConnectionWizardDialog uri_parts = '%1'",
-              uri_parts
-            )
-            if "" != Ops.get(uri_parts, 1, "") &&
-                "" != Ops.get(uri_parts, 2, "") &&
-                "" != Ops.get(uri_parts, 3, "")
-              beh_do_not_disable = false if "0" == Ops.get(uri_parts, 1, "")
-              beh_attempts = Ops.get(uri_parts, 2, "")
-              beh_delay = Ops.get(uri_parts, 3, "")
-            end
-          end
-          model_content = getContentFromCurrentModel(true)
-          content = VBox(
-            Left(
-              InputField(
-                Id(:beh_original_uri),
-                # Show it as wide as possible because it may have to contain
-                # longer stuff like 'scheme://server:port/path/to/resource':
-                Opt(:hstretch),
-                # TRANSLATORS: Text entry for device URI (Uniform Resource Identifier)
+          if !Printerlib.TestAndInstallPackage("cups-backends", "installed")
+            if Popup.ContinueCancel(
                 _(
-                  "Device URI (for which 'beh' should be applied) [percent-encoded]"
-                ),
-                uri
+                  "To use 'beh', the RPM package cups-backends must be installed."
+                )
               )
-            ),
-            Left(
-              CheckBox(
-                Id(:beh_do_not_disable),
-                # TRANSLATORS: Check box
-                _("Never Disable the Queue"),
-                beh_do_not_disable
+              Printerlib.TestAndInstallPackage("cups-backends", "install")
+              # There is no "abort" functionality which does a sudden death of the whole module (see dialogs.ycp).
+              # Unfortunately when the YaST package installer is run via Printerlib::TestAndInstallPackage
+              # it leaves a misused "abort" button labeled "Skip Autorefresh" with WidgetID "`abort"
+              # so that this leftover "abort" button must be explicitly hidden here:
+              Wizard.HideAbortButton
+            end
+            # The user can also decide during the actual installation not to install it
+            # or the installation may have failed for whatever reason
+            # so that we test again whether or not it is now actually installed:
+            if !Printerlib.TestAndInstallPackage("cups-backends", "installed")
+              content = VBox(
+                Left(
+                  Label(_("The RPM package cups-backends is not installed."))
+                )
               )
-            ),
-            Left(
-              InputField(
-                Id(:beh_attempts),
-                # TRANSLATORS: Text entry
-                _("Number of Retries ('0' means infinite retries)"),
-                beh_attempts
+            end
+          else
+            uri = ""
+            beh_do_not_disable = true
+            beh_attempts = "0"
+            beh_delay = "30"
+            current_device_uri = getCurrentDeviceURI
+            if "smb:/" ==
+                Builtins.substring(current_device_uri, 0, Builtins.size("smb:/"))
+              # so that it may have to be retrieved form /etc/cups/printers.conf:
+              current_device_uri = getUriWithUsernameAndPassword(
+                current_device_uri,
+                "smb"
               )
-            ),
-            Left(
-              InputField(
-                Id(:beh_delay),
-                # TRANSLATORS: Text entry
-                _("Delay in Seconds Between Two Retries"),
-                beh_delay
+            end
+            if "novell:/" ==
+                Builtins.substring(
+                  current_device_uri,
+                  0,
+                  Builtins.size("novell:/")
+                )
+              # so that it may have to be retrieved form /etc/cups/printers.conf:
+              current_device_uri = getUriWithUsernameAndPassword(
+                current_device_uri,
+                "novell"
               )
-            ),
-            model_content
-          )
+            end
+            # Even the DeviceURI for ipp/http can contain
+            # fixed username and password for authentication in the form
+            #   ipp://username:password@ip-address-or-hostname/...
+            #   http://username:password@ip-address-or-hostname/...
+            # but usage of this is really really not encouraged, see
+            # https://bugzilla.novell.com/show_bug.cgi?id=512549
+            # so that its setup not supported here but when
+            # such an URI already exists, it should be shown correctly:
+            if "ipp:/" ==
+                Builtins.substring(current_device_uri, 0, Builtins.size("ipp:/"))
+              # so that it may have to be retrieved form /etc/cups/printers.conf:
+              current_device_uri = getUriWithUsernameAndPassword(
+                current_device_uri,
+                "ipp"
+              )
+            end
+            if "http:/" ==
+                Builtins.substring(current_device_uri, 0, Builtins.size("http:/"))
+              # so that it may have to be retrieved form /etc/cups/printers.conf:
+              current_device_uri = getUriWithUsernameAndPassword(
+                current_device_uri,
+                "http"
+              )
+            end
+            # Even the DeviceURI for lpd can contain a fixed username
+            # (there is no authentication via LPD protocol)
+            # to describe who requested a print job in the form
+            #   lpd://username@ip-address-or-hostname/...
+            # but usage of this is really really not encouraged, see
+            # https://bugzilla.novell.com/show_bug.cgi?id=512549
+            # so that its setup not supported here but when
+            # such an URI already exists, it should be shown correctly:
+            if "lpd:/" ==
+                Builtins.substring(current_device_uri, 0, Builtins.size("lpd:/"))
+              # so that it may have to be retrieved form /etc/cups/printers.conf:
+              current_device_uri = getUriWithUsernameAndPassword(
+                current_device_uri,
+                "lpd"
+              )
+            end
+            uri = current_device_uri
+            if "beh:/" ==
+                Builtins.substring(current_device_uri, 0, Builtins.size("beh:/"))
+              # remove the beh-related stuff so that only the <originaluri> is left:
+              uri = Builtins.mergestring(
+                Builtins.sublist(Builtins.splitstring(current_device_uri, "/"), 4),
+                "/"
+              )
+              uri_parts = Builtins.splitstring(current_device_uri, "/")
+              # Remove possibly empty parts:
+              uri_parts = Builtins.filter(uri_parts) { |part| "" != part }
+              Builtins.y2milestone(
+                "ConnectionWizardDialog uri_parts = '%1'",
+                uri_parts
+              )
+              if "" != Ops.get(uri_parts, 1, "") &&
+                  "" != Ops.get(uri_parts, 2, "") &&
+                  "" != Ops.get(uri_parts, 3, "")
+                beh_do_not_disable = false if "0" == Ops.get(uri_parts, 1, "")
+                beh_attempts = Ops.get(uri_parts, 2, "")
+                beh_delay = Ops.get(uri_parts, 3, "")
+              end
+            end
+            model_content = getContentFromCurrentModel(true)
+            content = VBox(
+              Left(
+                InputField(
+                  Id(:beh_original_uri),
+                  # Show it as wide as possible because it may have to contain
+                  # longer stuff like 'scheme://server:port/path/to/resource':
+                  Opt(:hstretch),
+                  # TRANSLATORS: Text entry for device URI (Uniform Resource Identifier)
+                  _(
+                    "Device URI (for which 'beh' should be applied) [percent-encoded]"
+                  ),
+                  uri
+                )
+              ),
+              Left(
+                CheckBox(
+                  Id(:beh_do_not_disable),
+                  # TRANSLATORS: Check box
+                  _("Never Disable the Queue"),
+                  beh_do_not_disable
+                )
+              ),
+              Left(
+                InputField(
+                  Id(:beh_attempts),
+                  # TRANSLATORS: Text entry
+                  _("Number of Retries ('0' means infinite retries)"),
+                  beh_attempts
+                )
+              ),
+              Left(
+                InputField(
+                  Id(:beh_delay),
+                  # TRANSLATORS: Text entry
+                  _("Delay in Seconds Between Two Retries"),
+                  beh_delay
+                )
+              ),
+              model_content
+            )
+          end
         when :directly, :network, :server, :special
           content = VBox(Left(Label(_("Select a specific connection type."))))
         else
@@ -2195,13 +2220,15 @@ module Yast
                   _("Directly Connected Device"),
                   true,
                   [
-                    Item(Id(:parallel), _("Parallel Port")),
+                    # Disabled legacy "Parallel Port" so that it is no longer accessible in the dialog:
+                    #Item(Id(:parallel), _("Parallel Port")),
                     # TRANSLATORS: Tree widget item
                     Item(Id(:usb), _("USB Port")),
                     # TRANSLATORS: Tree widget item
                     Item(Id(:hplip), _("HP Devices (HPLIP)")),
                     # TRANSLATORS: Tree widget item
-                    Item(Id(:serial), _("Serial Port")),
+                    # Disabled legacy "Serial Port" so that it is no longer accessible in the dialog:
+                    #Item(Id(:serial), _("Serial Port")),
                     # TRANSLATORS: Tree widget item
                     Item(Id(:bluetooth), _("Bluetooth"))
                   ] # TRANSLATORS: Tree widget item
@@ -2232,7 +2259,8 @@ module Yast
                     # TRANSLATORS: Tree widget item
                     Item(Id(:cups), _("CUPS Server (IPP)")),
                     # TRANSLATORS: Tree widget item
-                    Item(Id(:ipx), _("Novell Netware Print Server (IPX)"))
+                    # Disabled legacy "Novell Netware Print Server (IPX)" so that it is no longer accessible in the dialog:
+                    #Item(Id(:ipx), _("Novell Netware Print Server (IPX)"))
                   ] # TRANSLATORS: Tree widget item
                 ),
                 Item(
