@@ -5,22 +5,15 @@
 # Remote host $1 and queue $2 are required parameters.
 # If no timeout $3 is given it is set to 10 seconds.
 #
-# Exits:   0 queue on host accepts print jobs
+# Exits:   0 queue on host accepts print jobs (or at least connection possible to port 515 on host)
 #          1 host $1 or queue $2 not set
-#          2 no connection possible to port 515 on host and host does not respond to a 'ping'
-#          3 no connection possible to port 515 on host but host responds to a 'ping'
+#          2 no connection possible to port 515 on host
 #          4 connection possible to port 515 on host but queue does not accept a print job
 #            (queue may not exist or queueing disabled?)
 #          5 connection possible to port 515 on host but no free source port to test queue on host
-#         10 no connection possible to port 515 on host and ping not executable (no iputils RPM installed?)
-#         11 give up empty-handed because netcat not executable (no netcat RPM installed?)
-#         12 connection possible to port 515 on host but fuser not executable (no psmisc RPM installed?)
-#         13 connection possible to port 515 on host but mktemp not executable (no mktemp RPM or coreutils RPM installed?)
-#            up to Suse Linux 10.3 and up to SLE10 /bin/mktemp was in the mktemp RPM
-#            since Suse Linux 11.0 /bin/mktemp is in the coreutils RPM which is required by YaST
-# The programs head, mkfifo, sleep, tr, rm are in the coreutils RPM and therefore assumed to exist.
+# The programs head, mkfifo, mktemp, sleep, tr, rm are in the coreutils RPM and therefore assumed to exist.
 #
-# Johannes Meixner <jsmeix@suse.de>, 2000, 2002, 2007, 2008, 2009, 2010, 2011
+# Johannes Meixner <jsmeix@suse.de>, 2000, 2002, 2007, 2008, 2009, 2010, 2011, 2014
 # Jan Holesovsky <kendy@suse.cz>, 2000
 # Jiri Srain <jsrain@suse.cz>, 2002
 # $Id: test_remote_lpd 43943 2008-01-28 13:38:58Z mzugec $
@@ -42,58 +35,50 @@ QUEUE="$2"
 TIMEOUT="$3"
 [ -z "$TIMEOUT" ] && TIMEOUT=10
 
-# Use the binaries of the operating system (no aliases, functions, /usr/local/):
-export PING=$( type -ap ping | head -n 1 )
-export NETCAT=$( type -ap netcat | head -n 1 )
-export FUSER=$( type -ap fuser | head -n 1 )
-export MKTEMP=$( type -ap mktemp | head -n 1 )
-
-# Test whether netcat is executable:
-if test -z "$NETCAT"
-then # Give up empty-handed when netcat is not executable because only the ping test is meaningless:
-     echo -en "\nGiving up empty-handed because 'netcat' not executable (no 'netcat' RPM installed?)\n" 1>&2
-     exit 11
-fi
-# Test whether connection is possible to port 515 on host:
-if ! $NETCAT -w $TIMEOUT -z $HOST 515
-then # The netcat test failed:
-     echo -en "\nNo connection possible to LPD port 515 on host '$HOST' (no LPD running or firewall active there?)\n\n"
-     # Test whether ping is executable:
-     [ -z "$PING" ] && { echo -en "\n'ping' not executable (no 'iputils' RPM installed?)\n" 1>&2 ; exit 10 ; }
-     # Test whether host is accessible:
-     if $PING -c 1 -w $TIMEOUT $HOST
-     then # The ping test was successful but the netcat test failed:
-          echo -en "\nHost '$HOST' is accessible (responds to a 'ping')\n"
-          exit 3
-     fi
-     # Both the netcat test and the ping test failed:
-     echo -en "\nHost '$HOST' unreachable (network issue or wrong host or firewall active?)\n"
+# Basic test whether connection is possible to port 515 on host:
+# If the test fails, show an error message and exit with non-zero exit code.
+# The outermost subshell avoids job control messages like "[1] job_pid" and "[1]+ Done..." or "[1]+ Terminated...".
+# The hardcoded 2 seconds timeout is waited in any case so that the test needs always basically that timeout time.
+# In POSIX shells wait returns the exit code of the job even if it had already terminated when wait was started,
+# see http://pubs.opengroup.org/onlinepubs/9699919799/utilities/wait.html that reads:
+# "This volume of POSIX.1-2008 requires the implementation to keep the status
+#  of terminated jobs available until the status is requested":
+if ! ( ( echo -n '' >/dev/tcp/$HOST/515 ) & ECHO_PID=$! ; sleep 2s ; kill $ECHO_PID &>/dev/null ; wait $ECHO_PID )
+then # The basic test failed:
+     echo -en "\nNo connection possible to LPD port 515 on host '$HOST'."
+     echo -en "\n(Network issue or wrong host or no LPD running or firewall active there?)\n\n"
      exit 2
 fi
 
-# The netcat test succeeded:
+# The basic test succeeded:
 echo -en "\nConnection possible to LPD port 515 on host '$HOST'\n"
 
-# Test whether fuser and mktemp are executable:
-if test -z "$FUSER"
-then echo -en "\nFailed to test if queue '$QUEUE' on host '$HOST' accepts print jobs" 1>&2
-     echo -en "\nbecause 'fuser' not executable (no 'psmisc' RPM installed?)\n" 1>&2
-     exit 12
-fi
-if test -z "$MKTEMP"
-then echo -en "\nFailed to test if queue '$QUEUE' on host '$HOST' accepts print jobs" 1>&2
-     echo -en "\nbecause 'mktemp' not executable (no 'mktemp' RPM or 'coreutils' RPM installed?)\n" 1>&2
-     exit 13
+# Use the binaries of the operating system (no aliases, functions, /usr/local/):
+export NETCAT=$( type -ap netcat | head -n 1 )
+export FUSER=$( type -ap fuser | head -n 1 )
+
+# Test whether netcat and fuser are executable and
+# if not, skip further testing and exit successfully as fallback:
+if test -z "$NETCAT" -o -z "$FUSER"
+then echo -en "\nCannot test if queue '$QUEUE' on host '$HOST' accepts print jobs because" 1>&2
+     if test -z "$NETCAT"
+     then echo -en "\n'netcat' not executable (no 'netcat' RPM installed?)" 1>&2
+     fi
+     if test -z "$FUSER"
+     then echo -en "\n'fuser' not executable (no 'psmisc' RPM installed?)" 1>&2
+     fi
+     echo -en "\nSkipping this test and exiting successfully as fallback.\n" 1>&2
+     exit 0
 fi
 
 # Create temporary fifos:
-NETCAT_IN=$( $MKTEMP -u /tmp/$MY_NAME.in.XXXXXX )
-NETCAT_OUT=$( $MKTEMP -u /tmp/$MY_NAME.out.XXXXXX )
+NETCAT_IN=$( mktemp -u /tmp/$MY_NAME.in.XXXXXX )
+NETCAT_OUT=$( mktemp -u /tmp/$MY_NAME.out.XXXXXX )
 mkfifo $NETCAT_IN
 mkfifo $NETCAT_OUT
 
 # Test the queue:
-echo -en "\nTesting queue '$QUEUE' on host '$HOST':\n"
+echo -en "\nTesting if queue '$QUEUE' on host '$HOST' accepts print jobs:\n"
 
 # Find an available local port for connecting:
 PORT=$( for P in 721 722 723 724 725 726 727 728 729 730 731
