@@ -1560,10 +1560,7 @@ module Yast
         driver_string = Ops.add(Ops.add(Ops.add(nickname, " ["), ppd), "]")
         # Take the filter_string into account:
         if "" == driver_filter_string
-          driver_items = Builtins.add(
-            driver_items,
-            Item(Id(ppds_index), driver_string)
-          )
+          driver_items << Item(Id(ppds_index), driver_string)
         else
           # test whether nickname or deviceID matches to the driver_filter_string.
           # Only the special character '+' is also taken into account because
@@ -1581,10 +1578,7 @@ module Yast
           )
           if Builtins.regexpmatch(unified_nickname, driver_filter_string) ||
               Builtins.regexpmatch(unified_deviceID, driver_filter_string)
-            driver_items = Builtins.add(
-              driver_items,
-              Item(Id(ppds_index), driver_string)
-            )
+            driver_items << Item(Id(ppds_index), driver_string)
           end
         end
       end 
@@ -2345,321 +2339,25 @@ module Yast
 
     # Test whether or not a "client-only" server is accessible.
     # @param [String] server_name string of the "client-only" server name
-    # @param [Boolean] fail_if_executable_is_missing boolean which lets this function fail
-    #        if netcat, ping, or host are not executable (e.g. because of not installed packages)
+    #
     # @return false if the "client-only" server is not accessible.
-    def TestClientOnlyServer(server_name, fail_if_executable_is_missing)
-      # because a local cupsd is needed if the server name is "localhost" or "127.0.0.1":
-      if "localhost" == Builtins.tolower(server_name) ||
-          "127.0" == Builtins.substring(server_name, 0, 5)
-        # which makes it effectively a config with a local running cupsd.
-        # If a local cupsd is already accessible, exit successfully, otherwise start it:
-        return true if Printerlib.GetAndSetCupsdStatus("")
+
+    def TestClientOnlyServer(server_name)
+
+      if server_name.empty?
+        Popup.Error(_("Servername could not be empty."))
+        return false
+
+      elsif "localhost" == Builtins.tolower(server_name) ||
+         "127.0" == Builtins.substring(server_name, 0, 5)
         return Printerlib.GetAndSetCupsdStatus("start")
-      end
-      # The tests here are the same (except verbosity) as in the cups_client_only tool.
-      # First do the most meaningful test and only if this works return true.
-      # The subsequent tests are only there to provide more info for the user
-      # what might be the reason why the server is not accessible via port 631.
-      netcat_test_fail_message = Builtins.sformat(
-        # where %1 will be replaced by the server name.
-        _("The server '%1' is not accessible via port 631 (IPP/CUPS)."),
-        server_name
-      ) # Popup message
-      ping_test_good_message = Builtins.sformat(
-        # where %1 will be replaced by the server name.
-        _("The server '%1' responds to a 'ping' in the network."),
-        server_name
-      ) # Popup message
-      ping_test_fail_message = Builtins.sformat(
-        # where %1 will be replaced by the server name.
-        _("The server '%1' does not respond to a 'ping' in the network."),
-        server_name
-      ) # Popup message
-      host_test_good_message = Builtins.sformat(
-        # where %1 will be replaced by the server name.
-        _("The server name '%1' is known in the network."),
-        server_name
-      ) # Popup message
-      host_test_fail_message = Builtins.sformat(
-        # where %1 will be replaced by the server name.
-        _("The server name '%1' is not known in the network."),
-        server_name
-      ) # Popup message
-      separator = "\n===========================================================\n"
-      error_messages = ""
-      result_details = ""
-      netcat_test_failed = false
-      ping_test_failed = false
-      host_test_failed = false
-      # Only the netcat test provides a really meaningful result
-      # so that only this test returns immediately true if it was successful.
-      if !Printerlib.ExecuteBashCommand("type -P netcat")
-        # but in most cases TestClientOnlyServer is called
-        # indirectly without a button click by the user
-        # so that even the netcat test is silently skipped
-        # and no negative feedback is shown when netcat is not executable:
-        if fail_if_executable_is_missing
-          Popup.ErrorDetails(
-            _("Cannot execute the program 'netcat'."),
-            Ops.add(
-              Ops.add(
-                Ops.add(
-                  # Popup::ErrorDetails details:
-                  _(
-                    "The RPM package 'netcat' is required for a meaningful test."
-                  ) + "\n",
-                  Ops.get_string(Printerlib.result, "stderr", "")
-                ),
-                "\n"
-              ),
-              Ops.get_string(Printerlib.result, "stdout", "")
-            )
-          )
-          return false
-        end
+
+      elsif Printerlib.ExecuteBashCommand("( echo -n '' >/dev/tcp/"+ server_name +"/631 ) & ECHO_PID=$! ; sleep 2s ; kill $ECHO_PID &>/dev/null ; wait $ECHO_PID")
+        return true
       else
-        # Make netcat verbose, otherwise there would be no output at all
-        # but some output is needed for the Popup::ErrorDetails below:
-        if Printerlib.ExecuteBashCommand(
-            Ops.add(Ops.add("netcat -v -w 1 -z ", server_name), " 631")
-          )
-          # because in most cases TestClientOnlyServer is called indirectly without a button click.
-          return true
-        end
-        # The netcat-test failed:
-        netcat_test_failed = true
-        error_messages = netcat_test_fail_message
-        result_details = Ops.add(
-          Ops.add(Ops.get_string(Printerlib.result, "stderr", ""), "\n"),
-          Ops.get_string(Printerlib.result, "stdout", "")
-        )
-      end
-      # When the netcat-test failed or when netcat is not executable, do a less meaningful test:
-      if !Printerlib.ExecuteBashCommand("type -P ping")
-        # but it the less meaningful test is not really important
-        # so that the less meaningful test is silently skipped
-        # and no negative feedback is shown when ping is not executable:
-        if fail_if_executable_is_missing
-          Popup.ErrorDetails(
-            _("Cannot execute the program 'ping'."),
-            Ops.add(
-              Ops.add(
-                Ops.add(
-                  Ops.add(
-                    Ops.add(
-                      Ops.add(
-                        Ops.add(
-                          # Popup::ErrorDetails details:
-                          _(
-                            "The RPM package 'iputils' is required for a meaningful test."
-                          ) + "\n",
-                          Ops.get_string(Printerlib.result, "stderr", "")
-                        ),
-                        "\n"
-                      ),
-                      Ops.get_string(Printerlib.result, "stdout", "")
-                    ),
-                    separator
-                  ),
-                  error_messages
-                ),
-                "\n"
-              ),
-              result_details
-            )
-          )
-          return false
-        end
-      else
-        if Printerlib.ExecuteBashCommand(
-            Ops.add("ping -w 1 -c 1 ", server_name)
-          )
-          if netcat_test_failed
-            # Show negative feedback:
-            Popup.ErrorDetails(
-              Builtins.sformat(
-                # where %1 will be replaced by the server name.
-                _("The server '%1' is not accessible."),
-                server_name
-              ), # Popup::ErrorDetails message
-              Ops.add(
-                Ops.add(
-                  Ops.add(
-                    Ops.add(
-                      Ops.add(
-                        Ops.add(
-                          Ops.add(
-                            Ops.add(
-                              # Popup::ErrorDetails details:
-                              error_messages,
-                              "\n"
-                            ),
-                            ping_test_good_message
-                          ),
-                          separator
-                        ),
-                        result_details
-                      ),
-                      "\n"
-                    ),
-                    Ops.get_string(Printerlib.result, "stderr", "")
-                  ),
-                  "\n"
-                ),
-                Ops.get_string(Printerlib.result, "stdout", "")
-              )
-            )
-            return false
-          end
-          # netcat was not executable but at least the ping-test was successful.
-          # Don't show positive feedback because this would be annoying popups for the user
-          # because in most cases TestClientOnlyServer is called indirectly without a button click.
-          return true
-        end
-        # The ping-test failed:
-        ping_test_failed = true
-        error_messages = Ops.add(
-          Ops.add(error_messages, "\n"),
-          ping_test_fail_message
-        )
-        result_details = Ops.add(
-          Ops.add(
-            Ops.add(
-              Ops.add(result_details, "\n"),
-              Ops.get_string(Printerlib.result, "stderr", "")
-            ),
-            "\n"
-          ),
-          Ops.get_string(Printerlib.result, "stdout", "")
-        )
-      end
-      # When the netcat-test failed or when netcat is not executable
-      # and when the ping-test failed or when ping is not executable
-      # do a last test:
-      if !Printerlib.ExecuteBashCommand("type -P host")
-        # but it the last test is not really important
-        # so that the last test is silently skipped
-        # and no negative feedback is shown when host is not executable:
-        if fail_if_executable_is_missing
-          Popup.ErrorDetails(
-            _("Cannot execute the program 'host'."),
-            Ops.add(
-              Ops.add(
-                Ops.add(
-                  Ops.add(
-                    Ops.add(
-                      Ops.add(
-                        Ops.add(
-                          # Popup::ErrorDetails details:
-                          _(
-                            "The RPM package 'bind-utils' is required for a meaningful test."
-                          ) + "\n",
-                          Ops.get_string(Printerlib.result, "stderr", "")
-                        ),
-                        "\n"
-                      ),
-                      Ops.get_string(Printerlib.result, "stdout", "")
-                    ),
-                    separator
-                  ),
-                  error_messages
-                ),
-                "\n"
-              ),
-              result_details
-            )
-          )
-          return false
-        end
-      else
-        if Printerlib.ExecuteBashCommand(Ops.add("host -W 1 ", server_name))
-          if netcat_test_failed || ping_test_failed
-            # Show negative feedback:
-            Popup.ErrorDetails(
-              Builtins.sformat(
-                # where %1 will be replaced by the server name.
-                _("The server '%1' does not respond in the network."),
-                server_name
-              ), # Popup::ErrorDetails message
-              Ops.add(
-                Ops.add(
-                  Ops.add(
-                    Ops.add(
-                      Ops.add(
-                        Ops.add(
-                          Ops.add(
-                            Ops.add(
-                              # Popup::ErrorDetails details:
-                              error_messages,
-                              "\n"
-                            ),
-                            host_test_good_message
-                          ),
-                          separator
-                        ),
-                        result_details
-                      ),
-                      "\n"
-                    ),
-                    Ops.get_string(Printerlib.result, "stderr", "")
-                  ),
-                  "\n"
-                ),
-                Ops.get_string(Printerlib.result, "stdout", "")
-              )
-            )
-            return false
-          end
-          # ping was not executable but at least the host-test was successful.
-          # Don't show positive feedback because this would be annoying popups for the user
-          # because in most cases TestClientOnlyServer is called indirectly without a button click.
-          return true
-        end
-        # The host-test failed:
-        host_test_failed = true
-        error_messages = Ops.add(
-          Ops.add(error_messages, "\n"),
-          host_test_fail_message
-        )
-        result_details = Ops.add(
-          Ops.add(
-            Ops.add(
-              Ops.add(result_details, "\n"),
-              Ops.get_string(Printerlib.result, "stderr", "")
-            ),
-            "\n"
-          ),
-          Ops.get_string(Printerlib.result, "stdout", "")
-        )
-      end
-      # When the netcat-test failed or when netcat is not executable
-      # and when the ping-test failed or when ping is not executable
-      # and when the host-test failed or when host is not executable:
-      if netcat_test_failed || ping_test_failed || host_test_failed
-        # Show negative feedback:
-        Popup.ErrorDetails(
-          Builtins.sformat(
-            # where %1 will be replaced by the server name.
-            _("The server '%1' is unknown."),
-            server_name
-          ), # Popup::ErrorDetails message
-          Ops.add(
-            Ops.add(
-              # Popup::ErrorDetails details:
-              error_messages,
-              separator
-            ),
-            result_details
-          )
-        )
+        Popup.Error(_("The server '" + server_name + "' is not available or not listening on port 631"))
         return false
       end
-      # Neither netcat nor ping nor host were executable.
-      # Don't show any kind of feedback because this would be annoying popups for the user
-      # because in most cases TestClientOnlyServer is called indirectly without a button click
-      # so that nothing else could be done in this case except a "hope-for-the-best" successful return:
-      true
     end
 
     # Run hp-setup:
@@ -2785,7 +2483,7 @@ module Yast
     publish :function => :AddQueue, :type => "boolean (string, boolean, string)"
     publish :function => :DeleteQueue, :type => "boolean (string)"
     publish :function => :DriverOptionItems, :type => "list (string, string)"
-    publish :function => :TestClientOnlyServer, :type => "boolean (string, boolean)"
+    publish :function => :TestClientOnlyServer, :type => "boolean (string)"
     publish :function => :RunHpsetup, :type => "boolean ()"
   end
 

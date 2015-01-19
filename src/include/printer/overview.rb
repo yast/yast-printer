@@ -190,10 +190,7 @@ module Yast
         end
         # A non-accessible client-only server leads to an endless sequence of weird further behaviour
         # of the module so that a non-accessible server is only accepted after insistent warning popups:
-        if !Printer.TestClientOnlyServer(
-            Printerlib.client_conf_server_name,
-            false
-          )
+        if !Printer.TestClientOnlyServer(Printerlib.client_conf_server_name)
           if feedback_popup_exists
             Popup.ClearFeedback
             feedback_popup_exists = false
