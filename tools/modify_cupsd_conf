@@ -1,8 +1,8 @@
 #! /bin/bash
 #
-# Johannes Meixner <jsmeix@suse.de>, 2007, 2008, 2009, 2010, 2011
+# Johannes Meixner <jsmeix@suse.de>, 2007, 2008, 2009, 2010, 2011, 2014
 
-#set -x
+# set -x
 
 # Make sure to have a clean environment:
 export PATH="/sbin:/usr/sbin:/usr/bin:/bin"
@@ -15,18 +15,40 @@ set -f
 MY_NAME=${0##*/}
 CUPSDCONF="/etc/cups/cupsd.conf"
 
+# Determine if we have CUPS <= 1.5.4 < 1.6 (with traditional CUPS Browsing)
+# or CUPS >= 1.6.0 > 1.6 (with cups-browsed):
+BROWSEDCONF=""
+if zypper versioncmp $( cups-config --version ) 1.6 | grep -q 'newer'
+then if test -e /etc/cups/cups-browsed.conf
+     then BROWSEDCONF="/etc/cups/cups-browsed.conf"
+          BROWSEDUNITFILE="cups-browsed.service"
+     fi
+fi
+
 KEY="$1"
 if test -z "$KEY"
-then echo "Read and write $CUPSDCONF (but does not restart cupsd)." 1>&2
+then if test -z "$BROWSEDCONF"
+     then echo "Read and write $CUPSDCONF (but does not restart cupsd)." 1>&2
+     else echo "Read and write $CUPSDCONF or $BROWSEDCONF (but does not restart cupsd)." 1>&2
+     fi
      echo "Usage:" 1>&2
      echo "$MY_NAME keyword [ new value ]" 1>&2
      echo "Without a new value, the current value is reported." 1>&2
      echo "Supported keywords and possible new values are:" 1>&2
      echo "Browsing [ On | Off ]" 1>&2
+     if test -n "$BROWSEDCONF"
+     then echo "      Browsing On (re)starts and enables cups-browsed." 1>&2
+          echo "      Browsing Off stops and disables cups-browsed." 1>&2
+     fi
      echo "      (Browsing On should be set when BrowseAllow or BrowseAddress is not 'none')" 1>&2
-     echo "BrowseAllow [ all | @LOCAL | host-address | network-address/netmask ] | BrowseAllow none" 1>&2
-     echo "e.g.: BrowseAllow '@LOCAL 192.168.100.1 192.168.200.0/255.255.255.0'" 1>&2
-     echo "      BrowseAllow none (to deny all incoming browse packets)" 1>&2
+     if test -z "$BROWSEDCONF"
+     then echo "BrowseAllow [ all | @LOCAL | host-address | network-address/netmask ] | BrowseAllow none" 1>&2
+          echo "e.g.: BrowseAllow '@LOCAL 192.168.100.1 192.168.200.0/255.255.255.0'" 1>&2
+          echo "      BrowseAllow none (to deny all incoming browse packets)" 1>&2
+     else echo "BrowseAllow [ all | host-address | network-address/netmask ] | BrowseAllow none" 1>&2
+          echo "e.g.: BrowseAllow '192.168.100.1 192.168.200.0/255.255.255.0'" 1>&2
+          echo "      The former BrowseAllow @LOCAL is no longer supported for cups-browsed." 1>&2
+     fi
      echo "BrowsePoll [ host-address ] | BrowsePoll none" 1>&2
      echo "e.g.: BrowsePoll '192.168.100.1 192.168.200.1'" 1>&2
      echo "      BrowsePoll none (to poll not at all, i.e. no BrowsePoll line)" 1>&2
@@ -37,9 +59,16 @@ then echo "Read and write $CUPSDCONF (but does not restart cupsd)." 1>&2
      echo "e.g.: Allow '@LOCAL @IF(eth1) 192.168.100.1 192.168.200.0/255.255.255.0'" 1>&2
      echo "      (to allow access via the root location '<Location />')" 1>&2
      echo "      Allow none (to have only 'Allow 127.0.0.2', localhost is allowed in any case)" 1>&2
-     echo "BrowseAddress [ @LOCAL | @IF(name) | host-address | broadcast-address ] | BrowseAddress none" 1>&2
-     echo "e.g.: BrowseAddress '@LOCAL @IF(eth1) 192.168.100.1 192.168.200.255'" 1>&2
-     echo "      BrowseAddress none (to send no browse packets, i.e. no BrowseAddress line)" 1>&2
+     if test -z "$BROWSEDCONF"
+     then echo "BrowseAddress [ @LOCAL | @IF(name) | host-address | broadcast-address ] | BrowseAddress none" 1>&2
+          echo "e.g.: BrowseAddress '@LOCAL @IF(eth1) 192.168.100.1 192.168.200.255'" 1>&2
+          echo "      BrowseAddress none (to send no browse packets, i.e. no BrowseAddress line)" 1>&2
+     else echo "BrowseAddress @LOCAL | BrowseAddress none" 1>&2
+          echo "e.g.: BrowseAddress @LOCAL sets BrowseLocalProtocols CUPS in /etc/cups/cups-browsed.conf" 1>&2
+          echo "      The former BrowseAddress [ @IF(name) | host-address | broadcast-address ]" 1>&2
+          echo "      is no longer supported for cups-browsed." 1>&2
+          echo "      BrowseAddress none sets BrowseLocalProtocols none in /etc/cups/cups-browsed.conf" 1>&2
+     fi
      echo "Policies" 1>&2
      echo "      (reports the existing policy names in '<Policy policy-name>' sections)" 1>&2
      echo "DefaultPolicy [ policy-name ] | DefaultPolicy default" 1>&2
@@ -51,15 +80,24 @@ then echo "Read and write $CUPSDCONF (but does not restart cupsd)." 1>&2
      echo "      DirtyCleanInterval 0 (update config files like printers.conf almost immediately)" 1>&2
      echo "For the syntax for keywords and values see 'man cupsd.conf'" 1>&2
      echo "and http://www.cups.org/documentation.php/ref-cupsd-conf.html" 1>&2
+     if test -n "$BROWSEDCONF"
+     then echo "and $BROWSEDCONF and /usr/share/doc/packages/cups-filters/README" 1>&2
+     fi
      echo "In case of ambiguity use the syntax which is described above." 1>&2
-     echo "Usually case matters, in particular for special keywords like On Off @LOCAL @IF none all." 1>&2
-     echo "Multiple values for a keyword must be separated by space." 1>&2
+     echo "Usually case matters, in particular for special values like On Off @LOCAL @IF none all." 1>&2
+     echo "Multiple values for a keyword must be separated by space in one quoted argument." 1>&2
      exit 1
 fi
 
 if ! test -r $CUPSDCONF -a -w $CUPSDCONF
 then echo "Cannot read or write $CUPSDCONF." 1>&2
      exit 2
+fi
+if test -n "$BROWSEDCONF"
+then if ! test -r $BROWSEDCONF -a -w $BROWSEDCONF
+     then echo "Cannot read or write $BROWSEDCONF." 1>&2
+          exit 2
+     fi
 fi
 
 # Remove duplicates (ignore case) and remove duplicate, leading and trailing spaces.
@@ -68,23 +106,118 @@ fi
 # because the user may like to have it exactly in cupsd.conf (even if actually case may not matter):
 VALUE="$( for V in $2 ; do echo $V ; done | sort -b -f -u | tr -s '[:space:]' ' ' | sed -e 's/ *$//' )"
 
-# Make a backup of /etc/cups/cupsd.conf if it would be changed:
-if test -n "$VALUE"
-then if rpm -V -f $CUPSDCONF | grep -q "^..5.*$CUPSDCONF\$"
-     then # The /etc/cups/cupsd.conf was already changed (RPM tells that the MD5 sum differs):
-          if ! cp -p $CUPSDCONF $CUPSDCONF.yast2save
-          then echo "Failed to backup $CUPSDCONF as $CUPSDCONF.yast2save" 1>&2
-          exit 3
-          fi
-     else # The /etc/cups/cupsd.conf content is the original from the RPM package:
-          if ! cp -p $CUPSDCONF $CUPSDCONF.yast2orig
-          then echo "Failed to backup $CUPSDCONF as $CUPSDCONF.yast2orig" 1>&2
-          exit 3
-          fi
-     fi
-     # Log the current change:
-     echo "# $(date '+%F,%T') $MY_NAME $KEY $VALUE" >>$CUPSDCONF
+# Determine if /etc/cups/cups-browsed.conf would be actually used (for read or write)
+# which means when the KEY is BrowseAllow or BrowsePoll:
+USESBROWSEDCONF=""
+if test -n "$BROWSEDCONF"
+then case "$KEY" in
+          BrowseAllow | BrowsePoll | BrowseAddress ) USESBROWSEDCONF="yes";;
+     esac
 fi
+
+# Function to backup /etc/cups/cupsd.conf or /etc/cups/cups-browsed.conf
+# and append a log entry of the intended change in the file:
+PrepareConfigFile()
+{ FILENAME="$1"
+  if test -z "$FILENAME"
+  then echo "Aborting because of syntax error: PrepareConfigFile() called without file name argument." 1>&2
+       exit 3
+  fi
+  # Make a backup before anything is changed:
+  if rpm -V -f $FILENAME | grep -q "^..5.*$FILENAME\$"
+  then # The FILENAME was already changed (RPM tells that the MD5 sum differs):
+       if ! cp -p $FILENAME $FILENAME.yast2save
+       then echo "Failed to backup $FILENAME as $FILENAME.yast2save" 1>&2
+       exit 3
+       fi
+  else # The FILENAME content is the original from the RPM package:
+       if ! cp -p $FILENAME $FILENAME.yast2orig
+       then echo "Failed to backup $FILENAME as $FILENAME.yast2orig" 1>&2
+       exit 3
+       fi
+  fi
+  # Log the intended change before it is actually written:
+  echo "# $(date '+%F,%T') $MY_NAME $KEY $VALUE" >>$FILENAME
+}
+
+# Make a backup of /etc/cups/cupsd.conf or /etc/cups/cups-browsed.conf if it would be changed
+# and append a log entry of the intended change in the file:
+if test -n "$VALUE"
+then # Make a backup of /etc/cups/cups-browsed.conf only when it will be actually changed which means
+     # when the KEY is BrowseAllow or BrowsePoll or BrowseAddress and the VALUE is non-empty:
+     if test -n "$USESBROWSEDCONF"
+     then # Prepare /etc/cups/cups-browsed.conf:
+          PrepareConfigFile $BROWSEDCONF
+     else # Prepare /etc/cups/cupsd.conf:
+          PrepareConfigFile $CUPSDCONF
+     fi
+fi
+
+# Function to output the line number of the last matching line or the line number of the first empty line:
+LastMatchingLineNumberOrFirstEmptyLineNumber()
+{ FILENAME="$1"
+  if test -z "$FILENAME"
+  then echo "Aborting because of syntax error: LastMatchingLineNumberOrFirstEmptyLineNumber() called without file name argument." 1>&2
+       exit 3
+  fi
+  INTENDEDMATCH="$2"
+  FALLBACKMATCH="$3"
+  LINE_NUMBER=""
+  if test -n "$INTENDEDMATCH" -o -n "$FALLBACKMATCH"
+  then # First try to find the actually intened matching line and then try the fallback match:
+       for MATCH in "$INTENDEDMATCH" "$FALLBACKMATCH"
+       do # First try to get and output the line number of the last matching active line:
+          LINE_NUMBER="$( sed -n -e "/^[[:space:]]*${MATCH}/I=" $FILENAME | tail -n 1 )"
+          if test -n "$LINE_NUMBER" 
+          then echo "$LINE_NUMBER"
+               return 0
+          fi
+          # Otherwise try to get and output the line number of the last matching non-active line:
+          LINE_NUMBER="$( sed -n -e "/^[[:space:]]*#[[:space:]]*${MATCH}/I=" $FILENAME | tail -n 1 )"
+          if test -n "$LINE_NUMBER"       
+          then echo "$LINE_NUMBER"
+               return 0
+          fi
+       done
+  fi
+  # When INTENDEDMATCH and FALLBACKMATCH are both empty
+  # or when neither a matching active line nor a matching non-active line was found
+  # then as last fallback try to get and output the line number of the first empty line
+  # (as fallback it is better to write at the first empty line than at the last empty line):
+  LINE_NUMBER="$( sed -n -e '/^[[:space:]]*$/=' $FILENAME | head -n 1 )"
+  if test -n "$LINE_NUMBER"     
+  then echo "$LINE_NUMBER"
+       return 0
+  fi
+  echo ""
+  return 1
+}
+
+# Function to append lines with same KEYWORD and one or more VALUES one by one for each VALUE
+# at a line number or at the end of the file when the line number is empty:
+AppendKeyValueLinesAtLineNumberOrAtEndOfFile()
+{ FILENAME="$1"
+  if test -z "$FILENAME"
+  then echo "Aborting because of syntax error: AppendKeyValueLinesAtLineNumberOrAtEndOfFile() called without file name argument." 1>&2
+       exit 3
+  fi
+  KEYWORD="$2"
+  VALUES="$3"
+  LINE_NUMBER="$4"
+  if test -n "$LINE_NUMBER"
+  then # When appending lines one by one at a fixed LINE_NUMBER with 'sed'
+       # invert the ordering of the values to get the lines added in the file
+       # in the original ordering of the values:
+       for V in $( echo "$VALUES" | tac -s ' ' )
+       do test -n "$V" && sed -i -e "${LINE_NUMBER}a$KEYWORD $V" $FILENAME
+       done
+  else # When appending lines one by one at the end of the file,
+       # append them in the original ordering:
+       for V in $VALUES
+       do test -n "$V" && echo -en "\n$KEYWORD $V\n" >>$FILENAME
+       done
+  fi
+}
 
 # Function to deal with 'Browsing [ On | Off ]'
 Browsing()
@@ -110,6 +243,24 @@ Browsing()
                  fi
             fi
        fi
+       if test -n "$BROWSEDCONF"
+       then if test -z "$( type -ap systemctl )"
+            then echo "Aborting because 'systemctl' not executable (no 'systemd' RPM installed?)" 1>&2
+                 exit 5
+            fi
+            case "$VALUE" in
+                 [Oo][Nn] ) if ! { systemctl --quiet enable $BROWSEDUNITFILE && systemctl --quiet restart $BROWSEDUNITFILE ; }
+                            then echo "Failed to enable and/or (re)start $BROWSEDUNITFILE." 1>&2
+                                 exit 5
+                            fi ;;
+                 [Oo][Ff][Ff] ) if ! { systemctl --quiet stop $BROWSEDUNITFILE && systemctl --quiet disable $BROWSEDUNITFILE ; }
+                                then echo "Failed to stop and/or disable $BROWSEDUNITFILE." 1>&2
+                                     exit 5
+                                fi ;;
+                 * ) echo "Invalid value '$VALUE' for '$KEY'." 1>&2
+                     exit 5 ;;
+            esac
+       fi
   fi
   # Report the resulting setting in any case:
   # The 'tr ... [:blank:]' makes sure that all active Browsing entries
@@ -117,13 +268,34 @@ Browsing()
   # Remove leading spaces (to cut the right part).
   # Remove trailing spaces (needed for the test below).
   RESULT="$( grep -i "^[[:space:]]*$KEY[[:space:]]" $CUPSDCONF | tr -s '[:blank:]' ' ' | sed -e 's/^ *//' | cut -s -d ' ' -f2 | tr -s '\n' ' ' | sed -e 's/ *$//' )"
+  # Test whether or not the RESULT matches cups-browsed actual status
+  # if not report a warning on stderr but do not abort in case of errors
+  # instead adjust the RESULT to match cups-browsed actual status:
+  if test -n "$BROWSEDCONF"
+  then if test -z "$( type -ap systemctl )"
+       then echo "Cannot check cups-browsed status because 'systemctl' not executable (no 'systemd' RPM installed?)" 1>&2
+       else case "$RESULT" in
+                 [Oo][Nn] ) if ! { systemctl --quiet is-active $BROWSEDUNITFILE && systemctl --quiet is-enabled $BROWSEDUNITFILE ; }
+                            then echo "Browsing is On in /etc/cups/cupsd.conf but cups-browsed not running and/or not enabled" 1>&2
+                                 echo "so that Browsing Off is reported to match cups-browsed actual status." 1>&2
+                                 RESULT="Off"
+                            fi ;;
+                 [Oo][Ff][Ff] ) if systemctl --quiet is-active $BROWSEDUNITFILE || systemctl --quiet is-enabled $BROWSEDUNITFILE
+                                then echo "Browsing is Off in /etc/cups/cupsd.conf but cups-browsed is running and/or enabled" 1>&2
+                                     echo "so that Browsing On is reported to match cups-browsed actual status." 1>&2
+                                     RESULT="On"
+                                fi ;;
+                 * ) echo "Invalid value '$VALUE' for '$KEY'." 1>&2
+            esac
+       fi
+  fi
   echo -n "$RESULT"
   # For a nicer output on a terminal where stdout and stderr is mixed up,
   # output a '\n' on stderr to get subsequent stuff (e.g. the shell prompt
   # or an error message because of a failed test below) on a new line:
   echo 1>&2
   # Test if the result is the expected one if a value was specified:
-  if test -n "$VALUE" -a "$RESULT" != "$VALUE"
+  if test -n "$VALUE" -a "${RESULT^^}" != "${VALUE^^}"
   then echo "Failed to set '$KEY $VALUE' in $CUPSDCONF." 1>&2
        exit 5
   fi
@@ -132,54 +304,150 @@ Browsing()
 # Function to deal with 'BrowseAllow [ all | @LOCAL | host-address | network-address/netmask ] | BrowseAllow none'
 BrowseAllow()
 { if test -n "$VALUE"
-  then # Set 'BrowseOrder allow,deny' to deny browse packets by default
-       # and then allow them from certain sources via BrowseAllow entries
-       # and finally deny from certain sources via BrowseDeny entries.
-       # All existing active BrowseOrder lines are removed (ignore case).
-       sed -i -e '/^[[:space:]]*BrowseOrder.*/Id' $CUPSDCONF
-       # Append the new BrowseOrder line below the last active 'Brows' line (ignore case)
-       # to have the new BrowseOrder line at the matching place
-       # but if no 'Brows' line exists, append below the first empty line
-       # which is usually the line after the initial comment block
-       # and if even no empty line exists, append at the end of the file:
-       LAST_BROWSE_LINE_NUMBER="$( sed -n -e '/^[^#]*Brows/I=' $CUPSDCONF | tail -n 1 )"
-       if test -n "$LAST_BROWSE_LINE_NUMBER" 
-       then sed -i -e "${LAST_BROWSE_LINE_NUMBER}aBrowseOrder allow,deny" $CUPSDCONF
-       else FIRST_EMPTY_LINE_NUMBER="$( sed -n -e '/^[[:space:]]*$/=' $CUPSDCONF | head -n 1 )"
-            if test -n "$FIRST_EMPTY_LINE_NUMBER"
-            then sed -i -e "${FIRST_EMPTY_LINE_NUMBER}aBrowseOrder allow,deny\n" $CUPSDCONF
-            else echo -en "\nBrowseOrder allow,deny\n\n" >>$CUPSDCONF
+  then # When VALUE contains "none" anything else is removed to be secure:
+       for V in $VALUE
+       do if test "none" = "$V"
+          then VALUE="none"
+               break
+          fi
+       done
+       # When VALUE contains "all" (but not "none", see above) anything else is removed to avoid meaningless stuff:
+       for V in $VALUE
+       do if test "all" = "$V"
+          then VALUE="all"
+               break
+          fi
+       done
+       if test -n "$BROWSEDCONF"
+       then # When VALUE is not "all" and not "none" test if its values are valid:
+            if test "all" != "$VALUE" -a "none" != "$VALUE"
+            then # When VALUE contains "@LOCAL" abort regardless of possible other values
+                 # to ensure the user gets negative feedback:
+                 for V in $VALUE
+                 do if test "@LOCAL" = "$V"
+                    then echo "BrowseAllow is no longer supported in /etc/cups/cupsd.conf since CUPS >= 1.6." 1>&2
+                         echo "BrowseAllow @LOCAL is not supported in /etc/cups/cups-browsed.conf for cups-browsed." 1>&2
+                         echo "For cups-browsed use BrowseAllow host-address or BrowseAllow network-address/netmask." 1>&2
+                         exit 6
+                    fi
+                 done
+                 # When VALUE contains something that is not of the form of an IPv4 address (netmask is optional)
+                 # abort regardless of possible other values to ensure the user gets negative feedback
+                 # see https://bugs.linuxfoundation.org/show_bug.cgi?id=1204
+                 # and https://bugs.linuxfoundation.org/show_bug.cgi?id=1205
+                 for V in $VALUE
+                 do if ! echo "$V" | egrep -q '^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}'
+                    then echo "For cups-browsed a BrowseAllow value must be either an IPv4 host address (e.g. 192.168.1.12)" 1>&2
+                         echo "or an IPv4 network address plus netmask (e.g. 192.168.1.0/255.255.255.0 or 192.168.1.0/24)." 1>&2
+                         exit 6
+                    fi
+                 done
+            fi
+            # All existing active BrowseAllow lines are removed (ignore case).
+            # Those lines can be removed because YaST supports BrowseAllow lines
+            # (YaST shows the BrowseAllow entries in the "printing via network" dialog):
+            sed -i -e '/^[[:space:]]*BrowseAllow.*/Id' $BROWSEDCONF
+            # For 'BrowseAllow all' do not have any active BrowseAllow line (all were deleted above) because
+            # no active BrowseAllow line means to accept browse packets from all hosts (see 'man cups-browsed.conf'):
+            if ! test "all" = "$VALUE"
+            then if test "none" = "$VALUE"
+                 then # The value 'none' is not explicitly supported (see the source file cups-browsed.c)
+                      # therefore a single value from 192.0.2.0/24 (TEST-NET-1 see RFC5737) is set
+                      # which no real host has which effectively means no browse packets are accepted:
+                      VALUE="192.0.2.1"
+                 fi
+                 # Try to find a matching existing BrowseAllow or 'Brows' line
+                 # where to append the new BrowseAllow lines
+                 # to have the new BrowseAllow lines at the right place
+                 # but if no such line exists, append below the first empty line
+                 # which is usually the line after the initial comment block
+                 # and if even no empty line exists, append at the end of the file:
+                 APPEND_LINE_NUMBER="$( LastMatchingLineNumberOrFirstEmptyLineNumber $BROWSEDCONF BrowseAllow Brows )"
+                 AppendKeyValueLinesAtLineNumberOrAtEndOfFile $BROWSEDCONF $KEY $VALUE $APPEND_LINE_NUMBER
+            fi
+            # Check cups-browsed status and enable and (re)start it (needed when it is not 'BrowseAllow none')
+            # on the other hand only 'BrowseAllow none' does not mean cups-browsed should be stopped and disabled
+            # but 'BrowseAllow none' means cups-browsed should be restarted but only if it is actually running.
+            if test -z "$( type -ap systemctl )"
+            then echo "Aborting because 'systemctl' not executable (no 'systemd' RPM installed?)" 1>&2
+                 exit 5
+            fi
+            # See above the special hack for 'BrowseAllow none' by setting "192.0.2.1" as value:
+            if test "192.0.2.1" = "$VALUE"
+            then if systemctl --quiet is-active $BROWSEDUNITFILE
+                 then if ! systemctl --quiet restart $BROWSEDUNITFILE
+                      then "Failed to restart $BROWSEDUNITFILE." 1>&2
+                           exit 5
+                      fi
+                 fi
+            else if ! { systemctl --quiet enable $BROWSEDUNITFILE && systemctl --quiet restart $BROWSEDUNITFILE ; }
+                 then echo "Failed to enable and/or (re)start $BROWSEDUNITFILE." 1>&2
+                      exit 5
+                 fi
+            fi
+       else # Set 'BrowseOrder allow,deny' to deny browse packets by default
+            # and then allow them from certain sources via BrowseAllow entries
+            # and finally deny from certain sources via BrowseDeny entries.
+            # All existing active BrowseOrder lines are removed (ignore case).
+            sed -i -e '/^[[:space:]]*BrowseOrder.*/Id' $CUPSDCONF
+            # Append the new BrowseOrder line below the last active 'Brows' line (ignore case)
+            # to have the new BrowseOrder line at the matching place
+            # but if no 'Brows' line exists, append below the first empty line
+            # which is usually the line after the initial comment block
+            # and if even no empty line exists, append at the end of the file:
+            LAST_BROWSE_LINE_NUMBER="$( sed -n -e '/^[^#]*Brows/I=' $CUPSDCONF | tail -n 1 )"
+            if test -n "$LAST_BROWSE_LINE_NUMBER" 
+            then sed -i -e "${LAST_BROWSE_LINE_NUMBER}aBrowseOrder allow,deny" $CUPSDCONF
+            else FIRST_EMPTY_LINE_NUMBER="$( sed -n -e '/^[[:space:]]*$/=' $CUPSDCONF | head -n 1 )"
+                 if test -n "$FIRST_EMPTY_LINE_NUMBER"
+                 then sed -i -e "${FIRST_EMPTY_LINE_NUMBER}aBrowseOrder allow,deny\n" $CUPSDCONF
+                 else echo -en "\nBrowseOrder allow,deny\n\n" >>$CUPSDCONF
+                 fi
+            fi
+            # All existing active BrowseAllow lines are removed (ignore case).
+            # Those lines can be removed because YaST supports BrowseAllow lines
+            # (YaST shows the BrowseAllow entries in the "printing via network" dialog):
+            sed -i -e '/^[[:space:]]*BrowseAllow.*/Id' $CUPSDCONF
+            # All active 'BrowseDeny all' lines are removed (ignore case).
+            # Such a line was added when the VALUE was "none", see below:
+            sed -i -e '/^[[:space:]]*BrowseDeny[[:space:]]*all/Id' $CUPSDCONF
+            # All remaining active BrowseDeny lines are deactivated (ignore case).
+            # Those lines are not removed because YaST does not support BrowseDeny lines
+            # so that a remove would silently delete BrowseDeny information:
+            sed -i -e 's/^[[:space:]]*\(BrowseDeny.*\)$/#\1/i' $CUPSDCONF
+            # Insert BrowseAllow lines before the BrowseOrder line
+            # to have the new BrowseAllow lines at the matching place
+            # and in the ordering of the values (needed for the test below):
+            if ! test "none" = "$VALUE"
+            then for V in $VALUE
+                 do test -n "$V" && sed -i -e "/^BrowseOrder /i$KEY $V" $CUPSDCONF
+                 done
+            else # The 'BrowseOrder allow,deny' line denies browse packets by default
+                 # to be 100% on the safe side have explicite 'BrowseAllow none' and 'BrowseDeny all' lines too:
+                 sed -i -e "/^BrowseOrder /aBrowseAllow none\nBrowseDeny all" $CUPSDCONF
             fi
        fi
-       # All existing active BrowseAllow lines are removed (ignore case).
-       # Those lines can be removed because YaST supports BrowseAllow lines
-       # (YaST shows the BrowseAllow entries in the "printing via network" dialog):
-       sed -i -e '/^[[:space:]]*BrowseAllow.*/Id' $CUPSDCONF
-       # All active 'BrowseDeny all' lines are removed (ignore case).
-       # Such a line was added when the VALUE was "none", see below:
-       sed -i -e '/^[[:space:]]*BrowseDeny[[:space:]]*all/Id' $CUPSDCONF
-       # All remaining active BrowseDeny lines are deactivated (ignore case).
-       # Those lines are not removed because YaST does not support BrowseDeny lines
-       # so that a remove would silently delete BrowseDeny information:
-       sed -i -e 's/^[[:space:]]*\(BrowseDeny.*\)$/#\1/i' $CUPSDCONF
-       # Insert BrowseAllow lines before the BrowseOrder line
-       # to have the new BrowseAllow lines at the matching place
-       # and in the ordering of the values (needed for the test below):
-       if ! test "none" = "$VALUE"
-       then for V in $VALUE
-            do test -n "$V" && sed -i -e "/^BrowseOrder /i$KEY $V" $CUPSDCONF
-            done
-       else # The 'BrowseOrder allow,deny' line denies browse packets by default
-            # to be 100% on the safe side have explicite 'BrowseAllow none' and 'BrowseDeny all' lines too:
-            sed -i -e "/^BrowseOrder /aBrowseAllow none\nBrowseDeny all" $CUPSDCONF
-       fi
+  fi
+  if test -n "$BROWSEDCONF"
+  then CONFIGFILE=$BROWSEDCONF
+  else CONFIGFILE=$CUPSDCONF
   fi
   # Report the resulting setting in any case:
   # The 'tr ... [:blank:]' makes sure that all active BrowseAllow entries
   # are found if there is more than one which is allowed.
   # Remove leading spaces (to cut the right part).
   # Remove trailing spaces (needed for the test below).
-  RESULT="$( grep -i "^[[:space:]]*$KEY[[:space:]]" $CUPSDCONF | sed -e 's/from//I' | tr -s '[:blank:]' ' ' | sed -e 's/^ *//' | cut -s -d ' ' -f2 | tr -s '\n' ' ' | sed -e 's/ *$//' )"
+  RESULT="$( grep -i "^[[:space:]]*$KEY[[:space:]]" $CONFIGFILE | sed -e 's/from//I' | tr -s '[:blank:]' ' ' | sed -e 's/^ *//' | cut -s -d ' ' -f2 | tr -s '\n' ' ' | sed -e 's/ *$//' )"
+  if test -n "$BROWSEDCONF"
+  then # Fixing the evil hacks above:
+       if test -z "$RESULT"
+       then RESULT="all"
+       fi
+       if test "192.0.2.1" = "$RESULT"
+       then RESULT="none"
+       fi
+       VALUE="$RESULT"
+  fi
   echo -n "$RESULT"
   # For a nicer output on a terminal where stdout and stderr is mixed up,
   # output a '\n' on stderr to get subsequent stuff (e.g. the shell prompt
@@ -187,41 +455,62 @@ BrowseAllow()
   echo 1>&2
   # Test if the result is the expected one if a value was specified:
   if test -n "$VALUE" -a "$RESULT" != "$VALUE"
-  then echo "Failed to set '$KEY $VALUE' in $CUPSDCONF." 1>&2
+  then echo "Failed to set '$KEY $VALUE' in $CONFIGFILE." 1>&2
        exit 5
   fi
 }
 
 # Function to deal with 'BrowsePoll [ host-address ] | BrowsePoll none'
 BrowsePoll()
-{ if test -n "$VALUE"
+{ if test -n "$BROWSEDCONF"
+  then CONFIGFILE=$BROWSEDCONF
+  else CONFIGFILE=$CUPSDCONF     
+  fi
+  if test -n "$VALUE"
   then # All existing active BrowsePoll lines are removed (ignore case).
        # Those lines can be removed because YaST supports BrowsePoll lines
        # (YaST shows BrowsePoll entries in the "printing via network" dialog):
-       sed -i -e '/^[[:space:]]*BrowsePoll.*/Id' $CUPSDCONF
-       if ! test "none" = "$VALUE"
-       then # Append the new BrowsePoll lines below the last active 'Brows' line (ignore case)
-            # to have the new BrowsePoll lines at the matching place
-            # but if no 'Brows' line exists, append below the first empty line
-            # which is usually the line after the initial comment block
-            # and if even no empty line exists, append at the end of the file.
-            # Invert the ordering of the values to get the lines
-            # in the original ordering of the values (needed for the test below):
-            LAST_BROWSE_LINE_NUMBER="$( sed -n -e '/^[^#]*Brows/I=' $CUPSDCONF | tail -n 1 )"
-            FIRST_EMPTY_LINE_NUMBER="$( sed -n -e '/^[[:space:]]*$/=' $CUPSDCONF | head -n 1 )"
-            APPEND_LINE_NUMBER=""
-            if test -n "$LAST_BROWSE_LINE_NUMBER"
-            then APPEND_LINE_NUMBER="$LAST_BROWSE_LINE_NUMBER"
-            else if test -n "$FIRST_EMPTY_LINE_NUMBER"
-                 then APPEND_LINE_NUMBER="$FIRST_EMPTY_LINE_NUMBER"
+       sed -i -e '/^[[:space:]]*BrowsePoll.*/Id' $CONFIGFILE
+       if test "none" != "$VALUE"
+       then # When cups-browsed should poll CUPS <= 1.5 servers,
+            # there must be a "/version=1.1" suffix to enforce using IPP version 1.1
+            # because CUPS <= 1.5 servers reject higher IPP version requests with "Bad Request":
+            if test -n "$BROWSEDCONF"
+            then # On a CUPS >= 1.6 system "lpstat -h cups_1.5_server -p" results on stderr:
+                 #   lpstat: Error - add '/version=1.1' to server name.
+                 if lpstat -h $VALUE -p 2>&1 1>/dev/null | grep -q "add '/version=1.1' to server name"
+                 then VALUE="${VALUE}/version=1.1"
                  fi
             fi
-            for V in $( echo "$VALUE" | tac -s ' ' )
-            do if test -n "$APPEND_LINE_NUMBER"
-               then test -n "$V" && sed -i -e "${APPEND_LINE_NUMBER}a$KEY $V" $CUPSDCONF
-               else test -n "$V" && echo -en "\n$KEY $V\n" >>$CUPSDCONF
-               fi
-            done
+            # Try to find a matching existing BrowsePoll or 'Brows' line
+            # where to append the new BrowsePoll lines
+            # to have the new BrowsePoll lines at the right place
+            # but if no such line exists, append below the first empty line
+            # which is usually the line after the initial comment block
+            # and if even no empty line exists, append at the end of the file:
+            APPEND_LINE_NUMBER="$( LastMatchingLineNumberOrFirstEmptyLineNumber $CONFIGFILE BrowsePoll Brows )"
+            AppendKeyValueLinesAtLineNumberOrAtEndOfFile $CONFIGFILE $KEY $VALUE $APPEND_LINE_NUMBER
+       fi
+       # Check cups-browsed status and enable and (re)start it (needed when it is not 'BrowsePoll none')
+       # on the other hand only 'BrowsePoll none' does not mean cups-browsed should be stopped and disabled
+       # but 'BrowsePoll none' means cups-browsed should be restarted but only if it is actually running.
+       if test -n "$BROWSEDCONF"
+       then if test -z "$( type -ap systemctl )"
+            then echo "Aborting because 'systemctl' not executable (no 'systemd' RPM installed?)" 1>&2
+                 exit 5
+            fi
+            if test "none" = "$VALUE"
+            then if systemctl --quiet is-active $BROWSEDUNITFILE
+                 then if ! systemctl --quiet restart $BROWSEDUNITFILE
+                      then "Failed to restart $BROWSEDUNITFILE." 1>&2
+                           exit 5
+                      fi
+                 fi
+            else if ! { systemctl --quiet enable $BROWSEDUNITFILE && systemctl --quiet restart $BROWSEDUNITFILE ; }
+                 then echo "Failed to enable and/or (re)start $BROWSEDUNITFILE." 1>&2
+                      exit 5
+                 fi
+            fi
        fi
   fi
   # Report the resulting setting in any case:
@@ -229,7 +518,16 @@ BrowsePoll()
   # are found if there is more than one which is allowed.
   # Remove leading spaces (to cut the right part).
   # Remove trailing spaces (needed for the test below).
-  RESULT="$( grep -i "^[[:space:]]*$KEY[[:space:]]" $CUPSDCONF | tr -s '[:blank:]' ' ' | sed -e 's/^ *//' | cut -s -d ' ' -f2 | tr -s '\n' ' ' | sed -e 's/ *$//' )"
+  RESULT="$( grep -i "^[[:space:]]*$KEY[[:space:]]" $CONFIGFILE | tr -s '[:blank:]' ' ' | sed -e 's/^ *//' | cut -s -d ' ' -f2 | tr -s '\n' ' ' | sed -e 's/ *$//' )"
+  # A possible "/version=1.1" suffix is removed to get only the plain server name
+  # because in YaST only the plain server name should be used and visible
+  # i.e. the special "/version=1.1" suffix for BrowsePoll for should be kept hidden
+  # from the user so that the entries in the "Print via Network" dialog in YaST
+  # look consistent because there is also special "/version=1.1" suffix for "client-only"
+  # where the "/version=1.1" suffix must be removed, see /usr/lib/YaST2/bin/cups_client_only
+  # so that not any "/version=1.1" suffix should appear in the "Print via Network" dialog:
+  RESULT="${RESULT%%/version=1.1}"
+  VALUE="${VALUE%%/version=1.1}"
   echo -n "$RESULT"
   # For a nicer output on a terminal where stdout and stderr is mixed up,
   # output a '\n' on stderr to get subsequent stuff (e.g. the shell prompt
@@ -238,10 +536,10 @@ BrowsePoll()
   # Test if the result is the expected one if a value was specified:
   if test -n "$VALUE"
   then if test "none" = "$VALUE"
-       then RESULT="$( grep -q -i '^[[:space:]]BrowsePoll' $CUPSDCONF || echo -n 'none' )"
+       then RESULT="$( grep -q -i '^[[:space:]]*BrowsePoll' $CONFIGFILE || echo -n 'none' )"
        fi
        if test "$RESULT" != "$VALUE"
-       then echo "Failed to set '$KEY $VALUE' in $CUPSDCONF." 1>&2
+       then echo "Failed to set '$KEY $VALUE' in $CONFIGFILE." 1>&2
             exit 5
        fi
   fi
@@ -396,41 +694,99 @@ Allow()
 # Function to deal with 'BrowseAddress [ @LOCAL | @IF(name) | host-address | broadcast-address ] | BrowseAddress none'
 BrowseAddress()
 { if test -n "$VALUE"
-  then # All existing active BrowseAddress lines are removed (ignore case).
-       # Those lines can be removed because YaST supports BrowseAddress lines
-       # (YaST shows BrowseAddress entries in the "share printers" dialog):
-       sed -i -e '/^[[:space:]]*BrowseAddress.*/Id' $CUPSDCONF
-       if ! test "none" = "$VALUE"
-       then # Append the new BrowseAddress lines below the last active 'Brows' line (ignore case)
-            # to have the new BrowseAddress lines at the matching place
-            # but if no 'Brows' line exists, append below the first empty line
-            # which is usually the line after the initial comment block
-            # and if even no empty line exists, append at the end of the file.
-            # Invert the ordering of the values to get the lines
-            # in the original ordering of the values (needed for the test below):
-            LAST_BROWSE_LINE_NUMBER="$( sed -n -e '/^[^#]*Brows/I=' $CUPSDCONF | tail -n 1 )"
-            FIRST_EMPTY_LINE_NUMBER="$( sed -n -e '/^[[:space:]]*$/=' $CUPSDCONF | head -n 1 )"
-            APPEND_LINE_NUMBER=""
-            if test -n "$LAST_BROWSE_LINE_NUMBER"
-            then APPEND_LINE_NUMBER="$LAST_BROWSE_LINE_NUMBER"
-            else if test -n "$FIRST_EMPTY_LINE_NUMBER"
-                 then APPEND_LINE_NUMBER="$FIRST_EMPTY_LINE_NUMBER"
+  then if test -n "$BROWSEDCONF"
+       then # Only BrowseAddress @LOCAL or BrowseAddress none is supported for cups-browsed.
+            # In particular multiple values in $VALUE are not supported for cups-browsed:
+            if test "@LOCAL" != "$VALUE" -a "none" != "$VALUE"
+            then echo "Either BrowseAddress @LOCAL or BrowseAddress none is supported for cups-browsed." 1>&2
+                 exit 6
+            fi
+            # All existing active BrowseLocalProtocols lines are removed (ignore case).
+            # Those lines can be removed because YaST supports BrowseLocalProtocols lines
+            # YaST shows the meaning of BrowseLocalProtocols entries in the "printing via network" dialog.
+            # The meaning of BrowseLocalProtocols entries in /etc/cups/cups-browsed.conf is:
+            # BrowseLocalProtocols CUPS <=> BrowseAddress @LOCAL
+            # BrowseLocalProtocols none <=> BrowseAddress none
+            # and anything else falls back to BrowseAddress none
+            sed -i -e '/^[[:space:]]*BrowseLocalProtocols.*/Id' $BROWSEDCONF
+            # For 'BrowseAddress none' do not have any active BrowseLocalProtocols line (all were deleted above) because
+            # no active BrowseLocalProtocols line means to not broadcast shared local printers (see 'man cups-browsed.conf'):
+            if test "@LOCAL" = "$VALUE"
+            then # Try to find a matching existing BrowseLocalProtocols or 'Brows' line
+                 # where to append the new BrowseLocalProtocols CUPS line
+                 # to have the new BrowseLocalProtocols line at the right place
+                 # but if no such line exists, append below the first empty line
+                 # which is usually the line after the initial comment block
+                 # and if even no empty line exists, append at the end of the file:
+                 APPEND_LINE_NUMBER="$( LastMatchingLineNumberOrFirstEmptyLineNumber $BROWSEDCONF BrowseLocalProtocols Brows )"
+                 AppendKeyValueLinesAtLineNumberOrAtEndOfFile $BROWSEDCONF BrowseLocalProtocols CUPS $APPEND_LINE_NUMBER
+            fi
+            # Check cups-browsed status and enable and (re)start it (needed when it is not 'BrowseAddress none')
+            # on the other hand only 'BrowseAddress none' does not mean cups-browsed should be stopped and disabled
+            # but 'BrowseAddress none' means cups-browsed should be restarted but only if it is actually running.
+            if test -z "$( type -ap systemctl )"
+            then echo "Aborting because 'systemctl' not executable (no 'systemd' RPM installed?)" 1>&2
+                 exit 5
+            fi
+            if test "none" = "$VALUE"
+            then if systemctl --quiet is-active $BROWSEDUNITFILE
+                 then if ! systemctl --quiet restart $BROWSEDUNITFILE
+                      then "Failed to restart $BROWSEDUNITFILE." 1>&2
+                           exit 5
+                      fi
+                 fi
+            else if ! { systemctl --quiet enable $BROWSEDUNITFILE && systemctl --quiet restart $BROWSEDUNITFILE ; }
+                 then echo "Failed to enable and/or (re)start $BROWSEDUNITFILE." 1>&2
+                      exit 5
                  fi
             fi
-            for V in $( echo "$VALUE" | tac -s ' ' )
-            do if test -n "$APPEND_LINE_NUMBER"
-               then test -n "$V" && sed -i -e "${APPEND_LINE_NUMBER}a$KEY $V" $CUPSDCONF
-               else test -n "$V" && echo -en "\n$KEY $V\n" >>$CUPSDCONF
-               fi
-            done
+       else # All existing active BrowseAddress lines are removed (ignore case).
+            # Those lines can be removed because YaST supports BrowseAddress lines
+            # (YaST shows BrowseAddress entries in the "share printers" dialog):
+            sed -i -e '/^[[:space:]]*BrowseAddress.*/Id' $CUPSDCONF
+            if ! test "none" = "$VALUE"
+            then # Append the new BrowseAddress lines below the last active 'Brows' line (ignore case)
+                 # to have the new BrowseAddress lines at the matching place
+                 # but if no 'Brows' line exists, append below the first empty line
+                 # which is usually the line after the initial comment block
+                 # and if even no empty line exists, append at the end of the file.
+                 # Invert the ordering of the values to get the lines
+                 # in the original ordering of the values (needed for the test below):
+                 LAST_BROWSE_LINE_NUMBER="$( sed -n -e '/^[^#]*Brows/I=' $CUPSDCONF | tail -n 1 )"
+                 FIRST_EMPTY_LINE_NUMBER="$( sed -n -e '/^[[:space:]]*$/=' $CUPSDCONF | head -n 1 )"
+                 APPEND_LINE_NUMBER=""
+                 if test -n "$LAST_BROWSE_LINE_NUMBER"
+                 then APPEND_LINE_NUMBER="$LAST_BROWSE_LINE_NUMBER"
+                 else if test -n "$FIRST_EMPTY_LINE_NUMBER"
+                      then APPEND_LINE_NUMBER="$FIRST_EMPTY_LINE_NUMBER"
+                      fi
+                 fi
+                 for V in $( echo "$VALUE" | tac -s ' ' )
+                 do if test -n "$APPEND_LINE_NUMBER"
+                    then test -n "$V" && sed -i -e "${APPEND_LINE_NUMBER}a$KEY $V" $CUPSDCONF
+                    else test -n "$V" && echo -en "\n$KEY $V\n" >>$CUPSDCONF
+                    fi
+                 done
+            fi
        fi
   fi
   # Report the resulting setting in any case:
-  # The 'tr ... [:blank:]' makes sure that all active BrowseAddress entries
-  # are found if there is more than one which is allowed.
-  # Remove leading spaces (to cut the right part).
-  # Remove trailing spaces (needed for the test below).
-  RESULT="$( grep -i "^[[:space:]]*$KEY[[:space:]]" $CUPSDCONF | tr -s '[:blank:]' ' ' | sed -e 's/^ *//' | cut -s -d ' ' -f2 | tr -s '\n' ' ' | sed -e 's/ *$//' )"
+  if test -n "$BROWSEDCONF"
+  then # The 'tr ... [:blank:]' makes sure that all active BrowseLocalProtocols entries
+       # are found if there is more than one which is a broken config.
+       # Remove leading spaces (to cut the right part).
+       # Remove trailing spaces (needed for the test below).
+       RESULT="$( grep -i "^[[:space:]]*BrowseLocalProtocols[[:space:]]" $BROWSEDCONF | tr -s '[:blank:]' ' ' | sed -e 's/^ *//' | cut -s -d ' ' -f2 | tr -s '\n' ' ' | sed -e 's/ *$//' )"
+       case "$RESULT" in
+            [Cc][Uu][Pp][Ss] ) RESULT="@LOCAL" ;;
+                           * ) RESULT="none" ;;
+       esac
+  else # The 'tr ... [:blank:]' makes sure that all active BrowseAddress entries
+       # are found if there is more than one which is allowed.
+       # Remove leading spaces (to cut the right part).
+       # Remove trailing spaces (needed for the test below).
+       RESULT="$( grep -i "^[[:space:]]*$KEY[[:space:]]" $CUPSDCONF | tr -s '[:blank:]' ' ' | sed -e 's/^ *//' | cut -s -d ' ' -f2 | tr -s '\n' ' ' | sed -e 's/ *$//' )"
+  fi
   echo -n "$RESULT"
   # For a nicer output on a terminal where stdout and stderr is mixed up,
   # output a '\n' on stderr to get subsequent stuff (e.g. the shell prompt
@@ -439,7 +795,10 @@ BrowseAddress()
   # Test if the result is the expected one if a value was specified:
   if test -n "$VALUE"
   then if test "none" = "$VALUE"
-       then RESULT="$( grep -q -i '^[[:space:]]BrowseAddress' $CUPSDCONF || echo -n 'none' )"
+       then if test -n "$BROWSEDCONF"
+            then RESULT="$( grep -q -i '^[[:space:]]*BrowseLocalProtocols' $BROWSEDCONF || echo -n 'none' )"
+            else RESULT="$( grep -q -i '^[[:space:]]*BrowseAddress' $CUPSDCONF || echo -n 'none' )"
+            fi
        fi
        if test "$RESULT" != "$VALUE"
        then echo "Failed to set '$KEY $VALUE' in $CUPSDCONF." 1>&2
@@ -597,7 +956,7 @@ case "$KEY" in
      DefaultPolicy) DefaultPolicy;;
      ErrorPolicy) ErrorPolicy;;
      DirtyCleanInterval) DirtyCleanInterval;;
-     *) echo "Ignoring keyword '$KEY'" 1>&2
+     *) echo "Unsupported keyword '$KEY'." 1>&2
         exit 4 ;;
 esac
 

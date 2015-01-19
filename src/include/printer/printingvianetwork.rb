@@ -383,7 +383,7 @@ module Yast
           # Therefore the admin can force YaST to proceed here.
           # Do not show additional error messages here because Printer::TestClientOnlyServer()
           # shows sufficient popups to the user:
-          if !Printer.TestClientOnlyServer(current_client_conf_value, true)
+          if !Printer.TestClientOnlyServer(current_client_conf_value)
             if !Popup.ContinueCancelHeadline(
                 Builtins.sformat(
                   # when a client-only server is not accessible
@@ -1137,7 +1137,7 @@ module Yast
             " "
           )
           # No need for error popups because TestClientOnlyServer shows sufficient error popups:
-          if Printer.TestClientOnlyServer(server_name, true)
+          if Printer.TestClientOnlyServer(server_name)
             Popup.Message(
               Builtins.sformat(
                 # where %1 will be replaced by the server name.
