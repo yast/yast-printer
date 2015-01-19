@@ -4,14 +4,11 @@
 #
 # Exits:   0 port on host accepts data
 #          1 host $1 not set
-#          2 no connection possible to port on host and host does not respond to a 'ping'
-#          3 no connection possible to port on host but host responds to a 'ping'
+#          2 no connection possible to port on host
 #          4 connection possible to port on host but does not accept data
-#         10 no connection possible to port on host and ping not executable (no iputils RPM installed?)
-#         11 give up empty-handed because netcat not executable (no netcat RPM installed?)
 # The program head is in the coreutils RPM and therefore assumed to exist.
 #
-# Johannes Meixner <jsmeix@suse.de> 2002, 2007, 2008, 2009, 2010, 2011
+# Johannes Meixner <jsmeix@suse.de> 2002, 2007, 2008, 2009, 2010, 2011, 2014
 # Jiri Srain <jsrain@suse.cz>, 2002
 # $Id: test_remote_socket 43943 2008-01-28 13:38:58Z mzugec $
 
@@ -27,26 +24,21 @@ set -f
 
 MY_NAME=${0##*/}
 HOST="$1"
-[ -z "$HOST" ] && { echo -en "\nUsage:\n$MY_NAME HOST [PORT [TIMEOUT]]\n" 1>&2 ; exit 1 ; }
+[ -z "$HOST" ] && { echo -en "\nUsage:\n$MY_NAME HOST [PORT]\n" 1>&2 ; exit 1 ; }
 PORT="$2"
 [ -z "$PORT" ] && PORT=9100
-TIMEOUT="$3"
-[ -z "$TIMEOUT" ] && TIMEOUT=10
 
-# Use the binaries of the operating system (no aliases, functions, /usr/local/):
-export NETCAT=$( type -ap netcat | head -n 1 )
-export PING=$( type -ap ping | head -n 1 )
-
-# Test whether netcat is executable:
-if test -z "$NETCAT"
-then # Give up empty-handed when netcat is not executable because only the ping test is meaningless:
-     echo -en "\nGiving up empty-handed because 'netcat' not executable (no 'netcat' RPM installed?)\n" 1>&2
-     exit 11
-fi
 # Test whether connection is possible to port on host:
-if $NETCAT -w $TIMEOUT -z $HOST $PORT
+# If the test fails, show an error message and exit with non-zero exit code.
+# The outermost subshell avoids job control messages like "[1] job_pid" and "[1]+ Done..." or "[1]+ Terminated...".
+# The hardcoded 2 seconds timeout is waited in any case so that the test needs always basically that timeout time.
+# In POSIX shells wait returns the exit code of the job even if it had already terminated when wait was started,
+# see http://pubs.opengroup.org/onlinepubs/9699919799/utilities/wait.html that reads:
+# "This volume of POSIX.1-2008 requires the implementation to keep the status
+#  of terminated jobs available until the status is requested":
+if ( ( echo -n '' >/dev/tcp/$HOST/$PORT ) & ECHO_PID=$! ; sleep 2s ; kill $ECHO_PID &>/dev/null ; wait $ECHO_PID )
 then # Test whether port on host accepts data:
-     if echo -en "\r" | $NETCAT -w $TIMEOUT $HOST $PORT 2>&1
+     if ( ( echo -en '\r' >/dev/tcp/$HOST/$PORT ) & ECHO_PID=$! ; sleep 2s ; kill $ECHO_PID &>/dev/null ; wait $ECHO_PID )
      then echo -en "\nPort '$PORT' on host '$HOST' accepts data\n"
           exit 0
      fi
@@ -54,24 +46,8 @@ then # Test whether port on host accepts data:
      exit 4
 fi
 
-# The netcat test failed:
-echo -en "\nNo connection possible to port '$PORT' on host '$HOST' (wrong port or firewall active there?)\n\n"
-
-# Test whether ping is executable:
-if test -z "$PING"
-then # ping is not executable and the netcat test failed:
-     echo -en "\n'ping' not executable (no 'iputils' RPM installed?)\n" 1>&2
-     exit 10
-fi
-# Test whether host is accessible:
-if $PING -c 1 -w $TIMEOUT $HOST
-then # The ping test was successful but the netcat test failed:
-     echo -en "\nHost '$HOST' is accessible (responds to a 'ping')\n"
-     exit 3
-fi
-
-# Both the netcat test and the ping test failed:
-echo -en "\nHost '$HOST' unreachable (network issue or wrong host or firewall active?)\n"
+# The test failed:
+echo -en "\nNo connection possible to port '$PORT' on host '$HOST'."
+echo -en "\n(Network issue or wrong host or wrong port or firewall active there?)\n\n"
 exit 2
-
 

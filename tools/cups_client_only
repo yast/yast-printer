@@ -1,6 +1,6 @@
 #! /bin/bash
 #
-# Johannes Meixner <jsmeix@suse.de>, 2007, 2008, 2009, 2010, 2011
+# Johannes Meixner <jsmeix@suse.de>, 2007, 2008, 2009, 2010, 2011, 2014
 
 #set -x
 
@@ -16,6 +16,19 @@ set -f
 # it is unified so that only 'localhost' or '127.0.0.1' are set
 # (but not stuff like 'LocalHost' or '127.000.000.001').
 SERVERNAME="$( echo $1 | sed -e 's/localhost/localhost/i' -e 's/127\.0*0\.0*0\.0*1/127.0.0.1/' )"
+
+# When on a CUPS >= 1.6 client system a CUPS <= 1.5 server should be used
+# there must be a "/version=1.1" suffix to enforce using IPP version 1.1
+# because CUPS <= 1.5 servers reject higher IPP version requests with "Bad Request":
+if zypper versioncmp $( cups-config --version ) 1.6 | grep -q 'newer'
+then if test "none" != "$SERVERNAME" -a "localhost" != "$SERVERNAME" -a "127.0.0.1" != "$SERVERNAME"
+     then # On a CUPS >= 1.6 system "lpstat -h cups_1.5_server -p" results on stderr:
+          #   lpstat: Error - add '/version=1.1' to server name.
+          if lpstat -h $SERVERNAME -p 2>&1 1>/dev/null | grep -q "add '/version=1.1' to server name"
+          then SERVERNAME="${SERVERNAME}/version=1.1"
+          fi
+     fi
+fi
 
 if test -n "$SERVERNAME"
 then # When a SERVERNAME is specified, set it in /etc/cups/client.conf
@@ -55,63 +68,31 @@ fi
 # it is unified so that YaST only needs to test for 'localhost' and '127.0.0.1'
 # (but not for stuff like 'LocalHost' or '127.000.000.001').
 SERVERNAME="$( grep -i '^ServerName ' /etc/cups/client.conf | tr -s '[:blank:]' ' ' | cut -s -d' ' -f2 | tr -s '\n' ' ' | sed -e 's/ *$//' -e 's/localhost/localhost/i' -e 's/127\.0*0\.0*0\.0*1/127.0.0.1/' )"
+# A possible "/version=1.1" suffix must be removed to get only the plain server name
+# because both YaST and the test below only work with a plain server name:
+SERVERNAME="${SERVERNAME%%/version=1.1}"
 echo -n "$SERVERNAME"
 # For a nicer output on a terminal where stdout and stderr is mixed up,
 # output a '\n' on stderr to get subsequent stuff (e.g. the shell prompt
-# or error messages because of failed tests below) on a new line:
+# or error messages because of a failed test below) on a new line:
 echo 1>&2
 
 # Test if the active ServerName is accessible, if such an entry exists.
-# If executables for the tests are missing, show an error message and skip the test.
-# If a test fails, show an error message and exit with non-zero exit code.
-if test -z "$SERVERNAME"
-then exit 0
-fi
-EXITCODE=0
-# First do the most meaningful test and exit successfully if this works:
-NETCAT="$( type -P netcat )"
-if test -x "$NETCAT"
-then # Test if the server is accessible via the default IPP port.
-     # It is possible to run the cupsd on another port and specify this
-     # via 'ServerName host:port' but currently this special case is ignored.
-     if $NETCAT -w 1 -z $SERVERNAME 631 &>/dev/null
+if test -n "$SERVERNAME"
+then # If the test fails, show an error message and exit with non-zero exit code.
+     # The outermost subshell avoids job control messages like "[1] job_pid" and "[1]+ Done..." or "[1]+ Terminated...".
+     # The hardcoded 2 seconds timeout is waited in any case so that the test needs always basically that timeout time.
+     # In POSIX shells wait returns the exit code of the job even if it had already terminated when wait was started,
+     # see http://pubs.opengroup.org/onlinepubs/9699919799/utilities/wait.html that reads:
+     # "This volume of POSIX.1-2008 requires the implementation to keep the status
+     #  of terminated jobs available until the status is requested":
+     if ( ( echo -n '' >/dev/tcp/$SERVERNAME/631 ) & ECHO_PID=$! ; sleep 2s ; kill $ECHO_PID &>/dev/null ; wait $ECHO_PID )
      then echo "The server '$SERVERNAME' is accessible via port 631 (IPP/CUPS)." 1>&2
-          exit 0
      else echo "The server '$SERVERNAME' is not accessible via port 631 (IPP/CUPS)." 1>&2
-          EXITCODE=2
+          exit 2
      fi
-else echo "Cannot execute netcat" 1>&2
-fi
-# Only if the most meaningful test had failed (or cannot be executed), do a less meaningful test:
-PING="$( type -P ping )"
-if test -x "$PING"
-then # Test if the server responds to ping:
-     if $PING -w 1 -c 1 $SERVERNAME &>/dev/null
-     then echo "The server '$SERVERNAME' responds to a 'ping' in the network." 1>&2
-          # Exit unsuccessfully when the most meaningful test had failed
-          # but exit successfully when the most meaningful test could no be executed:
-          exit $EXITCODE
-     else echo "The server '$SERVERNAME' does not respond to a 'ping' in the network." 1>&2
-          EXITCODE=3
-     fi
-else echo "Cannot execute ping" 1>&2
-fi
-# Only if both tests above have failed (or cannot be executed), do a last test:
-HOST="$( type -P host )"
-if test -x "$HOST"
-then # Test if the server name is known by DNS:
-     if $HOST -W 1 $SERVERNAME &>/dev/null
-     then echo "The server '$SERVERNAME' is known by the DNS." 1>&2
-          # Exit unsuccessfully when the less meaningful test had failed
-          # or when the most meaningful test had failed and the less meaningful test could no be executed
-          # but exit successfully when both the above tests could no be executed:
-          exit $EXITCODE
-     else echo "The server '$SERVERNAME' is not known by the DNS." 1>&2
-          exit 4
-     fi
-else echo "Cannot execute host" 1>&2
 fi
 
-# Exit successfully as fallback (e.g. when netcat or ping or host cannot be executed):
+# Exit successfully - also as fallback:
 exit 0
 
