@@ -180,17 +180,18 @@ module Yast
                 splix_installed
               )
             ),
-            Left(
-              CheckBox(
-                Id("m2300w"),
-                # CheckBox to select or un-select the printer driver package m2300w.
-                # There is no need to have the package name "m2300w" in this text
-                # because it is shown in a separated column to the left of this text.
-                "m2300&w : " +
-                  _("Driver for Konica Minolta 2300W and 2400W (unmaintained)"),
-                m2300w_installed
-              )
-            ),
+            # Disabled legacy "Driver for Konica Minolta 2300W and 2400W (unmaintained)" so that it is no longer accessible in the dialog:
+            #Left(
+            #  CheckBox(
+            #     Id("m2300w"),
+            #    # CheckBox to select or un-select the printer driver package m2300w.
+            #    # There is no need to have the package name "m2300w" in this text
+            #    # because it is shown in a separated column to the left of this text.
+            #    "m2300&w : " +
+            #      _("Driver for Konica Minolta 2300W and 2400W (unmaintained)"),
+            #    m2300w_installed
+            #  )
+            #),
             Left(
               CheckBox(
                 Id("epson-inkjet-printer-escpr"),
@@ -642,6 +643,11 @@ module Yast
           if package_changed
             Printer.ppds = []
             Printer.connections = []
+            # Show the "Restart locally running CUPS daemon" user confirmation popup
+            # because usually a change in printer driver RPMs (installation or removal)
+            # changes print job processing which requires a restart of cupsd,
+            # see https://bugzilla.novell.com/show_bug.cgi?id=888782
+            Printerlib.GetAndSetCupsdStatus("restart")
             # There is no "abort" functionality which does a sudden death of the whole module (see dialogs.ycp).
             # Unfortunately when the YaST package installer is run via Printerlib::TestAndInstallPackage
             # it leaves a misused "abort" button labeled "Skip Autorefresh" with WidgetID "`abort"
