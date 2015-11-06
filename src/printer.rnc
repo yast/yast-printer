@@ -9,7 +9,9 @@ printer =
      | printcap
      | cups_installation
      | server_hostname
-     | spooler)*
+     | spooler
+     | cups_remote_server
+     | server_settings)*
   }
 config = element config { text }
 printer_default = element default { text }
@@ -27,7 +29,7 @@ ff =
 info = element info { text }
 job-sheets = element job-sheets { text }
 lprng-state = element lprng-state { text }
-name = element name { text }
+p_name = element name { text }
 ownppd = element ownppd { text }
 printcap =
   element printcap {
@@ -45,7 +47,7 @@ y2_printcap_entry =
   | location
   | manufacturer
   | model
-  | name
+  | p_name
   | nick
   | printcap_entry_options
   | ppd_options
@@ -97,3 +99,124 @@ type = element type { text }
 spooler = element spooler { text }
 server_hostname = element server_hostname { text }
 uri = element uri { text }
+
+cups_listentries = LIST, element listentry { text }*
+
+a_section = element section {
+  element Allow      { cups_listentries }? &
+  element AuthType   { cups_listentries }? &
+  element Encryption { cups_listentries }? &
+  element Order      { cups_listentries }? &
+  element Require    { cups_listentries }? &
+  element Satisfy    { cups_listentries }? &
+  element Key   { text }? &
+  element Value { text }? &
+  element sections {
+    LIST,
+    a_section*
+  }?
+}
+
+server_settings =
+  element server_settings {
+    element AccessLog                      { cups_listentries }? &
+    element Allow                          { cups_listentries }? &
+    element AuthClass                      { cups_listentries }? &
+    element AuthGroupName                  { cups_listentries }? &
+    element AuthType                       { cups_listentries }? &
+    element AutoPurgeJobs                  { cups_listentries }? &
+    element BrowseAddress                  { cups_listentries }? &
+    element BrowseAllow                    { cups_listentries }? &
+    element BrowseDeny                     { cups_listentries }? &
+    element BrowseInterval                 { cups_listentries }? &
+    element BrowseOrder                    { cups_listentries }? &
+    element BrowsePoll                     { cups_listentries }? &
+    element BrowsePort                     { cups_listentries }? &
+    element BrowseProtocols                { cups_listentries }? &
+    element BrowseLocalProtocols           { cups_listentries }? &
+    element BrowseRemoteProtocols          { cups_listentries }? &
+    element BrowseRelay                    { cups_listentries }? &
+    element BrowseShortNames               { cups_listentries }? &
+    element BrowseTimeout                  { cups_listentries }? &
+    element Browsing                       { cups_listentries }? &
+    element Classification                 { cups_listentries }? &
+    element ClassifyOverride               { cups_listentries }? &
+    element ConfigFilePerm                 { cups_listentries }? &
+    element ConfigurationChangeRestriction { cups_listentries }? &
+    element DataDir                        { cups_listentries }? &
+    element DefaultAuthType                { cups_listentries }? &
+    element DefaultCharset                 { cups_listentries }? &
+    element DefaultLanguage                { cups_listentries }? &
+    element DefaultPolicy                  { cups_listentries }? &
+    element DefaultShared                  { cups_listentries }? &
+    element Deny                           { cups_listentries }? &
+    element DocumentRoot                   { cups_listentries }? &
+    element Encryption                     { cups_listentries }? &
+    element ErrorLog                       { cups_listentries }? &
+    element FileDevice                     { cups_listentries }? &
+    element FilterLimit                    { cups_listentries }? &
+    element FilterNice                     { cups_listentries }? &
+    element FontPath                       { cups_listentries }? &
+    element Group                          { cups_listentries }? &
+    element HideImplicitMembers            { cups_listentries }? &
+    element HostNameLookups                { cups_listentries }? &
+    element ImplicitAnyClasses             { cups_listentries }? &
+    element ImplicitClasses                { cups_listentries }? &
+    element Include                        { cups_listentries }? &
+    element JobRetryInterval               { cups_listentries }? &
+    element JobRetryLimit                  { cups_listentries }? &
+    element KeepAlive                      { cups_listentries }? &
+    element KeepAliveTimeout               { cups_listentries }? &
+    element Krb5Keytab                     { cups_listentries }? &
+    element LimitRequestBody               { cups_listentries }? &
+    element Listen                         { cups_listentries }? &
+    element LogFilePerm                    { cups_listentries }? &
+    element LogLevel                       { cups_listentries }? &
+    element MaxClients                     { cups_listentries }? &
+    element MaxClientsPerHost              { cups_listentries }? &
+    element MaxCopies                      { cups_listentries }? &
+    element MaxJobs                        { cups_listentries }? &
+    element MaxJobsPerPrinter              { cups_listentries }? &
+    element MaxJobsPerUser                 { cups_listentries }? &
+    element MaxLogSize                     { cups_listentries }? &
+    element MaxRequestSize                 { cups_listentries }? &
+    element Order                          { cups_listentries }? &
+    element PageLog                        { cups_listentries }? &
+    element PassEnv                        { cups_listentries }? &
+    element Port                           { cups_listentries }? &
+    element PreserveJobFiles               { cups_listentries }? &
+    element PreserveJobHistory             { cups_listentries }? &
+    element Printcap                       { cups_listentries }? &
+    element PrintcapFormat                 { cups_listentries }? &
+    element PrintcapGUI                    { cups_listentries }? &
+    element ReloadTimeout                  { cups_listentries }? &
+    element RemoteRoot                     { cups_listentries }? &
+    element RequestRoot                    { cups_listentries }? &
+    element Require                        { cups_listentries }? &
+    element RIPCache                       { cups_listentries }? &
+    element Satisfy                        { cups_listentries }? &
+    element ServerAdmin                    { cups_listentries }? &
+    element ServerBin                      { cups_listentries }? &
+    element ServerCertificate              { cups_listentries }? &
+    element ServerKey                      { cups_listentries }? &
+    element ServerName                     { cups_listentries }? &
+    element ServerRoot                     { cups_listentries }? &
+    element ServerTokens                   { cups_listentries }? &
+    element SetEnv                         { cups_listentries }? &
+    element SSLListen                      { cups_listentries }? &
+    element SSLPort                        { cups_listentries }? &
+    element SystemGroup                    { cups_listentries }? &
+    element TempDir                        { cups_listentries }? &
+    element Timeout                        { cups_listentries }? &
+    element User                           { cups_listentries }? &
+    element sections {
+      LIST,
+      a_section*
+    }?
+  }
+
+cups_remote_server =
+  element cups_remote_server {
+    element Encryption { cups_listentries }? &
+    element ServerName { cups_listentries }?
+  }
