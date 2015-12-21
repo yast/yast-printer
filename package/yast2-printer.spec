@@ -17,7 +17,7 @@
 
 
 Name:           yast2-printer
-Version:        3.1.2
+Version:        3.1.3
 Release:        0
 
 BuildRoot:      %{_tmppath}/%{name}-%{version}-build
@@ -44,13 +44,13 @@ Requires:       yast2-ruby-bindings >= 1.0.0
 
 Summary:        YaST2 - Printer Configuration
 License:        GPL-2.0
-Group:          Documentation/SUSE
+Group:          System/YaST
 
 %package devel-doc
 BuildRequires:  cups-devel
 BuildRequires:  yast2-core-devel
 Summary:        Developer documentation for yast2-printer
-Group:          Documentation/SUSE
+Group:          System/YaST
 
 %description
 This package contains the YaST2 component for printer configuration.
