@@ -34,7 +34,7 @@ BuildRequires:  yast2-testsuite
 Recommends:     cups-client iptables netcat samba-client
 
 Requires:       /bin/mktemp /bin/ping /usr/bin/sed
-Requires:       yast2 >= 3.1.182
+Requires:       yast2 >= 3.1.183
 
 # Used to exclude libX11, libXau, libxcb, and libxcb-xlib from the requires list
 # which are pulled in by Autoreqprov because of the basicadd_displaytest tool:
