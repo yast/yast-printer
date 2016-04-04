@@ -25,6 +25,9 @@
 # Authors:     Johannes Meixner <jsmeix@suse.de>
 #
 # $Id: overview.ycp 29363 2006-03-24 08:20:43Z mzugec $
+
+require "yast2/system_time"
+
 module Yast
   module PrinterOverviewInclude
     def initialize_printer_overview(include_target)
