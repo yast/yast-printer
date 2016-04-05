@@ -25,6 +25,9 @@
 # Authors:     Johannes Meixner <jsmeix@suse.de>
 #
 # $Id: overview.ycp 29363 2006-03-24 08:20:43Z mzugec $
+
+require "yast2/system_time"
+
 module Yast
   module PrinterOverviewInclude
     def initialize_printer_overview(include_target)
@@ -161,10 +164,10 @@ module Yast
       # Determine whether or not it is currently a real client-only config
       # (i.e. a ServerName != "localhost/127.0.0.1" in /etc/cups/client.conf)
       # and ignore when it fails (i.e. use the fallback value silently):
-      time_before = Builtins.time
+      time_before = Yast2::SystemTime.uptime
       Printerlib.DetermineClientOnly
       if Printerlib.client_only
-        if Ops.greater_than(Ops.subtract(Builtins.time, time_before), 10)
+        if (Yast2::SystemTime.uptime - time_before) > 10
           Builtins.y2milestone(
             "DetermineClientOnly took longer than 10 seconds. CUPS server is '%1'",
             Printerlib.client_conf_server_name
@@ -259,9 +262,9 @@ module Yast
         end
       end
       # Determine whether or not a local cupsd is accessible:
-      time_before = Builtins.time
+      time_before = Yast2::SystemTime.uptime
       if local_cupsd_required && !Printerlib.GetAndSetCupsdStatus("")
-        if Ops.greater_than(Ops.subtract(Builtins.time, time_before), 10)
+        if (Yast2::SystemTime.uptime - time_before) > 10
           Builtins.y2milestone(
             "GetAndSetCupsdStatus('') took longer than 10 seconds."
           )

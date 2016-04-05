@@ -17,7 +17,7 @@
 
 
 Name:           yast2-printer
-Version:        3.1.3
+Version:        3.1.4
 Release:        0
 
 BuildRoot:      %{_tmppath}/%{name}-%{version}-build
@@ -34,7 +34,7 @@ BuildRequires:  yast2-testsuite
 Recommends:     cups-client iptables netcat samba-client
 
 Requires:       /bin/mktemp /bin/ping /usr/bin/sed
-Requires:       yast2 >= 2.16.12
+Requires:       yast2 >= 3.1.183
 
 # Used to exclude libX11, libXau, libxcb, and libxcb-xlib from the requires list
 # which are pulled in by Autoreqprov because of the basicadd_displaytest tool:
