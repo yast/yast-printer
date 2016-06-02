@@ -17,7 +17,7 @@
 
 
 Name:           yast2-printer
-Version:        3.1.5
+Version:        3.1.6
 Release:        0
 
 BuildRoot:      %{_tmppath}/%{name}-%{version}-build
@@ -46,17 +46,8 @@ Summary:        YaST2 - Printer Configuration
 License:        GPL-2.0
 Group:          System/YaST
 
-%package devel-doc
-BuildRequires:  cups-devel
-BuildRequires:  yast2-core-devel
-Summary:        Developer documentation for yast2-printer
-Group:          System/YaST
-
 %description
 This package contains the YaST2 component for printer configuration.
-
-%description devel-doc
-Developer documentation for yast2-printer.
 
 %prep
 %setup -n %{name}-%{version}
@@ -102,10 +93,5 @@ chmod 755 %{my_requires}
 #Documentation
 %dir %{yast_docdir}
 %{yast_docdir}/COPYING
-
-%files devel-doc
-%defattr(-,root,root)
-%doc %{yast_docdir}
-%exclude %{yast_docdir}/COPYING
 
 %changelog
