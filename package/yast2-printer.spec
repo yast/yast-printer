@@ -42,6 +42,8 @@ Requires:       yast2 >= 3.1.183
 
 Requires:       yast2-ruby-bindings >= 1.0.0
 
+Obsoletes:      yast2-printer-devel-doc
+
 Summary:        YaST2 - Printer Configuration
 License:        GPL-2.0
 Group:          System/YaST
