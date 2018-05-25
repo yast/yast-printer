@@ -571,15 +571,19 @@ module Yast
       content = VBox(
         Left(
           HBox(
-            ComboBox(Id(:hostname), Opt(:editable), hostname_label, [hostname]),
-            MenuButton(
-              _("Look up"),
-              [
-                Item(Id(:scan), scan_hosts_label),
-                # TRANSLATORS: Button to search for remote servers
-                Item(Id(:scan_all), _("Look up for All Hosts"))
-              ]
-            ) # TRANSLATORS: Label for menu to search for remote servers
+            Bottom(
+              ComboBox(Id(:hostname), Opt(:editable), hostname_label, [hostname])
+            ),
+            Bottom(
+              MenuButton(
+                _("Look up"),
+                [
+                  Item(Id(:scan), scan_hosts_label),
+                  # TRANSLATORS: Button to search for remote servers
+                  Item(Id(:scan_all), _("Look up for All Hosts"))
+                ]
+              ) # TRANSLATORS: Label for menu to search for remote servers
+            )
           )
         ),
         Left(InputField(Id(:port_or_queue), port_or_queue_label, port_or_queue)),
@@ -1745,20 +1749,24 @@ module Yast
           content = VBox(
             Left(
               HBox(
-                ComboBox(
-                  Id(:hostname),
-                  Opt(:editable),
-                  @hostname_label,
-                  [hostname]
+                Bottom(
+                  ComboBox(
+                    Id(:hostname),
+                    Opt(:editable),
+                    @hostname_label,
+                    [hostname]
+                  )
                 ),
-                MenuButton(
-                  _("Look up"),
-                  [
-                    Item(Id(:scan), _("Scan for IPP Servers")),
-                    Item(Id(:scan_broadcast), _("Scan for IPP Broadcasts")),
-                    Item(Id(:scan_all), _("Look up for All Hosts"))
-                  ]
-                ) # TRANSLATORS: Label for menu to search for remote servers
+                Bottom(
+                  MenuButton(
+                    _("Look up"),
+                    [
+                      Item(Id(:scan), _("Scan for IPP Servers")),
+                      Item(Id(:scan_broadcast), _("Scan for IPP Broadcasts")),
+                      Item(Id(:scan_all), _("Look up for All Hosts"))
+                    ]
+                  ) # TRANSLATORS: Label for menu to search for remote servers
+                )
               )
             ),
             Left(
