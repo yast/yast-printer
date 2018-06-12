@@ -26,8 +26,14 @@
 #              Johannes Meixner <jsmeix@suse.de>
 #
 # $Id: connectionwizard.ycp 27914 2006-02-13 14:32:08Z locilka $
+#
+#
+require "ui/text_helpers"
+
 module Yast
   module PrinterConnectionwizardInclude
+    include ::UI::TextHelpers
+
     def initialize_printer_connectionwizard(include_target)
       Yast.import "UI"
 
@@ -2320,7 +2326,7 @@ module Yast
       Wizard.SetContentsButtons(
         _("Connection Wizard"),
         contents,
-        Ops.get_string(@HELPS, "connection_wizard_dialog", ""),
+        div_with_direction(Ops.get_string(@HELPS, "connection_wizard_dialog", "")),
         # Set a new label for the "back" button, see the comment above:
         Label.CancelButton,
         # Set a new label for the "next" button, see the comment above:
