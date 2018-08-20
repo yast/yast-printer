@@ -44,7 +44,7 @@ Requires:       yast2-ruby-bindings >= 1.0.0
 Obsoletes:      yast2-printer-devel-doc
 
 Summary:        YaST2 - Printer Configuration
-License:        GPL-2.0
+License:        GPL-2.0-only
 Group:          System/YaST
 
 %description
@@ -93,6 +93,6 @@ chmod 755 %{my_requires}
 %{yast_ybindir}/basicadd_displaytest
 #Documentation
 %dir %{yast_docdir}
-%{yast_docdir}/COPYING
+%license COPYING
 
 %changelog
