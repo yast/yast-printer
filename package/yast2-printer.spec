@@ -93,6 +93,6 @@ chmod 755 %{my_requires}
 %{yast_ybindir}/basicadd_displaytest
 #Documentation
 %dir %{yast_docdir}
-%license COPYING
+%{yast_docdir} COPYING
 
 %changelog
