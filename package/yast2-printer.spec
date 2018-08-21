@@ -62,7 +62,9 @@ This package contains the YaST2 component for printer configuration.
 # Remove the license from the /usr/share/doc/packages directory,
 # it is also included in the /usr/share/licenses directory by using
 # the %license tag.
-rm $RPM_BUILD_ROOT/%{yast_docdir}/COPYING
+if [ -f $RPM_BUILD_ROOT/%{yast_docdir}/COPYING ]; then
+    rm $RPM_BUILD_ROOT/%{yast_docdir}/COPYING
+fi
 
 # Exclude libX11, libXau, libxcb, and libxcb-xlib from the requires list
 # which are pulled in by Autoreqprov because of the basicadd_displaytest tool:
