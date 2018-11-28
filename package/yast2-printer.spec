@@ -96,7 +96,7 @@ chmod 755 %{my_requires}
 %{yast_ybindir}/test_remote_smb
 %{yast_ybindir}/test_remote_socket
 %{yast_ybindir}/basicadd_displaytest
-%{_datadir}/icons/*
+%{yast_icondir}
 
 #Documentation
 %dir %{yast_docdir}
