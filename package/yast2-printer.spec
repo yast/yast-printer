@@ -17,7 +17,7 @@
 
 
 Name:           yast2-printer
-Version:        4.0.2
+Version:        4.0.3
 Release:        0
 
 BuildRoot:      %{_tmppath}/%{name}-%{version}-build
@@ -96,6 +96,8 @@ chmod 755 %{my_requires}
 %{yast_ybindir}/test_remote_smb
 %{yast_ybindir}/test_remote_socket
 %{yast_ybindir}/basicadd_displaytest
+%{yast_icondir}
+
 #Documentation
 %dir %{yast_docdir}
 %license COPYING
