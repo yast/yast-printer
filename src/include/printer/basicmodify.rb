@@ -24,6 +24,8 @@
 # Summary:     Basic modify dialog definition
 # Authors:     Johannes Meixner <jsmeix@suse.de>
 
+require "shellwords"
+
 module Yast
   module PrinterBasicmodifyInclude
     def initialize_printer_basicmodify(include_target)

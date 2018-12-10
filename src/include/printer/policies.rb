@@ -24,6 +24,8 @@
 # Summary:     DefaultPolicy and ErrorPolicy settings in cupsd.conf
 # Authors:     Johannes Meixner <jsmeix@suse.de>
 
+require "shellwords"
+
 module Yast
   module PrinterPoliciesInclude
     def initialize_printer_policies(include_target)

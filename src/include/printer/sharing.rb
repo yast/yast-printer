@@ -24,6 +24,8 @@
 # Summary:     Print queue sharing and publishing dialog definition
 # Authors:     Johannes Meixner <jsmeix@suse.de>
 
+require "shellwords"
+
 module Yast
   module PrinterSharingInclude
     def initialize_printer_sharing(include_target)

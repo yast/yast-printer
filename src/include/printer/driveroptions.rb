@@ -24,6 +24,8 @@
 # Summary:     Driver options dialog definition
 # Authors:     Johannes Meixner <jsmeix@suse.de>
 
+require "shellwords"
+
 module Yast
   module PrinterDriveroptionsInclude
     def initialize_printer_driveroptions(include_target)

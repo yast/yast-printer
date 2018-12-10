@@ -26,6 +26,8 @@
 #
 # Representation of the configuration of printer.
 # Input and output routines.
+
+require "shellwords"
 require "yast"
 
 module Yast

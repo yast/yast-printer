@@ -24,6 +24,7 @@
 # Summary:     Overview dialog definition
 # Authors:     Johannes Meixner <jsmeix@suse.de>
 
+require "shellwords"
 require "yast2/system_time"
 
 module Yast

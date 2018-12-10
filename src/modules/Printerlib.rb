@@ -25,6 +25,7 @@
 # Authors:     Michal Zugec <mzugec@suse.cz>
 #              Johannes Meixner <jsmeix@suse.de>
 
+require "shellwords"
 require "yast"
 
 module Yast

@@ -24,6 +24,8 @@
 # Summary:     Printing via network dialog definition
 # Authors:     Johannes Meixner <jsmeix@suse.de>
 
+require "shellwords"
+
 module Yast
   module PrinterPrintingvianetworkInclude
     def initialize_printer_printingvianetwork(include_target)

@@ -25,6 +25,8 @@
 # Authors:     Michal Zugec <mzugec@suse.de>
 #              Johannes Meixner <jsmeix@suse.de>
 
+require "shellwords"
+
 module Yast
   module PrinterConnectionwizardInclude
     def initialize_printer_connectionwizard(include_target)

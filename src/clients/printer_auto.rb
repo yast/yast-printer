@@ -49,6 +49,9 @@
 # @return [Hash] edited settings, Summary or boolean on success depending on called function
 # @example map mm = $[ "FAIL_DELAY" : "77" ];
 # @example map ret = WFM::CallFunction ("printer_auto", [ "Summary", mm ]);
+
+require "shellwords"
+
 module Yast
   class PrinterAutoClient < Client
     def main

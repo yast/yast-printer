@@ -24,6 +24,8 @@
 # Summary:     Add Driver dialog definition
 # Authors:     Johannes Meixner <jsmeix@suse.de>
 
+require "shellwords"
+
 module Yast
   module PrinterDriveraddInclude
     def initialize_printer_driveradd(include_target)
