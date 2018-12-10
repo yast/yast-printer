@@ -25,8 +25,6 @@
 # Authors:	Michal Zugec <mzugec@suse.cz>
 #              Johannes Meixner <jsmeix@suse.de>
 #
-# $Id: printer_auto.ycp 27914 2006-02-13 14:32:08Z locilka $
-#
 # This is a client for autoinstallation. It takes its arguments,
 # goes through the configuration and return the setting.
 # Does not do any changes to the configuration.

@@ -23,8 +23,7 @@
 # Package:     Configuration of printer
 # Summary:     DefaultPolicy and ErrorPolicy settings in cupsd.conf
 # Authors:     Johannes Meixner <jsmeix@suse.de>
-#
-# $Id: policies.ycp 27914 2006-02-13 14:32:08Z locilka $
+
 module Yast
   module PrinterPoliciesInclude
     def initialize_printer_policies(include_target)

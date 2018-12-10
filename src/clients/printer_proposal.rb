@@ -24,10 +24,9 @@
 # Summary:	Proposal function dispatcher.
 # Authors:	Johannes Meixner <jsmeix@suse.de>
 #
-# $Id: printer_proposal.ycp 27914 2006-02-13 14:32:08Z locilka $
-#
 # Proposal function dispatcher for printer configuration.
 # See source/installation/proposal/proposal-API.txt
+
 module Yast
   class PrinterProposalClient < Client
     def main

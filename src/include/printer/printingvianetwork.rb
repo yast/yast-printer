@@ -23,8 +23,7 @@
 # Package:     Configuration of printer
 # Summary:     Printing via network dialog definition
 # Authors:     Johannes Meixner <jsmeix@suse.de>
-#
-# $Id: printingvianetwork.ycp 27914 2006-02-13 14:32:08Z locilka $
+
 module Yast
   module PrinterPrintingvianetworkInclude
     def initialize_printer_printingvianetwork(include_target)

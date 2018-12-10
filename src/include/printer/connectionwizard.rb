@@ -24,8 +24,7 @@
 # Summary:     Connection Wizard
 # Authors:     Michal Zugec <mzugec@suse.de>
 #              Johannes Meixner <jsmeix@suse.de>
-#
-# $Id: connectionwizard.ycp 27914 2006-02-13 14:32:08Z locilka $
+
 module Yast
   module PrinterConnectionwizardInclude
     def initialize_printer_connectionwizard(include_target)

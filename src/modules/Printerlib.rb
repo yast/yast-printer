@@ -24,8 +24,7 @@
 # Summary:     Common functionality
 # Authors:     Michal Zugec <mzugec@suse.cz>
 #              Johannes Meixner <jsmeix@suse.de>
-#
-# $Id: Printerlib.ycp 27914 2006-02-13 14:32:08Z locilka $
+
 require "yast"
 
 module Yast

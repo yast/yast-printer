@@ -23,8 +23,7 @@
 # Package:     Configuration of printer
 # Summary:     Driver options dialog definition
 # Authors:     Johannes Meixner <jsmeix@suse.de>
-#
-# $Id: driveroptions.ycp 27914 2006-02-13 14:32:08Z locilka $
+
 module Yast
   module PrinterDriveroptionsInclude
     def initialize_printer_driveroptions(include_target)

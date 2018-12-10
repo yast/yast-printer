@@ -23,8 +23,7 @@
 # Package:     Configuration of printer
 # Summary:     Add Driver dialog definition
 # Authors:     Johannes Meixner <jsmeix@suse.de>
-#
-# $Id: driveradd.ycp 27914 2006-02-13 14:32:08Z locilka $
+
 module Yast
   module PrinterDriveraddInclude
     def initialize_printer_driveradd(include_target)

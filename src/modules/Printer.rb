@@ -24,8 +24,6 @@
 # Summary:     Printer settings, input and output functions
 # Authors:     Johannes Meixner <jsmeix@suse.de>
 #
-# $Id: Printer.ycp 27914 2006-02-13 14:32:08Z locilka $
-#
 # Representation of the configuration of printer.
 # Input and output routines.
 require "yast"
