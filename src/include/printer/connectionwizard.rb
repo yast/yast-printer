@@ -288,56 +288,27 @@ module Yast
           "."
         )
         # Let the whole pipe fail if any of its commands fail (requires bash):
-        grepcommand = Ops.add(
-          Ops.add(
-            Ops.add(
-              Ops.add(
-                Ops.add("set -o pipefail ; egrep '^DeviceURI ", scheme),
-                "://[^:]+:[^@]+@"
-              ),
-              part1
-            ),
-            "/"
-          ),
-          part2
-        )
+        grepcommand = "set -o pipefail ; egrep '^DeviceURI " + scheme + "://[^:]+:[^@]+@" + part1 + "/" + part2
         if "lpd" == scheme
           # to describe who requested a print job in the form lpd://username@ip-address-or-hostname/...
           # (i.e. grep only for "username@" instead of the usual "username:password@"):
-          grepcommand = Ops.add(
-            Ops.add(
-              Ops.add(
-                Ops.add(
-                  Ops.add("set -o pipefail ; egrep '^DeviceURI ", scheme),
-                  "://[^@]+@"
-                ),
-                part1
-              ),
-              "/"
-            ),
-            part2
-          )
+          grepcommand = "set -o pipefail ; egrep '^DeviceURI " + scheme + "://[^@]+@" + part1 + "/" + part2
         end
         if "" != Ops.get(parts, 3, "")
           part3 = Builtins.mergestring(
             Builtins.splitstring(Ops.get(parts, 3, ""), special_chars),
             "."
           )
-          grepcommand = Ops.add(Ops.add(grepcommand, "/"), part3)
+          grepcommand += "/" + part3
         end
-        grepcommand = Ops.add(grepcommand, "$' /etc/cups/printers.conf")
-        Printerlib.ExecuteBashCommand(
-          Ops.add(grepcommand, " | sort -u | wc -l | tr -d '[:space:]'")
-        )
+        grepcommand += "$' /etc/cups/printers.conf"
+        grepcommand += " | sort -u | wc -l | tr -d '[:space:]'"
+        Printerlib.ExecuteBashCommand(grepcommand)
         if "1" == Ops.get_string(Printerlib.result, "stdout", "")
           # are unambiguous (exactly one or several exactly same such DeviceURIs)
           # so that I can actually get it form /etc/cups/printers.conf:
-          if Printerlib.ExecuteBashCommand(
-              Ops.add(
-                grepcommand,
-                " | head -n 1 | cut -s -d ' ' -f 2 | tr -d '[:space:]'"
-              )
-            )
+          grepcommand += " | head -n 1 | cut -s -d ' ' -f 2 | tr -d '[:space:]'"
+          if Printerlib.ExecuteBashCommand(grepcommand)
             return Ops.get_string(Printerlib.result, "stdout", "")
           end
         end
@@ -382,10 +353,10 @@ module Yast
             if Builtins.issubstring(ppd, "/cups/ppd/")
               # which suppresses it in certain "lpinfo -m" output.
               # Note the YCP quoting: \" becomes " and \\n becomes \n in the commandline.
-              commandline = Ops.add(
-                Ops.add("grep '^*NickName' ", ppd),
-                " | cut -s -d '\"' -f2 | sed -e 's/(recommended)//' -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | tr -s ' ' | tr -d '\\n'"
-              )
+              commandline = "grep '^*NickName' " + ppd.shellescape
+              commandline += " | cut -s -d '\"' -f2"
+              commandline += " | sed -e 's/(recommended)//' -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//'"
+              commandline += " | tr -s ' ' | tr -d '\\n'"
               if Printerlib.ExecuteBashCommand(commandline)
                 current_model_info = Ops.get_string(
                   Printerlib.result,
@@ -1498,15 +1469,7 @@ module Yast
               "ls -1 /usr/lib*/cups/backend/smb | head -n1 | tr -d '[:space:]'"
             )
             # readlink is in the coreutils RPM so that it is available in any case.
-            Printerlib.ExecuteBashCommand(
-              Ops.add(
-                Ops.add(
-                  "readlink ",
-                  Ops.get_string(Printerlib.result, "stdout", "")
-                ),
-                " | tr -d '[:space:]'"
-              )
-            )
+            Printerlib.ExecuteBashCommand("readlink " + Ops.get_string(Printerlib.result, "stdout", "") + " | tr -d '[:space:]'")
             # Only if /usr/lib[64]/cups/backend/smb -> /usr/bin/get_printing_ticket
             # there is support for Active Directory (R):
             if "/usr/bin/get_printing_ticket" ==
@@ -3267,10 +3230,7 @@ module Yast
               UI.ChangeWidget(Id(:active_directory_check_box), :Value, false)
               UI.ChangeWidget(Id(:active_directory_check_box), :Enabled, false)
             else
-              smb_backend_link_target_commandline = Ops.add(
-                Ops.add("readlink ", @smb_backend_link_name),
-                " | tr -d '[:space:]'"
-              )
+              smb_backend_link_target_commandline = + "readlink " + @smb_backend_link_name.shellescape + " | tr -d '[:space:]'"
               if Convert.to_boolean(
                   UI.QueryWidget(Id(:active_directory_check_box), :Value)
                 )
@@ -3305,10 +3265,7 @@ module Yast
                   # make sure that the symbolic link /usr/lib[64]/cups/backend/smb
                   # points to /usr/bin/get_printing_ticket:
                   Printerlib.ExecuteBashCommand(
-                    Ops.add(
-                      "ln -sf /usr/bin/get_printing_ticket ",
-                      @smb_backend_link_name
-                    )
+                    "ln -sf /usr/bin/get_printing_ticket " + @smb_backend_link_name.shellescape
                   )
                 end
               else
@@ -3328,7 +3285,7 @@ module Yast
                 # only let the symbolic link /usr/lib[64]/cups/backend/smb
                 # point to its traditional target /usr/bin/smbspool (provided by samba-client):
                 Printerlib.ExecuteBashCommand(
-                  Ops.add("ln -sf /usr/bin/smbspool ", @smb_backend_link_name)
+                  "ln -sf /usr/bin/smbspool " + @smb_backend_link_name.shellescape
                 )
               end
               # Detremine and set the actually right state of the active_directory_check_box:
