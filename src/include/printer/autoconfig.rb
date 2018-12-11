@@ -107,9 +107,7 @@ module Yast
             Printerlib.client_conf_server_name
           )
         else
-          if !Printerlib.ExecuteBashCommand(
-              Ops.add(Printerlib.yast_bin_dir, "cups_client_only none")
-            )
+          if !Printerlib.ExecuteBashCommand(Printerlib.yast_bin_dir + "cups_client_only none")
             Popup.ErrorDetails(
               _(
                 "Failed to remove the 'ServerName' entry in /etc/cups/client.conf"
