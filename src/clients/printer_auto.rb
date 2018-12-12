@@ -276,7 +276,7 @@ module Yast
       Builtins.y2milestone("Printer auto finished")
       Builtins.y2milestone("----------------------------------------")
 
-      deep_copy(@ret) 
+      deep_copy(@ret)
 
       # EOF
     end
@@ -354,7 +354,7 @@ module Yast
       # Intentionally not escaping file_name in the "grep" call:
       # If there are weird characters in file_name, we might simply make one backup
       # of it too many which won't hurt.
-      if Printerlib.ExecuteBashCommand("rpm -V -f " + file_name.shellescape + " | grep -q '^..5.*" + file_name + "$'")
+      if Printerlib.ExecuteBashCommand("rpm -V -f " + file_name.shellescape + " | grep -q '^..5.*'" + file_name.shellescape + "'$'")
         if Printerlib.ExecuteBashCommand("cp -p " + file_name.shellescape + " " + file_name.shellescape + ".yast2save")
           return true
         end

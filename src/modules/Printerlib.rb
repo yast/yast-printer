@@ -143,7 +143,7 @@ module Yast
       # because alternatives would be handled in the upper-level functions
       # (e.g. in the user dialogs) which call TestAndInstallPackage:
       if "installed" == action
-        if ExecuteBashCommand(Ops.add(Ops.add("rpm -q '", package_name), "'"))
+        if ExecuteBashCommand("rpm -q " + package_name.shellescape)
           Builtins.y2milestone(
             "TestAndInstallPackage: package '%1' is installed",
             Ops.get_string(@result, "stdout", package_name)
@@ -159,7 +159,7 @@ module Yast
         return false
       end
       if "install" == action
-        if ExecuteBashCommand(Ops.add(Ops.add("rpm -q '", package_name), "'"))
+        if ExecuteBashCommand("rpm -q " + package_name.shellescape)
           Builtins.y2milestone(
             "TestAndInstallPackage: package '%1' is already installed",
             Ops.get_string(@result, "stdout", package_name)
@@ -228,7 +228,7 @@ module Yast
         end
       end
       if "remove" == action
-        if !ExecuteBashCommand(Ops.add(Ops.add("rpm -q '", package_name), "'"))
+        if !ExecuteBashCommand("rpm -q " + package_name.shellescape)
           Builtins.y2milestone(
             "TestAndInstallPackage: skip remove because %1",
             Ops.get_string(@result, "stdout", "package is not installed")
@@ -268,9 +268,7 @@ module Yast
         # Therefore there is a test if the removal would break RPM dependencies
         # but intentionally it is not tested whether the removal
         # would "break" whatever kind of soft requirements (Recommends).
-        if !ExecuteBashCommand(
-            Ops.add(Ops.add("rpm -e --test '", package_name), "'")
-          )
+        if !ExecuteBashCommand("rpm -e --test " + package_name.shellescape)
           # Therefore the exact RPM message is shown via a separated Popup::ErrorDetails.
           Popup.ErrorDetails(
             Builtins.sformat(
@@ -295,9 +293,7 @@ module Yast
             return false
           end
         end
-        if !ExecuteBashCommand(
-            Ops.add(Ops.add("rpm -e --nodeps '", package_name), "'")
-          )
+        if !ExecuteBashCommand("rpm -e --nodeps " + package_name.shellescape)
           Builtins.y2milestone(
             "TestAndInstallPackage: Failed to remove package %1.",
             package_name
@@ -387,7 +383,7 @@ module Yast
           Popup.ErrorDetails(
             _("Failed to enable starting of the CUPS daemon during system boot"),
             Service.Error
-          ) 
+          )
           # This is not a fatal error, therefore return "successfully" nevertheless.
         end
         return true
@@ -446,7 +442,7 @@ module Yast
                   "Failed to enable starting of the CUPS daemon during system boot"
                 ),
                 Service.Error
-              ) 
+              )
               # This is not a fatal error, therefore return "successfully" nevertheless.
             end
           end
@@ -487,7 +483,7 @@ module Yast
     end
 
     def DetermineClientOnly
-      if ExecuteBashCommand(Ops.add(@yast_bin_dir, "cups_client_only"))
+      if ExecuteBashCommand(@yast_bin_dir + "cups_client_only")
         @client_conf_server_name = Ops.get_string(@result, "stdout", "")
         if "" != @client_conf_server_name &&
             "localhost" != @client_conf_server_name &&
@@ -537,9 +533,7 @@ module Yast
     end
 
     def DetermineBrowsing
-      if ExecuteBashCommand(
-          Ops.add(@yast_bin_dir, "modify_cupsd_conf Browsing")
-        )
+      if ExecuteBashCommand(@yast_bin_dir + "modify_cupsd_conf Browsing")
         browsing = Builtins.tolower(Ops.get_string(@result, "stdout", "On"))
         if "off" == browsing || "no" == browsing
           @cupsd_conf_browsing_on = false
@@ -554,9 +548,7 @@ module Yast
     end
 
     def DetermineBrowseAllow
-      if ExecuteBashCommand(
-          Ops.add(@yast_bin_dir, "modify_cupsd_conf BrowseAllow")
-        )
+      if ExecuteBashCommand(@yast_bin_dir + "modify_cupsd_conf BrowseAllow")
         # but possible duplicate BrowseAllow values are not removed in the command output:
         @cupsd_conf_browse_allow = Builtins.toset(
           Builtins.splitstring(Ops.get_string(@result, "stdout", "all"), " ")
@@ -569,9 +561,7 @@ module Yast
     end
 
     def DetermineBrowsePoll
-      if ExecuteBashCommand(
-          Ops.add(@yast_bin_dir, "modify_cupsd_conf BrowsePoll")
-        )
+      if ExecuteBashCommand(@yast_bin_dir + "modify_cupsd_conf BrowsePoll")
         # but possible duplicate BrowsePoll values are not removed in the command output:
         @cupsd_conf_browse_poll = Builtins.toset(
           Builtins.splitstring(Ops.get_string(@result, "stdout", ""), " ")
@@ -604,9 +594,7 @@ module Yast
         dirty_clean_interval = 0
       end
       # Determine the DirtyCleanInterval value in /etc/cups/cupsd.conf:
-      if ExecuteBashCommand(
-          Ops.add(@yast_bin_dir, "modify_cupsd_conf DirtyCleanInterval")
-        )
+      if ExecuteBashCommand(@yast_bin_dir + "modify_cupsd_conf DirtyCleanInterval")
         # the latter would require 'import "Printer"' but Printer does already 'import "Printerlib"'
         # and a cyclic import drives the YaST machinery mad (it collapses with "too many open files"):
         dirty_clean_interval_string = Builtins.filterchars(
@@ -616,7 +604,7 @@ module Yast
         if "" != dirty_clean_interval_string &&
             nil != Builtins.tointeger(dirty_clean_interval_string)
           dirty_clean_interval = Builtins.tointeger(dirty_clean_interval_string)
-        end 
+        end
         # Use the above defined fallback value 30 or the CUPS 1.3.x value 0
         # when there is no DirtyCleanInterval entry (this applies also for CUPS 1.3.x)
         # or when the DirtyCleanInterval value cannot be converted to an integer.

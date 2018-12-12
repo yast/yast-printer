@@ -296,32 +296,16 @@ module Yast
       # Local variables:
       @create_database_progress_filename = "/var/lib/YaST2/create_printer_ppd_database.progress"
       @database_filename = "/var/lib/YaST2/printer_ppd_database.ycp"
-      @create_database_commandline = Ops.add(
-        "/usr/lib/YaST2/bin/create_printer_ppd_database >",
-        @database_filename
-      )
+      @create_database_commandline = "/usr/lib/YaST2/bin/create_printer_ppd_database >" + @database_filename
       @autodetect_printers_progress_filename = "/var/lib/YaST2/autodetect_printers.progress"
       @autodetected_printers_filename = "/var/lib/YaST2/autodetected_printers.ycp"
-      @autodetect_printers_commandline = Ops.add(
-        Ops.add(
-          Ops.add("export PROGRESS=", @autodetect_printers_progress_filename),
-          " ; /usr/lib/YaST2/bin/autodetect_printers >"
-        ),
-        @autodetected_printers_filename
-      )
+      @autodetect_printers_commandline = "export PROGRESS=" + @autodetect_printers_progress_filename +
+        " ; /usr/lib/YaST2/bin/autodetect_printers >" + @autodetected_printers_filename
       @autodetected_queues_filename = "/var/lib/YaST2/autodetected_print_queues.ycp"
-      @autodetect_queues_commandline = Ops.add(
-        "/usr/lib/YaST2/bin/autodetect_print_queues >",
-        @autodetected_queues_filename
-      )
+      @autodetect_queues_commandline = "/usr/lib/YaST2/bin/autodetect_print_queues >" + @autodetected_queues_filename
       @driver_options_filename = "/var/lib/YaST2/printer_driver_options.ycp"
-      @determine_printer_driver_options_commandline = Ops.add(
-        Ops.add(
-          "/usr/lib/YaST2/bin/determine_printer_driver_options >",
-          @driver_options_filename
-        ),
-        " "
-      )
+      @determine_printer_driver_options_commandline =
+        "/usr/lib/YaST2/bin/determine_printer_driver_options >" + @driver_options_filename
     end
 
     # Abort function
@@ -354,9 +338,7 @@ module Yast
       if progress_feedback
         # Empty an existing progress file so that the DownloadProgress starts at the beginning.
         # Don't care if this command is successful. All what matters is if CreateDatabase() works.
-        Printerlib.ExecuteBashCommand(
-          Ops.add("cat /dev/null >", @create_database_progress_filename)
-        )
+        Printerlib.ExecuteBashCommand("cat /dev/null >" + @create_database_progress_filename)
         UI.OpenDialog(
           MinSize(
             60,
@@ -478,9 +460,7 @@ module Yast
       if progress_feedback
         # Empty an existing progress file so that the DownloadProgress starts at the beginning.
         # Don't care if this command is successful.
-        Printerlib.ExecuteBashCommand(
-          Ops.add("cat /dev/null >", @autodetect_printers_progress_filename)
-        )
+        Printerlib.ExecuteBashCommand("cat /dev/null >" + @autodetect_printers_progress_filename)
         UI.OpenDialog(
           MinSize(
             60,
@@ -664,11 +644,9 @@ module Yast
         end
       end
       return false if "" == queue_name
-      commandline = Ops.add(
-        @determine_printer_driver_options_commandline,
-        queue_name
-      )
-      if !Printerlib.ExecuteBashCommand(commandline)
+      if !Printerlib.ExecuteBashCommand(
+           @determine_printer_driver_options_commandline + queue_name.shellescape
+         )
         Popup.ErrorDetails(
           Builtins.sformat(
             # Only a simple message because this error does not happen on a normal system
@@ -831,7 +809,7 @@ module Yast
             words_start_with_known_manufacturer = true
             raise Break
           end
-        end 
+        end
 
         if 1 == max_words || 2 == max_words
           if words_start_with_known_manufacturer
@@ -978,7 +956,7 @@ module Yast
             Ops.set(words, 0, Ops.add("^", Ops.get(words, 0, "")))
             raise Break
           end
-        end 
+        end
 
         # Concatenate the words by the regular expression '.*' so that the search result
         # could hopefully fit better to what the user actually expects to get,
@@ -1074,7 +1052,7 @@ module Yast
             try_again = true
             raise Break
           end
-        end 
+        end
 
         # Avoid an endless loop:
         if Ops.greater_than(trailing_number, 10000)
@@ -1153,7 +1131,7 @@ module Yast
             @selected_queues_index = queues_index if @current_queue_name == name
           end
         end
-      end 
+      end
 
       # Show a fallback text if there are no queues:
       if Ops.less_than(Builtins.size(queue_items), 1)
@@ -1202,7 +1180,7 @@ module Yast
               connection
             )
           end
-        end 
+        end
 
         # AutodetectPrinters overwrites the existing connections list:
         if !AutodetectPrinters()
@@ -1238,7 +1216,7 @@ module Yast
             Builtins.substring(Ops.get(connection_entry, "uri", ""), 0, 10)
           parallel_uri_exists = true
         end
-      end 
+      end
 
       # Make a list of uri, model, and info entries of the connections
       # and take the connection_filter_string into account (if it is not the empty string).
@@ -1414,7 +1392,7 @@ module Yast
             @selected_connections_index = connections_index
           end
         end
-      end 
+      end
 
       # Sort the list according to the model:
       # connection_item[0] is `id(connections_index)
@@ -1581,7 +1559,7 @@ module Yast
             driver_items << Item(Id(ppds_index), driver_string)
           end
         end
-      end 
+      end
 
       if Builtins.size(driver_items) == 0
         # show a meaningful text as fallback entry ('Find More' is a button label).
@@ -1631,7 +1609,7 @@ module Yast
           selected_driver_items_index = driver_items_index
           raise Break
         end
-      end 
+      end
 
       if preselection && Ops.greater_or_equal(selected_driver_items_index, 0)
         # driver_items[selected_driver_items_index] is a driver_item and
@@ -1808,7 +1786,7 @@ module Yast
               raise Break
             end
           end
-        end 
+        end
 
         if Ops.greater_or_equal(driver_items_index, 0)
           Builtins.y2milestone(
@@ -2028,29 +2006,12 @@ module Yast
         @current_device_uri = ""
         return false
       end
-      # Note the bash quotings of the parameters with ' characters:
-      commandline = Ops.add(
-        Ops.add(
-          Ops.add(
-            Ops.add(
-              Ops.add(
-                Ops.add(
-                  Ops.add(
-                    Ops.add("/usr/sbin/lpadmin -h localhost -p '", queue_name),
-                    "' -v '"
-                  ),
-                  uri
-                ),
-                "' -m '"
-              ),
-              ppd
-            ),
-            "' -D '"
-          ),
-          description
-        ),
-        "' -E"
-      )
+      commandline = "/usr/sbin/lpadmin -h localhost"
+      commandline += " -p " + queue_name.shellescape
+      commandline += " -v " + uri.shellescape
+      commandline += " -m " + ppd.shellescape
+      commandline += " -D " + description.shellescape
+      commandline += " -E"
       if !Printerlib.ExecuteBashCommand(commandline)
         Popup.ErrorDetails(
           Builtins.sformat(
@@ -2070,12 +2031,7 @@ module Yast
         # Because this AddQueue function is only used to add a not-yet-existing queue,
         # it is safe to try to remove the queue in any case if the setup had failed
         # but ignore any possible errors here (e.g. when the queue does not exist).
-        Printerlib.ExecuteBashCommand(
-          Ops.add(
-            Ops.add("/usr/sbin/lpadmin -h localhost -x '", queue_name),
-            "'"
-          )
-        )
+        Printerlib.ExecuteBashCommand("/usr/sbin/lpadmin -h localhost -x " + queue_name.shellescape)
         @current_queue_name = ""
         @current_device_uri = ""
         return false
@@ -2083,13 +2039,10 @@ module Yast
       # If the new queue was created successfully, make it the default queue if this is requested:
       if is_default_queue
         # with other option settings so that a separate lpadmin command is called:
-        commandline = Ops.add(
-          Ops.add("/usr/sbin/lpadmin -h localhost -d '", queue_name),
-          "'"
-        )
+
         # Do not care if it fails to make it the default queue (i.e. show no error message to the user)
-        # because the default queue setting is nice to have but not mandatoty for a working queue:
-        Printerlib.ExecuteBashCommand(commandline)
+        # because the default queue setting is nice to have but not mandatory for a working queue:
+        Printerlib.ExecuteBashCommand("/usr/sbin/lpadmin -h localhost -d " + queue_name.shellescape)
       end
       # Try to set the requested default_paper_size if it is an available choice for this queue.
       # If no default_paper_size is requested, the CUPS default is used.
@@ -2108,27 +2061,13 @@ module Yast
         # (a queue with a "System V style interface script" cannot be set up with YaST).
         # '\>' is used to find an available choice also when it is the last value on the line.
         # Note the YCP quoting: \\< becomes \< and \\> becomes \> in the commandline.
-        commandline = Ops.add(
-          Ops.add(
-            Ops.add(
-              Ops.add("lpoptions -h localhost -p '", queue_name),
-              "' -l | grep '^PageSize.*\\<"
-            ),
-            default_paper_size
-          ),
-          "\\>'"
-        )
+        commandline = "lpoptions -h localhost -p " + queue_name.shellescape
+        commandline += " -l"
+        commandline += " | grep '^PageSize.*\\<'" + default_paper_size.shellescape + "'\\>'"
         if Printerlib.ExecuteBashCommand(commandline)
-          commandline = Ops.add(
-            Ops.add(
-              Ops.add(
-                Ops.add("/usr/sbin/lpadmin -h localhost -p '", queue_name),
-                "' -o 'PageSize="
-              ),
-              default_paper_size
-            ),
-            "'"
-          )
+          commandline = "/usr/sbin/lpadmin -h localhost"
+          commandline += " -p " + queue_name.shellescape
+          commandline += " -o PageSize=" + default_paper_size.shellescape
           # Do not care if it fails to set the default_paper_size (i.e. show no error message to the user)
           # because the default_paper_size setting is nice to have but not mandatoty for a working queue:
           Printerlib.ExecuteBashCommand(commandline)
@@ -2166,12 +2105,7 @@ module Yast
         )
         return false
       end
-      # Note the bash quoting of the queue_name string with ' characters:
-      commandline = Ops.add(
-        Ops.add("/usr/sbin/lpadmin -h localhost -x '", queue_name),
-        "'"
-      )
-      if !Printerlib.ExecuteBashCommand(commandline)
+      if !Printerlib.ExecuteBashCommand("/usr/sbin/lpadmin -h localhost -x " + queue_name.shellescape)
         Popup.ErrorDetails(
           Builtins.sformat(
             # Only a simple message because this error does not happen on a normal system
@@ -2291,7 +2225,7 @@ module Yast
               end
               value_items_list = Builtins.add(value_items_list, Item(value))
             end
-          end 
+          end
 
 
           if "" != currently_selected_value
@@ -2314,7 +2248,7 @@ module Yast
             Item(Id(keyword), option_name, opened, value_items_list)
           )
         end
-      end 
+      end
 
       # Have the PageSize option topmost:
       if Ops.greater_or_equal(pagesize_option_index, 0)
@@ -2352,7 +2286,10 @@ module Yast
          "127.0" == Builtins.substring(server_name, 0, 5)
         return Printerlib.GetAndSetCupsdStatus("start")
 
-      elsif Printerlib.ExecuteBashCommand("( echo -n '' >/dev/tcp/"+ server_name +"/631 ) & ECHO_PID=$! ; sleep 2s ; kill $ECHO_PID &>/dev/null ; wait $ECHO_PID")
+      elsif Printerlib.ExecuteBashCommand(
+              "( echo -n '' >/dev/tcp/" + server_name.shellescape + "/631 ) & ECHO_PID=$!" +
+              " ; sleep 2s ; kill $ECHO_PID &>/dev/null ; wait $ECHO_PID"
+            )
         return true
       else
         Popup.Error(_("The server '" + server_name + "' is not available or not listening on port 631"))
@@ -2389,9 +2326,7 @@ module Yast
         _(
           "Launched hp-setup.\nYou must finish hp-setup before you can proceed with the printer configuration.\n"
         )
-      if !Printerlib.ExecuteBashCommand(
-          Ops.add(Printerlib.yast_bin_dir, "basicadd_displaytest")
-        )
+      if !Printerlib.ExecuteBashCommand(Printerlib.yast_bin_dir + "basicadd_displaytest")
         # because it would run without any contact to the user "in the background"
         # while in the foreground YaST waits for hp-setup to be finished
         # which is imposible for the user so that the result is a deadlock.

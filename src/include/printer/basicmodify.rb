@@ -138,8 +138,7 @@ module Yast
       # The leading part "/etc/" may vary depending on how the local cupsd
       # is installed or configured, see "/usr/bin/cups-config --serverroot".
       if "" != ppd
-        commandline = "test -r " + ppd.shellescape
-        if Printerlib.ExecuteBashCommand(commandline)
+        if Printerlib.ExecuteBashCommand("test -r " + ppd.shellescape)
           driver_options_content = PushButton(
             Id(:driver_options),
             # Label of a PushButton to go to a dialog
@@ -155,7 +154,9 @@ module Yast
         # which suppresses it in certain "lpinfo -m" output.
         # Note the YCP quoting: \" becomes " and \\n becomes \n in the commandline.
         commandline = "grep '^*NickName' " + ppd.shellescape
-        commandline += " | cut -s -d '\"' -f2 | sed -e 's/(recommended)//' -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | tr -s ' ' | tr -d '\\n'"
+        commandline += " | cut -s -d '\"' -f2"
+        commandline += " | sed -e 's/(recommended)//' -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//'"
+        commandline += " | tr -s ' ' | tr -d '\\n'"
         if Printerlib.ExecuteBashCommand(commandline)
           Builtins.y2milestone(
             "'%1' stdout (nick_name) is: '%2'",
@@ -207,7 +208,7 @@ module Yast
                   end
                 end
               end
-            end 
+            end
 
             Builtins.y2milestone(
               "Default paper size is: '%1'",

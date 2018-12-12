@@ -212,9 +212,7 @@ module Yast
                 Printerlib.client_conf_server_name
               )
             )
-            if !Printerlib.ExecuteBashCommand(
-                Ops.add(Printerlib.yast_bin_dir, "cups_client_only none")
-              )
+            if !Printerlib.ExecuteBashCommand(Printerlib.yast_bin_dir + "cups_client_only none")
               Popup.ErrorDetails(
                 _(
                   "Failed to remove the 'ServerName' entry in /etc/cups/client.conf"
@@ -716,31 +714,17 @@ module Yast
           # When this command fails for whatever reason, it is a safe fallback
           # to assume that there are no pending jobs in the queue:
           if Printerlib.ExecuteBashCommand(
-              Ops.add(
-                Ops.add(
-                  Ops.add(
-                    Ops.add("/usr/bin/lpstat -h localhost -o '", queue_name),
-                    "' | egrep -q '^"
-                  ),
-                  queue_name
-                ),
-                "-[0-9]+'"
-              )
+               "/usr/bin/lpstat -h localhost" +
+               " -o " + queue_name.shellescape +
+               " | egrep -q '^'" + queue_name.shellescape + "'-[0-9]+'"
             )
             pending_job_info = _(
               "There are pending print jobs which might be deleted before the testpage is printed."
             )
             if Printerlib.ExecuteBashCommand(
-                Ops.add(
-                  Ops.add(
-                    Ops.add(
-                      Ops.add("/usr/bin/lpstat -h localhost -o '", queue_name),
-                      "' -p '"
-                    ),
-                    queue_name
-                  ),
-                  "'"
-                )
+                 "/usr/bin/lpstat -h localhost" +
+                 " -o " + queue_name.shellescape +
+                 " -p " + queue_name.shellescape
               )
               pending_job_info = Ops.get_string(Printerlib.result, "stdout", "")
             end
@@ -761,12 +745,7 @@ module Yast
                 _("Print testpage after the other jobs"),
                 :focus_no
               )
-              if !Printerlib.ExecuteBashCommand(
-                  Ops.add(
-                    Ops.add("/usr/bin/cancel -a -h localhost '", queue_name),
-                    "'"
-                  )
-                )
+              if !Printerlib.ExecuteBashCommand("/usr/bin/cancel -a -h localhost " + queue_name.shellescape)
                 Popup.ErrorDetails(
                   Builtins.sformat(
                     # where %1 will be replaced by the queue name.
@@ -813,23 +792,12 @@ module Yast
         # Do not enforce to talk to the cupsd on localhost when submiting the testpage
         # because testpage printing must also work for a "client-only" config.
         if !Printerlib.ExecuteBashCommand(
-            Ops.add(
-              Ops.add(
-                Ops.add(
-                  Ops.add(
-                    Ops.add(
-                      Ops.add(Ops.add("/usr/bin/lp -d '", queue_name), "' -t '"),
-                      testprint_job_title
-                    ),
-                    "' -o page-label=\""
-                  ),
-                  queue_name
-                ),
-                ":YaST2testprint@$(hostname)\" "
-              ),
-              testprint_file_name
-            )
-          )
+             "/usr/bin/lp -d " + queue_name.shellescape +
+             " -t " + testprint_job_title.shellescape +
+             " -o page-label=" + queue_name.shellescape +
+             "\":YaST2testprint@$(hostname)\" " +
+             testprint_file_name.shellescape
+           )
           Popup.ErrorDetails(
             Builtins.sformat(
               # where %1 will be replaced by the queue name.
@@ -885,32 +853,18 @@ module Yast
           # When this command fails for whatever reason, it is a safe fallback
           # to assume that there are no pending jobs in the queue:
           if Printerlib.ExecuteBashCommand(
-              Ops.add(
-                Ops.add(
-                  Ops.add(
-                    Ops.add("/usr/bin/lpstat -h localhost -o '", queue_name),
-                    "' | egrep -q '^"
-                  ),
-                  queue_name
-                ),
-                "-[0-9]+'"
-              )
-            )
+               "/usr/bin/lpstat -h localhost" +
+               " -o " + queue_name.shellescape +
+               " | egrep -q '^'" + queue_name.shellescape + "'-[0-9]+'"
+             )
             pending_job_info = _(
               "There are pending print jobs which might be deleted now."
             )
             if Printerlib.ExecuteBashCommand(
-                Ops.add(
-                  Ops.add(
-                    Ops.add(
-                      Ops.add("/usr/bin/lpstat -h localhost -o '", queue_name),
-                      "' -p '"
-                    ),
-                    queue_name
-                  ),
-                  "'"
-                )
-              )
+                 "/usr/bin/lpstat -h localhost" +
+                 " -o " + queue_name.shellescape +
+                 " -p " + queue_name.shellescape
+               )
               pending_job_info = Ops.get_string(Printerlib.result, "stdout", "")
             end
             if Popup.AnyQuestionRichText(
@@ -930,12 +884,7 @@ module Yast
                 _("Do not delete them"),
                 :focus_no
               )
-              if !Printerlib.ExecuteBashCommand(
-                  Ops.add(
-                    Ops.add("/usr/bin/cancel -a -h localhost '", queue_name),
-                    "'"
-                  )
-                )
+              if !Printerlib.ExecuteBashCommand("/usr/bin/cancel -a -h localhost " + queue_name.shellescape)
                 Popup.ErrorDetails(
                   Builtins.sformat(
                     # where %1 will be replaced by the queue name.
@@ -952,16 +901,8 @@ module Yast
               # when something is really wrong.
               # Sleep 1 second in any case to let the backend process terminate orderly:
               Builtins.sleep(1000)
-              backend_is_running_commandline = Ops.add(
-                Ops.add(
-                  Ops.add(
-                    Ops.add("ps -C '", uri_scheme),
-                    "' -o pid=,args= | grep '"
-                  ),
-                  testprint_job_title
-                ),
-                "'"
-              )
+              backend_is_running_commandline = "ps -C " + uri_scheme.shellescape + " -o pid=,args="
+              backend_is_running_commandline += " | grep " + testprint_job_title.shellescape
               # Do nothing to be on the safe side if the next command fails for whatever reason:
               if Printerlib.ExecuteBashCommand(backend_is_running_commandline)
                 # Sleep 10 seconds to give the backend process more time to terminate orderly
@@ -976,16 +917,12 @@ module Yast
                   )
                   # Kill the backend process:
                   Printerlib.ExecuteBashCommand(
-                    Ops.add(
-                      backend_is_running_commandline,
-                      " | cut -s -d ' ' -f1 | head -n 1 | tr -d -c '[:digit:]'"
-                    )
+                    backend_is_running_commandline +
+                    " | cut -s -d ' ' -f1 | head -n 1 | tr -d -c '[:digit:]'"
                   )
                   backend_pid = Ops.get_string(Printerlib.result, "stdout", "")
                   if "" != backend_pid
-                    Printerlib.ExecuteBashCommand(
-                      Ops.add(Ops.add("kill -9 '", backend_pid), "'")
-                    )
+                    Printerlib.ExecuteBashCommand("kill -9 " + backend_pid.shellescape)
                   end
                 end
               end
@@ -999,23 +936,15 @@ module Yast
               "'"
             )
             Printerlib.ExecuteBashCommand(
-              Ops.add(
-                Ops.add(
-                  Ops.add(
-                    Ops.add(
-                      #   echo ' funprinter-1000-123 ' | sed -e 's/.*-//'
-                      # so that it works even if there is a '-' in the queue name
-                      # which is not allowed but may happen nevertheless, see
-                      # http://bugzilla.novell.com/show_bug.cgi?id=556819#c12
-                      # and the final tr removes in particular spaces and newline:
-                      "echo '",
-                      test_print_command_stdout
-                    ), # sed is greedy and cuts all up to the last '-' for example
-                    "' | grep -o ' "
-                  ),
-                  queue_name
-                ),
-                "-[0-9]* ' | sed -e 's/.*-//' | tr -d -c '[:digit:]'"
+              #   echo funprinter-1000-123 | sed -e 's/.*-//'
+              # so that it works even if there is a '-' in the queue name
+              # which is not allowed but may happen nevertheless, see
+              # http://bugzilla.novell.com/show_bug.cgi?id=556819#c12
+              # and the final tr removes in particular spaces and newline:
+              "echo " + test_print_command_stdout.shellescape +
+              " | grep -o " + queue_name.shellescape + "'-[0-9]* '" +
+              " | sed -e 's/.*-//' | tr -d -c '[:digit:]'"
+              # sed is greedy and cuts all up to the last '-' for example
               )
             )
             test_print_job_number = Ops.get_string(
@@ -1026,10 +955,8 @@ module Yast
             test_print_cups_error_log = ""
             if "" != test_print_job_number
               Printerlib.ExecuteBashCommand(
-                Ops.add(
-                  Ops.add("grep '\\[Job ", test_print_job_number),
-                  "\\]' /var/log/cups/error_log | grep -v '^[dD]' | tail -n 20"
-                )
+                "grep '\\[Job '" + test_print_job_number.shellescape +
+                "'\\]' /var/log/cups/error_log | grep -v '^[dD]' | tail -n 20"
               )
               test_print_cups_error_log = Ops.add(
                 "...\n",
@@ -1108,9 +1035,7 @@ module Yast
             return nil
           end
           # Remove the 'ServerName' entry in /etc/cups/client.conf:
-          if !Printerlib.ExecuteBashCommand(
-              Ops.add(Printerlib.yast_bin_dir, "cups_client_only none")
-            )
+          if !Printerlib.ExecuteBashCommand(Printerlib.yast_bin_dir + "cups_client_only none")
             Popup.ErrorDetails(
               # Only a simple message because this error does not happen on a normal system
               # (i.e. a system which is not totally broken or totally messed up).

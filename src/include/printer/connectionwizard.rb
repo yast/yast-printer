@@ -117,7 +117,7 @@ module Yast
           Builtins.splitstring(output, character),
           encoding
         )
-      end 
+      end
 
       Builtins.y2milestone(
         "URIpercentEncoding from '%1' to '%2'",
@@ -163,7 +163,7 @@ module Yast
         if position != nil && position_lowercase != nil &&
             Ops.less_than(position_lowercase, position) ||
             position == nil && position_lowercase != nil
-          position = position_lowercase 
+          position = position_lowercase
           # For character = ":" and actual percent encoding = "%3a"
           #   position = 5
         end
@@ -218,7 +218,7 @@ module Yast
               Ops.less_than(position_lowercase, position) ||
               position == nil && position_lowercase != nil
             position = position_lowercase
-          end 
+          end
           # For character = "%" and encoding = "%25"
           #   position = nil
           # For character = ":" and encoding = "%3A"
@@ -232,7 +232,7 @@ module Yast
         #   output = "First%3aSecond%3AThird%25Rest"
         # For character = ":" and encoding = "%3A"
         #   output = "First:Second:Third%25Rest"
-      end 
+      end
 
       # output = "First:Second:Third%25Rest"
       Builtins.y2milestone(
@@ -473,7 +473,7 @@ module Yast
             connection_items = Builtins.add(connection_items, connection_item)
           end
         end
-      end 
+      end
 
       if backend ==
           Builtins.substring(current_device_uri, 0, Builtins.size(backend))
@@ -669,7 +669,7 @@ module Yast
                 Item(Id(device_node), device_node)
               )
             end
-          end 
+          end
 
           if !@current_serial_device_node_found
             if "" == @current_serial_device_node
@@ -742,7 +742,7 @@ module Yast
                       Item(Id(item_value), item_value)
                     )
                   end
-                end 
+                end
 
                 if !value_found
                   if "" == value
@@ -787,7 +787,7 @@ module Yast
                       Item(Id(item_value), item_value)
                     )
                   end
-                end 
+                end
 
                 if !value_found
                   if "" == value
@@ -832,7 +832,7 @@ module Yast
                       Item(Id(item_value), item_value)
                     )
                   end
-                end 
+                end
 
                 if !value_found
                   if "" == value
@@ -881,7 +881,7 @@ module Yast
                       Item(Id(item_value), item_text)
                     )
                   end
-                end 
+                end
 
                 if !value_found
                   if "" == value
@@ -926,7 +926,7 @@ module Yast
                       Item(Id(item_value), item_value)
                     )
                   end
-                end 
+                end
 
                 if !value_found
                   if "" == value
@@ -1089,7 +1089,11 @@ module Yast
             # ( hcitool scan | grep '...' ) & sleep 10 ; kill -9 $!
             # would kill only the sub shell.
             if !Printerlib.ExecuteBashCommand(
-                "hcitool scan >/tmp/hcitool_scan.out & sleep 10 ; kill -9 $! ; grep '..:..:..:..:..:..' /tmp/hcitool_scan.out | tr -s ' ' ; rm -f /tmp/hcitool_scan.out"
+                 "hcitool scan >/tmp/hcitool_scan.out & sleep 10" +
+                 " ; kill -9 $!" +
+                 " ; grep '..:..:..:..:..:..' /tmp/hcitool_scan.out" +
+                 " | tr -s ' '" +
+                 " ; rm -f /tmp/hcitool_scan.out"
               )
               Popup.ErrorDetails(
                 _("Failed to get a list of bluetooth device IDs."),
@@ -1156,7 +1160,7 @@ module Yast
                   end
                 end
               end
-            end 
+            end
 
             if !current_bluetooth_device_id_found
               if "" == current_bluetooth_device_id
@@ -1466,10 +1470,15 @@ module Yast
             end
             # Be backward compatible for openSUSE < 11.3 and be prepared for /usr/lib64/cups/
             Printerlib.ExecuteBashCommand(
-              "ls -1 /usr/lib*/cups/backend/smb | head -n1 | tr -d '[:space:]'"
+              "ls -1 /usr/lib*/cups/backend/smb" +
+              " | head -n1 | tr -d '[:space:]'"
             )
             # readlink is in the coreutils RPM so that it is available in any case.
-            Printerlib.ExecuteBashCommand("readlink " + Ops.get_string(Printerlib.result, "stdout", "") + " | tr -d '[:space:]'")
+            Printerlib.ExecuteBashCommand(
+              "readlink " +
+              Ops.get_string(Printerlib.result, "stdout", "") +
+              " | tr -d '[:space:]'"
+            )
             # Only if /usr/lib[64]/cups/backend/smb -> /usr/bin/get_printing_ticket
             # there is support for Active Directory (R):
             if "/usr/bin/get_printing_ticket" ==
@@ -2926,13 +2935,8 @@ module Yast
           when :tcp
             host = Convert.to_string(UI.QueryWidget(:hostname, :Value))
             port = Convert.to_string(UI.QueryWidget(:port_or_queue, :Value))
-            test_command = Builtins.sformat(
-              "%1test_remote_socket \"%2\" \"%3\" %4",
-              Printerlib.yast_bin_dir,
-              host,
-              port,
-              timeout
-            )
+            test_command = Printerlib.yast_bin_dir + "test_remote_socket"
+            test_command += " #{host.shellescape} #{port.shellescape} #{timeout.shellescape}"
             if !Printerlib.ExecuteBashCommand(test_command)
               Popup.ErrorDetails(
                 Builtins.sformat(
@@ -2953,13 +2957,8 @@ module Yast
             host = Convert.to_string(UI.QueryWidget(:hostname, :Value))
             queue = Convert.to_string(UI.QueryWidget(:port_or_queue, :Value))
             port = "515"
-            test_command = Builtins.sformat(
-              "%1test_remote_lpd \"%2\" \"%3\" %4",
-              Printerlib.yast_bin_dir,
-              host,
-              queue,
-              timeout
-            )
+            test_command = Printerlib.yast_bin_dir + "test_remote_lpd"
+            test_command += " #{host.shellescape} #{queue.shellescape} #{timeout.shellescape}"
             if !Printerlib.ExecuteBashCommand(test_command)
               Popup.ErrorDetails(
                 Builtins.sformat(
@@ -2979,13 +2978,8 @@ module Yast
           when :cups
             host = Convert.to_string(UI.QueryWidget(:hostname, :Value))
             queue = Convert.to_string(UI.QueryWidget(:queue, :Value))
-            test_command = Builtins.sformat(
-              "%1test_remote_ipp \"%2\" \"%3\" %4",
-              Printerlib.yast_bin_dir,
-              host,
-              queue,
-              timeout
-            )
+            test_command = Printerlib.yast_bin_dir + "test_remote_ipp"
+            test_command += " #{host.shellescape} #{queue.shellescape} #{timeout.shellescape}"
             if !Printerlib.ExecuteBashCommand(test_command)
               Popup.ErrorDetails(
                 Builtins.sformat(
@@ -3024,16 +3018,11 @@ module Yast
             workgroup = Convert.to_string(UI.QueryWidget(:domain, :Value))
             user = Convert.to_string(UI.QueryWidget(:user, :Value))
             password = Convert.to_string(UI.QueryWidget(:pass, :Value))
-            test_command = Builtins.sformat(
-              "%1test_remote_smb \"%2\" \"%3\" \"%4\" \"%5\" \"%6\" %7",
-              Printerlib.yast_bin_dir,
-              workgroup,
-              host,
-              queue,
-              user,
-              password,
-              timeout
-            )
+            test_command = Printerlib.yast_bin_dir + "test_remote_smb"
+            test_command += " #{workgroup.shellescape}"
+            test_command += " #{host.shellescape} #{queue.shellescape}"
+            test_command += " #{user.shellescape} #{password.shellescape}"
+            test_command += " #{timeout.shellescape}"
             if !Printerlib.ExecuteBashCommand(test_command)
               if @active_directory
                 Popup.ErrorDetails(
@@ -3076,15 +3065,12 @@ module Yast
             queue = Convert.to_string(UI.QueryWidget(:queue, :Value))
             user = Convert.to_string(UI.QueryWidget(:user, :Value))
             password = Convert.to_string(UI.QueryWidget(:pass, :Value))
-            test_command = Builtins.sformat(
-              "%1test_remote_novell \"%2\" \"%3\" \"%4\" \"%5\" %6",
-              Printerlib.yast_bin_dir,
-              host,
-              queue,
-              user,
-              password,
-              timeout
-            )
+
+            test_command = Printerlib.yast_bin_dir + "test_remote_novell"
+            test_command += " #{host.shellescape} #{queue.shellescape}"
+            test_command += " #{user.shellescape} #{password.shellescape}"
+            test_command += " #{timeout.shellescape}"
+
             if !Printerlib.ExecuteBashCommand(test_command)
               Popup.ErrorDetails(
                 Builtins.sformat(
@@ -3304,7 +3290,7 @@ module Yast
         end
       end
       # ret == `back || ret == `next
-      deep_copy(ret) 
+      deep_copy(ret)
       #UI::CloseDialog();
     end
   end
