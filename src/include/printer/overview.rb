@@ -946,7 +946,6 @@ module Yast
               " | sed -e 's/.*-//' | tr -d -c '[:digit:]'"
               # sed is greedy and cuts all up to the last '-' for example
               )
-            )
             test_print_job_number = Ops.get_string(
               Printerlib.result,
               "stdout",
