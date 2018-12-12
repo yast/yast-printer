@@ -678,7 +678,7 @@ module Yast
       # Therefore "modify_cupsd_conf Listen" reports 'localhost' but ignores '/var/run/cups/cups.sock'
       # so that ["localhost"] is the right fallback value here:
       listen_values = [""]
-      if Printerlib.ExecuteBashCommand(Printerlib.yast_bin_dir +"modify_cupsd_conf Listen")
+      if Printerlib.ExecuteBashCommand(Printerlib.yast_bin_dir + "modify_cupsd_conf Listen")
         # but possible duplicate Listen values are not removed in the command output:
         listen_values = Builtins.toset(
           Builtins.splitstring(
