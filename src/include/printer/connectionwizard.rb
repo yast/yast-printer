@@ -94,6 +94,15 @@ module Yast
       @percentage_percent_encoding = { "character" => "%", "encoding" => "%25" }
     end
 
+    # Run a test command from the YaST binary dir with shell-escaped arguments
+    # and return the result of running that command.
+    def run_test_command(command, *args)
+      commandline = Printerlib.yast_bin_dir + command
+      args.map!(&:shellescape) # map each arg to its shell-escaped version
+      commandline += " " + args.join(" ")
+      Printerlib.ExecuteBashCommand(commandline)
+    end
+
     def URIpercentEncoding(input)
       # cannot be used because URL::transform_map_passwd is insufficient because
       # the characters ! # ' ( ) * [ ] are missing in URL::transform_map_passwd.
@@ -2923,7 +2932,6 @@ module Yast
       end
 
       testQueue = lambda do |selected|
-        test_command = ""
         timeout = "5"
         host = ""
         port = ""
@@ -2935,9 +2943,8 @@ module Yast
           when :tcp
             host = Convert.to_string(UI.QueryWidget(:hostname, :Value))
             port = Convert.to_string(UI.QueryWidget(:port_or_queue, :Value))
-            test_command = Printerlib.yast_bin_dir + "test_remote_socket"
-            test_command += " #{host.shellescape} #{port.shellescape} #{timeout.shellescape}"
-            if !Printerlib.ExecuteBashCommand(test_command)
+
+            if !run_test_command("test_remote_socket", host, port, timeout)
               Popup.ErrorDetails(
                 Builtins.sformat(
                   # where %1 will be replaced by the port number
@@ -2957,9 +2964,8 @@ module Yast
             host = Convert.to_string(UI.QueryWidget(:hostname, :Value))
             queue = Convert.to_string(UI.QueryWidget(:port_or_queue, :Value))
             port = "515"
-            test_command = Printerlib.yast_bin_dir + "test_remote_lpd"
-            test_command += " #{host.shellescape} #{queue.shellescape} #{timeout.shellescape}"
-            if !Printerlib.ExecuteBashCommand(test_command)
+
+            if !run_test_command("test_remote_lpd", host, queue, timeout)
               Popup.ErrorDetails(
                 Builtins.sformat(
                   # where %1 will be replaced by the queue name
@@ -2978,9 +2984,7 @@ module Yast
           when :cups
             host = Convert.to_string(UI.QueryWidget(:hostname, :Value))
             queue = Convert.to_string(UI.QueryWidget(:queue, :Value))
-            test_command = Printerlib.yast_bin_dir + "test_remote_ipp"
-            test_command += " #{host.shellescape} #{queue.shellescape} #{timeout.shellescape}"
-            if !Printerlib.ExecuteBashCommand(test_command)
+            if !run_test_command("test_remote_ipp", host, queue, timeout)
               Popup.ErrorDetails(
                 Builtins.sformat(
                   # where %1 will be replaced by the queue name
@@ -3018,12 +3022,8 @@ module Yast
             workgroup = Convert.to_string(UI.QueryWidget(:domain, :Value))
             user = Convert.to_string(UI.QueryWidget(:user, :Value))
             password = Convert.to_string(UI.QueryWidget(:pass, :Value))
-            test_command = Printerlib.yast_bin_dir + "test_remote_smb"
-            test_command += " #{workgroup.shellescape}"
-            test_command += " #{host.shellescape} #{queue.shellescape}"
-            test_command += " #{user.shellescape} #{password.shellescape}"
-            test_command += " #{timeout.shellescape}"
-            if !Printerlib.ExecuteBashCommand(test_command)
+
+            if !run_test_command("test_remote_smb", workgroup, host, queue, user, password, timeout)
               if @active_directory
                 Popup.ErrorDetails(
                   Builtins.sformat(
@@ -3066,12 +3066,7 @@ module Yast
             user = Convert.to_string(UI.QueryWidget(:user, :Value))
             password = Convert.to_string(UI.QueryWidget(:pass, :Value))
 
-            test_command = Printerlib.yast_bin_dir + "test_remote_novell"
-            test_command += " #{host.shellescape} #{queue.shellescape}"
-            test_command += " #{user.shellescape} #{password.shellescape}"
-            test_command += " #{timeout.shellescape}"
-
-            if !Printerlib.ExecuteBashCommand(test_command)
+            if !run_test_command("test_remote_novell", host, queue, user, password, timeout)
               Popup.ErrorDetails(
                 Builtins.sformat(
                   # where %1 will be replaced by the queue name
