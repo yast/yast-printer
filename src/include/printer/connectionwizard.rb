@@ -298,12 +298,16 @@ module Yast
           "."
         )
         # Let the whole pipe fail if any of its commands fail (requires bash):
-        grepcommand = "set -o pipefail ; egrep '^DeviceURI " + scheme + "://[^:]+:[^@]+@'" + part1.shellescape + "/" + part2.shellescape
+        grepcommand = "set -o pipefail"
+        grepcommand += " ; egrep '^DeviceURI '" + scheme.shellescape
         if "lpd" == scheme
           # to describe who requested a print job in the form lpd://username@ip-address-or-hostname/...
           # (i.e. grep only for "username@" instead of the usual "username:password@"):
-          grepcommand = "set -o pipefail ; egrep '^DeviceURI " + scheme + "://[^@]+@'" + part1.shellescape + "/" + part2.shellescape
+          grepcommand += "'://[^@]+@'"
+        else
+          grepcommand += "'://[^:]+:[^@]+@'"
         end
+        grepcommand += part1.shellescape + "/" + part2.shellescape
         if "" != Ops.get(parts, 3, "")
           part3 = Builtins.mergestring(
             Builtins.splitstring(Ops.get(parts, 3, ""), special_chars),
