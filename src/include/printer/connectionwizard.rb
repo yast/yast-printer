@@ -297,20 +297,20 @@ module Yast
           "."
         )
         # Let the whole pipe fail if any of its commands fail (requires bash):
-        grepcommand = "set -o pipefail ; egrep '^DeviceURI " + scheme + "://[^:]+:[^@]+@" + part1 + "/" + part2
+        grepcommand = "set -o pipefail ; egrep '^DeviceURI " + scheme + "://[^:]+:[^@]+@'" + part1.shellescape + "/" + part2.shellescape
         if "lpd" == scheme
           # to describe who requested a print job in the form lpd://username@ip-address-or-hostname/...
           # (i.e. grep only for "username@" instead of the usual "username:password@"):
-          grepcommand = "set -o pipefail ; egrep '^DeviceURI " + scheme + "://[^@]+@" + part1 + "/" + part2
+          grepcommand = "set -o pipefail ; egrep '^DeviceURI " + scheme + "://[^@]+@'" + part1.shellescape + "/" + part2.shellescape
         end
         if "" != Ops.get(parts, 3, "")
           part3 = Builtins.mergestring(
             Builtins.splitstring(Ops.get(parts, 3, ""), special_chars),
             "."
           )
-          grepcommand += "/" + part3
+          grepcommand += "/" + part3.shellescape
         end
-        grepcommand += "$' /etc/cups/printers.conf"
+        grepcommand += "'$' /etc/cups/printers.conf"
         grepcommand += " | sort -u | wc -l | tr -d '[:space:]'"
         Printerlib.ExecuteBashCommand(grepcommand)
         if "1" == Ops.get_string(Printerlib.result, "stdout", "")
