@@ -26,6 +26,7 @@
 #              Johannes Meixner <jsmeix@suse.de>
 
 require "shellwords"
+require "tempfile"
 
 module Yast
   module PrinterConnectionwizardInclude
@@ -1091,6 +1092,12 @@ module Yast
               # Body of a Popup::ShowFeedback:
               _("Retrieving bluetooth device IDs...")
             )
+
+            # For security reasons, we need a unique tmp filename that is not
+            # easily guessed in a directory with restrictive (0700)
+            # permissions.
+            tmp_dir = Dir.mktmpdir("yast2-printer-") # e.g. /tmp/yast2-printer-20181217-11873-1bwkc6
+            tmp_file = File.join(tmp_dir, "hcitool.out")
             # The command "hcitool scan" might need very much time or hang up.
             # To kill exactly hcitool there is the workaround via the temporary file because
             # hcitool scan | grep '...' & sleep 10 ; kill -9 $!
@@ -1098,11 +1105,11 @@ module Yast
             # ( hcitool scan | grep '...' ) & sleep 10 ; kill -9 $!
             # would kill only the sub shell.
             if !Printerlib.ExecuteBashCommand(
-                 "hcitool scan >/tmp/hcitool_scan.out & sleep 10" +
+                 "hcitool scan >#{tmp_file} & sleep 10" +
                  " ; kill -9 $!" +
-                 " ; grep '..:..:..:..:..:..' /tmp/hcitool_scan.out" +
+                 " ; grep '..:..:..:..:..:..' #{tmp_file}" +
                  " | tr -s ' '" +
-                 " ; rm -f /tmp/hcitool_scan.out"
+                 " ; rm -f #{tmp_dir}"
               )
               Popup.ErrorDetails(
                 _("Failed to get a list of bluetooth device IDs."),
