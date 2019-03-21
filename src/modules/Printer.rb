@@ -305,7 +305,7 @@ module Yast
       @autodetect_queues_commandline = "/usr/lib/YaST2/bin/autodetect_print_queues >" + @autodetected_queues_filename
       @driver_options_filename = "/var/lib/YaST2/printer_driver_options.ycp"
       @determine_printer_driver_options_commandline =
-        "/usr/lib/YaST2/bin/determine_printer_driver_options >" + @driver_options_filename
+        "/usr/lib/YaST2/bin/determine_printer_driver_options >" + @driver_options_filename + " "
     end
 
     # Abort function
