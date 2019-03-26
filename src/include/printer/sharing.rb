@@ -23,8 +23,9 @@
 # Package:     Configuration of printer
 # Summary:     Print queue sharing and publishing dialog definition
 # Authors:     Johannes Meixner <jsmeix@suse.de>
-#
-# $Id: sharing.ycp 27914 2006-02-13 14:32:08Z locilka $
+
+require "shellwords"
+
 module Yast
   module PrinterSharingInclude
     def initialize_printer_sharing(include_target)
@@ -347,7 +348,7 @@ module Yast
             )
           end
         end
-      end 
+      end
 
       if allow_local_network_access
         allow_values = Ops.add("@LOCAL ", allow_values)
@@ -385,12 +386,7 @@ module Yast
         # but Allow and BrowseAddress enties would be kept because when there are
         # BrowseAddress enties, it must listen on matching remote interfaces
         # and then also matching Allow enties should be there.
-        if !Printerlib.ExecuteBashCommand(
-            Ops.add(
-              Printerlib.yast_bin_dir,
-              "modify_cupsd_conf Listen localhost"
-            )
-          )
+        if !Printerlib.ExecuteBashCommand(Printerlib.yast_bin_dir + "modify_cupsd_conf Listen localhost")
           Popup.ErrorDetails(
             # Do not change or translate "Listen localhost", it is a system settings name.
             _("Failed to set only 'Listen localhost' in /etc/cups/cupsd.conf."),
@@ -398,9 +394,7 @@ module Yast
           )
           return false
         end
-        if !Printerlib.ExecuteBashCommand(
-            Ops.add(Printerlib.yast_bin_dir, "modify_cupsd_conf Allow none")
-          )
+        if !Printerlib.ExecuteBashCommand(Printerlib.yast_bin_dir + "modify_cupsd_conf Allow none")
           Popup.ErrorDetails(
             # Do not change or translate "Allow", it is a system settings name.
             _("Failed to remove 'Allow' entries from /etc/cups/cupsd.conf."),
@@ -413,12 +407,7 @@ module Yast
         # of remote queue information from remote CUPS servers
         # which might be needed by the "Print Via Network" dialog.
         # Instead remove only the "BrowseAddress" entries in cupsd.conf:
-        if !Printerlib.ExecuteBashCommand(
-            Ops.add(
-              Printerlib.yast_bin_dir,
-              "modify_cupsd_conf BrowseAddress none"
-            )
-          )
+        if !Printerlib.ExecuteBashCommand(Printerlib.yast_bin_dir + "modify_cupsd_conf BrowseAddress none")
           Popup.ErrorDetails(
             # Do not change or translate "BrowseAddress", it is a system settings name.
             _(
@@ -462,7 +451,7 @@ module Yast
             Ops.get_string(initial_interface_table_item, 2, "")
           )
         )
-      end 
+      end
 
       initial_interface_table_entries = Builtins.toset(
         initial_interface_table_entries
@@ -476,7 +465,7 @@ module Yast
             Ops.get_string(interface_table_item, 2, "")
           )
         )
-      end 
+      end
 
       interface_table_entries = Builtins.toset(interface_table_entries)
       if Builtins.mergestring(interface_table_entries, "") !=
@@ -521,14 +510,8 @@ module Yast
         end
       end
       if !Printerlib.ExecuteBashCommand(
-          Ops.add(
-            Ops.add(
-              Ops.add(Printerlib.yast_bin_dir, "modify_cupsd_conf Allow '"),
-              allow_values
-            ),
-            "'"
-          )
-        )
+           Printerlib.yast_bin_dir + "modify_cupsd_conf Allow " + allow_values.shellescape
+         )
         Popup.ErrorDetails(
           Builtins.sformat(
             # where %1 will be replaced by one or more system settings values.
@@ -542,17 +525,8 @@ module Yast
       end
       if "" != browse_address_values
         if !Printerlib.ExecuteBashCommand(
-            Ops.add(
-              Ops.add(
-                Ops.add(
-                  Printerlib.yast_bin_dir,
-                  "modify_cupsd_conf BrowseAddress '"
-                ),
-                browse_address_values
-              ),
-              "'"
-            )
-          )
+             Printerlib.yast_bin_dir + "modify_cupsd_conf BrowseAddress " + browse_address_values.shellescape
+           )
           Popup.ErrorDetails(
             Builtins.sformat(
               # where %1 will be replaced by one or more system settings values.
@@ -568,9 +542,7 @@ module Yast
         end
         # Having "BrowseAddress" entries requires "Browsing On",
         # otherwise browsing information would not be sent at all:
-        if !Printerlib.ExecuteBashCommand(
-            Ops.add(Printerlib.yast_bin_dir, "modify_cupsd_conf Browsing On")
-          )
+        if !Printerlib.ExecuteBashCommand(Printerlib.yast_bin_dir + "modify_cupsd_conf Browsing On")
           Popup.ErrorDetails(
             _("Failed to set 'Browsing On' in /etc/cups/cupsd.conf."),
             Ops.get_string(Printerlib.result, "stderr", "")
@@ -583,12 +555,7 @@ module Yast
         # of remote queue information from remote CUPS servers
         # which might be needed by the "Print Via Network" dialog.
         # Instead remove only the "BrowseAddress" entries in cupsd.conf:
-        if !Printerlib.ExecuteBashCommand(
-            Ops.add(
-              Printerlib.yast_bin_dir,
-              "modify_cupsd_conf BrowseAddress none"
-            )
-          )
+        if !Printerlib.ExecuteBashCommand(Printerlib.yast_bin_dir + "modify_cupsd_conf BrowseAddress none")
           Popup.ErrorDetails(
             # Do not change or translate "BrowseAddress", it is a system settings name.
             _(
@@ -605,9 +572,7 @@ module Yast
       # Neither 'Listen @LOCAL' nor 'Listen @IF(name)' is supported.
       # TODO: Determine the matching network address for @LOCAL and @IF(name)
       #       and use the matching network address for the Listen directive.
-      if !Printerlib.ExecuteBashCommand(
-          Ops.add(Printerlib.yast_bin_dir, "modify_cupsd_conf Listen all")
-        )
+      if !Printerlib.ExecuteBashCommand(Printerlib.yast_bin_dir + "modify_cupsd_conf Listen all")
         Popup.ErrorDetails(
           # Do not change or translate "Listen *:631", it is a system settings name.
           _("Failed to set 'Listen *:631' in /etc/cups/cupsd.conf."),
@@ -650,9 +615,7 @@ module Yast
             Printerlib.client_conf_server_name
           )
         else
-          if !Printerlib.ExecuteBashCommand(
-              Ops.add(Printerlib.yast_bin_dir, "cups_client_only none")
-            )
+          if !Printerlib.ExecuteBashCommand(Printerlib.yast_bin_dir + "cups_client_only none")
             Popup.ErrorDetails(
               _(
                 "Failed to remove the 'ServerName' entry in /etc/cups/client.conf"
@@ -715,9 +678,7 @@ module Yast
       # Therefore "modify_cupsd_conf Listen" reports 'localhost' but ignores '/var/run/cups/cups.sock'
       # so that ["localhost"] is the right fallback value here:
       listen_values = [""]
-      if Printerlib.ExecuteBashCommand(
-          Ops.add(Printerlib.yast_bin_dir, "modify_cupsd_conf Listen")
-        )
+      if Printerlib.ExecuteBashCommand(Printerlib.yast_bin_dir + "modify_cupsd_conf Listen")
         # but possible duplicate Listen values are not removed in the command output:
         listen_values = Builtins.toset(
           Builtins.splitstring(
@@ -745,7 +706,7 @@ module Yast
             listen_remote = true
           end
         end
-      end 
+      end
 
       if !listen_local
         # (e.g. listen only on /var/run/cups/cups.sock is a broken config)
@@ -761,18 +722,14 @@ module Yast
         # Only while this dialog is open, the non-'localhost' Listen entries are removed
         # which means that there is no remote access while this dialog is open
         # which is no big issue for a broken config without any local access ;-)
-        Printerlib.ExecuteBashCommand(
-          Ops.add(Printerlib.yast_bin_dir, "modify_cupsd_conf Listen localhost")
-        )
+        Printerlib.ExecuteBashCommand(Printerlib.yast_bin_dir + "modify_cupsd_conf Listen localhost")
         Printerlib.GetAndSetCupsdStatus("restart")
       end
       # Determine the 'Allow' values for the root location '<Location />' in /etc/cups/cupsd.conf:
       # By default there is only 'Allow 127.0.0.2' but this value is suppressed in the output
       # of 'modify_cupsd_conf Allow' so that the empty sting is the right fallback value here:
       allow_values = [""]
-      if Printerlib.ExecuteBashCommand(
-          Ops.add(Printerlib.yast_bin_dir, "modify_cupsd_conf Allow")
-        )
+      if Printerlib.ExecuteBashCommand(Printerlib.yast_bin_dir + "modify_cupsd_conf Allow")
         # but possible duplicate Allow values are not removed in the command output:
         allow_values = Builtins.toset(
           Builtins.splitstring(
@@ -787,9 +744,7 @@ module Yast
       # Determine the 'BrowseAddress' values in /etc/cups/cupsd.conf:
       # By default there is no BrowseAddress value so that the empty sting is the right fallback:
       browse_address_values = [""]
-      if Printerlib.ExecuteBashCommand(
-          Ops.add(Printerlib.yast_bin_dir, "modify_cupsd_conf BrowseAddress")
-        )
+      if Printerlib.ExecuteBashCommand(Printerlib.yast_bin_dir + "modify_cupsd_conf BrowseAddress")
         # but possible duplicate BrowseAddress values are not removed in the command output:
         browse_address_values = Builtins.toset(
           Builtins.splitstring(
@@ -877,7 +832,7 @@ module Yast
           Ops.add(@initial_allow_input_value, allow_value),
           " "
         )
-      end 
+      end
 
       # By default initial_deny_remote_access is true
       # and initial_allow_remote_access is false (see above)
@@ -929,7 +884,7 @@ module Yast
           Ops.add(@initial_browse_address_input_value, browse_address_value),
           " "
         )
-      end 
+      end
 
       Builtins.y2milestone(
         "Initial interface_table_items: %1",
@@ -1083,7 +1038,7 @@ module Yast
                     )
                   )
                 end
-              end 
+              end
 
               if !@is_in_table
                 Builtins.y2milestone("Adding interface_map %1", @interface_map)
@@ -1148,7 +1103,7 @@ module Yast
                     )
                   )
                 end
-              end 
+              end
 
               UI.ChangeWidget(:interface_table, :Items, @interface_table_items)
               UI.ChangeWidget(:interface_table, :CurrentItem, @current_item)
@@ -1182,7 +1137,7 @@ module Yast
                     interface_table_item
                   )
                 end
-              end 
+              end
 
               UI.ChangeWidget(:interface_table, :Items, @interface_table_items)
             else

@@ -23,8 +23,7 @@
 # Package:     Configuration of printer
 # Summary:     Help texts of all the dialogs
 # Authors:     Johannes Meixner <jsmeix@suse.de>
-#
-# $Id: helps.ycp 27914 2006-02-13 14:32:08Z locilka $
+
 module Yast
   module PrinterHelpsInclude
     def initialize_printer_helps(include_target)

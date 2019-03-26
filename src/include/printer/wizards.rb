@@ -23,8 +23,7 @@
 # Package:     Configuration of printer
 # Summary:     Wizards definitions
 # Authors:     Johannes Meixner <jsmeix@suse.de>
-#
-# $Id: wizards.ycp 27914 2006-02-13 14:32:08Z locilka $
+
 module Yast
   module PrinterWizardsInclude
     def initialize_printer_wizards(include_target)

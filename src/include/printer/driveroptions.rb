@@ -23,8 +23,9 @@
 # Package:     Configuration of printer
 # Summary:     Driver options dialog definition
 # Authors:     Johannes Meixner <jsmeix@suse.de>
-#
-# $Id: driveroptions.ycp 27914 2006-02-13 14:32:08Z locilka $
+
+require "shellwords"
+
 module Yast
   module PrinterDriveroptionsInclude
     def initialize_printer_driveroptions(include_target)
@@ -96,10 +97,7 @@ module Yast
         break if ret == :abort || ret == :cancel || ret == :back
         if ret == :next
           Builtins.y2milestone("Driver options: %1", Printer.driver_options)
-          commandline = Ops.add(
-            Ops.add("/usr/sbin/lpadmin -h localhost -p '", name),
-            "'"
-          )
+          commandline = "/usr/sbin/lpadmin -h localhost -p " + name.shellescape
           something_has_changed = false
           Builtins.foreach(Printer.driver_options) do |driver_option|
             keyword = Ops.get_string(driver_option, "keyword", "")
@@ -108,23 +106,14 @@ module Yast
               really_changed = true
               Builtins.foreach(Ops.get_list(driver_option, "values", [])) do |value|
                 really_changed = false if value == Ops.add("*", selected_value)
-              end 
+              end
 
               if really_changed
-                commandline = Ops.add(
-                  Ops.add(
-                    Ops.add(
-                      Ops.add(Ops.add(commandline, " -o '"), keyword),
-                      "="
-                    ),
-                    selected_value
-                  ),
-                  "'"
-                )
+                commandline += " -o " + keyword.shellescape + "=" + selected_value.shellescape
                 something_has_changed = true
               end
             end
-          end 
+          end
 
           if something_has_changed
             Wizard.DisableBackButton

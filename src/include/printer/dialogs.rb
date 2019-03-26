@@ -23,8 +23,7 @@
 # Package:     Configuration of printer
 # Summary:     DialogTree definition
 # Authors:     Michal Zugec <mzugec@suse.de>
-#
-# $Id: dialogs.ycp 27914 2006-02-13 14:32:08Z locilka $
+
 module Yast
   module PrinterDialogsInclude
     def initialize_printer_dialogs(include_target)

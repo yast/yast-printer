@@ -23,8 +23,7 @@
 # Package:     Configuration of printer
 # Summary:     Read and write dialogs definitions
 # Authors:     Johannes Meixner <jsmeix@suse.de>
-#
-# $Id: readwrite.ycp 29363 2006-03-24 08:20:43Z mzugec $
+
 module Yast
   module PrinterReadwriteInclude
     def initialize_printer_readwrite(include_target)
