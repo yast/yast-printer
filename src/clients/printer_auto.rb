@@ -25,8 +25,6 @@
 # Authors:	Michal Zugec <mzugec@suse.cz>
 #              Johannes Meixner <jsmeix@suse.de>
 #
-# $Id: printer_auto.ycp 27914 2006-02-13 14:32:08Z locilka $
-#
 # This is a client for autoinstallation. It takes its arguments,
 # goes through the configuration and return the setting.
 # Does not do any changes to the configuration.
@@ -51,6 +49,9 @@
 # @return [Hash] edited settings, Summary or boolean on success depending on called function
 # @example map mm = $[ "FAIL_DELAY" : "77" ];
 # @example map ret = WFM::CallFunction ("printer_auto", [ "Summary", mm ]);
+
+require "shellwords"
+
 module Yast
   class PrinterAutoClient < Client
     def main
@@ -275,7 +276,7 @@ module Yast
       Builtins.y2milestone("Printer auto finished")
       Builtins.y2milestone("----------------------------------------")
 
-      deep_copy(@ret) 
+      deep_copy(@ret)
 
       # EOF
     end
@@ -318,9 +319,7 @@ module Yast
       # there is no string "]]>" (except perhaps in a comment).
       # It is o.k. to ignore when the sed command fails because then
       # the file content was (hopefully) not changed at all which is the right fallback:
-      Printerlib.ExecuteBashCommand(
-        Ops.add("sed -i -e 's/]]>/] ]>/g' ", file_name)
-      )
+      Printerlib.ExecuteBashCommand("sed -i -e 's/]]>/] ]>/g' " + file_name.shellescape)
       content = Convert.to_string(SCR.Read(path(".target.string"), file_name))
       if "" == Builtins.filterchars(content, Printer.alnum_chars)
         # It is an error when /etc/cups/cupsd.conf or /etc/cups/client.conf exist
@@ -348,25 +347,15 @@ module Yast
 
     def CreateBackupFile(file_name)
       if "" == file_name ||
-          !Printerlib.ExecuteBashCommand(Ops.add("test -f ", file_name))
+          !Printerlib.ExecuteBashCommand("test -f " + file_name.shellescape)
         return true
       end
-      # See "Make a backup" in tools/modify_cupsd_conf how to create a backup file:
-      if Printerlib.ExecuteBashCommand(
-          Ops.add(
-            Ops.add(
-              Ops.add(Ops.add("rpm -V -f ", file_name), " | grep -q '^..5.*"),
-              file_name
-            ),
-            "$'"
-          )
-        )
-        if Printerlib.ExecuteBashCommand(
-            Ops.add(
-              Ops.add(Ops.add(Ops.add("cp -p ", file_name), " "), file_name),
-              ".yast2save"
-            )
-          )
+      # See "Make a backup" in tools/modify_cupsd_conf how to create a backup file.
+      # Intentionally not escaping file_name in the "grep" call:
+      # If there are weird characters in file_name, we might simply make one backup
+      # of it too many which won't hurt.
+      if Printerlib.ExecuteBashCommand("rpm -V -f " + file_name.shellescape + " | grep -q '^..5.*'" + file_name.shellescape + "'$'")
+        if Printerlib.ExecuteBashCommand("cp -p " + file_name.shellescape + " " + file_name.shellescape + ".yast2save")
           return true
         end
         # No user information popup because this would block autoinstallation.
@@ -389,12 +378,7 @@ module Yast
         return false
       end
       # The file is the original from the RPM package or the file is not owned by any package:
-      if Printerlib.ExecuteBashCommand(
-          Ops.add(
-            Ops.add(Ops.add(Ops.add("cp -p ", file_name), " "), file_name),
-            ".yast2orig"
-          )
-        )
+      if Printerlib.ExecuteBashCommand("cp -p " + file_name.shellescape + " " + file_name.shellescape + ".yast2orig")
         return true
       end
       # No user information popup because this would block autoinstallation.

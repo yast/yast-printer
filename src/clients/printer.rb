@@ -24,9 +24,8 @@
 # Summary:	Main file
 # Authors:	Johannes Meixner <jsmeix@suse.de>
 #
-# $Id: printer.ycp 27914 2006-02-13 14:32:08Z locilka $
-#
 # Main file for printer configuration. Uses all other files.
+
 module Yast
   class PrinterClient < Client
     def main

@@ -23,8 +23,9 @@
 # Package:     Configuration of printer
 # Summary:     Add Driver dialog definition
 # Authors:     Johannes Meixner <jsmeix@suse.de>
-#
-# $Id: driveradd.ycp 27914 2006-02-13 14:32:08Z locilka $
+
+require "shellwords"
+
 module Yast
   module PrinterDriveraddInclude
     def initialize_printer_driveradd(include_target)
@@ -657,9 +658,7 @@ module Yast
           # Ignore an effectively empty ppd_path_input_value:
           if "" !=
               Builtins.filterchars(ppd_path_input_value, Printer.alnum_chars)
-            if !Printerlib.ExecuteBashCommand(
-                Ops.add(Ops.add("ls -l '", ppd_path_input_value), "'")
-              )
+            if !Printerlib.ExecuteBashCommand("ls -l " + ppd_path_input_value.shellescape)
               Popup.ErrorDetails(
                 Builtins.sformat(
                   # where %1 will be replaced by the file name:
@@ -673,13 +672,7 @@ module Yast
               break
             end
             if !Printerlib.ExecuteBashCommand(
-                Ops.add(
-                  Ops.add(
-                    "cupstestppd -W constraints -W defaults -W translations -r '",
-                    ppd_path_input_value
-                  ),
-                  "'"
-                )
+                 "cupstestppd -W constraints -W defaults -W translations -r " + ppd_path_input_value.shellescape
               )
               Popup.ErrorDetails(
                 _(
@@ -710,14 +703,9 @@ module Yast
               end
             end
             if !Printerlib.ExecuteBashCommand(
-                Ops.add(
-                  Ops.add(
-                    "test -d /usr/share/cups/model/downloaded || mkdir /usr/share/cups/model/downloaded ; cp '",
-                    ppd_path_input_value
-                  ),
-                  "' /usr/share/cups/model/downloaded"
-                )
-              )
+                 "test -d /usr/share/cups/model/downloaded || mkdir /usr/share/cups/model/downloaded" +
+                 " ; cp " + ppd_path_input_value.shellescape + " /usr/share/cups/model/downloaded"
+               )
               Popup.ErrorDetails(
                 _("Failed to make the printer description file available"),
                 Ops.get_string(Printerlib.result, "stderr", "")

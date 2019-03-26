@@ -23,8 +23,9 @@
 # Package:     Configuration of printer
 # Summary:     DefaultPolicy and ErrorPolicy settings in cupsd.conf
 # Authors:     Johannes Meixner <jsmeix@suse.de>
-#
-# $Id: policies.ycp 27914 2006-02-13 14:32:08Z locilka $
+
+require "shellwords"
+
 module Yast
   module PrinterPoliciesInclude
     def initialize_printer_policies(include_target)
@@ -146,9 +147,7 @@ module Yast
             Printerlib.client_conf_server_name
           )
         else
-          if !Printerlib.ExecuteBashCommand(
-              Ops.add(Printerlib.yast_bin_dir, "cups_client_only none")
-            )
+          if !Printerlib.ExecuteBashCommand(Printerlib.yast_bin_dir + "cups_client_only none")
             Popup.ErrorDetails(
               _(
                 "Failed to remove the 'ServerName' entry in /etc/cups/client.conf"
@@ -180,9 +179,7 @@ module Yast
       end
       # Determine the existing policy names in '<Policy policy-name>' sections in /etc/cups/cupsd.conf:
       policy_names = [""]
-      if Printerlib.ExecuteBashCommand(
-          Ops.add(Printerlib.yast_bin_dir, "modify_cupsd_conf Policies")
-        )
+      if Printerlib.ExecuteBashCommand(Printerlib.yast_bin_dir + "modify_cupsd_conf Policies")
         # but possible duplicate policy names are not removed in the command output:
         policy_names = Builtins.toset(
           Builtins.splitstring(
@@ -194,9 +191,7 @@ module Yast
         policy_names = ["default"]
       end
       # Determine the DefaultPolicy in /etc/cups/cupsd.conf:
-      if Printerlib.ExecuteBashCommand(
-          Ops.add(Printerlib.yast_bin_dir, "modify_cupsd_conf DefaultPolicy")
-        )
+      if Printerlib.ExecuteBashCommand(Printerlib.yast_bin_dir + "modify_cupsd_conf DefaultPolicy")
         # but possible duplicate policy names are not removed in the command output.
         # Multiple DefaultPolicy entries are a broken config but it can happen
         # and in this case the first DefaultPolicy entry is used:
@@ -220,9 +215,7 @@ module Yast
       # un-checked in any case:
       UI.ChangeWidget(Id("apply_operation_policy"), :Value, false)
       # Determine the ErrorPolicy in /etc/cups/cupsd.conf:
-      if Printerlib.ExecuteBashCommand(
-          Ops.add(Printerlib.yast_bin_dir, "modify_cupsd_conf ErrorPolicy")
-        )
+      if Printerlib.ExecuteBashCommand(Printerlib.yast_bin_dir + "modify_cupsd_conf ErrorPolicy")
         # but possible duplicate policy names are not removed in the command output.
         # Multiple ErrorPolicy entries are a broken config but it can happen
         # and in this case the first ErrorPolicy entry is used:
@@ -302,27 +295,12 @@ module Yast
         Builtins.foreach(Printer.queues) do |queue|
           name = Ops.get(queue, "name", "")
           next if "" == Builtins.filterchars(name, Printer.alnum_chars)
-          commandline = Ops.add(
-            Ops.add("/usr/sbin/lpadmin -h localhost -p '", name),
-            "'"
-          )
+          commandline = "/usr/sbin/lpadmin -h localhost -p " + name.shellescape
           if apply_operation_policy
-            commandline = Ops.add(
-              Ops.add(
-                Ops.add(commandline, " -o 'printer-op-policy="),
-                current_operation_policy
-              ),
-              "'"
-            )
+            commandline += " -o printer-op-policy=" + current_operation_policy.shellescape
           end
           if apply_error_policy
-            commandline = Ops.add(
-              Ops.add(
-                Ops.add(commandline, " -o 'printer-error-policy="),
-                current_error_policy
-              ),
-              "'"
-            )
+            commandline += " -o printer-error-policy=" + current_error_policy.shellescape
           end
           if !Printerlib.ExecuteBashCommand(commandline)
             Popup.ErrorDetails(
@@ -339,13 +317,7 @@ module Yast
       end
       if current_operation_policy != @initial_operation_policy
         if !Printerlib.ExecuteBashCommand(
-            Ops.add(
-              Ops.add(
-                Printerlib.yast_bin_dir,
-                "modify_cupsd_conf DefaultPolicy "
-              ),
-              current_operation_policy
-            )
+             Printerlib.yast_bin_dir + "modify_cupsd_conf DefaultPolicy " + current_operation_policy.shellescape
           )
           Popup.ErrorDetails(
             Builtins.sformat(
@@ -361,11 +333,8 @@ module Yast
       end
       if current_error_policy != @initial_error_policy
         if !Printerlib.ExecuteBashCommand(
-            Ops.add(
-              Ops.add(Printerlib.yast_bin_dir, "modify_cupsd_conf ErrorPolicy "),
-              current_error_policy
-            )
-          )
+             Printerlib.yast_bin_dir + "modify_cupsd_conf ErrorPolicy " + current_error_policy.shellescape
+           )
           Popup.ErrorDetails(
             Builtins.sformat(
               # where %1 will be replaced by the default error policy value.

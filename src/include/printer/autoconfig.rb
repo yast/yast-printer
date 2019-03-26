@@ -23,8 +23,7 @@
 # Package:     Configuration of printer
 # Summary:     Automatic Configuration dialog definition
 # Authors:     Johannes Meixner <jsmeix@suse.de>
-#
-# $Id: autoconfig.ycp 27914 2006-02-13 14:32:08Z locilka $
+
 module Yast
   module PrinterAutoconfigInclude
     def initialize_printer_autoconfig(include_target)
@@ -108,9 +107,7 @@ module Yast
             Printerlib.client_conf_server_name
           )
         else
-          if !Printerlib.ExecuteBashCommand(
-              Ops.add(Printerlib.yast_bin_dir, "cups_client_only none")
-            )
+          if !Printerlib.ExecuteBashCommand(Printerlib.yast_bin_dir + "cups_client_only none")
             Popup.ErrorDetails(
               _(
                 "Failed to remove the 'ServerName' entry in /etc/cups/client.conf"

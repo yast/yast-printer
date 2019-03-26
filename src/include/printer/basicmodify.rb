@@ -23,8 +23,9 @@
 # Package:     Configuration of printer
 # Summary:     Basic modify dialog definition
 # Authors:     Johannes Meixner <jsmeix@suse.de>
-#
-# $Id: basicmodify.ycp 27914 2006-02-13 14:32:08Z locilka $
+
+require "shellwords"
+
 module Yast
   module PrinterBasicmodifyInclude
     def initialize_printer_basicmodify(include_target)
@@ -137,8 +138,7 @@ module Yast
       # The leading part "/etc/" may vary depending on how the local cupsd
       # is installed or configured, see "/usr/bin/cups-config --serverroot".
       if "" != ppd
-        commandline = Ops.add("test -r ", ppd)
-        if Printerlib.ExecuteBashCommand(commandline)
+        if Printerlib.ExecuteBashCommand("test -r " + ppd.shellescape)
           driver_options_content = PushButton(
             Id(:driver_options),
             # Label of a PushButton to go to a dialog
@@ -153,10 +153,10 @@ module Yast
       if Builtins.issubstring(ppd, "/cups/ppd/")
         # which suppresses it in certain "lpinfo -m" output.
         # Note the YCP quoting: \" becomes " and \\n becomes \n in the commandline.
-        commandline = Ops.add(
-          Ops.add("grep '^*NickName' ", ppd),
-          " | cut -s -d '\"' -f2 | sed -e 's/(recommended)//' -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | tr -s ' ' | tr -d '\\n'"
-        )
+        commandline = "grep '^*NickName' " + ppd.shellescape
+        commandline += " | cut -s -d '\"' -f2"
+        commandline += " | sed -e 's/(recommended)//' -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//'"
+        commandline += " | tr -s ' ' | tr -d '\\n'"
         if Printerlib.ExecuteBashCommand(commandline)
           Builtins.y2milestone(
             "'%1' stdout (nick_name) is: '%2'",
@@ -208,7 +208,7 @@ module Yast
                   end
                 end
               end
-            end 
+            end
 
             Builtins.y2milestone(
               "Default paper size is: '%1'",
@@ -571,10 +571,7 @@ module Yast
           break
         end
         if :next == user_input
-          commandline = Ops.add(
-            Ops.add("/usr/sbin/lpadmin -h localhost -p '", name),
-            "'"
-          )
+          commandline = "/usr/sbin/lpadmin -h localhost -p " + name.shellescape
           something_has_changed = false
           set_paper_size_later = false
           selected_connection_index = Convert.to_integer(
@@ -587,10 +584,7 @@ module Yast
               ""
             )
             if "" != uri
-              commandline = Ops.add(
-                Ops.add(Ops.add(commandline, " -v '"), uri),
-                "'"
-              )
+              commandline += " -v " + uri.shellescape
               Printer.current_device_uri = uri
               something_has_changed = true
             end
@@ -601,10 +595,7 @@ module Yast
           if Ops.greater_or_equal(selected_ppd_index, 0)
             ppd = Ops.get(Printer.ppds, [selected_ppd_index, "ppd"], "")
             if "" != ppd
-              commandline = Ops.add(
-                Ops.add(Ops.add(commandline, " -m '"), ppd),
-                "'"
-              )
+              commandline += " -m " + ppd.shellescape
               something_has_changed = true
               # The paper size for a new driver will be only set
               # after the new driver was actually successfully set:
@@ -619,11 +610,11 @@ module Yast
                 :CurrentButton
               )
               if :a4 == paper_size && "A4" != default_paper_size
-                commandline = Ops.add(commandline, " -o PageSize=A4")
+                commandline += " -o PageSize=A4"
                 something_has_changed = true
               end
               if :letter == paper_size && "Letter" != default_paper_size
-                commandline = Ops.add(commandline, " -o PageSize=Letter")
+                commandline += " -o PageSize=Letter"
                 something_has_changed = true
               end
             end
@@ -641,10 +632,7 @@ module Yast
             " "
           )
           if description_input != description
-            commandline = Ops.add(
-              Ops.add(Ops.add(commandline, " -D '"), description_input),
-              "'"
-            )
+            commandline += " -D " + description_input.shellescape
             something_has_changed = true
           end
           location_input = Convert.to_string(
@@ -660,10 +648,7 @@ module Yast
             " "
           )
           if location_input != location
-            commandline = Ops.add(
-              Ops.add(Ops.add(commandline, " -L '"), location_input),
-              "'"
-            )
+            commandline += " -L " + location_input.shellescape
             something_has_changed = true
           end
           is_default_input = Convert.to_boolean(
@@ -673,13 +658,7 @@ module Yast
             something_has_changed = true
             if is_default_input
               # with other option settings so that a separate lpadmin command is called:
-              commandline = Ops.add(
-                Ops.add(
-                  Ops.add(commandline, " ; /usr/sbin/lpadmin -h localhost -d '"),
-                  name
-                ),
-                "'"
-              )
+              commandline += " ; /usr/sbin/lpadmin -h localhost -d " + name.shellescape
             else
               # see http://www.cups.org/newsgroups.php?gcups.general+v:31874
               # All one can do is set up a dummy queue, make it the default, and remove it.
@@ -687,16 +666,9 @@ module Yast
               # nor is printing enabled (no '-E' as last lpadmin option)
               # nor is it announced ("shared") to whatever BrowseAddress in cupsd.conf.
               # Here I assume blindly that no queue "yast2unsetdefaultqueue" exists.
-              commandline = Ops.add(
-                Ops.add(
-                  Ops.add(
-                    commandline,
-                    " ; /usr/sbin/lpadmin -h localhost -p yast2unsetdefaultqueue -v file:/dev/null -o printer-is-shared=false"
-                  ),
-                  " ; /usr/sbin/lpadmin -h localhost -d yast2unsetdefaultqueue"
-                ),
-                " ; /usr/sbin/lpadmin -h localhost -x yast2unsetdefaultqueue"
-              )
+              commandline += " ; /usr/sbin/lpadmin -h localhost -p yast2unsetdefaultqueue -v file:/dev/null -o printer-is-shared=false"
+              commandline += " ; /usr/sbin/lpadmin -h localhost -d yast2unsetdefaultqueue"
+              commandline += " ; /usr/sbin/lpadmin -h localhost -x yast2unsetdefaultqueue"
             end
           end
           accepting_jobs_input = Convert.to_boolean(
@@ -705,21 +677,9 @@ module Yast
           if accepting_jobs_input != accepting_jobs
             something_has_changed = true
             if accepting_jobs_input
-              commandline = Ops.add(
-                Ops.add(
-                  Ops.add(commandline, " ; /usr/sbin/accept -h localhost '"),
-                  name
-                ),
-                "'"
-              )
+              commandline += " ; /usr/sbin/accept -h localhost " + name.shellescape
             else
-              commandline = Ops.add(
-                Ops.add(
-                  Ops.add(commandline, " ; /usr/sbin/reject -h localhost '"),
-                  name
-                ),
-                "'"
-              )
+              commandline += " ; /usr/sbin/reject -h localhost " + name.shellescape
             end
           end
           printing_enabled_input = Convert.to_boolean(
@@ -728,24 +688,9 @@ module Yast
           if printing_enabled_input != printing_enabled
             something_has_changed = true
             if printing_enabled_input
-              commandline = Ops.add(
-                Ops.add(
-                  Ops.add(commandline, " ; /usr/sbin/cupsenable -h localhost '"),
-                  name
-                ),
-                "'"
-              )
+              commandline += " ; /usr/sbin/cupsenable -h localhost " + name.shellescape
             else
-              commandline = Ops.add(
-                Ops.add(
-                  Ops.add(
-                    commandline,
-                    " ; /usr/sbin/cupsdisable -h localhost '"
-                  ),
-                  name
-                ),
-                "'"
-              )
+              commandline += " ; /usr/sbin/cupsdisable -h localhost " + name.shellescape
             end
           end
           if something_has_changed
@@ -782,27 +727,13 @@ module Yast
                   # and http://www.cups.org/str.php?L2848
                   if "" != default_paper_size
                     # Note the YCP quoting: \\< becomes \< and \\> becomes \> in the commandline.
-                    commandline = Ops.add(
-                      Ops.add(
-                        Ops.add(
-                          Ops.add("lpoptions -h localhost -p '", name),
-                          "' -l | grep '^PageSize.*\\<"
-                        ),
-                        default_paper_size
-                      ),
-                      "\\>'"
-                    )
+                    # Note that default_paper_size does not need to be escaped because it is only set to
+                    # well-defined values "A4" or "Letter" if paper_size is one of those two.
+                    commandline = "lpoptions -h localhost -p " + name.shellescape + " -l"
+                    commandline += " | grep '^PageSize.*\\<" + default_paper_size + "\\>'"
                     if Printerlib.ExecuteBashCommand(commandline)
-                      commandline = Ops.add(
-                        Ops.add(
-                          Ops.add(
-                            Ops.add("/usr/sbin/lpadmin -h localhost -p '", name),
-                            "' -o 'PageSize="
-                          ),
-                          default_paper_size
-                        ),
-                        "'"
-                      )
+                      commandline = "/usr/sbin/lpadmin -h localhost -p " + name.shellescape
+                      commandline += " -o PageSize=" + default_paper_size
                       # Do not care if it fails to set the default_paper_size (i.e. show no error message to the user)
                       # because the default_paper_size setting is nice to have but not mandatoty for a working queue:
                       Printerlib.ExecuteBashCommand(commandline)

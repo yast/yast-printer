@@ -23,8 +23,7 @@
 # Package:     Configuration of printer
 # Summary:     Basic add dialog definition
 # Authors:     Johannes Meixner <jsmeix@suse.de>
-#
-# $Id: basicadd.ycp 27914 2006-02-13 14:32:08Z locilka $
+
 module Yast
   module PrinterBasicaddInclude
     def initialize_printer_basicadd(include_target)

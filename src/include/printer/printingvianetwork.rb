@@ -23,8 +23,9 @@
 # Package:     Configuration of printer
 # Summary:     Printing via network dialog definition
 # Authors:     Johannes Meixner <jsmeix@suse.de>
-#
-# $Id: printingvianetwork.ycp 27914 2006-02-13 14:32:08Z locilka $
+
+require "shellwords"
+
 module Yast
   module PrinterPrintingvianetworkInclude
     def initialize_printer_printingvianetwork(include_target)
@@ -415,10 +416,7 @@ module Yast
             end
           end
           if !Printerlib.ExecuteBashCommand(
-              Ops.add(
-                Ops.add(Printerlib.yast_bin_dir, "cups_client_only "),
-                current_client_conf_value
-              )
+               Printerlib.yast_bin_dir + "cups_client_only " + current_client_conf_value.shellescape
             )
             if enforce_client_only_server_setting
               # In this case the cups_client_only tool fails in any case because it also tests accessibility.
@@ -447,7 +445,7 @@ module Yast
           end
           # Exit successfully by default and as fallback:
           return true
-        end 
+        end
         # A client-only config with effectively empty server name value continues here
         # and triggers the following "turn off client-only" case:
       end
@@ -471,9 +469,7 @@ module Yast
           return false
         end
         # Remove the 'ServerName' entry in /etc/cups/client.conf:
-        if !Printerlib.ExecuteBashCommand(
-            Ops.add(Printerlib.yast_bin_dir, "cups_client_only none")
-          )
+        if !Printerlib.ExecuteBashCommand(Printerlib.yast_bin_dir + "cups_client_only none")
           Popup.ErrorDetails(
             _(
               "Failed to remove the 'ServerName' entry in /etc/cups/client.conf"
@@ -481,7 +477,7 @@ module Yast
             Ops.get_string(Printerlib.result, "stderr", "")
           )
           return false
-        end 
+        end
         # The local cupsd is not started here because it is not clear at this point
         # if a local running cupsd is really needed. E.g. when both Browsing and BrowsePoll
         # are also disabled, there is no need to start the local cupsd in this dialog.
@@ -538,12 +534,7 @@ module Yast
               end
             end
             # An effectively non-empty current_browse_allow_value requires "Browsing On" in cupsd.conf:
-            if !Printerlib.ExecuteBashCommand(
-                Ops.add(
-                  Printerlib.yast_bin_dir,
-                  "modify_cupsd_conf Browsing On"
-                )
-              )
+            if !Printerlib.ExecuteBashCommand(Printerlib.yast_bin_dir + "modify_cupsd_conf Browsing On")
               Popup.ErrorDetails(
                 _("Failed to set 'Browsing On' in /etc/cups/cupsd.conf."),
                 Ops.get_string(Printerlib.result, "stderr", "")
@@ -552,16 +543,7 @@ module Yast
             end
             # Write the BrowseAllow values to cupsd.conf:
             if !Printerlib.ExecuteBashCommand(
-                Ops.add(
-                  Ops.add(
-                    Ops.add(
-                      Printerlib.yast_bin_dir,
-                      "modify_cupsd_conf BrowseAllow '"
-                    ),
-                    current_browse_allow_value
-                  ),
-                  "'"
-                )
+                 Printerlib.yast_bin_dir + "modify_cupsd_conf BrowseAllow " + current_browse_allow_value.shellescape
               )
               Popup.ErrorDetails(
                 # where %1 will be replaced by the values for BrowseAllow.
@@ -587,12 +569,7 @@ module Yast
         # because "Browsing Off" disables also sharing of local printers
         # which might be needed by the "Share Printers" dialog.
         # Instead set only "BrowseAllow none" in cupsd.conf:
-        if !Printerlib.ExecuteBashCommand(
-            Ops.add(
-              Printerlib.yast_bin_dir,
-              "modify_cupsd_conf BrowseAllow none"
-            )
-          )
+        if !Printerlib.ExecuteBashCommand(Printerlib.yast_bin_dir + "modify_cupsd_conf BrowseAllow none")
           Popup.ErrorDetails(
             _("Failed to set 'BrowseAllow none' in /etc/cups/cupsd.conf."),
             Ops.get_string(Printerlib.result, "stderr", "")
@@ -628,12 +605,7 @@ module Yast
                 current_browse_poll_value,
                 Printer.alnum_chars
               )
-            if !Printerlib.ExecuteBashCommand(
-                Ops.add(
-                  Printerlib.yast_bin_dir,
-                  "modify_cupsd_conf Browsing On"
-                )
-              )
+            if !Printerlib.ExecuteBashCommand(Printerlib.yast_bin_dir + "modify_cupsd_conf Browsing On")
               Popup.ErrorDetails(
                 _("Failed to set 'Browsing On' in /etc/cups/cupsd.conf."),
                 Ops.get_string(Printerlib.result, "stderr", "")
@@ -642,17 +614,8 @@ module Yast
             end
             # Write the BrowsePoll values to cupsd.conf:
             if !Printerlib.ExecuteBashCommand(
-                Ops.add(
-                  Ops.add(
-                    Ops.add(
-                      Printerlib.yast_bin_dir,
-                      "modify_cupsd_conf BrowsePoll '"
-                    ),
-                    current_browse_poll_value
-                  ),
-                  "'"
-                )
-              )
+                 Printerlib.yast_bin_dir + "modify_cupsd_conf BrowsePoll " + current_browse_poll_value.shellescape
+               )
               Popup.ErrorDetails(
                 # where %1 will be replaced by the values for BrowsePoll.
                 Builtins.sformat(
@@ -674,12 +637,7 @@ module Yast
         # but now the user has deactivated it
         # so that the BrowsePoll config should be disabled:
         # Set only "BrowsePoll none" in cupsd.conf:
-        if !Printerlib.ExecuteBashCommand(
-            Ops.add(
-              Printerlib.yast_bin_dir,
-              "modify_cupsd_conf BrowsePoll none"
-            )
-          )
+        if !Printerlib.ExecuteBashCommand(Printerlib.yast_bin_dir + "modify_cupsd_conf BrowsePoll none")
           Popup.ErrorDetails(
             _("Failed to set 'BrowsePoll none' in /etc/cups/cupsd.conf"),
             Ops.get_string(Printerlib.result, "stderr", "")
@@ -852,7 +810,7 @@ module Yast
           :Value,
           Id(:browse_allow_all)
         )
-        @initial_browse_allow = :browse_allow_all 
+        @initial_browse_allow = :browse_allow_all
         # If browsing info is accepted from "all" hosts
         # it would be useless to additionally accept it from specific IPs or networks.
       end
@@ -871,7 +829,7 @@ module Yast
           :Value,
           Id(:browse_allow_none)
         )
-        @initial_browse_allow = :browse_allow_none 
+        @initial_browse_allow = :browse_allow_none
         # If browsing info is accepted from "none" hosts
         # it would be contradicting to additionally accept it from specific IPs or networks.
       end
@@ -1099,7 +1057,7 @@ module Yast
         end
         if :next == Ops.get(event, "ID")
           if !ApplyNetworkPrintingSettings()
-            Popup.Error(_("Failed to apply the settings to the system.")) 
+            Popup.Error(_("Failed to apply the settings to the system."))
             # In case of an error stay on the "Print via Network" dialog
             # so that the user can either change his settings until it works
             # or he can use the [Cancel] button to return to the Overview dialog:
