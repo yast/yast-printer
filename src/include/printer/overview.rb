@@ -150,7 +150,7 @@ module Yast
             "If you really must use a non-official port, you cannot use\n" +
             "the YaST printer module to configure your printers.\n"
         )
-      Wizard.SetDesktopIcon("printer")
+      Wizard.SetDesktopIcon("org.openSUSE.YaST.Printer")
       # The button with "back/cancel" functionality is removed here
       # only because here it happens faster than only in the handleOverview function
       # to avoid that the button is visible for some time until it is actually removed.

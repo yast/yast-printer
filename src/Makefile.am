@@ -31,7 +31,7 @@ schemafiles_DATA = \
   autoyast-rnc/printer.rnc
 
 desktop_DATA = \
-  desktop/printer.desktop
+  desktop/org.openSUSE.YaST.Printer.desktop
 
 symbolicdir = @icondir@/hicolor/symbolic/apps
 symbolic_DATA = \
