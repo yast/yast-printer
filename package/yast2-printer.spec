@@ -73,7 +73,7 @@ chmod 755 %{my_requires}
 %{yast_ydatadir}
 %{yast_ybindir}
 %{yast_icondir}
-%dir %{yast_docdir}
+%doc %{yast_docdir}
 %license COPYING
 
 %changelog
