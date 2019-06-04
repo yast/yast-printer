@@ -153,7 +153,7 @@ module Yast
         "write"    => { :abort => :abort, :next => :next }
       }
       Wizard.CreateDialog
-      Wizard.SetDesktopIcon("printer")
+      Wizard.SetDesktopIcon("org.opensuse.yast.Printer")
       ret = Sequencer.Run(aliases, sequence)
       UI.CloseDialog
       deep_copy(ret)
