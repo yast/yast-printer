@@ -30,7 +30,6 @@ BuildRequires:  update-desktop-files
 BuildRequires:  xorg-x11-libX11-devel
 BuildRequires:  yast2
 BuildRequires:  yast2-devtools >= 4.2.2
-BuildRequires:  yast2-testsuite
 
 Requires:       /bin/mktemp /usr/bin/sed
 Requires:       yast2 >= 3.1.183
