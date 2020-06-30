@@ -25,9 +25,7 @@ describe Yast::PrinterAutoClient do
     let(:args) { ["Export"] }
 
     before do
-      allow(Yast::WFM).to receive(:Args) do |idx = nil|
-        idx ? args[idx] : args
-      end
+      allow(Yast::WFM).to receive(:Args) { |i = nil| i ? args[i] : args }
       allow(subject).to receive(:ReadFileContent).with(/cupsd.conf/)
         .and_return("cupsd.conf content")
       allow(subject).to receive(:ReadFileContent).with(/client.conf/)
@@ -35,15 +33,33 @@ describe Yast::PrinterAutoClient do
     end
 
     describe "Export" do
-      it "returns the content of CUPS configuration files" do
-        expect(subject.main).to include(
-          "cupsd_conf_content"  => {
-            "file_contents" => "cupsd.conf content"
-          },
-          "client_conf_content" => {
-            "file_contents" => "client.conf content"
-          }
-        )
+      let(:enabled?) { true }
+
+      before do
+        allow(Yast::Printer).to receive(:enabled?).and_return(enabled?)
+      end
+
+      context "when the 'cups' service is enabled" do
+        let(:enabled) { true }
+
+        it "returns the content of CUPS configuration files" do
+          expect(subject.main).to include(
+            "cupsd_conf_content"  => {
+              "file_contents" => "cupsd.conf content"
+            },
+            "client_conf_content" => {
+              "file_contents" => "client.conf content"
+            }
+          )
+        end
+      end
+
+      context "when the 'cups' service is disabled" do
+        let(:enabled?) { false }
+
+        it "returns an empty hash" do
+          expect(subject.main).to eq({})
+        end
       end
     end
   end

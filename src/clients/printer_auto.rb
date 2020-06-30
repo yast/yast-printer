@@ -183,15 +183,20 @@ module Yast
       # on another system from AutoYaST when AutoYaST on the other system
       # calls the above Import function.
       elsif @func == "Export"
-        # what else could be exported instead in case of errors:
-        @ret = {
-          "cupsd_conf_content"  => {
-            "file_contents" => ReadFileContent("/etc/cups/cupsd.conf")
-          },
-          "client_conf_content" => {
-            "file_contents" => ReadFileContent("/etc/cups/client.conf")
-          }
-        }
+        @ret = {}
+
+        if Printer.enabled?
+          # what else could be exported instead in case of errors:
+          @ret.merge!(
+            "cupsd_conf_content"  => {
+              "file_contents" => ReadFileContent("/etc/cups/cupsd.conf")
+            },
+            "client_conf_content" => {
+              "file_contents" => ReadFileContent("/etc/cups/client.conf")
+            }
+          )
+        end
+
       # Return packages needed to be installed and removed during
       # Autoinstallation to ensure it has all needed software installed.
       # @return map with 2 lists of strings $["install":[],"remove":[]]
