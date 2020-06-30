@@ -29,6 +29,7 @@
 
 require "shellwords"
 require "yast"
+require "yast2/system_service"
 
 module Yast
   class PrinterClass < Module
@@ -2376,6 +2377,13 @@ module Yast
       Printerlib.ExecuteBashCommand("/usr/bin/hp-setup")
       Popup.ClearFeedback
       true
+    end
+
+    # Determine whether the printer service ('cups') is enabled
+    # @return [Boolean] true if the service is enabled; false otherwise
+    def enabled?
+      service = Yast2::SystemService.find("cups")
+      !!service && service.start_mode != :manual
     end
 
     publish :function => :Modified, :type => "boolean ()"
