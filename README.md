@@ -1,5 +1,6 @@
 # YaST - The Printer Configuration Module #
 
-[![Travis Build](https://travis-ci.org/yast/yast-printer.svg?branch=master)](https://travis-ci.org/yast/yast-printer)
-[![Jenkins Build](http://img.shields.io/jenkins/s/https/ci.opensuse.org/yast-printer-master.svg)](https://ci.opensuse.org/view/Yast/job/yast-printer-master/)
-
+[![Workflow Status](https://github.com/yast/yast-printer/workflows/CI/badge.svg?branch=master)](
+https://github.com/yast/yast-printer/actions?query=branch%3Amaster)
+[![Jenkins Status](https://ci.opensuse.org/buildStatus/icon?job=yast-yast-printer-master)](
+https://ci.opensuse.org/view/Yast/job/yast-yast-printer-master/)
