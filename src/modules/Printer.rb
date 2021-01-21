@@ -784,8 +784,8 @@ module Yast
     end
 
     # Derive a reasonable model info from an arbitrary description string.
-    # @param string from which a model info is derived.
-    # @param integer how many words the model info can contain.
+    # @param [String] description from which a model info is derived.
+    # @param [Integer] max_words how many words the model info can contain.
     # @return [String] (possibly the empty string)
     def DeriveModelName(description, max_words)
       model_info = ""
@@ -888,7 +888,7 @@ module Yast
     end
 
     # Derive a reasonable driver_filter_string from an arbitrary driver_filter_input_text.
-    # @param string from which a driver_filter_string is derived.
+    # @param [String] driver_filter_input_text from which a driver_filter_string is derived.
     # @return [String] (possibly the empty string)
     def DeriveDriverFilterString(driver_filter_input_text)
       driver_filter_string = ""
