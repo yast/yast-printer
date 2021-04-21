@@ -1,7 +1,7 @@
 #
 # spec file for package yast2-printer
 #
-# Copyright (c) 2013 SUSE LINUX Products GmbH, Nuernberg, Germany.
+# Copyright (c) 2021 SUSE LLC
 #
 # All modifications and additions to the file contributed by third parties
 # remain the property of their copyright owners, unless otherwise agreed
@@ -16,33 +16,31 @@
 #
 
 
+# Used to exclude libX11, libXau, libxcb, and libxcb-xlib from the requires list
+# which are pulled in by Autoreqprov because of the basicadd_displaytest tool:
+%define my_requires /tmp/my-requires
 Name:           yast2-printer
-Version:        4.4.0
+Version:        4.4.1
 Release:        0
 Summary:        YaST2 - Printer Configuration
 License:        GPL-2.0-only
 Group:          System/YaST
-Url:            https://github.com/yast/yast-printer
-
+URL:            https://github.com/yast/yast-printer
 Source0:        %{name}-%{version}.tar.bz2
-
 BuildRequires:  update-desktop-files
 BuildRequires:  xorg-x11-libX11-devel
 BuildRequires:  yast2
-BuildRequires:  yast2-devtools >= 4.2.2
-
-Requires:       /bin/mktemp /usr/bin/sed
+BuildRequires:  yast2-devtools >= 4.4.0
+Requires:       %{_bindir}/sed
+Requires:       /bin/mktemp
 Requires:       yast2 >= 3.1.183
-# Used to exclude libX11, libXau, libxcb, and libxcb-xlib from the requires list
-# which are pulled in by Autoreqprov because of the basicadd_displaytest tool:
-%define my_requires /tmp/my-requires
 Requires:       yast2-ruby-bindings >= 1.0.0
-
-Recommends:     cups-client iptables netcat samba-client
-
-Obsoletes:      yast2-printer-devel-doc
-
+Recommends:     cups-client
+Recommends:     iptables
+Recommends:     netcat
+Recommends:     samba-client
 Supplements:    autoyast(printer)
+Obsoletes:      yast2-printer-devel-doc
 
 %description
 This package contains the YaST2 component for printer configuration.
@@ -65,6 +63,7 @@ chmod 755 %{my_requires}
 %yast_metainfo
 
 %files
+%license COPYING
 %{yast_desktopdir}
 %{yast_metainfodir}
 %{yast_moduledir}
@@ -74,7 +73,5 @@ chmod 755 %{my_requires}
 %{yast_ydatadir}
 %{yast_ybindir}
 %{yast_icondir}
-%doc %{yast_docdir}
-%license COPYING
 
 %changelog
