@@ -569,6 +569,7 @@ module Yast
                 "The package provides HP's printing and scanning software HPLIP.<br>\n" +
                 "In contrast devices which are connected via bluetooth\n" +
                 "are not autodetected so that the device URI must be manually specified.\n" +
+                "Example device URI:<br>\n" +
                 "bluetooth://1A2B3C4D5E6F<br>\n" +
                 "To access a device via bluetooth, the RPM package bluez-cups must be installed.\n" +
                 "The package provides the CUPS backend 'bluetooth' which actually sends the data\n" +
