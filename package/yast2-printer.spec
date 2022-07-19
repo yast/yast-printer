@@ -1,7 +1,7 @@
 #
 # spec file for package yast2-printer
 #
-# Copyright (c) 2021 SUSE LLC
+# Copyright (c) 2022 SUSE LLC
 #
 # All modifications and additions to the file contributed by third parties
 # remain the property of their copyright owners, unless otherwise agreed
@@ -16,11 +16,8 @@
 #
 
 
-# Used to exclude libX11, libXau, libxcb, and libxcb-xlib from the requires list
-# which are pulled in by Autoreqprov because of the basicadd_displaytest tool:
-%define my_requires /tmp/my-requires
 Name:           yast2-printer
-Version:        4.5.0
+Version:        4.5.1
 Release:        0
 Summary:        YaST2 - Printer Configuration
 License:        GPL-2.0-only
@@ -42,6 +39,10 @@ Recommends:     samba-client
 Supplements:    autoyast(printer)
 Obsoletes:      yast2-printer-devel-doc
 
+# Exclude libX11 from the requires list which is pulled in by Autoreqprov
+# because of the basicadd_displaytest tool
+%global __requires_exclude_from basicadd_displaytest
+
 %description
 This package contains the YaST2 component for printer configuration.
 
@@ -53,13 +54,6 @@ This package contains the YaST2 component for printer configuration.
 
 %install
 %yast_install
-# Exclude libX11, libXau, libxcb, and libxcb-xlib from the requires list
-# which are pulled in by Autoreqprov because of the basicadd_displaytest tool:
-cat << EOF > %{my_requires}
-grep -v 'basicadd_displaytest' | %{__find_requires}
-EOF
-chmod 755 %{my_requires}
-%define __find_requires %{my_requires}
 %yast_metainfo
 
 %files
