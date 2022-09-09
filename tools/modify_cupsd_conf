@@ -336,7 +336,7 @@ BrowseAllow()
                  # see https://bugs.linuxfoundation.org/show_bug.cgi?id=1204
                  # and https://bugs.linuxfoundation.org/show_bug.cgi?id=1205
                  for V in $VALUE
-                 do if ! echo "$V" | egrep -q '^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}'
+                 do if ! echo "$V" | grep -E -q '^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}'
                     then echo "For cups-browsed a BrowseAllow value must be either an IPv4 host address (e.g. 192.168.1.12)" 1>&2
                          echo "or an IPv4 network address plus netmask (e.g. 192.168.1.0/255.255.255.0 or 192.168.1.0/24)." 1>&2
                          exit 6
@@ -672,7 +672,7 @@ Allow()
   # in the root location are found if there is more than one which is allowed.
   # Remove leading spaces (to cut the right part).
   # Remove trailing spaces (needed for the test below).
-  RESULT="$( sed -n -e '/[[:space:]]*<[[:space:]]*Location[[:space:]]*\/[[:space:]]*>/,/[[:space:]]*<[[:space:]]*\/[[:space:]]*Location[[:space:]]*>/p' $CUPSDCONF | grep -i "^[[:space:]]*$KEY[[:space:]]" | egrep -v '127.0.0.2' | sed -e 's/from//I' | tr -s '[:blank:]' ' ' | sed -e 's/^ *//' | cut -s -d ' ' -f2 | tr -s '\n' ' ' | sed -e 's/ *$//' )"
+  RESULT="$( sed -n -e '/[[:space:]]*<[[:space:]]*Location[[:space:]]*\/[[:space:]]*>/,/[[:space:]]*<[[:space:]]*\/[[:space:]]*Location[[:space:]]*>/p' $CUPSDCONF | grep -i "^[[:space:]]*$KEY[[:space:]]" | grep -E -v '127.0.0.2' | sed -e 's/from//I' | tr -s '[:blank:]' ' ' | sed -e 's/^ *//' | cut -s -d ' ' -f2 | tr -s '\n' ' ' | sed -e 's/ *$//' )"
   echo -n "$RESULT"
   # For a nicer output on a terminal where stdout and stderr is mixed up,
   # output a '\n' on stderr to get subsequent stuff (e.g. the shell prompt

@@ -845,9 +845,9 @@ module Yast
             # It is crucial to take whatever (trailing) character in the model series into account
             # to be on the safe side to distinguish different models
             # (e.g. "HP LaserJet 4" versus "HP LaserJet 4/4M" or "Kyocera FS-1000" versus "Kyocera FS-1000+").
-            # For example as egrep regular expression:
+            # For example as grep -E regular expression:
             #   lpinfo -m | cut -d' ' -f2-
-            #   | egrep -o '^[[:alpha:]]+[[:space:]]+([[:alpha:]-]+[[:space:]]+){0,2}[[:alpha:]-]*[[:digit:]][^[:space:]]*'
+            #   | grep -E -o '^[[:alpha:]]+[[:space:]]+([[:alpha:]-]+[[:space:]]+){0,2}[[:alpha:]-]*[[:digit:]][^[:space:]]*'
             # Of course this best-guess is not 100% correct because it would result for example
             # that "ACME FunPrinter 1000" and "ACME FunPrinter 1000 XL"
             # are considered to be the same model "ACME FunPrinter 1000"
@@ -1715,9 +1715,9 @@ module Yast
       # It is crucial to take whatever (trailing) character in the model series into account
       # to be on the safe side to distinguish different models
       # (e.g. "HP LaserJet 4" versus "HP LaserJet 4/4M" or "Kyocera FS-1000" versus "Kyocera FS-1000+").
-      # For example as egrep regular expression:
+      # For example as grep -E regular expression:
       #   lpinfo -m | cut -d' ' -f2-
-      #   | egrep -o '^[[:alpha:]]+[[:space:]]+([[:alpha:]-]+[[:space:]]+){0,2}[[:alpha:]-]*[[:digit:]][^[:space:]]*'
+      #   | grep -E -o '^[[:alpha:]]+[[:space:]]+([[:alpha:]-]+[[:space:]]+){0,2}[[:alpha:]-]*[[:digit:]][^[:space:]]*'
       # Of course this best-guess is not 100% correct because it would result for example
       # that "ACME FunPrinter 1000" and "ACME FunPrinter 1000 XL" are considered to be the same model
       # but "ACME FunPrinter 1000XL" and "ACME FunPrinter 1000 XL" are considered to be different models.
@@ -1729,7 +1729,7 @@ module Yast
       # when the driver_items list is short so that the user can easily survey the whole list.
       # For example the PPDs in openSUSE 10.2
       #   lpinfo -m | cut -d' ' -f2-
-      #   | egrep -o '^[[:alpha:]]+[[:space:]]+([[:alpha:]-]+[[:space:]]+){0,2}[[:alpha:]-]*[[:digit:]][^[:space:]]*'
+      #   | grep -E -o '^[[:alpha:]]+[[:space:]]+([[:alpha:]-]+[[:space:]]+){0,2}[[:alpha:]-]*[[:digit:]][^[:space:]]*'
       #   | sort -f | uniq -i -c | sort -n
       # results that the maximum lenght of the driver_items list for the same model is 13
       # (in openSUSE 10.2 the 13 entries are for the "Kyocera FS-600").
