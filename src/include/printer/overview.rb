@@ -716,7 +716,7 @@ module Yast
           if Printerlib.ExecuteBashCommand(
                "/usr/bin/lpstat -h localhost" +
                " -o " + queue_name.shellescape +
-               " | egrep -q '^'" + queue_name.shellescape + "'-[0-9]+'"
+               " | grep -E -q '^'" + queue_name.shellescape + "'-[0-9]+'"
             )
             pending_job_info = _(
               "There are pending print jobs which might be deleted before the testpage is printed."
@@ -855,7 +855,7 @@ module Yast
           if Printerlib.ExecuteBashCommand(
                "/usr/bin/lpstat -h localhost" +
                " -o " + queue_name.shellescape +
-               " | egrep -q '^'" + queue_name.shellescape + "'-[0-9]+'"
+               " | grep -E -q '^'" + queue_name.shellescape + "'-[0-9]+'"
              )
             pending_job_info = _(
               "There are pending print jobs which might be deleted now."
