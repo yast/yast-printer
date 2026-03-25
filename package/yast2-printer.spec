@@ -17,14 +17,13 @@
 
 
 Name:           yast2-printer
-Version:        5.0.0
+Version:        5.0.1
 Release:        0
 Summary:        YaST2 - Printer Configuration
 License:        GPL-2.0-only
 Group:          System/YaST
 URL:            https://github.com/yast/yast-printer
 Source0:        %{name}-%{version}.tar.bz2
-BuildRequires:  update-desktop-files
 BuildRequires:  xorg-x11-libX11-devel
 BuildRequires:  yast2
 BuildRequires:  yast2-devtools >= 4.4.0
