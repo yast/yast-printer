@@ -1,5 +1,15 @@
-# YaST - The Printer Configuration Module #
+Obsoleted Module
+================
 
-[![Workflow Status](https://github.com/yast/yast-printer/workflows/CI/badge.svg?branch=master)](
-https://github.com/yast/yast-printer/actions?query=branch%3Amaster)
-[![OBS](https://github.com/yast/yast-printer/actions/workflows/submit.yml/badge.svg)](https://github.com/yast/yast-printer/actions/workflows/submit.yml)
+**This module is obsoleted and is not developed anymore.**
+
+The printer configuration module was dropped, the functionality is available
+via a native desktop applet available in the `system-config-printer-applet`
+RPM package.
+
+
+GIT
+---
+
+If you want to see the last state check the [*master_old*](../../tree/master_old) branch.
+
